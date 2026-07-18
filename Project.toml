@@ -1,0 +1,13 @@
+name = "Agrocosm"
+uuid = "03150e84-a77a-4da1-94e0-c2afe2ed6c45"
+authors = ["Yunan Lin"]
+version = "1.0.0-DEV"
+
+[compat]
+julia = "1.10.10"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
