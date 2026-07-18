@@ -14,13 +14,11 @@ function update_lit_winter_wheat!(soil::Soil,
 
     hdate_callback = copy(crop_cal_hcallback)
 
-    Zygote.ignore() do
-        launch_1D!(update_lit_winter_wheat_kernel!,
-                   hdate_callback,
-                   crop_wtype,
-                   hdate,
-                   day)
-    end
+    launch_1D!(update_lit_winter_wheat_kernel!,
+                hdate_callback,
+                crop_wtype,
+                hdate,
+                day)
 
     soil.litc = soil.litc .* (1 .- reshape(hdate_callback, (1, :))) + litch .* reshape(hdate_callback, (1, :)) 
     soil.litn = soil.litn .* (1 .- reshape(hdate_callback, (1, :))) + litnh .* reshape(hdate_callback, (1, :)) 

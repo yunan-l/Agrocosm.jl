@@ -33,9 +33,7 @@ function photosynthesis_C3!(PFT::PftParameters,
         s = (24 ./ pet_daylength) * b
         sigma = 1.0f0 .- (c2 .- s) ./ (c2 .- theta * s)
         sigma = sqrt.(max.(1f-7, sigma))
-        Zygote.ignore() do
-            photos.lambda .= 0.8f0
-        end  
+        photos.lambda .= 0.8f0  
         photos.vmax = (1.0f0 / b) * (c1 ./ c2) .* ((2.0f0 * theta - 1.0f0) .* s .- (2.0f0 * theta .* s .- c2) .* sigma) .* apar * cmass * cq
     end
 
@@ -115,9 +113,7 @@ function photosynthesis_C4!(PFT::PftParameters,
         sigma = 1.0f0 .- (c2 .- s) ./ (c2 .- theta * s)
         # sigma = sqrt.(0.5f0 * (sigma .+ sqrt(sigma .* sigma .+ (1f-3)^2)))
         sigma = sqrt.(max.(1f-7, sigma))
-        Zygote.ignore() do
-            photos.lambda .= 0.4f0
-        end  
+        photos.lambda .= 0.4f0  
         photos.vmax = (1.0f0 / b) * (c1 ./ c2) .* ((2.0f0 * theta - 1.0f0) .* s .- (2.0f0 * theta .* s .- c2) .* sigma) .* apar * cmass * cq
     end
 

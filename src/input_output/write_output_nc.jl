@@ -15,7 +15,7 @@ function write_output_nc(
     output_path::String,
     varname::String,
     values::AbstractArray;
-    grid_path::String = joinpath(pkgdir(NeuralCrop), "inputs/grid.nc"),
+    grid_path::String = joinpath(pkgdir(Agrocosm), "inputs/grid.nc"),
     grid_indices::Union{Nothing, AbstractVector{<:Tuple{<:Integer, <:Integer}}} = nothing,
     time::Union{Nothing, AbstractVector} = nothing,
     units::String = "",

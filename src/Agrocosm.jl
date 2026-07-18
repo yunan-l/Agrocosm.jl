@@ -124,4 +124,8 @@ include("utils/load_nc.jl")
 include("utils/callback.jl")
 include("utils/tools.jl")
 
+# Daily crop simulations
+include("processes/crop/daily_crop_C3.jl")
+include("processes/crop/daily_crop_C4.jl")
+
 end

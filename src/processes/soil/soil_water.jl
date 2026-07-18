@@ -9,10 +9,8 @@ function soil_water!(soil::Soil,
                      irrigation = false
 ) where {T <: AbstractFloat}
 
-    Zygote.ignore() do
-        soil.infil .= prec - crop.intercep
-        infil_perc!(soil)
-    end
+    soil.infil .= prec - crop.intercep
+    infil_perc!(soil)
 
     # compute soil water content
     if irrigation

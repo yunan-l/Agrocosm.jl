@@ -53,15 +53,14 @@ function init_states!(PFT::PftParameters,
     climbuf = init_climbuf(cell_size, device)
     crop, crop_cal, managed_land, photos = init_crop(cell_size, device)
     crop.phu = copy(phu)
-    Zygote.ignore() do
-        rootdist = root_distribution(beta_root)
-        # idx = crop.phu .< 0
-        # crop.wtype[idx] .= true
-        # crop.phu[idx] .= -crop.phu[idx]
-        crop.wtype .= ifelse.(crop.phu .< 0, true, crop.wtype)
-        crop.phu .= ifelse.(crop.phu .< 0, -crop.phu, crop.phu)
-        crop.rootdist .= device(rootdist)
-    end
+    rootdist = root_distribution(beta_root)
+    # idx = crop.phu .< 0
+    # crop.wtype[idx] .= true
+    # crop.phu[idx] .= -crop.phu[idx]
+    crop.wtype .= ifelse.(crop.phu .< 0, true, crop.wtype)
+    crop.phu .= ifelse.(crop.phu .< 0, -crop.phu, crop.phu)
+    crop.rootdist .= device(rootdist)
+
     crop_cal.sdate = sdate
     managed_land.manure = manure
     managed_land.fertilizer = fertilizer
