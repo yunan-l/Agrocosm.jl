@@ -113,7 +113,6 @@ include("processes/soil/soil_response.jl")
 # Input and output
 include("input_output/climate_data_loader.jl")
 include("input_output/initial_data_loader.jl")
-include("input_output/data_loader.jl")
 include("input_output/write_output_nc.jl")
 
 # Utilities
