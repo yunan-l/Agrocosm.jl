@@ -14,6 +14,9 @@ mutable struct WaterBalance{M <: AbstractArray{<:AbstractFloat}}
     soil_storage_after::M
     snow_storage_before::M
     snow_storage_after::M
+    snowmelt::M
+    snow_sublimation::M
+    snow_runoff::M
     unaccounted_snow_flux::M
     interception::M
     transpiration::M
@@ -41,6 +44,7 @@ function init_water_balance(number_of_days::Integer,
         allocate(), allocate(), allocate(), allocate(), allocate(),
         allocate(), allocate(), allocate(), allocate(), allocate(),
         allocate(), allocate(), allocate(), allocate(), allocate(),
+        allocate(), allocate(), allocate(),
     )
 end
 
@@ -68,6 +72,9 @@ function record_water_balance_end!(water_balance::WaterBalance,
     @views begin
         water_balance.soil_storage_after[day_index, :] .= vec(sum(soil.swc; dims = 1))
         water_balance.snow_storage_after[day_index, :] .= soil.snowpack
+        water_balance.snowmelt[day_index, :] .= soil.snowmelt
+        water_balance.snow_sublimation[day_index, :] .= soil.snow_sublimation
+        water_balance.snow_runoff[day_index, :] .= soil.snow_runoff
         water_balance.interception[day_index, :] .= crop.intercep
         water_balance.transpiration[day_index, :] .= vec(sum(crop.trans_layer; dims = 1))
         water_balance.evaporation[day_index, :] .= vec(sum(soil.evap; dims = 1))
@@ -80,7 +87,9 @@ function record_water_balance_end!(water_balance::WaterBalance,
             water_balance.snow_storage_before[day_index, :] .+
             water_balance.precipitation[day_index, :] .-
             water_balance.rain_after_snow[day_index, :] .-
-            water_balance.snow_storage_after[day_index, :]
+            water_balance.snow_storage_after[day_index, :] .-
+            water_balance.snow_sublimation[day_index, :] .-
+            water_balance.snow_runoff[day_index, :]
 
         water_balance.residual[day_index, :] .=
             water_balance.soil_storage_before[day_index, :] .+
@@ -91,6 +100,8 @@ function record_water_balance_end!(water_balance::WaterBalance,
             water_balance.interception[day_index, :] .-
             water_balance.transpiration[day_index, :] .-
             water_balance.evaporation[day_index, :] .-
+            water_balance.snow_sublimation[day_index, :] .-
+            water_balance.snow_runoff[day_index, :] .-
             water_balance.surface_runoff[day_index, :] .-
             water_balance.lateral_runoff[day_index, :] .-
             water_balance.bottom_drainage[day_index, :]

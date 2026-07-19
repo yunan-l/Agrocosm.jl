@@ -17,6 +17,9 @@ function snow!(soil::Soil,
         dailyWeather.temp,
         dailyWeather.prec,
         soil.snowpack,
+        soil.snowmelt,
+        soil.snow_sublimation,
+        soil.snow_runoff,
         soil.snowheight,
         soil.snowfraction,
         kernel_params
@@ -30,6 +33,9 @@ end
                               temp::AbstractArray{T},
                               prec::AbstractArray{T},
                               soil_snowpack::AbstractArray{T},
+                              soil_snowmelt::AbstractArray{T},
+                              soil_snow_sublimation::AbstractArray{T},
+                              soil_snow_runoff::AbstractArray{T},
                               soil_snowheight::AbstractArray{T},
                               soil_snowfraction::AbstractArray{T},
                               kernel_params
@@ -40,11 +46,15 @@ end
     @unpack tsnow, snow_skin_depth, th_diff_snow, lambda_snow, c_water2ice, c_watertosnow, c_roughness= kernel_params.snowparams
     @unpack maxsnowpack = kernel_params.lpjmlparams
 
+    soil_snowmelt[cell] = zero(T)
+    soil_snow_sublimation[cell] = zero(T)
+    soil_snow_runoff[cell] = zero(T)
+
     # precipitation falls as snow
     if temp[cell] < tsnow
         soil_snowpack[cell] += prec[cell]
         if soil_snowpack[cell] > maxsnowpack
-            # runoff[cell] = soil_snowpack[cell] - maxsnowpack
+            soil_snow_runoff[cell] = soil_snowpack[cell] - maxsnowpack
             soil_snowpack[cell] = maxsnowpack
         end
         prec[cell] = zero(T)
@@ -53,9 +63,7 @@ end
     # sublimation of snow
     if soil_snowpack[cell] > T(0.1)
         soil_snowpack[cell] -= T(0.1)
-        # evap[cell] += T(0.1)
-    # else
-        # evap[cell] = T(0.1)
+        soil_snow_sublimation[cell] = T(0.1)
     end
 
     # snow layer is insulating
@@ -66,8 +74,9 @@ end
             dT = th_diff_snow * timestep2sec / (depth * depth) * T(1000000.0) * (temp[cell] - tsnow)
             heatflux = lambda_snow * (tsnow - zero(T) + dT) / depth * T(1000)
             melt_heat = min(heatflux * timestep2sec, depth * T(1e-3) * c_water2ice) #[J/m2]
-            # snowmelt[cell] += melt_heat / c_water2ice * T(1000)
-            soil_snowpack[cell] -= melt_heat / c_water2ice * T(1000)
+            melt = melt_heat / c_water2ice * T(1000)
+            soil_snowmelt[cell] += melt
+            soil_snowpack[cell] -= melt
             if soil_snowpack[cell] < T(1e-7)
                 soil_snowpack[cell] = zero(T)
                 soil_snowheight[cell] = zero(T)
@@ -75,6 +84,9 @@ end
             end
         end
     end
+
+    # Add melt water to rainfall before interception and infiltration.
+    prec[cell] += soil_snowmelt[cell]
 
     # calculate snow height and fraction of snow coverage 
     if soil_snowpack[cell] > T(1e-7)

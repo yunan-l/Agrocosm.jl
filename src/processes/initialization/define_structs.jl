@@ -170,6 +170,9 @@ mutable struct Soil{T <: AbstractArray{ <: AbstractFloat}, M <: AbstractArray{ <
     decom_lit_response::M
     rh::T
     snowpack::T
+    snowmelt::T
+    snow_sublimation::T
+    snow_runoff::T
     snowheight::T
     snowfraction::T
 end

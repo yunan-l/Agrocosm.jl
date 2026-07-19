@@ -32,6 +32,7 @@ using Test
     Agrocosm.record_water_balance_start!(water_balance, 2, soil, Float32[3.0])
     Agrocosm.record_water_balance_after_snow!(water_balance, 2, Float32[0.0])
     soil.snowpack .= 4.9f0
+    soil.snow_sublimation .= 0.1f0
     crop.intercep .= 0.0f0
     crop.trans_layer .= 0.0f0
     soil.evap .= 0.0f0
@@ -40,6 +41,7 @@ using Test
     soil.outflux_f .= 0.0f0
     Agrocosm.record_water_balance_end!(water_balance, 2, soil, crop)
 
-    @test water_balance.unaccounted_snow_flux[2, 1] ≈ 0.1f0 atol = 1.0f-6
-    @test water_balance.residual[2, 1] ≈ 0.1f0 atol = 1.0f-6
+    @test water_balance.snow_sublimation[2, 1] == 0.1f0
+    @test water_balance.unaccounted_snow_flux[2, 1] ≈ 0.0f0 atol = 1.0f-6
+    @test water_balance.residual[2, 1] ≈ 0.0f0 atol = 1.0f-6
 end

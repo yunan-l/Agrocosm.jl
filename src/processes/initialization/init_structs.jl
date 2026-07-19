@@ -242,6 +242,9 @@ function init_soil(cell_size::Int,
         device(zeros(Float32, (1, cell_size))),            # decom_lit_response
         device(zeros(Float32, cell_size)),                 # rh
         device(zeros(Float32, cell_size)),                 # snowpack
+        device(zeros(Float32, cell_size)),                 # snowmelt
+        device(zeros(Float32, cell_size)),                 # snow sublimation
+        device(zeros(Float32, cell_size)),                 # snow runoff
         device(zeros(Float32, cell_size)),                 # snowheight
         device(zeros(Float32, cell_size))                  # snowfraction
     )
