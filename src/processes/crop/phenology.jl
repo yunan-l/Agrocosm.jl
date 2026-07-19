@@ -13,46 +13,46 @@ function phenology_crop!(crop::Crop,
     @unpack laimax = PFT
 
     # Keep yesterday's harvest flag for downstream transition logic.
-    crop.harvesting0 .= crop.harvesting
+    crop.phenology.harvesting_previous .= crop.phenology.harvesting
 
     # 1D launch over cells; climbuf_V_req is used as launch reference and kernel arg #1.
     launch_1D!(
         phenology_kernel!,
         climbuf_V_req,
-        crop.phu, 
-        crop.vdsum, 
-        crop.husum, 
-        crop.fphu,
-        crop.flaimax,
-        crop.senescence, 
-        crop.senescence0, 
-        crop.harvesting, 
-        crop.growingdays,
-        crop.isgrowing,
-        crop.wtype,
-        temp, 
+        crop.phenology.phu,
+        crop.phenology.vdsum,
+        crop.phenology.husum,
+        crop.phenology.fphu,
+        crop.canopy.flaimax,
+        crop.phenology.senescence,
+        crop.phenology.senescence_previous,
+        crop.phenology.harvesting,
+        crop.phenology.growing_days,
+        crop.phenology.is_growing,
+        crop.phenology.winter_type,
+        temp,
         daylength,
         PFT
     )
 
     lai_crop!(crop, PFT)
-    
+
     # Normalize current LAI by potential max LAI to obtain phenological progress proxy.
-    crop.phen .= crop.lai / laimax
-  
+    crop.canopy.phenology_fraction .= crop.canopy.lai / laimax
+
 end
 
 
 @kernel inbounds = true function phenology_kernel!(
                                    climbuf_V_req::AbstractArray{T},
-                                   crop_phu::AbstractArray{T},           
-                                   crop_vdsum::AbstractArray{T},           
-                                   crop_husum::AbstractArray{T},            
-                                   crop_fphu::AbstractArray{T}, 
-                                   crop_flaimax::AbstractArray{T}, 
+                                   crop_phu::AbstractArray{T},
+                                   crop_vdsum::AbstractArray{T},
+                                   crop_husum::AbstractArray{T},
+                                   crop_fphu::AbstractArray{T},
+                                   crop_flaimax::AbstractArray{T},
                                    crop_senescence::AbstractArray{B},
-                                   crop_senescence0::AbstractArray{B},                  
-                                   crop_harvesting::AbstractArray{B},         
+                                   crop_senescence0::AbstractArray{B},
+                                   crop_harvesting::AbstractArray{B},
                                    crop_growingdays::AbstractArray{S},
                                    crop_isgrowing::AbstractArray{S},
                                    crop_wtype::AbstractArray{B},
@@ -60,13 +60,13 @@ end
                                    daylength::AbstractArray{T},
                                    PFT::PftParameters
 ) where {T <: AbstractFloat, B <: Bool, S <: Integer}
-    
+
     cell = @index(Global)
 
     @unpack basetemp, tv_eff, tv_opt, fphuc, flaimaxc, fphuk, flaimaxk, fphusen, flaimaxharvest, psens, pb, ps, hlimit, sla, shapesenescencenorm = PFT
 
     crop_senescence0[cell] = crop_senescence[cell]
-    
+
     if crop_isgrowing[cell] == 1
         crop_growingdays[cell] += 1
         if crop_husum[cell] < crop_phu[cell]
@@ -86,11 +86,11 @@ end
                 else
                     vd_inc = zero(T)
                 end
-                
+
                 crop_vdsum[cell] += max(zero(T), vd_inc)
                 #Calculation of vernalization reduction factor
                 vd_b = climbuf_V_req[cell] / 5 # base requirements, 20% of total vernalization requirements
-                
+
                 if crop_vdsum[cell] < vd_b
                     vrf = zero(T)
                 elseif crop_vdsum[cell] >= vd_b && crop_vdsum[cell] < climbuf_V_req[cell]
@@ -98,18 +98,18 @@ end
                 else
                     vrf = one(T)
                 end
-                
+
             else
                 vrf = one(T)
             end
-            
+
             #Response to photoperiodism (still inactive, yet. This means that PFT.psens == 1 for all crops)
             if crop_fphu[cell] <= fphusen
                 prf = (one(T) - psens) * min(one(T), max(zero(T), (daylength[cell] - pb) / (ps - pb))) + psens
             else
                 prf = one(T)
             end
-            
+
             #Calculation of temperature sum (deg Cd)
             crop_husum[cell] += hu * vrf * prf
 
@@ -121,7 +121,7 @@ end
                 k = fphuk / flaimaxk - fphuk
                 # Logistic-like pre-senescence LAI trajectory.
                 crop_flaimax[cell] = crop_fphu[cell] / (crop_fphu[cell] + c * (c/k) ^ ((fphuc - crop_fphu[cell]) / (fphuk - fphuc)))
-            else 
+            else
                 crop_senescence[cell] = true
                 # Power-law decline after senescence starts.
                 crop_flaimax[cell] = ((1 - crop_fphu[cell]) / (1 - fphusen)) ^ shapesenescencenorm * (1 - flaimaxharvest) + flaimaxharvest
@@ -130,7 +130,7 @@ end
         else
             crop_harvesting[cell] = true
         end
-        
+
         if(crop_growingdays[cell] == hlimit)
             crop_harvesting[cell] = true
         end
@@ -141,5 +141,5 @@ end
         crop_senescence[cell] = false
         crop_growingdays[cell] = 0
         crop_flaimax[cell] = zero(T)
-    end  
+    end
 end

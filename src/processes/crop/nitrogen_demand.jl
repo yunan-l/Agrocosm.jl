@@ -14,19 +14,19 @@ function ndemand_crop!(crop::Crop,
 
     launch_1D!(
         ndemand_crop_kernel!,
-        crop.ndemand_tot,
-        crop.leafc, 
-        crop.rootc, 
-        crop.poolc, 
-        crop.stoc, 
-        crop.ndemand_leaf,
-        crop.isgrowing, 
-        photos_vmax, 
+        crop.nitrogen.demand_total,
+        crop.carbon.leaf,
+        crop.carbon.root,
+        crop.carbon.pool,
+        crop.carbon.storage,
+        crop.nitrogen.demand_leaf,
+        crop.phenology.is_growing,
+        photos_vmax,
         temp,
         PFT,
         kernel_params
     )
-  
+
 end
 
 @kernel inbounds = true function ndemand_crop_kernel!(
@@ -42,9 +42,9 @@ end
                                       PFT::PftParameters,
                                       kernel_params
 ) where {T <: AbstractFloat, S <: Integer}
-    
+
     cell = @index(Global)
-    
+
     @unpack lpjmlparams = kernel_params
 
     @unpack p, k_temp = lpjmlparams

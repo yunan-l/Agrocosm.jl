@@ -29,16 +29,16 @@ function allocate_crop_nitrogen!(crop::Crop,
                                  PFT::PftParameters)
 
     launch_1D!(crop_nitrogen_kernel!,
-               crop.nitrogen,
-               crop.isgrowing,
-               crop.leafc,
-               crop.rootc,
-               crop.stoc,
-               crop.poolc,
-               crop.leafn,
-               crop.rootn,
-               crop.ston,
-               crop.pooln,
+               crop.nitrogen.total,
+               crop.phenology.is_growing,
+               crop.carbon.leaf,
+               crop.carbon.root,
+               crop.carbon.storage,
+               crop.carbon.pool,
+               crop.nitrogen.leaf,
+               crop.nitrogen.root,
+               crop.nitrogen.storage,
+               crop.nitrogen.pool,
                PFT)
 
 end
@@ -61,7 +61,7 @@ end
      cell = @index(Global)
 
      @unpack ratio = PFT
- 
+
      if (crop_isgrowing[cell] == 1) && (crop_nitrogen[cell] > zero(T)) && (crop_leafc[cell] > T(1e-7))
           # LPJmL clears all four organ pools before calling solve(). With those
           # inputs fixed at zero, solve() reduces exactly to these positive

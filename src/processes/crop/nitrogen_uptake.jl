@@ -20,28 +20,28 @@ function nuptake_crop!(crop::Crop,
 
     launch_1D!(
         nuptake_crop_kernel!,
-        crop.nitrogen,
-        crop.nuptake,
-        crop.nautofertilizer,
-        crop.leafn,
-        crop.leafc,
-        crop.rootn,
-        crop.rootc,
-        crop.ndemand_leaf,
-        crop.ndemand_tot,
-        crop.vscal,
-        crop.rootdist,
-        crop.isgrowing,
-        soil.w,
-        soil.wsat,
-        soil.NO3,
-        soil.NH4,
-        soil.layer_depth,
-        soil.temp,
+        crop.nitrogen.total,
+        crop.nitrogen.uptake,
+        crop.nitrogen.auto_fertilizer,
+        crop.nitrogen.leaf,
+        crop.carbon.leaf,
+        crop.nitrogen.root,
+        crop.carbon.root,
+        crop.nitrogen.demand_leaf,
+        crop.nitrogen.demand_total,
+        crop.nitrogen.stress,
+        crop.water.root_distribution,
+        crop.phenology.is_growing,
+        soil.water.relative_content,
+        soil.water.saturation_fraction,
+        soil.nitrogen.nitrate,
+        soil.nitrogen.ammonium,
+        soil.properties.layer_depth,
+        soil.thermal.temperature,
         PFT,
         kernel_params
     )
-  
+
 end
 
 @kernel inbounds = true function nuptake_crop_kernel!(
@@ -66,9 +66,9 @@ end
                                       PFT::PftParameters,
                                       kernel_params
 ) where {T <: AbstractFloat, M <: AbstractFloat, S <: Integer}
-    
+
     cell = @index(Global)
-    
+
     @unpack lpjmlparams, soil_layers, auto_fertilizer = kernel_params
 
     @unpack T_0, T_m, T_r = lpjmlparams

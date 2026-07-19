@@ -1,0 +1,99 @@
+using Agrocosm
+using Test
+
+@testset "Daily nitrogen-balance diagnostics" begin
+    crop = init_crop(1, identity)
+    soil = init_soil(1, soilparams.soildepth, identity)
+    balance = @inferred init_nitrogen_balance(4, 1, identity)
+
+    crop.nitrogen.total .= 1.0f0
+    soil.nitrogen.nitrate .= 0.2f0
+    soil.nitrogen.ammonium .= 0.1f0
+    soil.nitrogen.litter .= 0.3f0
+    soil.nitrogen.fast .= 0.4f0
+    soil.nitrogen.slow .= 0.5f0
+    Agrocosm.record_nitrogen_balance_start!(balance, 1, crop, soil)
+    Agrocosm.record_nitrogen_balance_end!(balance, 1, crop, soil)
+
+    @test balance.plant_before[1, 1] == 1.0f0
+    @test balance.mineral_before[1, 1] ≈ 1.5f0 atol = 1.0f-6
+    @test balance.organic_before[1, 1] ≈ 5.4f0 atol = 1.0f-6
+    @test balance.residual[1, 1] ≈ 0.0f0 atol = 1.0f-6
+    @test balance.relative_residual[1, 1] ≈ 0.0f0 atol = 1.0f-7
+
+    # Root uptake is an internal soil-to-plant transfer, not a boundary input.
+    Agrocosm.record_nitrogen_balance_start!(balance, 2, crop, soil)
+    soil.nitrogen.nitrate[1, 1] -= 0.25f0
+    crop.nitrogen.total[1] += 0.25f0
+    crop.nitrogen.uptake[1] = 0.25f0
+    Agrocosm.record_nitrogen_balance_end!(balance, 2, crop, soil)
+
+    @test balance.root_uptake[2, 1] == 0.25f0
+    @test balance.residual[2, 1] ≈ 0.0f0 atol = 1.0f-6
+
+    # Explicit external inputs must explain the corresponding stock increase.
+    Agrocosm.record_nitrogen_balance_start!(balance, 3, crop, soil)
+    crop.nitrogen.total[1] += 0.7f0
+    crop.nitrogen.seed_input[1] = 0.7f0
+    soil.nitrogen.ammonium[1, 1] += 0.2f0
+    crop.nitrogen.prescribed_fertilizer_input[1] = 0.2f0
+    crop.nitrogen.auto_fertilizer[1] = 0.3f0
+    crop.nitrogen.total[1] += 0.3f0
+    Agrocosm.record_nitrogen_balance_end!(balance, 3, crop, soil)
+
+    @test balance.seed_input[3, 1] == 0.7f0
+    @test balance.prescribed_fertilizer_input[3, 1] == 0.2f0
+    @test balance.automatic_fertilizer_input[3, 1] == 0.3f0
+    @test balance.residual[3, 1] ≈ 0.0f0 atol = 2.0f-6
+
+    # Harvest transfers residues internally and exports the remaining organ N.
+    crop.nitrogen.total .= 1.0f0
+    crop.nitrogen.leaf .= 0.2f0
+    crop.nitrogen.root .= 0.3f0
+    crop.nitrogen.storage .= 0.3f0
+    crop.nitrogen.pool .= 0.2f0
+    crop.nitrogen.seed_input .= 0.0f0
+    crop.nitrogen.prescribed_fertilizer_input .= 0.0f0
+    crop.nitrogen.prescribed_manure_input .= 0.0f0
+    crop.nitrogen.auto_fertilizer .= 0.0f0
+    crop.phenology.harvesting_previous .= false
+    crop.phenology.harvesting .= true
+    soil.nitrogen.litter .= 0.0f0
+    soil.nitrogen.fast .= 0.0f0
+    soil.nitrogen.slow .= 0.0f0
+    soil.nitrogen.nitrate .= 0.0f0
+    soil.nitrogen.ammonium .= 0.0f0
+    soil.management.tillage_fraction .= Float32[1 0 0; 0 1 0; 0 0 1]
+    output = init_output(1, identity)
+
+    Agrocosm.record_nitrogen_balance_start!(balance, 4, crop, soil)
+    harvest_crop!(crop.calendar, crop, soil, output, Float32[0.5], 100)
+    soil_nitrogen!(crop.calendar, soil)
+    Agrocosm.record_nitrogen_balance_end!(balance, 4, crop, soil)
+
+    @test crop.nitrogen.total[1] == 0.0f0
+    @test balance.harvest_export[4, 1] ≈ 0.5f0 atol = 1.0f-6
+    @test balance.organic_after[4, 1] ≈ 0.5f0 atol = 1.0f-6
+    @test balance.residual[4, 1] ≈ 0.0f0 atol = 1.0f-6
+end
+
+@testset "Conservative baseline soil-N mineralization" begin
+    crop = init_crop(1, identity)
+    soil = init_soil(1, soilparams.soildepth, identity)
+    balance = init_nitrogen_balance(1, 1, identity)
+
+    soil.nitrogen.litter .= 2.0f0
+    soil.nitrogen.fast .= 3.0f0
+    soil.nitrogen.slow .= 4.0f0
+    soil.nitrogen.litter_response .= 0.1f0
+    soil.decomposition.litter_response .= 1.0f0
+    soil.decomposition.response .= 0.2f0
+
+    Agrocosm.record_nitrogen_balance_start!(balance, 1, crop, soil)
+    soil_nitrogen!(crop.calendar, soil)
+    Agrocosm.record_nitrogen_balance_end!(balance, 1, crop, soil)
+
+    @test balance.organic_after[1, 1] < balance.organic_before[1, 1]
+    @test balance.mineral_after[1, 1] > balance.mineral_before[1, 1]
+    @test balance.residual[1, 1] ≈ 0.0f0 atol = 1.0f-5
+end

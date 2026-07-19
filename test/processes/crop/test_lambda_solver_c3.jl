@@ -2,7 +2,8 @@ using Agrocosm
 using Test
 
 @testset "Backend-compatible C3 lambda kernel" begin
-    crop, _, _, photos = init_crop(2, identity)
+    crop = init_crop(2, identity)
+    photos = crop.photosynthesis
     pet = init_pet(2, identity)
 
     target_lambda = 0.5f0
@@ -22,10 +23,10 @@ using Test
     target_conductance = gpd / (daylength * 3600.0f0) + cft1.gmin * fpar
 
     photos.vmax .= vmax
-    photos.tstress .= tstress
-    crop.apar .= apar
-    crop.fpar .= fpar
-    crop.gp .= Float32[target_conductance, 0.0]
+    photos.temperature_stress .= tstress
+    crop.canopy.apar .= apar
+    crop.canopy.fpar .= fpar
+    crop.water.canopy_conductance .= Float32[target_conductance, 0.0]
     pet.daylength .= daylength
 
     solve_lambda_c3!(cft1, photos, crop, pet, temp, co2)
@@ -49,8 +50,9 @@ end
     )
     @test target_adtmm > 0.0f0
 
-    _, _, _, photos = init_crop(1, identity)
-    photos.tstress .= tstress
+    crop = init_crop(1, identity)
+    photos = crop.photosynthesis
+    photos.temperature_stress .= tstress
     photos.lambda .= target_lambda
     photos.vmax .= vmax
     photosynthesis_C3!(
@@ -62,7 +64,7 @@ end
         Float32[co2];
         comp_vmax = false,
     )
-    @test target_adtmm ≈ photos.adtmm[1] atol = 1.0f-6
+    @test target_adtmm ≈ photos.water_limited_assimilation[1] atol = 1.0f-6
 
     fac = target_adtmm / (1.0f0 - target_lambda)
 

@@ -20,8 +20,8 @@ function update_lit_winter_wheat!(soil::Soil,
                 hdate,
                 day)
 
-    soil.litc = soil.litc .* (1 .- reshape(hdate_callback, (1, :))) + litch .* reshape(hdate_callback, (1, :)) 
-    soil.litn = soil.litn .* (1 .- reshape(hdate_callback, (1, :))) + litnh .* reshape(hdate_callback, (1, :)) 
+    soil.carbon.litter = soil.carbon.litter .* (1 .- reshape(hdate_callback, (1, :))) + litch .* reshape(hdate_callback, (1, :))
+    soil.nitrogen.litter = soil.nitrogen.litter .* (1 .- reshape(hdate_callback, (1, :))) + litnh .* reshape(hdate_callback, (1, :))
 
 end
 

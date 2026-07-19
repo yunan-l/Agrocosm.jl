@@ -5,8 +5,8 @@ cultivate!(crop, crop_cal, day)
 Handle sowing-day state transitions and activate crop growth state.
 """
 function cultivate!(crop::Crop,
-                    crop_cal::Calendar,
-                    ml::Managed_land,
+                    crop_cal::CropCalendar,
+                    ml::ManagedLand,
                     soil::Soil,
                     day::Int;
                     lpjmlparams::LPJmLParams = lpjmlparams,
@@ -14,17 +14,15 @@ function cultivate!(crop::Crop,
                     apply_prescribed_fertilizer::Bool = true
 )
 
-    @unpack manure_cn, nfert_split_frac, nmanure_nh4_frac= lpjmlparams
-
     # if day > 1 && day % 365 == 1
-    #     crop_cal.sdate = crop_sdate[div(day, 365) + 1, :]
+    #     crop_cal.sowing_date = crop_sdate[div(day, 365) + 1, :]
     # end
     # day_ = day % 365 != 0 ? day % 365 : 365
-    crop.harvesting .= ifelse.(crop_cal.sdate .== day, false, crop.harvesting)
+    crop.phenology.harvesting .= ifelse.(crop_cal.sowing_date .== day, false, crop.phenology.harvesting)
     # Update scallback and g_period
-    crop_cal.scallback .= ifelse.(crop_cal.sdate .== day, 1, crop_cal.scallback)
-    crop.isgrowing .= ifelse.(crop_cal.sdate .== day, 1, crop.isgrowing)
-    crop_cal.scallback .= ifelse.(crop_cal.sdate .!= day, 0, crop_cal.scallback)
+    crop_cal.sowing_callback .= ifelse.(crop_cal.sowing_date .== day, 1, crop_cal.sowing_callback)
+    crop.phenology.is_growing .= ifelse.(crop_cal.sowing_date .== day, 1, crop.phenology.is_growing)
+    crop_cal.sowing_callback .= ifelse.(crop_cal.sowing_date .!= day, 0, crop_cal.sowing_callback)
     fertilizer!(
         crop_cal,
         ml,
@@ -32,24 +30,23 @@ function cultivate!(crop::Crop,
         soil,
         day;
         enabled = apply_prescribed_fertilizer,
+        manure = manure,
+        lpjmlparams = lpjmlparams,
     )
-    if manure && apply_prescribed_fertilizer
-        soil.litc[2, :] = soil.litc[2, :] + (ml.manure * manure_cn * nfert_split_frac) .* reshape(crop_cal.scallback, (1, :))
-        soil.litn[2, :] = soil.litn[2, :] + (ml.manure * (1 - nmanure_nh4_frac) * nfert_split_frac) .* reshape(crop_cal.scallback, (1, :))
-    end
 
-    crop.lai = crop.lai .* (1 .- crop_cal.scallback) .+ 0.000415f0 .* crop_cal.scallback
-    crop.biomass = crop.biomass .* (1 .- crop_cal.scallback) .+ 20.0f0 .* crop_cal.scallback
+    crop.canopy.lai = crop.canopy.lai .* (1 .- crop_cal.sowing_callback) .+ 0.000415f0 .* crop_cal.sowing_callback
+    crop.carbon.biomass = crop.carbon.biomass .* (1 .- crop_cal.sowing_callback) .+ 20.0f0 .* crop_cal.sowing_callback
     # init_vegc = device([8.0f0, 0.0113804f0, 0.0f0, 11.9886196f0])
-    crop.vegc = crop.vegc .* (1 .- reshape(crop_cal.scallback, (1, :))) .+ crop.init_vegc .* reshape(crop_cal.scallback, (1, :))
+    # crop.carbon.organs = crop.carbon.organs .* (1 .- reshape(crop_cal.sowing_callback, (1, :))) .+ crop.carbon.initial_organs .* reshape(crop_cal.sowing_callback, (1, :))
 
     # initilization of crop carbon pools and nitrogen pools
-    crop.rootc = crop.rootc .* (1 .- crop_cal.scallback) .+ 8.0f0 .* crop_cal.scallback
-    crop.leafc = crop.leafc .* (1 .- crop_cal.scallback) .+ 0.0113804f0 .* crop_cal.scallback
-    crop.stoc = crop.stoc .* (1 .- crop_cal.scallback) .+ 0.0f0 .* crop_cal.scallback
-    crop.poolc = crop.poolc .* (1 .- crop_cal.scallback) .+ 11.9886196f0 .* crop_cal.scallback
+    crop.carbon.root = crop.carbon.root .* (1 .- crop_cal.sowing_callback) .+ 8.0f0 .* crop_cal.sowing_callback
+    crop.carbon.leaf = crop.carbon.leaf .* (1 .- crop_cal.sowing_callback) .+ 0.0113804f0 .* crop_cal.sowing_callback
+    crop.carbon.storage = crop.carbon.storage .* (1 .- crop_cal.sowing_callback) .+ 0.0f0 .* crop_cal.sowing_callback
+    crop.carbon.pool = crop.carbon.pool .* (1 .- crop_cal.sowing_callback) .+ 11.9886196f0 .* crop_cal.sowing_callback
 
     init_nitrogen = 0.7f0 # C:N ratio of seed = 29
-    crop.nitrogen = crop.nitrogen .* (1 .- crop_cal.scallback) .+ init_nitrogen * crop_cal.scallback
+    crop.nitrogen.seed_input .= init_nitrogen .* crop_cal.sowing_callback
+    crop.nitrogen.total = crop.nitrogen.total .* (1 .- crop_cal.sowing_callback) .+ init_nitrogen * crop_cal.sowing_callback
 
 end

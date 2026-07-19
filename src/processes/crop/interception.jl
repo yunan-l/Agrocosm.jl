@@ -12,16 +12,16 @@ function interception!(crop::Crop,
 
     launch_1D!(
         interception_kernel!,
-        crop.intercep,
-        crop.canopy_wet,
-        crop.lai,
-        crop.isgrowing,
+        crop.water.interception,
+        crop.water.canopy_wet,
+        crop.canopy.lai,
+        crop.phenology.is_growing,
         pet_eeq,
         rain,
         PFT,
         lpjmlparams
     )
-  
+
 end
 
 @kernel inbounds = true function interception_kernel!(
@@ -34,7 +34,7 @@ end
                                       PFT::PftParameters,
                                       lpjmlparams::LPJmLParams
 ) where {T <: AbstractFloat, S <: Integer}
-    
+
     cell = @index(Global)
 
     @unpack PRIESTLEY_TAYLOR = lpjmlparams

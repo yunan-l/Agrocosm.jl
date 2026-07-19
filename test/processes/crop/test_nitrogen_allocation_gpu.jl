@@ -6,25 +6,25 @@ CUDA.functional() || error("A functional NVIDIA GPU is required for this test")
 CUDA.allowscalar(false)
 
 @testset "CUDA crop organ nitrogen redistribution" begin
-    crop, _, _, _ = init_crop(2, CuArray)
-    crop.isgrowing .= 1
-    crop.nitrogen .= 0.7f0
-    crop.leafc .= 2.0f0
-    crop.rootc .= 3.0f0
-    crop.stoc .= 4.0f0
-    crop.poolc .= 1.0f0
-    crop.leafn .= 10.0f0
-    crop.rootn .= 20.0f0
-    crop.ston .= 30.0f0
-    crop.pooln .= 40.0f0
+    crop = init_crop(2, CuArray)
+    crop.phenology.is_growing .= 1
+    crop.nitrogen.total .= 0.7f0
+    crop.carbon.leaf .= 2.0f0
+    crop.carbon.root .= 3.0f0
+    crop.carbon.storage .= 4.0f0
+    crop.carbon.pool .= 1.0f0
+    crop.nitrogen.leaf .= 10.0f0
+    crop.nitrogen.root .= 20.0f0
+    crop.nitrogen.storage .= 30.0f0
+    crop.nitrogen.pool .= 40.0f0
 
     Agrocosm.allocate_crop_nitrogen!(crop, cft1)
-    first_sum = Array(crop.leafn .+ crop.rootn .+ crop.ston .+ crop.pooln)
-    first_leafn = Array(crop.leafn)
+    first_sum = Array(crop.nitrogen.leaf .+ crop.nitrogen.root .+ crop.nitrogen.storage .+ crop.nitrogen.pool)
+    first_leafn = Array(crop.nitrogen.leaf)
 
     Agrocosm.allocate_crop_nitrogen!(crop, cft1)
-    second_sum = Array(crop.leafn .+ crop.rootn .+ crop.ston .+ crop.pooln)
-    second_leafn = Array(crop.leafn)
+    second_sum = Array(crop.nitrogen.leaf .+ crop.nitrogen.root .+ crop.nitrogen.storage .+ crop.nitrogen.pool)
+    second_leafn = Array(crop.nitrogen.leaf)
 
     @test first_sum ≈ fill(0.7f0, 2) atol = 1.0f-6
     @test second_sum ≈ first_sum atol = 1.0f-6

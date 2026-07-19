@@ -9,23 +9,23 @@ function lai_crop!(crop::Crop,
 
     launch_1D!(
         lai_crop_kernel!,
-        crop.lai,
-        crop.senescence, 
-        crop.senescence0, 
-        crop.wscal, 
-        crop.vscal, 
-        crop.flaimax, 
-        crop.laimax_adjusted, 
-        crop.isgrowing, 
+        crop.canopy.lai,
+        crop.phenology.senescence,
+        crop.phenology.senescence_previous,
+        crop.water.stress,
+        crop.nitrogen.stress,
+        crop.canopy.flaimax,
+        crop.canopy.laimax_adjusted,
+        crop.phenology.is_growing,
         PFT,
     )
-  
+
 end
 
 @kernel inbounds = true function lai_crop_kernel!(
                                   crop_lai::AbstractArray{T},
-                                  crop_senescence::AbstractArray{B}, 
-                                  crop_senescence0::AbstractArray{B},           
+                                  crop_senescence::AbstractArray{B},
+                                  crop_senescence0::AbstractArray{B},
                                   crop_wscal::AbstractArray{T},
                                   crop_vscal::AbstractArray{T},
                                   crop_flaimax::AbstractArray{T},
@@ -33,7 +33,7 @@ end
                                   crop_isgrowing::AbstractArray{S},
                                   PFT::PftParameters
 ) where {T <: AbstractFloat, S <: Integer, B <: Bool}
-    
+
     cell = @index(Global)
 
     @unpack sla, laimax = PFT
@@ -74,29 +74,29 @@ function lai_deficit!(crop::Crop,
 
     launch_1D!(
         lai_deficit_kernel!,
-        crop.lai,
-        crop.senescence,
-        crop.biomass,
-        crop.rootc,
-        crop.leafc,
-        crop.lai_nppdeficit,
-        crop.isgrowing,
+        crop.canopy.lai,
+        crop.phenology.senescence,
+        crop.carbon.biomass,
+        crop.carbon.root,
+        crop.carbon.leaf,
+        crop.canopy.lai_npp_deficit,
+        crop.phenology.is_growing,
         PFT,
     )
-  
+
 end
 
 @kernel inbounds = true function lai_deficit_kernel!(
-                                     crop_lai::AbstractArray{T},           
-                                     crop_senescence::AbstractArray{B},           
-                                     crop_biomass::AbstractArray{T},           
-                                     crop_rootc::AbstractArray{T}, 
+                                     crop_lai::AbstractArray{T},
+                                     crop_senescence::AbstractArray{B},
+                                     crop_biomass::AbstractArray{T},
+                                     crop_rootc::AbstractArray{T},
                                      crop_leafc::AbstractArray{T},
                                      crop_lai_nppdeficit::AbstractArray{T},
-                                     crop_isgrowing::AbstractArray{S},       
+                                     crop_isgrowing::AbstractArray{S},
                                      PFT::PftParameters
 ) where {T <: AbstractFloat, S <: Integer, B <: Bool}
-    
+
     cell = @index(Global)
 
     @unpack sla = PFT

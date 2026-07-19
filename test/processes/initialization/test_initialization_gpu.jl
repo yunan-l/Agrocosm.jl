@@ -1,0 +1,57 @@
+using Agrocosm
+using CUDA
+using Test
+
+CUDA.functional() || error("A functional NVIDIA GPU is required for this test")
+CUDA.allowscalar(false)
+
+@testset "CUDA state initialization" begin
+    cell_size = 2
+    crop = @inferred init_crop(cell_size, CuArray)
+    managed_land = @inferred init_managed_land(cell_size, CuArray)
+    soil = @inferred init_soil(cell_size, soilparams.soildepth, CuArray)
+    weather = @inferred init_weather(cell_size, CuArray)
+    output = @inferred init_output(cell_size, CuArray)
+    nitrogen_balance = @inferred init_nitrogen_balance(3, cell_size, CuArray)
+
+    @test crop.phenology.phu isa CuArray{Float32, 1}
+    @test crop.phenology.is_growing isa CuArray{Bool, 1}
+    @test crop.canopy.lai isa CuArray{Float32, 1}
+    @test crop.carbon.organs isa CuArray{Float32, 2}
+    @test crop.nitrogen.total isa CuArray{Float32, 1}
+    @test crop.nitrogen.seed_input isa CuArray{Float32, 1}
+    @test crop.nitrogen.harvest_export isa CuArray{Float32, 1}
+    @test crop.water.transpiration_layer isa CuArray{Float32, 2}
+    @test crop.calendar.sowing_date isa CuArray{Int32, 1}
+    @test managed_land.latitude isa CuArray{Float32, 1}
+    @test crop.photosynthesis.gross_assimilation isa CuArray{Float32, 1}
+    @test soil.properties.sand_fraction isa CuArray{Float32, 2}
+    @test soil.water.storage isa CuArray{Float32, 2}
+    @test soil.thermal.temperature isa CuArray{Float32, 2}
+    @test soil.carbon.litter isa CuArray{Float32, 2}
+    @test soil.nitrogen.nitrate isa CuArray{Float32, 2}
+    @test soil.nitrogen.leaching isa CuArray{Float32, 1}
+    @test soil.decomposition.response isa CuArray{Float32, 2}
+    @test soil.management.tillage_fraction isa CuArray{Float32, 2}
+    @test soil.snow.pack isa CuArray{Float32, 1}
+    @test weather.temp isa CuArray{Float32, 1}
+    @test output.crop.npp isa CuArray{Float32, 2}
+    @test output.soil.water_storage isa CuArray{Float32, 2}
+    @test output.climate.temperature isa CuArray{Float32, 2}
+    @test output.calendar.harvest_date isa CuArray{Int32, 2}
+    @test nitrogen_balance.residual isa CuArray{Float32, 2}
+
+    @test size(crop.carbon.organs) == (4, cell_size)
+    @test size(crop.water.transpiration_layer) == (5, cell_size)
+    @test size(nitrogen_balance.residual) == (3, cell_size)
+    @test all(Array(crop.canopy.lai) .== 0.0f0)
+
+    u0 = (
+        soil_NO3 = CUDA.fill(9000.0f0, 5, cell_size),
+        soil_NH4 = CUDA.fill(8000.0f0, 5, cell_size),
+    )
+    soil.nitrogen.slow .= 100.0f0
+    Agrocosm.initialize_soil_mineral_nitrogen!(soil, u0, :lpjml_initsoil)
+    @test all(Array(soil.nitrogen.nitrate) .== 1.0f0)
+    @test all(Array(soil.nitrogen.ammonium) .== 1.0f0)
+end

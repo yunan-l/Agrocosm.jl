@@ -53,8 +53,8 @@ function record_water_balance_start!(water_balance::WaterBalance,
                                      soil::Soil,
                                      precipitation)
     @views water_balance.precipitation[day_index, :] .= precipitation
-    @views water_balance.soil_storage_before[day_index, :] .= vec(sum(soil.swc; dims = 1))
-    @views water_balance.snow_storage_before[day_index, :] .= soil.snowpack
+    @views water_balance.soil_storage_before[day_index, :] .= vec(sum(soil.water.storage; dims = 1))
+    @views water_balance.snow_storage_before[day_index, :] .= soil.snow.pack
     return nothing
 end
 
@@ -70,18 +70,18 @@ function record_water_balance_end!(water_balance::WaterBalance,
                                    soil::Soil,
                                    crop::Crop)
     @views begin
-        water_balance.soil_storage_after[day_index, :] .= vec(sum(soil.swc; dims = 1))
-        water_balance.snow_storage_after[day_index, :] .= soil.snowpack
-        water_balance.snowmelt[day_index, :] .= soil.snowmelt
-        water_balance.snow_sublimation[day_index, :] .= soil.snow_sublimation
-        water_balance.snow_runoff[day_index, :] .= soil.snow_runoff
-        water_balance.interception[day_index, :] .= crop.intercep
-        water_balance.transpiration[day_index, :] .= vec(sum(crop.trans_layer; dims = 1))
-        water_balance.evaporation[day_index, :] .= vec(sum(soil.evap; dims = 1))
-        water_balance.surface_runoff[day_index, :] .= soil.srunoff
-        water_balance.lateral_runoff[day_index, :] .= vec(sum(soil.lrunoff; dims = 1))
-        water_balance.bottom_drainage[day_index, :] .= soil.outflux_f
-        water_balance.remaining_infiltration[day_index, :] .= soil.infil
+        water_balance.soil_storage_after[day_index, :] .= vec(sum(soil.water.storage; dims = 1))
+        water_balance.snow_storage_after[day_index, :] .= soil.snow.pack
+        water_balance.snowmelt[day_index, :] .= soil.snow.melt
+        water_balance.snow_sublimation[day_index, :] .= soil.snow.sublimation
+        water_balance.snow_runoff[day_index, :] .= soil.snow.runoff
+        water_balance.interception[day_index, :] .= crop.water.interception
+        water_balance.transpiration[day_index, :] .= vec(sum(crop.water.transpiration_layer; dims = 1))
+        water_balance.evaporation[day_index, :] .= vec(sum(soil.water.evaporation; dims = 1))
+        water_balance.surface_runoff[day_index, :] .= soil.water.surface_runoff
+        water_balance.lateral_runoff[day_index, :] .= vec(sum(soil.water.lateral_runoff; dims = 1))
+        water_balance.bottom_drainage[day_index, :] .= soil.water.bottom_drainage
+        water_balance.remaining_infiltration[day_index, :] .= soil.water.infiltration
 
         water_balance.unaccounted_snow_flux[day_index, :] .=
             water_balance.snow_storage_before[day_index, :] .+

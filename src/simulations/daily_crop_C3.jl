@@ -6,12 +6,17 @@ Execute daily forward simulation for C3 crop configuration.
 """
 function daily_crop_C3!(start_day, end_day,
                         pftparameters,
-                        climate, climbuf, crop, crop_cal, photos, pet, soil, managed_land, 
+                        climate, climbuf, crop, pet, soil, managed_land,
                         dailyWeather, output;
                         irrigation = false,
+                        manure = false,
                         auto_fertilizer = true,
-                        water_balance = nothing
+                        water_balance = nothing,
+                        nitrogen_balance = nothing
 )
+
+    crop_cal = crop.calendar
+    photos = crop.photosynthesis
 
     if water_balance !== nothing && irrigation
         throw(ArgumentError("water-balance diagnostics currently support rainfed simulations only"))
@@ -22,8 +27,12 @@ function daily_crop_C3!(start_day, end_day,
         diagnostic_day = day - start_day + 1
 
         day_of_year = day % 365 != 0 ? day % 365 : 365
-        
+
         readclimate!(climate, dailyWeather, day)
+
+        if nitrogen_balance !== nothing
+            record_nitrogen_balance_start!(nitrogen_balance, diagnostic_day, crop, soil)
+        end
 
         if water_balance !== nothing
             record_water_balance_start!(water_balance, diagnostic_day, soil, dailyWeather.prec)
@@ -43,6 +52,7 @@ function daily_crop_C3!(start_day, end_day,
             managed_land,
             soil,
             day_of_year;
+            manure = manure,
             apply_prescribed_fertilizer = !auto_fertilizer,
         )
 
@@ -53,28 +63,28 @@ function daily_crop_C3!(start_day, end_day,
 
         # compute phenology variables
         phenology_crop!(crop, climbuf.V_req, pftparameters, dailyWeather.temp, pet.daylength)
-        
-        harvest_crop!(crop_cal, crop, soil, output, managed_land.residuefrac, day_of_year) # crop harvesting
+
+        harvest_crop!(crop_cal, crop, soil, output, managed_land.residue_fraction, day_of_year) # crop harvesting
 
         # Interception and infiltration precede plant water stress, as in LPJmL.
         interception!(crop, pftparameters, pet.eeq, dailyWeather.prec)
         pedotransfer!(soil)
         soil_infiltration!(soil, crop, dailyWeather.prec; irrigation = irrigation)
-        
+
         apar_crop!(pftparameters, crop, pet) # crop absorbed photosynthetic radiation
         temp_stress(pftparameters, pet, photos, dailyWeather.temp) # temperature stress function
 
         # C3 photosynthesis
-        photosynthesis_C3!(pftparameters, photos, crop.apar, pet.daylength, dailyWeather.temp, dailyWeather.annual_co2; comp_vmax = true)
+        photosynthesis_C3!(pftparameters, photos, crop.canopy.apar, pet.daylength, dailyWeather.temp, dailyWeather.annual_co2; comp_vmax = true)
 
         # LPJmL first uses lambda_opt photosynthesis to obtain potential
         # conductance, then constrains conductance by water supply.
-        transpiration!(photos.adtmm, pftparameters, crop, pet, soil, dailyWeather.annual_co2)
+        transpiration!(photos.water_limited_assimilation, pftparameters, crop, pet, soil, dailyWeather.annual_co2)
 
         # Solve the water-limited lambda on the active backend (CPU or GPU),
         # then recompute photosynthesis with fixed vmax and actual lambda.
         solve_lambda_c3!(pftparameters, photos, crop, pet, dailyWeather.temp, dailyWeather.annual_co2)
-        photosynthesis_C3!(pftparameters, photos, crop.apar, pet.daylength, dailyWeather.temp, dailyWeather.annual_co2; comp_vmax = false)
+        photosynthesis_C3!(pftparameters, photos, crop.canopy.apar, pet.daylength, dailyWeather.temp, dailyWeather.annual_co2; comp_vmax = false)
 
         # crop respiration and carbon allocation
         crop_carbon!(photos, crop, output, pftparameters, dailyWeather.temp)
@@ -96,6 +106,10 @@ function daily_crop_C3!(start_day, end_day,
 
         if water_balance !== nothing
             record_water_balance_end!(water_balance, diagnostic_day, soil, crop)
+        end
+
+        if nitrogen_balance !== nothing
+            record_nitrogen_balance_end!(nitrogen_balance, diagnostic_day, crop, soil)
         end
 
     end

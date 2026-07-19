@@ -19,34 +19,34 @@ function transpiration!(photos_adtmm::AbstractArray{T},
     # this is LPJmL's ppm2bar(original_co2) without applying ppm conversion twice.
     co2_bar = co2 .* T(1e-5)
     conductance_denominator = co2_bar .* (one(T) - T(LAMBDA_OPT)) .* hour2sec(pet.daylength)
-    crop.gp .= ifelse.(
+    crop.water.canopy_conductance .= ifelse.(
         (co2_bar .> zero(T)) .& (pet.daylength .> zero(T)),
-        T(1.6) .* photos_adtmm ./ conductance_denominator .+ T(gmin) .* crop.fpar,
+        T(1.6) .* photos_adtmm ./ conductance_denominator .+ T(gmin) .* crop.canopy.fpar,
         zero(T),
     )
 
     # Root-zone weighted soil water availability per cell.
-    wr = sum(soil.w .* crop.rootdist, dims = 1)
-    # supply = emax * wr .* (1 .- exp.(-0.04f0 * crop.rootc))
-    # demand = ifelse.(crop.gp .> 0, (1 .- crop.canopy_wet) .* pet.eeq * ALPHAM ./ (1 .+ (GM * ALPHAM) ./ crop.gp), zero(T))
+    wr = sum(soil.water.relative_content .* crop.water.root_distribution, dims = 1)
+    # supply = emax * wr .* (1 .- exp.(-0.04f0 * crop.carbon.root))
+    # demand = ifelse.(crop.water.canopy_conductance .> 0, (1 .- crop.water.canopy_wet) .* pet.eeq * ALPHAM ./ (1 .+ (GM * ALPHAM) ./ crop.water.canopy_conductance), zero(T))
     # transp = ifelse.(wr .> 0, min.(supply, demand) ./ wr .* fpc, zero(T)) # here the crop.fpc = 1, so we just omit it in the kernel fucntion
 
     kernel_params = (lpjmlparams = lpjmlparams, soil_layers = 5)
 
     launch_1D!(water_demand_supply_kernel!,
-               crop.gp,
-               crop.trans_layer,
-               crop.w_demandsum,
-               crop.w_supplysum,
-               crop.wdf,
-               crop.wscal,
-               crop.rootc,
-               crop.canopy_wet,
-               crop.isgrowing,
+               crop.water.canopy_conductance,
+               crop.water.transpiration_layer,
+               crop.water.demand_sum,
+               crop.water.supply_sum,
+               crop.water.deficit,
+               crop.water.stress,
+               crop.carbon.root,
+               crop.water.canopy_wet,
+               crop.phenology.is_growing,
                pet.eeq,
-               crop.rootdist,
-               soil.w,
-               soil.whcs,
+               crop.water.root_distribution,
+               soil.water.relative_content,
+               soil.water.holding_capacity_storage,
                wr,
                PFT,
                kernel_params)
@@ -71,7 +71,7 @@ end
                                              PFT::PftParameters,
                                              kernel_params
 ) where {T <: AbstractFloat, M <: AbstractFloat, S <: Integer}
-    
+
     cell = @index(Global)
 
     @unpack lpjmlparams, soil_layers = kernel_params
@@ -86,7 +86,7 @@ end
         else
             demand = zero(T)
         end
-        
+
         crop_w_demandsum[cell] += demand
         if supply > demand
             crop_w_supplysum[cell] += demand

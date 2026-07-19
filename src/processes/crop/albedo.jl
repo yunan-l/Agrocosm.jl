@@ -14,7 +14,7 @@ function albedo!(PFT::PftParameters,
 
     crop_albedo!(PFT, crop)
 
-    pet.albedo .= crop.albedo .+ (1 .- fpc * crop.isgrowing) * soil_albedo
+    pet.albedo .= crop.canopy.albedo .+ (1 .- fpc * crop.phenology.is_growing) * soil_albedo
 
 end
 
@@ -23,13 +23,13 @@ function crop_albedo!(PFT::PftParameters,
                       crop::Crop
 )
     @unpack albedo_leaf, albedo_litter, fpc = PFT
-    
-    albedo_green_leaves = fpc * crop.phen * albedo_leaf
-    
+
+    albedo_green_leaves = fpc * crop.canopy.phenology_fraction * albedo_leaf
+
     # albedo of PFT without green foliage (litter background albedo)
-  
-    albedo_brown_litter = fpc * (1 .- crop.phen) * albedo_litter
-    
-    crop.albedo .= albedo_green_leaves .+ albedo_brown_litter
-    
+
+    albedo_brown_litter = fpc * (1 .- crop.canopy.phenology_fraction) * albedo_litter
+
+    crop.canopy.albedo .= albedo_green_leaves .+ albedo_brown_litter
+
 end

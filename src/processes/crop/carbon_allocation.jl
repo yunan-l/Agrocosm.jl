@@ -5,31 +5,31 @@ Partition crop biomass among leaf/root/storage/pool carbon compartments.
 """
 function carbon_allocation!(PFT::PftParameters,
                             crop::Crop,
-                            photos::Photos
+                            photos::CropPhotosynthesis
 )
-    # 1D cell-wise allocation; crop.stoc provides launch length and kernel arg #1.
+    # 1D cell-wise allocation; crop.carbon.storage provides launch length and kernel arg #1.
     kernel_params = (FROOTMAX = 0.4f0, FROOTMIN = 0.3f0)
 
     launch_1D!(carbon_allocation_kernel!,
-               crop.stoc,
-               crop.isgrowing,
-               crop.growingdays,
-               crop.vscal_sum,
-               crop.vscal,
-               crop.ndf,
-               crop.wdf,
-               crop.fphu,
-               crop.senescence,
-               crop.biomass,
-               crop.resp,
-               photos.agd,
-               photos.rd,
-               crop.npp,
-               crop.lai,
-               crop.leafc,
-               crop.rootc,
-               crop.poolc,
-               crop.lai_nppdeficit,
+               crop.carbon.storage,
+               crop.phenology.is_growing,
+               crop.phenology.growing_days,
+               crop.nitrogen.stress_sum,
+               crop.nitrogen.stress,
+               crop.nitrogen.deficit,
+               crop.water.deficit,
+               crop.phenology.fphu,
+               crop.phenology.senescence,
+               crop.carbon.biomass,
+               crop.carbon.respiration,
+               photos.gross_assimilation,
+               photos.leaf_respiration,
+               crop.carbon.npp,
+               crop.canopy.lai,
+               crop.carbon.leaf,
+               crop.carbon.root,
+               crop.carbon.pool,
+               crop.canopy.lai_npp_deficit,
                PFT,
                kernel_params)
 

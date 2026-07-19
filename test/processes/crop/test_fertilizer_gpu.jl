@@ -6,19 +6,23 @@ CUDA.functional() || error("A functional NVIDIA GPU is required for this test")
 CUDA.allowscalar(false)
 
 @testset "CUDA prescribed fertilizer is conserved" begin
-    crop, crop_cal, managed_land, _ = init_crop(1, CuArray)
+    crop = init_crop(1, CuArray)
+    managed_land = init_managed_land(1, CuArray)
+    crop_cal = crop.calendar
     soil = init_soil(1, soilparams.soildepth, CuArray)
-    crop_cal.sdate .= 1
+    crop_cal.sowing_date .= 1
     managed_land.fertilizer .= 10.0f0
-    no3_before = sum(Array(soil.NO3))
-    nh4_before = sum(Array(soil.NH4))
+    no3_before = sum(Array(soil.nitrogen.nitrate))
+    nh4_before = sum(Array(soil.nitrogen.ammonium))
 
     fertilizer!(crop_cal, managed_land, crop, soil, 1)
-    crop.fphu .= 0.3f0
+    @test Array(crop.nitrogen.prescribed_fertilizer_input)[1] ≈ 2.0f0
+    crop.phenology.fphu .= 0.3f0
     fertilizer!(crop_cal, managed_land, crop, soil, 2)
+    @test Array(crop.nitrogen.prescribed_fertilizer_input)[1] ≈ 8.0f0
 
-    total_input = sum(Array(soil.NO3)) - no3_before +
-                  sum(Array(soil.NH4)) - nh4_before
+    total_input = sum(Array(soil.nitrogen.nitrate)) - no3_before +
+                  sum(Array(soil.nitrogen.ammonium)) - nh4_before
     @test total_input ≈ 10.0f0 atol = 1.0f-6
-    @test Array(crop.nfertilizer)[1] == 0.0f0
+    @test Array(crop.nitrogen.pending_fertilizer)[1] == 0.0f0
 end

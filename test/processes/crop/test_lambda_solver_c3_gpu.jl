@@ -6,7 +6,8 @@ CUDA.functional() || error("A functional NVIDIA GPU is required for this test")
 CUDA.allowscalar(false)
 
 @testset "CUDA C3 lambda solver" begin
-    crop, _, _, photos = init_crop(2, CuArray)
+    crop = init_crop(2, CuArray)
+    photos = crop.photosynthesis
     pet = init_pet(2, CuArray)
 
     target_lambda = 0.5f0
@@ -26,10 +27,10 @@ CUDA.allowscalar(false)
     target_conductance = gpd / (daylength * 3600.0f0) + cft1.gmin * fpar
 
     photos.vmax .= vmax
-    photos.tstress .= tstress
-    crop.apar .= apar
-    crop.fpar .= fpar
-    crop.gp .= CuArray(Float32[target_conductance, 0.0])
+    photos.temperature_stress .= tstress
+    crop.canopy.apar .= apar
+    crop.canopy.fpar .= fpar
+    crop.water.canopy_conductance .= CuArray(Float32[target_conductance, 0.0])
     pet.daylength .= daylength
 
     solve_lambda_c3!(

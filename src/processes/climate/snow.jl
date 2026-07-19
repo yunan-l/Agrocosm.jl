@@ -16,12 +16,12 @@ function snow!(soil::Soil,
         snow_kernel!,
         dailyWeather.temp,
         dailyWeather.prec,
-        soil.snowpack,
-        soil.snowmelt,
-        soil.snow_sublimation,
-        soil.snow_runoff,
-        soil.snowheight,
-        soil.snowfraction,
+        soil.snow.pack,
+        soil.snow.melt,
+        soil.snow.sublimation,
+        soil.snow.runoff,
+        soil.snow.height,
+        soil.snow.fraction,
         kernel_params
     )
 
@@ -40,9 +40,9 @@ end
                               soil_snowfraction::AbstractArray{T},
                               kernel_params
 ) where {T <: AbstractFloat}
-    
+
     cell = @index(Global)
-    
+
     @unpack tsnow, snow_skin_depth, th_diff_snow, lambda_snow, c_water2ice, c_watertosnow, c_roughness= kernel_params.snowparams
     @unpack maxsnowpack = kernel_params.lpjmlparams
 
@@ -88,7 +88,7 @@ end
     # Add melt water to rainfall before interception and infiltration.
     prec[cell] += soil_snowmelt[cell]
 
-    # calculate snow height and fraction of snow coverage 
+    # calculate snow height and fraction of snow coverage
     if soil_snowpack[cell] > T(1e-7)
         HS = c_watertosnow * (soil_snowpack[cell] / T(1000.0)) # mm -> m */
         frsg = HS / (HS+ T(0.5) * c_roughness)

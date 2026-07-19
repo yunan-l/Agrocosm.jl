@@ -7,22 +7,22 @@ function evaporation!(pet_eeq::AbstractArray{T},
                       crop::Crop,
                       soil::Soil;
                       lpjmlparams::LPJmLParams = lpjmlparams
-    
+
 ) where {T <: AbstractFloat}
 
     kernel_params = (lpjmlparams = lpjmlparams, soil_layers = 5)
 
     launch_1D!(evaporation_kernel!,
                pet_eeq,
-               crop.fpar,
-               crop.trans_layer,
-               crop.canopy_wet,
-               soil.swc,
-               soil.wpwps,
-               soil.whcs,
-               soil.evap,
-               soil.agtop_cover,
-               soil.layer_depth,
+               crop.canopy.fpar,
+               crop.water.transpiration_layer,
+               crop.water.canopy_wet,
+               soil.water.storage,
+               soil.water.wilting_storage,
+               soil.water.holding_capacity_storage,
+               soil.water.evaporation,
+               soil.properties.surface_litter_cover,
+               soil.properties.layer_depth,
                kernel_params)
 
 end
@@ -40,13 +40,13 @@ end
                                      soil_layer_depth::AbstractArray{T},
                                      kernel_params
 ) where {T <: AbstractFloat, M <: AbstractFloat}
-    
+
     cell = @index(Global)
 
     @unpack lpjmlparams, soil_layers = kernel_params
 
     @unpack PRIESTLEY_TAYLOR = lpjmlparams  # Priestley-Taylor coefficient
-    
+
     soildepth_evap = lpjmlparams.soildepth_evap
 
     evap_energy = pet_eeq[cell] * PRIESTLEY_TAYLOR * max(1 - crop_fpar[cell], 0.05)

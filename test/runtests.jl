@@ -15,4 +15,5 @@ using Test
     include("processes/crop/test_nitrogen_uptake.jl")
     include("processes/soil/test_soil_water.jl")
     include("diagnostics/test_water_balance.jl")
+    include("diagnostics/test_nitrogen_balance.jl")
 end

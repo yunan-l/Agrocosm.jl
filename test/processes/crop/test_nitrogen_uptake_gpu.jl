@@ -6,51 +6,51 @@ CUDA.functional() || error("A functional NVIDIA GPU is required for this test")
 CUDA.allowscalar(false)
 
 @testset "CUDA separate NO3/NH4 uptake conserves nitrogen" begin
-    crop, _, _, _ = init_crop(1, CuArray)
+    crop = init_crop(1, CuArray)
     soil = init_soil(1, soilparams.soildepth, CuArray)
 
-    crop.isgrowing .= 1
-    crop.nitrogen .= 0.1f0
-    crop.leafc .= 20.0f0
-    crop.rootc .= 100.0f0
-    crop.ndemand_leaf .= 0.4f0
-    crop.ndemand_tot .= 1.0f0
-    crop.rootdist .= CuArray(Float32[0.5, 0.3, 0.2, 0.0, 0.0])
-    soil.w .= 1.0f0
-    soil.wsat .= 0.4f0
-    soil.temp .= 15.0f0
-    soil.NO3 .= CuArray(reshape(Float32[1.0, 0.0, 0.5, 0.0, 0.0], 5, 1))
-    soil.NH4 .= CuArray(reshape(Float32[0.0, 0.7, 0.0, 0.0, 0.0], 5, 1))
+    crop.phenology.is_growing .= 1
+    crop.nitrogen.total .= 0.1f0
+    crop.carbon.leaf .= 20.0f0
+    crop.carbon.root .= 100.0f0
+    crop.nitrogen.demand_leaf .= 0.4f0
+    crop.nitrogen.demand_total .= 1.0f0
+    crop.water.root_distribution .= CuArray(Float32[0.5, 0.3, 0.2, 0.0, 0.0])
+    soil.water.relative_content .= 1.0f0
+    soil.water.saturation_fraction .= 0.4f0
+    soil.thermal.temperature .= 15.0f0
+    soil.nitrogen.nitrate .= CuArray(reshape(Float32[1.0, 0.0, 0.5, 0.0, 0.0], 5, 1))
+    soil.nitrogen.ammonium .= CuArray(reshape(Float32[0.0, 0.7, 0.0, 0.0, 0.0], 5, 1))
 
-    plant_before = Array(crop.nitrogen)[1]
-    soil_before = sum(Array(soil.NO3)) + sum(Array(soil.NH4))
+    plant_before = Array(crop.nitrogen.total)[1]
+    soil_before = sum(Array(soil.nitrogen.nitrate)) + sum(Array(soil.nitrogen.ammonium))
     nuptake_crop!(crop, cft1, soil)
 
-    uptake = Array(crop.nuptake)[1]
-    plant_gain = Array(crop.nitrogen)[1] - plant_before
-    soil_loss = soil_before - sum(Array(soil.NO3)) - sum(Array(soil.NH4))
+    uptake = Array(crop.nitrogen.uptake)[1]
+    plant_gain = Array(crop.nitrogen.total)[1] - plant_before
+    soil_loss = soil_before - sum(Array(soil.nitrogen.nitrate)) - sum(Array(soil.nitrogen.ammonium))
 
     @test uptake > 0.0f0
     @test plant_gain ≈ uptake atol = 1.0f-6
     @test soil_loss ≈ uptake atol = 1.0f-6
-    @test all(Array(soil.NO3) .>= 0.0f0)
-    @test all(Array(soil.NH4) .>= 0.0f0)
+    @test all(Array(soil.nitrogen.nitrate) .>= 0.0f0)
+    @test all(Array(soil.nitrogen.ammonium) .>= 0.0f0)
 end
 
 @testset "CUDA automatic fertilizer supplies the remaining demand" begin
-    crop, _, _, _ = init_crop(1, CuArray)
+    crop = init_crop(1, CuArray)
     soil = init_soil(1, soilparams.soildepth, CuArray)
-    crop.isgrowing .= 1
-    crop.nitrogen .= 0.1f0
-    crop.leafc .= 20.0f0
-    crop.rootc .= 100.0f0
-    crop.ndemand_leaf .= 0.4f0
-    crop.ndemand_tot .= 1.0f0
+    crop.phenology.is_growing .= 1
+    crop.nitrogen.total .= 0.1f0
+    crop.carbon.leaf .= 20.0f0
+    crop.carbon.root .= 100.0f0
+    crop.nitrogen.demand_leaf .= 0.4f0
+    crop.nitrogen.demand_total .= 1.0f0
 
     nuptake_crop!(crop, cft1, soil; auto_fertilizer = true)
 
-    @test Array(crop.nitrogen)[1] ≈ 1.0f0 atol = 1.0f-6
-    @test Array(crop.nuptake)[1] ≈ 0.9f0 atol = 1.0f-6
-    @test Array(crop.nautofertilizer)[1] ≈ 0.9f0 atol = 1.0f-6
-    @test Array(crop.vscal)[1] == 1.0f0
+    @test Array(crop.nitrogen.total)[1] ≈ 1.0f0 atol = 1.0f-6
+    @test Array(crop.nitrogen.uptake)[1] ≈ 0.9f0 atol = 1.0f-6
+    @test Array(crop.nitrogen.auto_fertilizer)[1] ≈ 0.9f0 atol = 1.0f-6
+    @test Array(crop.nitrogen.stress)[1] == 1.0f0
 end

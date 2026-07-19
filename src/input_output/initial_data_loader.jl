@@ -3,16 +3,16 @@ InitialDataLoader(data, data_index, device)
 
 Build initial model-state inputs from forcing/parameter datasets.
 """
-function InitialDataLoader(data::NamedTuple, 
+function InitialDataLoader(data::NamedTuple,
                            data_index::Vector{Int},
                            device
 )
 
 
     @unpack latitude, crop, soilparam, initialLPJmL = data
-    
+
     latitude_set = latitude[data_index] |> device
-    
+
     crop = (
         sdate = Int32.(crop.sdate[data_index]),
         phu = crop.phu[data_index],
@@ -31,7 +31,7 @@ function InitialDataLoader(data::NamedTuple,
         tdiff_15 = soilparam.tdiff_15[data_index],
         soildepth = soilparam.soildepth,
     ) |> device
-      
+
     u0_set = (
         swc = initialLPJmL.u0.swc[:, data_index],
         litc = initialLPJmL.u0.litc[:, data_index],
@@ -43,7 +43,7 @@ function InitialDataLoader(data::NamedTuple,
         soil_NH4 = initialLPJmL.u0.soil_NH4[:, data_index],
         soil_NO3 = initialLPJmL.u0.soil_NO3[:, data_index],
     ) |> device
-    
+
     model_state = (
         crop = crop,
         c_shift_fast = initialLPJmL.c_shift_fast[:, data_index],

@@ -18,20 +18,26 @@ import Parameters: @with_kw, @unpack
 import MuladdMacro: @muladd
 
 # STRUCTURES
-export LPJmLParams, PftParameters, PhotoParams, Photos, PetPar, Output
+export LPJmLParams, PftParameters, PhotoParams, PetPar, Output
 export DailyWeather, ClimBuf, CO2
-export Crop, Calendar, Managed_land
+export Crop, CropPhenology, CropCanopy, CropCarbon, CropNitrogen, CropWater
+export CropCalendar, CropPhotosynthesis, ManagedLand
 export SoilParams, SoilDecompParams, SnowParams, Soil
+export SoilProperties, SoilWater, SoilThermal, SoilCarbon, SoilNitrogen
+export SoilDecomposition, SoilManagement, SoilSnow
+export CropOutput, SoilOutput, ClimateOutput, CalendarOutput
 
 # PARAMETERS (PFTs)
 export lpjmlparams, photoparams, soilparams, soil_decomp_params, snowparams, cft1, cft2, cft3, cft4
 
 # INITIALIZATION
 export init_states!, init_climbuf, init_crop, init_pet, init_soil, init_output
+export init_weather, init_managed_land
 export WaterBalance, init_water_balance
+export NitrogenBalance, init_nitrogen_balance
 
 # CLIMATE
-export annual_climbuf!, daily_climbuf!, infil_perc!, spin_up_climbuf!, update_climbuf!, readclimate!, snow!         
+export annual_climbuf!, daily_climbuf!, infil_perc!, spin_up_climbuf!, update_climbuf!, readclimate!, snow!
 
 # PHYSICS FUNCTIONS
 # RADIATION
@@ -75,12 +81,31 @@ include("parameters/pft.jl")
 include("numerics/lpj_bisect.jl")
 
 # Initialization
-include("processes/initialization/define_structs.jl")
+include("processes/initialization/states/climate/climate.jl")
+include("processes/initialization/states/management/managed_land.jl")
+include("processes/initialization/states/output/output.jl")
+include("processes/initialization/states/crop/phenology.jl")
+include("processes/initialization/states/crop/canopy.jl")
+include("processes/initialization/states/crop/carbon.jl")
+include("processes/initialization/states/crop/nitrogen.jl")
+include("processes/initialization/states/crop/water.jl")
+include("processes/initialization/states/crop/calendar.jl")
+include("processes/initialization/states/crop/photosynthesis.jl")
+include("processes/initialization/states/crop/crop.jl")
+include("processes/initialization/states/soil/properties.jl")
+include("processes/initialization/states/soil/water.jl")
+include("processes/initialization/states/soil/thermal.jl")
+include("processes/initialization/states/soil/carbon.jl")
+include("processes/initialization/states/soil/nitrogen.jl")
+include("processes/initialization/states/soil/decomposition.jl")
+include("processes/initialization/states/soil/management.jl")
+include("processes/initialization/states/soil/snow.jl")
+include("processes/initialization/states/soil/soil.jl")
 include("processes/initialization/init_states.jl")
-include("processes/initialization/init_structs.jl")
 
 # Diagnostics
 include("diagnostics/water_balance.jl")
+include("diagnostics/nitrogen_balance.jl")
 
 # Climate
 include("processes/climate/climbuf.jl")

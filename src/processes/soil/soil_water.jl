@@ -10,11 +10,11 @@ function soil_infiltration!(soil::Soil,
                             prec::AbstractArray{T};
                             irrigation = false
 ) where {T <: AbstractFloat}
-    soil.infil .= prec - crop.intercep
+    soil.water.infiltration .= prec - crop.water.interception
     infil_perc!(soil)
 
     if !irrigation
-        soil.swc .= soil.swc .+ soil.perc
+        soil.water.storage .= soil.water.storage .+ soil.water.percolation
     end
 
     return nothing
@@ -32,9 +32,9 @@ function soil_evapotranspiration!(soil::Soil,
                                   irrigation = false)
     if irrigation
         # Preserve the existing idealized irrigation behaviour.
-        soil.swc .= soil.wfc .* soil.layer_depth
+        soil.water.storage .= soil.water.field_capacity .* soil.properties.layer_depth
     else
-        soil.swc .= soil.swc .- crop.trans_layer .- soil.evap
+        soil.water.storage .= soil.water.storage .- crop.water.transpiration_layer .- soil.water.evaporation
     end
 
     return nothing

@@ -12,65 +12,65 @@ function nitrogen_transform!(soil::Soil;
 
     # NO3 and N2O from mineralization of litter organic matter
     # c_shift_* already includes layer-wise redistribution from equilibrium spin-up.
-    F_Nmineral = sum(soil.decom_litn, dims = 1) * atmfrac .* (fastfrac * soil.c_shift_fast + (1.0f0 - fastfrac) * soil.c_shift_slow);
-    soil.NH4 .+= F_Nmineral * (1 - k_l)
-    soil.NO3 .+= F_Nmineral * k_l
+    F_Nmineral = sum(soil.nitrogen.decomposed_litter, dims = 1) * atmfrac .* (fastfrac * soil.carbon.shift_fast + (1.0f0 - fastfrac) * soil.carbon.shift_slow);
+    soil.nitrogen.ammonium .+= F_Nmineral * (1 - k_l)
+    soil.nitrogen.nitrate .+= F_Nmineral * k_l
 
     # NO3 and N2O from mineralization of soil organic matter
-    F_Nmineral = soil.decom_fastn + soil.decom_slown
-    soil.NH4 .+= F_Nmineral * (1 - k_l)
-    soil.NO3 .+= F_Nmineral * k_l
+    F_Nmineral = soil.nitrogen.decomposed_fast + soil.nitrogen.decomposed_slow
+    soil.nitrogen.ammonium .+= F_Nmineral * (1 - k_l)
+    soil.nitrogen.nitrate .+= F_Nmineral * k_l
 
     # Immobilization consumes mineral N (NH4 + NO3) and transfers it to slow soil pools.
     # decom_sum_lit* are reduced to 1D cell vectors for 1D kernel launch.
-    decom_sum_litc = vec(sum(soil.decom_litc, dims = 1))
-    decom_sum_litn = vec(sum(soil.decom_litn, dims = 1))
+    decom_sum_litc = vec(sum(soil.carbon.decomposed_litter, dims = 1))
+    decom_sum_litn = vec(sum(soil.nitrogen.decomposed_litter, dims = 1))
     kernel_params_immo = (lpjmlparams = lpjmlparams, cn_ratio = 15.0f0, soil_layers = 5, k_N = 5f-3)
 
     launch_1D!(immobilize_kernel!,
-                decom_sum_litc, 
+                decom_sum_litc,
                 decom_sum_litn,
-                soil.NH4,
-                soil.NO3,
-                soil.fastn,
-                soil.slown,
-                soil.c_shift_fast,
-                soil.c_shift_slow,
-                soil.layer_depth,
+                soil.nitrogen.ammonium,
+                soil.nitrogen.nitrate,
+                soil.nitrogen.fast,
+                soil.nitrogen.slow,
+                soil.carbon.shift_fast,
+                soil.carbon.shift_slow,
+                soil.properties.layer_depth,
                 kernel_params_immo)
 
     # Nitrification converts NH4 to NO3 with soil moisture/temperature modifiers.
     kernel_params_nit = (lpjmlparams = lpjmlparams, soil_layers = 5, a_nit = 0.45f0, b_nit = 1.27f0, c_nit = 0.0012f0, d_nit = 2.84f0)
-    
+
     launch_1D!(nitrify_kernel!,
-                soil.ph,
-                soil.NH4,
-                soil.NO3,
-                soil.swc,
-                soil.wsats,
-                soil.temp,
+                soil.properties.ph,
+                soil.nitrogen.ammonium,
+                soil.nitrogen.nitrate,
+                soil.water.storage,
+                soil.water.saturation_storage,
+                soil.thermal.temperature,
                 kernel_params_nit)
 
     #  Denitrification: NO3 -> N2O + N2.
     kernel_params_denit = (lpjmlparams = lpjmlparams, soil_layers = 5)
     launch_1D!(denitrify_kernel!,
-                soil.fastc,
-                soil.slowc,
-                soil.w,
-                soil.whcs,
-                soil.wpwps,
-                soil.w_fw,
-                soil.wsats,
-                soil.temp,
-                soil.NO3,
+                soil.carbon.fast,
+                soil.carbon.slow,
+                soil.water.relative_content,
+                soil.water.holding_capacity_storage,
+                soil.water.wilting_storage,
+                soil.water.free_water,
+                soil.water.saturation_storage,
+                soil.thermal.temperature,
+                soil.nitrogen.nitrate,
                 kernel_params_denit)
 
     # NH3 volatilization from top-layer NH4 (no wind forcing available yet, uses default parameter).
     launch_1D!(volatilization_kernel!,
-                soil.NH4,
-                soil.ph,
-                soil.temp,
-                soil.layer_depth,
+                soil.nitrogen.ammonium,
+                soil.properties.ph,
+                soil.thermal.temperature,
+                soil.properties.layer_depth,
                 lpjmlparams)
 
 end
@@ -78,7 +78,7 @@ end
 
 @kernel inbounds = true function immobilize_kernel!(decom_sum_litc::AbstractArray{T},
                                     decom_sum_litn::AbstractArray{T},
-                                    soil_NH4::AbstractArray{M},           
+                                    soil_NH4::AbstractArray{M},
                                     soil_NO3::AbstractArray{M},
                                     soil_fastn::AbstractArray{M},
                                     soil_slown::AbstractArray{M},
@@ -87,7 +87,7 @@ end
                                     soil_layer_depth::AbstractArray{T},
                                     kernel_params_immo
 ) where {T <: AbstractFloat, M <: AbstractFloat}
-    
+
     cell = @index(Global)
 
     @unpack lpjmlparams, cn_ratio, soil_layers, k_N = kernel_params_immo
@@ -97,7 +97,7 @@ end
     for l in 1:soil_layers
 
         N_sum = soil_NH4[l, cell] + soil_NO3[l, cell]
-        if(N_sum > 0) # immobilization of N 
+        if(N_sum > 0) # immobilization of N
             n_immo = fastfrac * (1 - atmfrac) * (decom_sum_litc[cell] / cn_ratio - decom_sum_litn[cell]) * c_shift_fast[l, cell] * N_sum / soil_layer_depth[l] * 1f3 / (k_N + N_sum / soil_layer_depth[l] * 1f3)
             if(n_immo > 0)
                 if(n_immo > N_sum)
@@ -111,7 +111,7 @@ end
 
         # Fast/slow litter fractions are handled separately with different shift factors.
         N_sum = soil_NH4[l, cell] + soil_NO3[l, cell]
-        if(N_sum > 0) # immobilization of N 
+        if(N_sum > 0) # immobilization of N
             n_immo = (1 - fastfrac) * (1 - atmfrac) * (decom_sum_litc[cell] / cn_ratio - decom_sum_litn[cell]) * c_shift_slow[l, cell] * N_sum / soil_layer_depth[l] * 1f3 / (k_N + N_sum / soil_layer_depth[l] * 1f3)
             if(n_immo > 0)
                 if(n_immo > N_sum)
@@ -129,14 +129,14 @@ end
 
 @kernel inbounds = true function nitrify_kernel!(
                                  soil_ph::AbstractArray{T},
-                                 soil_NH4::AbstractArray{M},           
+                                 soil_NH4::AbstractArray{M},
                                  soil_NO3::AbstractArray{M},
                                  soil_swc::AbstractArray{M},
                                  soil_wsats::AbstractArray{M},
                                  soil_temp::AbstractArray{M},
                                  kernel_params_nit
 ) where {T <: AbstractFloat, M <: AbstractFloat}
-    
+
     cell = @index(Global)
 
     @unpack lpjmlparams, soil_layers, a_nit, b_nit, c_nit, d_nit = kernel_params_nit
@@ -229,7 +229,7 @@ end
 ) where {T <: AbstractFloat, M <: AbstractFloat}
 
     cell = @index(Global)
-    
+
     @unpack volatil_wind, volatil_length = lpjmlparams
 
     temp = soil_temp[1, cell]

@@ -3,20 +3,20 @@ using Test
 
 @testset "Daily water-balance diagnostics" begin
     soil = init_soil(1, soilparams.soildepth, identity)
-    crop, _, _, _ = init_crop(1, identity)
+    crop = init_crop(1, identity)
     water_balance = init_water_balance(2, 1, identity)
 
-    soil.swc .= 20.0f0
+    soil.water.storage .= 20.0f0
     Agrocosm.record_water_balance_start!(water_balance, 1, soil, Float32[10.0])
     Agrocosm.record_water_balance_after_snow!(water_balance, 1, Float32[10.0])
 
-    soil.swc[1, 1] = 24.5f0
-    crop.intercep .= 1.0f0
-    crop.trans_layer .= 0.4f0
-    soil.evap .= 0.2f0
-    soil.srunoff .= 0.5f0
-    soil.lrunoff .= 0.1f0
-    soil.outflux_f .= 0.5f0
+    soil.water.storage[1, 1] = 24.5f0
+    crop.water.interception .= 1.0f0
+    crop.water.transpiration_layer .= 0.4f0
+    soil.water.evaporation .= 0.2f0
+    soil.water.surface_runoff .= 0.5f0
+    soil.water.lateral_runoff .= 0.1f0
+    soil.water.bottom_drainage .= 0.5f0
     Agrocosm.record_water_balance_end!(water_balance, 1, soil, crop)
 
     @test water_balance.soil_storage_before[1, 1] == 100.0f0
@@ -27,18 +27,18 @@ using Test
     @test water_balance.unaccounted_snow_flux[1, 1] == 0.0f0
     @test water_balance.residual[1, 1] ≈ 0.0f0 atol = 1.0f-6
 
-    soil.swc .= 20.0f0
-    soil.snowpack .= 2.0f0
+    soil.water.storage .= 20.0f0
+    soil.snow.pack .= 2.0f0
     Agrocosm.record_water_balance_start!(water_balance, 2, soil, Float32[3.0])
     Agrocosm.record_water_balance_after_snow!(water_balance, 2, Float32[0.0])
-    soil.snowpack .= 4.9f0
-    soil.snow_sublimation .= 0.1f0
-    crop.intercep .= 0.0f0
-    crop.trans_layer .= 0.0f0
-    soil.evap .= 0.0f0
-    soil.srunoff .= 0.0f0
-    soil.lrunoff .= 0.0f0
-    soil.outflux_f .= 0.0f0
+    soil.snow.pack .= 4.9f0
+    soil.snow.sublimation .= 0.1f0
+    crop.water.interception .= 0.0f0
+    crop.water.transpiration_layer .= 0.0f0
+    soil.water.evaporation .= 0.0f0
+    soil.water.surface_runoff .= 0.0f0
+    soil.water.lateral_runoff .= 0.0f0
+    soil.water.bottom_drainage .= 0.0f0
     Agrocosm.record_water_balance_end!(water_balance, 2, soil, crop)
 
     @test water_balance.snow_sublimation[2, 1] == 0.1f0

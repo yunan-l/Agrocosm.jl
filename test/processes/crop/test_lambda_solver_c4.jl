@@ -16,8 +16,9 @@ using Test
     )
     @test target_adtmm > 0.0f0
 
-    _, _, _, photos = init_crop(1, identity)
-    photos.tstress .= tstress
+    crop = init_crop(1, identity)
+    photos = crop.photosynthesis
+    photos.temperature_stress .= tstress
     photos.lambda .= target_lambda
     photos.vmax .= vmax
     photosynthesis_C4!(
@@ -28,7 +29,7 @@ using Test
         Float32[temp];
         comp_vmax = false,
     )
-    @test target_adtmm ≈ photos.adtmm[1] atol = 1.0f-6
+    @test target_adtmm ≈ photos.water_limited_assimilation[1] atol = 1.0f-6
 
     fac = target_adtmm / (1.0f0 - target_lambda)
     lambda, iterations, residual = solve_lambda_c4_lpj(
@@ -42,7 +43,8 @@ using Test
 end
 
 @testset "Backend-compatible C4 lambda kernel" begin
-    crop, _, _, photos = init_crop(2, identity)
+    crop = init_crop(2, identity)
+    photos = crop.photosynthesis
     pet = init_pet(2, identity)
 
     target_lambda = 0.2f0
@@ -62,10 +64,10 @@ end
     target_conductance = gpd / (daylength * 3600.0f0) + cft3.gmin * fpar
 
     photos.vmax .= vmax
-    photos.tstress .= tstress
-    crop.apar .= apar
-    crop.fpar .= fpar
-    crop.gp .= Float32[target_conductance, 0.0]
+    photos.temperature_stress .= tstress
+    crop.canopy.apar .= apar
+    crop.canopy.fpar .= fpar
+    crop.water.canopy_conductance .= Float32[target_conductance, 0.0]
     pet.daylength .= daylength
 
     solve_lambda_c4!(cft3, photos, crop, pet, temp, co2)
@@ -74,7 +76,7 @@ end
     @test photos.lambda[2] == 0.0f0
 
     photosynthesis_C4!(
-        cft3, photos, crop.apar, pet.daylength, temp; comp_vmax = false,
+        cft3, photos, crop.canopy.apar, pet.daylength, temp; comp_vmax = false,
     )
-    @test photos.adtmm[2] == 0.0f0
+    @test photos.water_limited_assimilation[2] == 0.0f0
 end
