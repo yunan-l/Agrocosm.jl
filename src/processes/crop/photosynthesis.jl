@@ -70,9 +70,9 @@ function photosynthesis_C3!(PFT::PftParameters,
 
     #   Daily dark respiration, Rd, gC/m2/day
     #   Eqn 10, Haxeltine & Prentice 1996
-    # photos.rd .= ifelse.(photos.tstress .< 1e-2, zero(T), b * photos.vmax)
-    gate = sigmoid.(T(50.0) * (photos.tstress .- T(1e-2)))
-    photos.rd = gate * b .* photos.vmax
+    photos.rd .= ifelse.(photos.tstress .< 1e-2, zero(T), b * photos.vmax)
+    # gate = sigmoid.(T(50.0) * (photos.tstress .- T(1e-2)))
+    # photos.rd = gate * b .* photos.vmax
     photos.adt = photos.agd .- hour2day(pet_daylength) .* photos.rd
 
     #   Convert adt from gC/m2/day to mm/m2/day using ideal gas equation
@@ -117,10 +117,9 @@ function photosynthesis_C4!(PFT::PftParameters,
         photos.vmax = (1.0f0 / b) * (c1 ./ c2) .* ((2.0f0 * theta - 1.0f0) .* s .- (2.0f0 * theta .* s .- c2) .* sigma) .* apar * cmass * cq
     end
 
-    gate = sigmoid.(T(-30.0) * (photos.lambda/lambdamc4 .- one(T)))
-    phipi = gate .* photos.lambda/lambdamc4 .+ (one(T) .- gate)
-    # phipi = min.(one(T), photos.lambda/lambdamc4)
-    # phipi = photos.lambda/lambdamc4
+    # gate = sigmoid.(T(-30.0) * (photos.lambda/lambdamc4 .- one(T)))
+    # phipi = gate .* photos.lambda/lambdamc4 .+ (one(T) .- gate)
+    phipi = min.(one(T), photos.lambda/lambdamc4)
     c1 = photos.tstress .* phipi * alphac4
     # c2 = device(ones(T, size(c1)))
 
@@ -146,8 +145,9 @@ function photosynthesis_C4!(PFT::PftParameters,
     #   Total daytime net photosynthesis, Adt, gC/m2/day
     #   Eqn 19, Haxeltine & Prentice 1996
 
-    gate = sigmoid.(T(50.0) * (photos.tstress .- T(1e-2)))
-    photos.rd = gate * b .* photos.vmax
+    photos.rd .= ifelse.(photos.tstress .< 1e-2, zero(T), b * photos.vmax)
+    # gate = sigmoid.(T(50.0) * (photos.tstress .- T(1e-2)))
+    # photos.rd = gate * b .* photos.vmax
     photos.adt = photos.agd .- hour2day(pet_daylength) .* photos.rd
 
     #   Convert adt from gC/m2/day to mm/m2/day using ideal gas equation
