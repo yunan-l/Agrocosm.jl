@@ -6,6 +6,7 @@ Update litter and soil nitrogen pools and crop-available mineral nitrogen.
 function soil_nitrogen!(crop_cal::CropCalendar,
                         soil::Soil;
                         air_temperature = nothing,
+                        wind_speed = nothing,
                         lpjmlparams::LPJmLParams = lpjmlparams,
                         soil_decomp_params::SoilDecompParams = soil_decomp_params
 )
@@ -36,6 +37,7 @@ function soil_nitrogen!(crop_cal::CropCalendar,
     nitrogen_transform!(
         soil;
         air_temperature = air_temperature,
+        wind_speed = wind_speed,
         lpjmlparams = lpjmlparams,
     )
 

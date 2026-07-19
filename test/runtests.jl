@@ -5,6 +5,7 @@ using Test
     include("numerics/test_lpj_bisect.jl")
     include("processes/initialization/test_initialization.jl")
     include("processes/climate/test_snow.jl")
+    include("processes/climate/test_readclimate.jl")
     include("processes/crop/test_photosynthesis.jl")
     include("processes/crop/test_lambda_solver_c3.jl")
     include("processes/crop/test_lambda_solver_c4.jl")

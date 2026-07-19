@@ -8,18 +8,20 @@ function ClimateDataLoader(climate::NamedTuple,
                            device
 )
 
-    climate = (
+    loaded_climate = (
         temp_spinup = climate.temp_spinup[:, data_index],
         temp = climate.temp[:, data_index],
         prec = climate.prec[:, data_index],
         sw = climate.swdown[:, data_index],
         lw = climate.lwnet[:, data_index],
-        co2 = climate.co2,
-        temp_n = climate.temp_n[:, data_index],
-        prec_n = climate.prec_n[:, data_index],
-        sw_n = climate.sw_n[:, data_index],
-        lw_n = climate.lw_n[:, data_index]
-    ) |> device
+        co2 = climate.co2
+    )
 
-    return climate
+    # Normalize optional wind forcing to one internal field name while keeping
+    # existing climate archives (which do not contain wind) fully compatible.
+    if hasproperty(climate, :windspeed)
+        loaded_climate = merge(loaded_climate, (wind = climate.windspeed[:, data_index],))
+    end
+
+    return device(loaded_climate)
 end

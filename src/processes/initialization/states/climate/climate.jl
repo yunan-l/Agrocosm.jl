@@ -4,6 +4,7 @@ mutable struct DailyWeather{A}
     prec::A
     swr::A
     lwr::A
+    wind::A
     daily_co2::A
     annual_co2::A
 end
@@ -31,7 +32,9 @@ end
 function init_weather(cell_size::Int, device)
     cell_state() = device(zeros(Float32, cell_size))
     return DailyWeather(
-        ntuple(_ -> cell_state(), 5)...,
+        ntuple(_ -> cell_state(), 4)...,
+        device(fill(lpjmlparams.volatil_wind, cell_size)),
+        cell_state(),
         device(zeros(Float32, 1)),
     )
 end

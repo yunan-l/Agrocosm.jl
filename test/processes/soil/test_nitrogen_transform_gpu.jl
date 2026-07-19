@@ -28,7 +28,11 @@ CUDA.allowscalar(false)
     soil.nitrogen.decomposed_slow .= 0.001f0
     soil.nitrogen.fast .-= soil.nitrogen.decomposed_fast
     soil.nitrogen.slow .-= soil.nitrogen.decomposed_slow
-    nitrogen_transform!(soil; air_temperature = CuArray(Float32[20, 21]))
+    nitrogen_transform!(
+        soil;
+        air_temperature = CuArray(Float32[20, 21]),
+        wind_speed = CuArray(Float32[1.5, 2.0]),
+    )
     stock_after = sum(Array(soil.nitrogen.ammonium .+ soil.nitrogen.nitrate .+
                             soil.nitrogen.fast .+ soil.nitrogen.slow))
     gases = sum(Array(soil.nitrogen.n2o_nitrification .+

@@ -1,5 +1,6 @@
 """
-nitrogen_transform!(soil; air_temperature=nothing, lpjmlparams=lpjmlparams)
+nitrogen_transform!(soil; air_temperature=nothing, wind_speed=nothing,
+                    lpjmlparams=lpjmlparams)
 
 Apply the LPJmL-style daily mineralization/immobilization, nitrification,
 denitrification, and NH₃-volatilization sequence. Internal and boundary
@@ -7,6 +8,7 @@ fluxes are stored layer-wise in `soil.nitrogen` for diagnostics.
 """
 function nitrogen_transform!(soil::Soil;
                              air_temperature = nothing,
+                             wind_speed = nothing,
                              lpjmlparams::LPJmLParams = lpjmlparams)
     soil_layers = size(soil.nitrogen.nitrate, 1)
     decomposed_litter_carbon = vec(sum(soil.carbon.decomposed_litter; dims = 1))
@@ -66,11 +68,19 @@ function nitrogen_transform!(soil::Soil;
 
     volatilization_temperature = air_temperature === nothing ?
         vec(@view(soil.thermal.temperature[1, :])) : air_temperature
+    volatilization_wind = if wind_speed === nothing
+        fallback = similar(volatilization_temperature)
+        fill!(fallback, eltype(fallback)(lpjmlparams.volatil_wind))
+        fallback
+    else
+        wind_speed
+    end
     launch_1D!(
         volatilization_kernel!,
         soil.properties.ph,
         soil.nitrogen.ammonium,
         volatilization_temperature,
+        volatilization_wind,
         soil.properties.layer_depth,
         soil.nitrogen.volatilization,
         lpjmlparams,
@@ -287,12 +297,13 @@ end
     soil_ph::AbstractArray{T},
     ammonium::AbstractArray{M},
     air_temperature::AbstractArray{M},
+    wind_speed::AbstractArray{M},
     layer_depth::AbstractArray{T},
     volatilization::AbstractArray{M},
     lpjmlparams::LPJmLParams,
 ) where {T <: AbstractFloat, M <: AbstractFloat}
     cell = @index(Global)
-    @unpack volatil_wind, volatil_length = lpjmlparams
+    @unpack volatil_length = lpjmlparams
     temperature = air_temperature[cell]
     kelvin = temperature + M(273.15)
     ammonium_top = max(zero(M), ammonium[1, cell])
@@ -302,7 +313,7 @@ end
     aqueous_nh3 = aqueous_fraction * ammonium_top /
         max(layer_depth[1], eps(T)) * M(1000)
     henry = M(0.2138) / kelvin * M(10)^(M(6.123) - M(1825) / kelvin)
-    mass_transfer = M(0.000612) * M(volatil_wind)^M(0.8) *
+    mass_transfer = M(0.000612) * max(zero(M), wind_speed[cell])^M(0.8) *
         kelvin^M(0.382) * M(volatil_length)^M(-0.2)
     flux = clamp(M(86400) * mass_transfer * henry * aqueous_nh3,
                  zero(M), ammonium_top)
