@@ -16,7 +16,7 @@ function photosynthesis_C3!(PFT::PftParameters,
 ) where {T <: AbstractFloat}
     
     @unpack b = PFT
-    @unpack ko25, kc25, alphac3, theta = lpjmlparams
+    @unpack ko25, kc25, alphac3, theta, LAMBDA_OPT = lpjmlparams
     @unpack q10ko, q10kc, po2, tau25, q10tau, cmass, cq, p, lambdamc3 = photoparams
     inactive = photos.tstress .< T(1e-2)
     
@@ -34,7 +34,7 @@ function photosynthesis_C3!(PFT::PftParameters,
         s = (24 ./ pet_daylength) * b
         sigma = 1.0f0 .- (c2 .- s) ./ (c2 .- theta * s)
         sigma = sqrt.(max.(zero(T), sigma))
-        photos.lambda .= 0.8f0  
+        photos.lambda .= T(LAMBDA_OPT)
         vmax = (1.0f0 / b) * (c1 ./ c2) .* ((2.0f0 * theta - 1.0f0) .* s .- (2.0f0 * theta .* s .- c2) .* sigma) .* apar * cmass * cq
         photos.vmax = ifelse.(inactive, zero(T), max.(zero(T), vmax))
     end
@@ -104,7 +104,7 @@ function photosynthesis_C4!(PFT::PftParameters,
 ) where {T <: AbstractFloat}
     
     @unpack b = PFT
-    @unpack alphac4, theta = lpjmlparams
+    @unpack alphac4, theta, LAMBDA_OPT = lpjmlparams
     @unpack lambdamc4, cmass, cq, p = photoparams
     inactive = photos.tstress .< T(1e-2)
     
@@ -119,7 +119,9 @@ function photosynthesis_C4!(PFT::PftParameters,
         sigma = 1.0f0 .- (c2 .- s) ./ (c2 .- theta * s)
         # sigma = sqrt.(0.5f0 * (sigma .+ sqrt(sigma .* sigma .+ (1f-3)^2)))
         sigma = sqrt.(max.(zero(T), sigma))
-        photos.lambda .= 0.4f0  
+        # LPJmL computes potential conductance at the common LAMBDA_OPT.
+        # C4 assimilation is already saturated above lambdamc4.
+        photos.lambda .= T(LAMBDA_OPT)
         vmax = (1.0f0 / b) * (c1 ./ c2) .* ((2.0f0 * theta - 1.0f0) .* s .- (2.0f0 * theta .* s .- c2) .* sigma) .* apar * cmass * cq
         photos.vmax = ifelse.(inactive, zero(T), max.(zero(T), vmax))
     end

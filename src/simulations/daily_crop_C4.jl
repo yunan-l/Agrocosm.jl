@@ -65,14 +65,18 @@ function daily_crop_C4!(day_start, day_end,
         # C4 photosynthesis
         photosynthesis_C4!(pftparameters, photos, crop.apar, pet.daylength, dailyWeather.temp; comp_vmax = true)
 
+        # Potential conductance at LAMBDA_OPT, followed by the LPJmL
+        # water-limited C4 lambda solve on the active CPU/GPU backend.
+        transpiration!(photos.adtmm, pftparameters, crop, pet, soil, dailyWeather.annual_co2)
+        solve_lambda_c4!(pftparameters, photos, crop, pet, dailyWeather.temp, dailyWeather.annual_co2)
+        photosynthesis_C4!(pftparameters, photos, crop.apar, pet.daylength, dailyWeather.temp; comp_vmax = false)
+
         # crop respiration and carbon allocation
         crop_carbon!(photos, crop, output, pftparameters, dailyWeather.temp)
 
         # crop nitrogen allocation
-        crop_nitrogen!(crop, pftparameters, soil, photos.vmax, pet.daylength, dailyWeather.temp) # nitrogen cycle         
-        
-        # evapotranspiration based on the post-infiltration soil water state
-        transpiration!(photos.adtmm, pftparameters, crop, pet, soil, dailyWeather.annual_co2)
+        crop_nitrogen!(crop, pftparameters, soil, photos.vmax, pet.daylength, dailyWeather.temp) # nitrogen cycle
+
         evaporation!(pet.eeq, crop, soil)
 
         # soil carbon cycle

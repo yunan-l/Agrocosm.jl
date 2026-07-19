@@ -59,14 +59,21 @@ function daily_crop_C3!(start_day, end_day,
         # C3 photosynthesis
         photosynthesis_C3!(pftparameters, photos, crop.apar, pet.daylength, dailyWeather.temp, dailyWeather.annual_co2; comp_vmax = true)
 
+        # LPJmL first uses lambda_opt photosynthesis to obtain potential
+        # conductance, then constrains conductance by water supply.
+        transpiration!(photos.adtmm, pftparameters, crop, pet, soil, dailyWeather.annual_co2)
+
+        # Solve the water-limited lambda on the active backend (CPU or GPU),
+        # then recompute photosynthesis with fixed vmax and actual lambda.
+        solve_lambda_c3!(pftparameters, photos, crop, pet, dailyWeather.temp, dailyWeather.annual_co2)
+        photosynthesis_C3!(pftparameters, photos, crop.apar, pet.daylength, dailyWeather.temp, dailyWeather.annual_co2; comp_vmax = false)
+
         # crop respiration and carbon allocation
         crop_carbon!(photos, crop, output, pftparameters, dailyWeather.temp)
 
         # crop nitrogen allocation
         crop_nitrogen!(crop, pftparameters, soil, photos.vmax, pet.daylength, dailyWeather.temp) # nitrogen cycle
-           
-        # evapotranspiration based on the post-infiltration soil water state
-        transpiration!(photos.adtmm, pftparameters, crop, pet, soil, dailyWeather.annual_co2)
+
         evaporation!(pet.eeq, crop, soil)
 
         # soil carbon cycle
