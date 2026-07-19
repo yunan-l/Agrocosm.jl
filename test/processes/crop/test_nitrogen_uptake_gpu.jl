@@ -36,3 +36,21 @@ CUDA.allowscalar(false)
     @test all(Array(soil.NO3) .>= 0.0f0)
     @test all(Array(soil.NH4) .>= 0.0f0)
 end
+
+@testset "CUDA automatic fertilizer supplies the remaining demand" begin
+    crop, _, _, _ = init_crop(1, CuArray)
+    soil = init_soil(1, soilparams.soildepth, CuArray)
+    crop.isgrowing .= 1
+    crop.nitrogen .= 0.1f0
+    crop.leafc .= 20.0f0
+    crop.rootc .= 100.0f0
+    crop.ndemand_leaf .= 0.4f0
+    crop.ndemand_tot .= 1.0f0
+
+    nuptake_crop!(crop, cft1, soil; auto_fertilizer = true)
+
+    @test Array(crop.nitrogen)[1] ≈ 1.0f0 atol = 1.0f-6
+    @test Array(crop.nuptake)[1] ≈ 0.9f0 atol = 1.0f-6
+    @test Array(crop.nautofertilizer)[1] ≈ 0.9f0 atol = 1.0f-6
+    @test Array(crop.vscal)[1] == 1.0f0
+end

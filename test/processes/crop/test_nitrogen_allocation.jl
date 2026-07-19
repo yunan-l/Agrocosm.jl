@@ -49,3 +49,29 @@ end
     @test crop.ston[1] == 0.0f0
     @test crop.pooln[1] == 0.0f0
 end
+
+@testset "Integrated automatic-fertilizer nitrogen cycle" begin
+    crop, _, _, _ = init_crop(1, identity)
+    soil = init_soil(1, soilparams.soildepth, identity)
+    crop.isgrowing .= 1
+    crop.nitrogen .= 0.1f0
+    crop.leafc .= 2.0f0
+    crop.rootc .= 3.0f0
+    crop.poolc .= 1.0f0
+    crop.stoc .= 4.0f0
+
+    crop_nitrogen!(
+        crop,
+        cft1,
+        soil,
+        Float32[10.0],
+        Float32[25.0];
+        auto_fertilizer = true,
+    )
+
+    organ_n = crop.leafn[1] + crop.rootn[1] + crop.pooln[1] + crop.ston[1]
+    @test crop.nitrogen[1] ≈ crop.ndemand_tot[1] atol = 1.0f-6
+    @test organ_n ≈ crop.nitrogen[1] atol = 1.0f-6
+    @test crop.nautofertilizer[1] > 0.0f0
+    @test crop.vscal[1] == 1.0f0
+end

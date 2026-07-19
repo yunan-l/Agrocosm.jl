@@ -35,12 +35,29 @@ end
     soil_loss = soil_before - sum(soil.NO3) - sum(soil.NH4)
 
     @test crop.nuptake[1] > 0.0f0
+    @test crop.nautofertilizer[1] == 0.0f0
     @test plant_gain ≈ crop.nuptake[1] atol = 1.0f-6
     @test soil_loss ≈ crop.nuptake[1] atol = 1.0f-6
     @test all(soil.NO3 .>= 0.0f0)
     @test all(soil.NH4 .>= 0.0f0)
     @test soil.NO3[4, 1] == 0.0f0
     @test soil.NH4[4, 1] == 0.0f0
+end
+
+@testset "Automatic fertilizer is an explicit external N input" begin
+    crop, soil = nitrogen_uptake_fixture()
+    plant_before = crop.nitrogen[1]
+    soil_before = sum(soil.NO3) + sum(soil.NH4)
+
+    nuptake_crop!(crop, cft1, soil; auto_fertilizer = true)
+
+    plant_gain = crop.nitrogen[1] - plant_before
+    soil_loss = soil_before - sum(soil.NO3) - sum(soil.NH4)
+    @test crop.nitrogen[1] ≈ crop.ndemand_tot[1] atol = 1.0f-6
+    @test crop.nuptake[1] ≈ plant_gain atol = 1.0f-6
+    @test plant_gain ≈ soil_loss + crop.nautofertilizer[1] atol = 1.0f-6
+    @test crop.nautofertilizer[1] >= 0.0f0
+    @test crop.vscal[1] == 1.0f0
 end
 
 @testset "Nitrogen uptake respects remaining plant demand" begin
