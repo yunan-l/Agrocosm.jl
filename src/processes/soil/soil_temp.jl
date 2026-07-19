@@ -92,19 +92,18 @@ end
 
     @unpack NDAYS = kernel_params
 
-    ∑x = NDAYS * (NDAYS + 1) / 2
-    ∑x² = (NDAYS * (NDAYS + 1) * (2 * NDAYS + 1)) / 6
+    n = T(NDAYS)
+    ∑x = T(NDAYS * (NDAYS + 1) ÷ 2)
+    ∑x² = T(NDAYS * (NDAYS + 1) * (2 * NDAYS + 1) ÷ 6)
     ∑y = zero(T)
     ∑xy = zero(T)
-    n = 1
 
     for day in 1:NDAYS
         ∑y += climbuf_temp[day, cell]
-        ∑xy += climbuf_temp[day, cell] * n
-        n += 1
+        ∑xy += climbuf_temp[day, cell] * T(day)
     end
 
-    Δ = 1 / (n * ∑x² - ∑x * ∑x)
+    Δ = one(T) / (n * ∑x² - ∑x * ∑x)
     a[cell] = (∑x² * ∑y - ∑x * ∑xy) * Δ
     b[cell] = (n * ∑xy - ∑x * ∑y) * Δ
 

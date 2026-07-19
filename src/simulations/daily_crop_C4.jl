@@ -14,7 +14,8 @@ function daily_crop_C4!(day_start, day_end,
                         auto_fertilizer = true,
                         nitrogen_limit_vmax = false,
                         water_balance = nothing,
-                        nitrogen_balance = nothing
+                        nitrogen_balance = nothing,
+                        carbon_balance = nothing
 )
 
     crop_cal = crop.calendar
@@ -31,6 +32,10 @@ function daily_crop_C4!(day_start, day_end,
         day_of_year = day % 365 != 0 ? day % 365 : 365
 
         readclimate!(climate, dailyWeather, day)
+
+        if carbon_balance !== nothing
+            record_carbon_balance_start!(carbon_balance, diagnostic_day, crop, soil)
+        end
 
         if nitrogen_balance !== nothing
             record_nitrogen_balance_start!(nitrogen_balance, diagnostic_day, crop, soil)
@@ -58,6 +63,10 @@ function daily_crop_C4!(day_start, day_end,
             apply_prescribed_fertilizer = !auto_fertilizer,
         )
 
+        if carbon_balance !== nothing
+            record_carbon_balance_after_cultivate!(carbon_balance, diagnostic_day, crop)
+        end
+
         update_climbuf!(pftparameters, dailyWeather.temp, climbuf, day) # update climate buffer
         albedo!(pftparameters, crop, pet)  # compute albedo
         petpar!(pet, day_of_year, managed_land.latitude, dailyWeather.temp, dailyWeather.lwr, dailyWeather.swr) # compute crop potential evapotraspiration variables
@@ -67,6 +76,13 @@ function daily_crop_C4!(day_start, day_end,
         phenology_crop!(crop, climbuf.V_req, pftparameters, dailyWeather.temp, pet.daylength)
 
         harvest_crop!(crop_cal, crop, soil, output, managed_land.residue_fraction, day_of_year) # crop harvesting
+
+        if carbon_balance !== nothing
+            record_carbon_balance_after_harvest!(
+                carbon_balance, diagnostic_day, crop, soil,
+                managed_land.residue_fraction,
+            )
+        end
 
         # Interception and infiltration precede plant water stress, as in LPJmL.
         interception!(crop, pftparameters, pet.eeq, dailyWeather.prec)
@@ -126,6 +142,10 @@ function daily_crop_C4!(day_start, day_end,
 
         if nitrogen_balance !== nothing
             record_nitrogen_balance_end!(nitrogen_balance, diagnostic_day, crop, soil)
+        end
+
+        if carbon_balance !== nothing
+            record_carbon_balance_end!(carbon_balance, diagnostic_day, crop, soil)
         end
 
     end

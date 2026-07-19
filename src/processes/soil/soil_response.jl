@@ -25,9 +25,10 @@ end
 """
 temp_response(temp; lpjmlparams=lpjmlparams)
 
-Calculate the temperature response function for soil decomposition based on LPJmL's formulation. The function is defined as
-`g(T) = exp(e0 * (1/(temp_response+10) - 1/(T+temp_response)))` for `T >= -40`,
-otherwise `0`.
+Calculate the temperature response function for soil decomposition based on
+LPJmL's formulation. The response is zero below `-15 °C`, uses the
+Lloyd–Taylor expression from `-15 °C` through `40 °C`, and is capped at
+its `40 °C` value above that threshold.
 """
 function temp_response(temp::AbstractArray{T};
                        lpjmlparams::LPJmLParams = lpjmlparams
@@ -35,7 +36,11 @@ function temp_response(temp::AbstractArray{T};
 
     @unpack e0, temp_response = lpjmlparams
 
-    return ifelse.(temp .>= T(-40.0), exp.(e0 .* (one(T) / (temp_response + T(10.0)) .- one(T) ./ (temp .+ temp_response))), zero(T))
+    bounded_temp = clamp.(temp, T(-15.0), T(40.0))
+    response = exp.(e0 .* (
+        one(T) / (temp_response + T(10.0)) .-
+        one(T) ./ (bounded_temp .+ temp_response)
+    ))
+    return ifelse.(temp .>= T(-15.0), response, zero(T))
 end
-
 

@@ -35,6 +35,7 @@ export init_states!, init_climbuf, init_crop, init_pet, init_soil, init_output
 export init_weather, init_managed_land
 export WaterBalance, init_water_balance
 export NitrogenBalance, init_nitrogen_balance
+export CarbonBalance, init_carbon_balance
 
 # CLIMATE
 export annual_climbuf!, daily_climbuf!, infil_perc!, spin_up_climbuf!, update_climbuf!, readclimate!, snow!
@@ -107,6 +108,7 @@ include("processes/initialization/init_states.jl")
 # Diagnostics
 include("diagnostics/water_balance.jl")
 include("diagnostics/nitrogen_balance.jl")
+include("diagnostics/carbon_balance.jl")
 
 # Climate
 include("processes/climate/climbuf.jl")
