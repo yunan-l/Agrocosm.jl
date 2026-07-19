@@ -11,6 +11,7 @@ function daily_crop_C3!(start_day, end_day,
                         irrigation = false,
                         manure = false,
                         auto_fertilizer = true,
+                        nitrogen_limit_vmax = false,
                         water_balance = nothing,
                         nitrogen_balance = nothing
 )
@@ -84,14 +85,28 @@ function daily_crop_C3!(start_day, end_day,
         # Solve the water-limited lambda on the active backend (CPU or GPU),
         # then recompute photosynthesis with fixed vmax and actual lambda.
         solve_lambda_c3!(pftparameters, photos, crop, pet, dailyWeather.temp, dailyWeather.annual_co2)
+
+        if nitrogen_limit_vmax
+            # LPJmL obtains N using the potential capacity, constrains Vmax
+            # only when leaf N remains insufficient, then recomputes carbon.
+            crop_nitrogen!(crop, pftparameters, soil, photos.potential_vmax, dailyWeather.temp;
+                           auto_fertilizer = auto_fertilizer)
+            limit_vmax_by_nitrogen!(crop, pftparameters, dailyWeather.temp)
+        end
         photosynthesis_C3!(pftparameters, photos, crop.canopy.apar, pet.daylength, dailyWeather.temp, dailyWeather.annual_co2; comp_vmax = false)
 
         # crop respiration and carbon allocation
         crop_carbon!(photos, crop, output, pftparameters, dailyWeather.temp)
 
         # crop nitrogen allocation
-        crop_nitrogen!(crop, pftparameters, soil, photos.vmax, dailyWeather.temp;
-                       auto_fertilizer = auto_fertilizer) # nitrogen cycle
+        if nitrogen_limit_vmax
+            # Carbon growth changes organ proportions; redistribute the same
+            # conserved plant N without performing a second uptake.
+            allocate_crop_nitrogen!(crop, pftparameters)
+        else
+            crop_nitrogen!(crop, pftparameters, soil, photos.vmax, dailyWeather.temp;
+                           auto_fertilizer = auto_fertilizer) # nitrogen cycle
+        end
 
         evaporation!(pet.eeq, crop, soil)
 

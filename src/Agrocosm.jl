@@ -48,6 +48,7 @@ export photosynthesis_C3!, photosynthesis_C4!, carbon_allocation!, respiration!
 export phenology_crop!, lai_crop!, lai_deficit!, cultivate!, harvest_crop!, fertilizer!
 export transpiration!, interception!
 export crop_nitrogen!, ndemand_crop!, nuptake_crop!
+export limit_vmax_by_nitrogen!
 export root_distribution, temp_stress
 export lpj_bisect, solve_lambda_c3_lpj, solve_lambda_c4_lpj
 export solve_lambda_c3!, solve_lambda_c4!
@@ -130,6 +131,7 @@ include("processes/crop/transpiration.jl")
 include("processes/crop/nitrogen_allocation.jl")
 include("processes/crop/nitrogen_demand.jl")
 include("processes/crop/nitrogen_uptake.jl")
+include("processes/crop/nitrogen_vmax_limit.jl")
 include("processes/crop/fertilizer.jl")
 include("processes/crop/harvesting.jl")
 include("processes/crop/waterlogging_stress.jl")

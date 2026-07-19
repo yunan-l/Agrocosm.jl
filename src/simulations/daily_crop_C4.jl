@@ -12,6 +12,7 @@ function daily_crop_C4!(day_start, day_end,
                         irrigation = false,
                         manure = false,
                         auto_fertilizer = true,
+                        nitrogen_limit_vmax = false,
                         water_balance = nothing,
                         nitrogen_balance = nothing
 )
@@ -87,14 +88,24 @@ function daily_crop_C4!(day_start, day_end,
         # water-limited C4 lambda solve on the active CPU/GPU backend.
         transpiration!(photos.water_limited_assimilation, pftparameters, crop, pet, soil, dailyWeather.annual_co2)
         solve_lambda_c4!(pftparameters, photos, crop, pet, dailyWeather.temp, dailyWeather.annual_co2)
+
+        if nitrogen_limit_vmax
+            crop_nitrogen!(crop, pftparameters, soil, photos.potential_vmax, dailyWeather.temp;
+                           auto_fertilizer = auto_fertilizer)
+            limit_vmax_by_nitrogen!(crop, pftparameters, dailyWeather.temp)
+        end
         photosynthesis_C4!(pftparameters, photos, crop.canopy.apar, pet.daylength, dailyWeather.temp; comp_vmax = false)
 
         # crop respiration and carbon allocation
         crop_carbon!(photos, crop, output, pftparameters, dailyWeather.temp)
 
         # crop nitrogen allocation
-        crop_nitrogen!(crop, pftparameters, soil, photos.vmax, dailyWeather.temp;
-                       auto_fertilizer = auto_fertilizer) # nitrogen cycle
+        if nitrogen_limit_vmax
+            allocate_crop_nitrogen!(crop, pftparameters)
+        else
+            crop_nitrogen!(crop, pftparameters, soil, photos.vmax, dailyWeather.temp;
+                           auto_fertilizer = auto_fertilizer) # nitrogen cycle
+        end
 
         evaporation!(pet.eeq, crop, soil)
 

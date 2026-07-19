@@ -37,6 +37,8 @@ function photosynthesis_C3!(PFT::PftParameters,
         photos.lambda .= T(LAMBDA_OPT)
         vmax = (1.0f0 / b) * (c1 ./ c2) .* ((2.0f0 * theta - 1.0f0) .* s .- (2.0f0 * theta .* s .- c2) .* sigma) .* apar * cmass * cq
         photos.vmax = ifelse.(inactive, zero(T), max.(zero(T), vmax))
+        photos.potential_vmax .= photos.vmax
+        photos.nitrogen_limitation .= ifelse.(photos.vmax .> zero(T), one(T), zero(T))
     end
 
     # calculation of C1C3, C2C3 with actual p_i (leaf internal partial pressure of CO2)
@@ -124,6 +126,8 @@ function photosynthesis_C4!(PFT::PftParameters,
         photos.lambda .= T(LAMBDA_OPT)
         vmax = (1.0f0 / b) * (c1 ./ c2) .* ((2.0f0 * theta - 1.0f0) .* s .- (2.0f0 * theta .* s .- c2) .* sigma) .* apar * cmass * cq
         photos.vmax = ifelse.(inactive, zero(T), max.(zero(T), vmax))
+        photos.potential_vmax .= photos.vmax
+        photos.nitrogen_limitation .= ifelse.(photos.vmax .> zero(T), one(T), zero(T))
     end
 
     phipi = min.(one(T), photos.lambda/lambdamc4)

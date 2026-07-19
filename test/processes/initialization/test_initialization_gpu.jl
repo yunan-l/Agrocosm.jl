@@ -36,6 +36,8 @@ CUDA.allowscalar(false)
     @test soil.snow.pack isa CuArray{Float32, 1}
     @test weather.temp isa CuArray{Float32, 1}
     @test output.crop.npp isa CuArray{Float32, 2}
+    @test output.crop.potential_vmax isa CuArray{Float32, 2}
+    @test output.crop.nitrogen_limitation isa CuArray{Float32, 2}
     @test output.soil.water_storage isa CuArray{Float32, 2}
     @test output.climate.temperature isa CuArray{Float32, 2}
     @test output.calendar.harvest_date isa CuArray{Int32, 2}

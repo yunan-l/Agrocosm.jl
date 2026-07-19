@@ -19,6 +19,18 @@ function crop_carbon!(photos::CropPhotosynthesis,
 
     output.crop.gpp = vcat(output.crop.gpp, reshape(photos.gross_assimilation, (1, :)))
     output.crop.npp = vcat(output.crop.npp, reshape(crop.carbon.npp, (1, :)))
+    output.crop.lambda = vcat(output.crop.lambda, reshape(photos.lambda, (1, :)))
+    output.crop.potential_vmax = vcat(
+        output.crop.potential_vmax, reshape(photos.potential_vmax, (1, :)),
+    )
+    output.crop.vmax = vcat(output.crop.vmax, reshape(photos.vmax, (1, :)))
+    output.crop.nitrogen_limitation = vcat(
+        output.crop.nitrogen_limitation,
+        reshape(photos.nitrogen_limitation, (1, :)),
+    )
+    output.crop.respiration = vcat(
+        output.crop.respiration, reshape(crop.carbon.respiration, (1, :)),
+    )
     output.crop.lai = vcat(output.crop.lai, reshape(crop.canopy.lai, (1, :)))
     output.crop.fphu = vcat(output.crop.fphu, reshape(crop.phenology.fphu, (1, :)))
     output.crop.biomass = vcat(output.crop.biomass, reshape(crop.carbon.biomass, (1, :)))

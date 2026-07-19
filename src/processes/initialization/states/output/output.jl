@@ -3,7 +3,9 @@ mutable struct CropOutput{A, I, M}
     gpp::A
     npp::A
     lambda::A
+    potential_vmax::A
     vmax::A
+    nitrogen_limitation::A
     respiration::A
     biomass::A
     lai::A
@@ -65,7 +67,7 @@ function init_output(cell_size::Int,
     crop = CropOutput(
         scalar_output(), scalar_output(), scalar_output(), scalar_output(),
         scalar_output(), scalar_output(), scalar_output(), scalar_output(),
-        scalar_output(),
+        scalar_output(), scalar_output(), scalar_output(),
         device(zeros(Float32, 1, vegc_pools * cell_size)),
         device(zeros(Float32, 1, vegc_pools * cell_size)),
         scalar_output(), scalar_output(), integer_output(),
