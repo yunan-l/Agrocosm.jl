@@ -13,9 +13,17 @@ function transpiration!(photos_adtmm::AbstractArray{T},
 ) where {T <: AbstractFloat}
 
     @unpack LAMBDA_OPT = lpjmlparams
+    @unpack gmin = PFT
 
-    # Potential canopy conductance from photosynthesis and atmospheric CO2.
-    crop.gp .= (1.6f0 * photos_adtmm ./ (ppm2bar(co2) * (1 - LAMBDA_OPT) .* hour2sec(pet.daylength))) .+ crop.fpar
+    # `co2` is already a partial pressure in Pa. Since 1 Pa = 1e-5 bar,
+    # this is LPJmL's ppm2bar(original_co2) without applying ppm conversion twice.
+    co2_bar = co2 .* T(1e-5)
+    conductance_denominator = co2_bar .* (one(T) - T(LAMBDA_OPT)) .* hour2sec(pet.daylength)
+    crop.gp .= ifelse.(
+        (co2_bar .> zero(T)) .& (pet.daylength .> zero(T)),
+        T(1.6) .* photos_adtmm ./ conductance_denominator .+ T(gmin) .* crop.fpar,
+        zero(T),
+    )
 
     # Root-zone weighted soil water availability per cell.
     wr = sum(soil.w .* crop.rootdist, dims = 1)
@@ -137,6 +145,15 @@ end
             transp = zero(T)
         end
 
+        # LPJmL recomputes actual canopy conductance after layer extraction.
+        # Store it in `gp`; downstream lambda solving consumes this actual value.
+        actual_supply = fpc > zero(T) ? transp_cor / fpc : zero(T)
+        if actual_supply < demand && pet_eeq[cell] > zero(T)
+            denominator = (one(T) - crop_canopy_wet[cell]) * pet_eeq[cell] * ALPHAM - actual_supply
+            crop_gp[cell] = denominator > zero(T) ?
+                            (GM * ALPHAM) * actual_supply / denominator : zero(T)
+        end
+
         # Distribute corrected transpiration back to layers by root distribution.
         for l in 1:soil_layers
             crop_trans_layer[l, cell] = transp * crop_rootdist[l] * soil_w[l, cell]
@@ -145,6 +162,7 @@ end
             end
         end
     else
+        crop_gp[cell] = zero(T)
         for l in 1:soil_layers
             crop_trans_layer[l, cell] = zero(T)
         end

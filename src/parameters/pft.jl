@@ -97,6 +97,7 @@ end
     beta_root::T
     intc::T # Interception storage parameter
     emax::T
+    gmin::T # Minimum canopy conductance (mm s-1)
     knstore::T
     vmax_up::T
     kNmin::T
@@ -150,6 +151,7 @@ cft1 = PftParameters{Float32, Int32}(
     beta_root = 0.969,
     intc = 0.01,
     emax = 8.0,
+    gmin = 1.0,
     knstore = 0.1,
     vmax_up = 5.51,
     kNmin = 0.05,
@@ -203,6 +205,7 @@ cft2 = PftParameters{Float32, Int32}(
     beta_root = 0.969,
     intc = 0.01,
     emax = 8.0,
+    gmin = 1.0,
     knstore = 0.1,
     vmax_up = 5.51,
     kNmin = 0.05,
@@ -256,6 +259,7 @@ cft3 = PftParameters{Float32, Int32}(
     beta_root = 0.969,
     intc = 0.01,
     emax = 8.0,
+    gmin = 1.2,
     knstore = 0.1,
     vmax_up = 5.51,
     kNmin = 0.05,
@@ -309,6 +313,7 @@ cft4 = PftParameters{Float32, Int32}(
     beta_root = 0.969,
     intc = 0.01,
     emax = 8.0,
+    gmin = 1.2,
     knstore = 0.1,
     vmax_up = 5.51,
     kNmin = 0.05,
