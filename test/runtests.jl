@@ -24,6 +24,7 @@ using Test
     include("processes/soil/test_soil_temperature.jl")
     include("processes/soil/test_soil_freeze_thaw.jl")
     include("processes/soil/test_water_ice_pools.jl")
+    include("processes/soil/test_percolation_enthalpy.jl")
     include("processes/soil/test_soil_carbon.jl")
     include("diagnostics/test_water_balance.jl")
     include("diagnostics/test_nitrogen_balance.jl")

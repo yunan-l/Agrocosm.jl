@@ -4,10 +4,144 @@ infil_perc!(soil; lpjmlparams=lpjmlparams)
 Update infiltration, percolation, runoff, and nitrate transport through soil layers.
 """
 function infil_perc!(soil::Soil;
-                    lpjmlparams::LPJmLParams = lpjmlparams
+                     lpjmlparams::LPJmLParams = lpjmlparams)
+    return infil_perc!(
+        soil,
+        soil.water.infiltration,
+        soil.snow.melt,
+        soil.water.infiltration;
+        lpjmlparams = lpjmlparams,
+        transfer_heat = false,
+    )
+end
+
+"""
+    apply_percolation_enthalpy!(soil)
+
+Apply the layer-wise `perc_energy` ledger after the corresponding water-stock
+update. Thermal properties and phase fractions are rebuilt from the new water
+mass, matching LPJmL's `apply_perc_enthalpy`/thermal-property reconciliation.
+"""
+function apply_percolation_enthalpy!(
+    soil::Soil;
+    thermalparams::SoilThermalParams = soil_thermal_params,
 )
+    launch_1D!(
+        apply_percolation_enthalpy_kernel!,
+        soil.thermal.percolation_energy_residual,
+        soil.thermal.temperature,
+        soil.thermal.enthalpy,
+        soil.thermal.frozen_fraction,
+        soil.thermal.freeze_depth,
+        soil.thermal.heat_capacity_frozen,
+        soil.thermal.heat_capacity_unfrozen,
+        soil.thermal.latent_heat,
+        soil.thermal.conductivity_frozen,
+        soil.thermal.conductivity_unfrozen,
+        soil.thermal.water_reference,
+        soil.thermal.percolation_energy,
+        soil.thermal.rain_energy_input,
+        soil.thermal.snowmelt_energy_input,
+        soil.thermal.lateral_runoff_energy_output,
+        soil.thermal.bottom_drainage_energy_output,
+        soil.thermal.diffusivity_0,
+        soil.water.storage,
+        soil.water.ice_storage,
+        soil.water.saturation_storage,
+        soil.properties.layer_depth,
+        thermalparams,
+    )
+    partition_soil_water_ice!(soil)
+    return nothing
+end
+
+@kernel inbounds = true function apply_percolation_enthalpy_kernel!(
+    percolation_energy_residual::AbstractArray{T},
+    temperature::AbstractArray{T},
+    enthalpy::AbstractArray{T},
+    frozen_fraction::AbstractArray{T},
+    freeze_depth::AbstractArray{T},
+    heat_capacity_frozen::AbstractArray{T},
+    heat_capacity_unfrozen::AbstractArray{T},
+    latent_heat::AbstractArray{T},
+    conductivity_frozen::AbstractArray{T},
+    conductivity_unfrozen::AbstractArray{T},
+    water_reference::AbstractArray{T},
+    percolation_energy::AbstractArray{T},
+    rain_energy_input::AbstractArray{T},
+    snowmelt_energy_input::AbstractArray{T},
+    lateral_energy_output::AbstractArray{T},
+    bottom_energy_output::AbstractArray{T},
+    diffusivity_0::AbstractArray{T},
+    liquid_water::AbstractArray{T},
+    ice_water::AbstractArray{T},
+    saturation_storage::AbstractArray{T},
+    layer_depth::AbstractArray{T},
+    thermalparams::SoilThermalParams{T},
+) where {T <: AbstractFloat}
+    cell = @index(Global)
+    transfer_sum = zero(T)
+
+    for layer in 1:5
+        depth_m = max(layer_depth[layer] * T(0.001), eps(T))
+        layer_transfer = percolation_energy[layer, cell]
+        transfer_sum += layer_transfer
+        updated_enthalpy = enthalpy[layer, cell] + layer_transfer / depth_m
+        total_water = max(liquid_water[layer, cell] + ice_water[layer, cell], zero(T))
+        cf, cu, lh, kf, ku = layer_thermal_properties(
+            total_water,
+            saturation_storage[layer, cell],
+            layer_depth[layer],
+            diffusivity_0[cell],
+            thermalparams,
+        )
+        layer_temperature = enthalpy_temperature(updated_enthalpy, cf, cu, lh)
+        layer_frozen_fraction = enthalpy_frozen_fraction(updated_enthalpy, lh)
+
+        enthalpy[layer, cell] = updated_enthalpy
+        temperature[layer, cell] = layer_temperature
+        frozen_fraction[layer, cell] = layer_frozen_fraction
+        freeze_depth[layer, cell] = layer_frozen_fraction * layer_depth[layer]
+        heat_capacity_frozen[layer, cell] = cf
+        heat_capacity_unfrozen[layer, cell] = cu
+        latent_heat[layer, cell] = lh
+        conductivity_frozen[layer, cell] = kf
+        conductivity_unfrozen[layer, cell] = ku
+        water_reference[layer, cell] = total_water
+        ice_water[layer, cell] = layer_frozen_fraction * total_water
+        liquid_water[layer, cell] = total_water - ice_water[layer, cell]
+        percolation_energy[layer, cell] = zero(T)
+    end
+
+    boundary_energy = rain_energy_input[cell] + snowmelt_energy_input[cell] -
+                      lateral_energy_output[cell] - bottom_energy_output[cell]
+    percolation_energy_residual[cell] = transfer_sum - boundary_energy
+end
+
+"""
+    infil_perc!(soil, precipitation, snowmelt, air_temperature;
+                transfer_heat=true)
+
+Route water, nitrate, and the enthalpy carried by liquid water. The upper
+boundary follows LPJmL: rainfall enters at air temperature and meltwater at
+0 °C. Water leaving a layer carries that layer's liquid-water enthalpy.
+"""
+function infil_perc!(soil::Soil,
+                     precipitation::AbstractArray{T},
+                     snowmelt::AbstractArray{T},
+                     air_temperature::AbstractArray{T};
+                     lpjmlparams::LPJmLParams = lpjmlparams,
+                     thermalparams::SoilThermalParams{T} = soil_thermal_params,
+                     transfer_heat::Bool = true) where {T <: AbstractFloat}
     # One-cell kernel launch; each thread updates the full vertical soil column for that cell.
-    kernel_params = (lpjmlparams = lpjmlparams, soil_layers = 5, anion_excl = 0.3f0, NPERCO = 0.4f0)
+    kernel_params = (;
+        lpjmlparams,
+        thermalparams,
+        soil_layers = 5,
+        anion_excl = T(0.3),
+        NPERCO = T(0.4),
+        transfer_heat,
+    )
 
     launch_1D!(infil_perc_kernel!,
                soil.water.infiltration,
@@ -34,8 +168,17 @@ function infil_perc!(soil::Soil;
                soil.nitrogen.nitrate,
                soil.nitrogen.leaching,
                soil.properties.layer_depth,
+               soil.thermal.temperature,
+               soil.thermal.percolation_energy,
+               soil.thermal.rain_energy_input,
+               soil.thermal.snowmelt_energy_input,
+               soil.thermal.lateral_runoff_energy_output,
+               soil.thermal.bottom_drainage_energy_output,
+               precipitation,
+               snowmelt,
+               air_temperature,
                kernel_params)
-
+    return nothing
 end
 
 @kernel inbounds = true function infil_perc_kernel!(
@@ -63,12 +206,22 @@ end
                                     soil_NO3::AbstractArray{M},
                                     soil_n_leaching::AbstractArray{T},
                                     soil_layer_depth::AbstractArray{T},
+                                    soil_temperature::AbstractArray{M},
+                                    soil_perc_energy::AbstractArray{M},
+                                    rain_energy_input::AbstractArray{T},
+                                    snowmelt_energy_input::AbstractArray{T},
+                                    lateral_energy_output::AbstractArray{T},
+                                    bottom_energy_output::AbstractArray{T},
+                                    precipitation::AbstractArray{T},
+                                    snowmelt::AbstractArray{T},
+                                    air_temperature::AbstractArray{T},
                                     kernel_params
 ) where {T <: AbstractFloat, M <: AbstractFloat}
 
     cell = @index(Global)
 
-    @unpack lpjmlparams, soil_layers, anion_excl, NPERCO = kernel_params
+    @unpack lpjmlparams, thermalparams, soil_layers, anion_excl, NPERCO,
+            transfer_heat = kernel_params
 
     @unpack soil_infil, soil_infil_litter, percthres = lpjmlparams
 
@@ -76,6 +229,10 @@ end
     soil_srunoff[cell] = zero(T)
     soil_outflux_f[cell] = zero(T)
     soil_n_leaching[cell] = zero(T)
+    rain_energy_input[cell] = zero(T)
+    snowmelt_energy_input[cell] = zero(T)
+    lateral_energy_output[cell] = zero(T)
+    bottom_energy_output[cell] = zero(T)
     for l in 1:soil_layers
         freewater += soil_w_fw[l, cell]
         if soil_w[l, cell] + soil_ice_available[l, cell] / soil_whcs[l, cell] > one(T)
@@ -86,7 +243,24 @@ end
         soil_lrunoff[l, cell] = zero(T)
         soil_w_influx[l, cell] = zero(T)
         soil_w_outflux[l, cell] = zero(T)
+        soil_perc_energy[l, cell] = zero(T)
     end
+
+    @unpack water_heat_capacity, ice_heat_capacity,
+            volumetric_fusion_heat = thermalparams
+    total_top_water = max(precipitation[cell], zero(T))
+    melt_top_water = min(max(snowmelt[cell], zero(T)), total_top_water)
+    rain_top_water = max(total_top_water - melt_top_water, zero(T))
+    top_water_denominator = rain_top_water + melt_top_water
+    rain_fraction = top_water_denominator > eps(T) ?
+                    rain_top_water / top_water_denominator : zero(T)
+    melt_fraction = top_water_denominator > eps(T) ?
+                    melt_top_water / top_water_denominator : zero(T)
+    rain_volumetric_enthalpy = volumetric_fusion_heat +
+                               water_heat_capacity * air_temperature[cell]
+    melt_volumetric_enthalpy = volumetric_fusion_heat
+    top_volumetric_enthalpy = rain_fraction * rain_volumetric_enthalpy +
+                              melt_fraction * melt_volumetric_enthalpy
 
     soil_infil *= (one(T) + soil_agtop_cover[cell] * soil_infil_litter)
     influx = zero(T)
@@ -110,17 +284,36 @@ end
         end
         srunoff = slug-influx
         soil_srunoff[cell] += slug - influx # surface runoff used for leaching
+        incoming_volumetric_enthalpy = top_volumetric_enthalpy
+
+        if transfer_heat
+            rain_energy = influx * T(0.001) * rain_fraction * rain_volumetric_enthalpy
+            melt_energy = influx * T(0.001) * melt_fraction * melt_volumetric_enthalpy
+            rain_energy_input[cell] += rain_energy
+            snowmelt_energy_input[cell] += melt_energy
+        end
 
         for l in 1:soil_layers
             lrunoff = zero(T)
+            layer_influx = influx
+            influx = zero(T)
+
+            if transfer_heat
+                soil_perc_energy[l, cell] +=
+                    layer_influx * T(0.001) * incoming_volumetric_enthalpy
+            end
 
             # Nitrate percolated from the layer above enters this layer even
             # when water does not continue percolating out of it today.
             soil_NO3[l, cell] += NO3perc_ly
             NO3perc_ly = zero(T)
 
-            soil_w[l, cell] += (soil_w_fw[l, cell] + influx) / soil_whcs[l, cell]
+            soil_w[l, cell] += (soil_w_fw[l, cell] + layer_influx) / soil_whcs[l, cell]
             soil_w_fw[l, cell] = zero(T)
+
+            layer_volumetric_enthalpy = soil_temperature[l, cell] >= zero(T) ?
+                volumetric_fusion_heat + water_heat_capacity * soil_temperature[l, cell] :
+                ice_heat_capacity * soil_temperature[l, cell]
 
             # Handle lateral runoff of water above saturation
             liquid_capacity = max(
@@ -139,6 +332,12 @@ end
                 soil_w[l, cell] -= grunoff / soil_whcs[l, cell]
                 soil_lrunoff[l, cell] += grunoff
                 lrunoff += grunoff
+            end
+
+            if transfer_heat && lrunoff > zero(T)
+                runoff_energy = lrunoff * T(0.001) * layer_volumetric_enthalpy
+                soil_perc_energy[l, cell] -= runoff_energy
+                lateral_energy_output[cell] += runoff_energy
             end
 
             # Percolation from layer l to l+1 (or to outflux at bottom layer).
@@ -179,10 +378,22 @@ end
                 if l == soil_layers
                     soil_outflux_f[cell] += perc
                     soil_w_outflux[l, cell] += perc
+                    if transfer_heat
+                        drainage_energy = perc * T(0.001) * layer_volumetric_enthalpy
+                        soil_perc_energy[l, cell] -= drainage_energy
+                        bottom_energy_output[cell] += drainage_energy
+                    end
                 else
                     influx = perc
                     soil_w_influx[l+1, cell] += perc
                     soil_w_outflux[l, cell] += perc
+                    if transfer_heat
+                        transfer_energy = perc * T(0.001) * layer_volumetric_enthalpy
+                        soil_perc_energy[l, cell] -= transfer_energy
+                        # The next layer receives precisely the enthalpy carried
+                        # out of this layer, not the upper-boundary mixture.
+                        incoming_volumetric_enthalpy = layer_volumetric_enthalpy
+                    end
                 end
 
                 concNO3_mobile = zero(T)

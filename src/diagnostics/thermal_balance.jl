@@ -2,6 +2,11 @@
 mutable struct ThermalBalance{M <: AbstractArray{<:AbstractFloat}}
     surface_energy_flux::M
     energy_residual::M
+    rain_energy_input::M
+    snowmelt_energy_input::M
+    lateral_runoff_energy_output::M
+    bottom_drainage_energy_output::M
+    percolation_energy_residual::M
     column_energy::M
     total_ice_storage::M
     wilting_ice_storage::M
@@ -21,6 +26,7 @@ function init_thermal_balance(number_of_days::Integer,
     return ThermalBalance(
         allocate(), allocate(), allocate(), allocate(), allocate(), allocate(),
         allocate(), allocate(), allocate(), allocate(), allocate(),
+        allocate(), allocate(), allocate(), allocate(), allocate(),
     )
 end
 
@@ -32,6 +38,16 @@ function record_thermal_balance!(thermal_balance::ThermalBalance,
             soil.thermal.surface_energy_flux
         thermal_balance.energy_residual[day_index, :] .=
             soil.thermal.energy_residual
+        thermal_balance.rain_energy_input[day_index, :] .=
+            soil.thermal.rain_energy_input
+        thermal_balance.snowmelt_energy_input[day_index, :] .=
+            soil.thermal.snowmelt_energy_input
+        thermal_balance.lateral_runoff_energy_output[day_index, :] .=
+            soil.thermal.lateral_runoff_energy_output
+        thermal_balance.bottom_drainage_energy_output[day_index, :] .=
+            soil.thermal.bottom_drainage_energy_output
+        thermal_balance.percolation_energy_residual[day_index, :] .=
+            soil.thermal.percolation_energy_residual
         thermal_balance.column_energy[day_index, :] .= vec(sum(
             soil.thermal.enthalpy .* reshape(
                 soil.properties.layer_depth .* eltype(soil.properties.layer_depth)(0.001),

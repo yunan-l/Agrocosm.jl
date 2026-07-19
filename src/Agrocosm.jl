@@ -58,7 +58,7 @@ export crop_carbon!, crop_carbon_hybrid!, hybrid_photos_C3!, hybrid_photos_C4!
 export waterlogging_stress!
 
 # SOIL
-export soil_temperature!
+export apply_percolation_enthalpy!, soil_temperature!
 export pedotransfer!, soil_carbon!, update_litc_tillage!, update_lit_winter_wheat!
 export evaporation!, soil_infiltration!, soil_evapotranspiration!
 export soil_nitrogen!, nitrogen_transform!, update_litn_tillage!

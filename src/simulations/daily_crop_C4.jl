@@ -75,9 +75,6 @@ function daily_crop_C4!(day_start, day_end,
         # Thermal properties require current pore volume before phase partitioning.
         pedotransfer!(soil)
         soil_temperature!(soil, dailyWeather.temp, climbuf.atemp_mean)
-        if thermal_balance !== nothing
-            record_thermal_balance!(thermal_balance, diagnostic_day, soil)
-        end
 
         # compute phenology variables
         phenology_crop!(crop, climbuf.V_req, pftparameters, dailyWeather.temp, pet.daylength)
@@ -94,7 +91,17 @@ function daily_crop_C4!(day_start, day_end,
         # Interception and infiltration precede plant water stress, as in LPJmL.
         interception!(crop, pftparameters, pet.eeq, dailyWeather.prec)
         pedotransfer!(soil)
-        soil_infiltration!(soil, crop, dailyWeather.prec; irrigation = irrigation)
+        soil_infiltration!(
+            soil,
+            crop,
+            dailyWeather.prec;
+            irrigation = irrigation,
+            snowmelt = soil.snow.melt,
+            air_temperature = dailyWeather.temp,
+        )
+        if thermal_balance !== nothing
+            record_thermal_balance!(thermal_balance, diagnostic_day, soil)
+        end
 
         if maize
             apar_crop_maize!(pftparameters, crop, pet) # crop absorbed photosynthetic radiation

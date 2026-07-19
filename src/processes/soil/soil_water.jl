@@ -8,16 +8,31 @@ added to absolute soil water storage.
 function soil_infiltration!(soil::Soil,
                             crop::Crop,
                             prec::AbstractArray{T};
-                            irrigation = false
+                            irrigation = false,
+                            snowmelt::Union{Nothing, AbstractArray{T}} = nothing,
+                            air_temperature::Union{Nothing, AbstractArray{T}} = nothing,
 ) where {T <: AbstractFloat}
     soil.water.infiltration .= prec - crop.water.interception
     surface_litter_interception!(soil)
-    infil_perc!(soil)
+    transfer_heat = !irrigation && snowmelt !== nothing && air_temperature !== nothing
+    if transfer_heat
+        infil_perc!(soil, prec, snowmelt, air_temperature)
+    else
+        infil_perc!(soil)
+    end
 
     if !irrigation
         soil.water.storage .= soil.water.storage .+ soil.water.percolation
     end
-    partition_soil_water_ice!(soil)
+    if transfer_heat
+        # LPJmL may reconcile temperature every two infiltration iterations.
+        # Agrocosm preserves the same water/energy ledger but applies it once
+        # after the GPU column kernel, avoiding device synchronization inside
+        # the iterative hydrology loop.
+        apply_percolation_enthalpy!(soil)
+    else
+        partition_soil_water_ice!(soil)
+    end
 
     return nothing
 end

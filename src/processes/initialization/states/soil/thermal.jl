@@ -10,8 +10,14 @@ mutable struct SoilThermal{A, B, M}
     conductivity_frozen::M
     conductivity_unfrozen::M
     water_reference::M
+    percolation_energy::M
     surface_energy_flux::A
     energy_residual::A
+    rain_energy_input::A
+    snowmelt_energy_input::A
+    lateral_runoff_energy_output::A
+    bottom_drainage_energy_output::A
+    percolation_energy_residual::A
     initialized::B
     diffusivity_0::A
     diffusivity_15::A
@@ -31,6 +37,12 @@ function init_soil_thermal(cell_size::Int, device; soil_layers::Int = 5)
         layer_state(),
         layer_state(),
         layer_state(),
+        layer_state(),
+        cell_state(),
+        cell_state(),
+        cell_state(),
+        cell_state(),
+        cell_state(),
         cell_state(),
         cell_state(),
         device(zeros(Bool, cell_size)),
