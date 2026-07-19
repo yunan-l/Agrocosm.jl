@@ -1,0 +1,100 @@
+"""
+    WaterBalance
+
+Optional daily water-budget diagnostics. All fields have shape
+`(number_of_days, number_of_cells)` and use millimetres of water.
+
+`residual` is positive when water enters the model but is neither retained in
+soil/snow storage nor represented by a recorded outgoing flux.
+"""
+mutable struct WaterBalance{M <: AbstractArray{<:AbstractFloat}}
+    precipitation::M
+    rain_after_snow::M
+    soil_storage_before::M
+    soil_storage_after::M
+    snow_storage_before::M
+    snow_storage_after::M
+    unaccounted_snow_flux::M
+    interception::M
+    transpiration::M
+    evaporation::M
+    surface_runoff::M
+    lateral_runoff::M
+    bottom_drainage::M
+    remaining_infiltration::M
+    residual::M
+end
+
+"""
+    init_water_balance(number_of_days, number_of_cells, device=identity; T=Float32)
+
+Allocate an optional daily water-balance ledger on the selected device.
+Currently the ledger supports rainfed simulations only.
+"""
+function init_water_balance(number_of_days::Integer,
+                            number_of_cells::Integer,
+                            device = identity;
+                            T::Type{<:AbstractFloat} = Float32)
+    allocate() = device(zeros(T, number_of_days, number_of_cells))
+
+    return WaterBalance(
+        allocate(), allocate(), allocate(), allocate(), allocate(),
+        allocate(), allocate(), allocate(), allocate(), allocate(),
+        allocate(), allocate(), allocate(), allocate(), allocate(),
+    )
+end
+
+function record_water_balance_start!(water_balance::WaterBalance,
+                                     day_index::Integer,
+                                     soil::Soil,
+                                     precipitation)
+    @views water_balance.precipitation[day_index, :] .= precipitation
+    @views water_balance.soil_storage_before[day_index, :] .= vec(sum(soil.swc; dims = 1))
+    @views water_balance.snow_storage_before[day_index, :] .= soil.snowpack
+    return nothing
+end
+
+function record_water_balance_after_snow!(water_balance::WaterBalance,
+                                          day_index::Integer,
+                                          precipitation)
+    @views water_balance.rain_after_snow[day_index, :] .= precipitation
+    return nothing
+end
+
+function record_water_balance_end!(water_balance::WaterBalance,
+                                   day_index::Integer,
+                                   soil::Soil,
+                                   crop::Crop)
+    @views begin
+        water_balance.soil_storage_after[day_index, :] .= vec(sum(soil.swc; dims = 1))
+        water_balance.snow_storage_after[day_index, :] .= soil.snowpack
+        water_balance.interception[day_index, :] .= crop.intercep
+        water_balance.transpiration[day_index, :] .= vec(sum(crop.trans_layer; dims = 1))
+        water_balance.evaporation[day_index, :] .= vec(sum(soil.evap; dims = 1))
+        water_balance.surface_runoff[day_index, :] .= soil.srunoff
+        water_balance.lateral_runoff[day_index, :] .= vec(sum(soil.lrunoff; dims = 1))
+        water_balance.bottom_drainage[day_index, :] .= soil.outflux_f
+        water_balance.remaining_infiltration[day_index, :] .= soil.infil
+
+        water_balance.unaccounted_snow_flux[day_index, :] .=
+            water_balance.snow_storage_before[day_index, :] .+
+            water_balance.precipitation[day_index, :] .-
+            water_balance.rain_after_snow[day_index, :] .-
+            water_balance.snow_storage_after[day_index, :]
+
+        water_balance.residual[day_index, :] .=
+            water_balance.soil_storage_before[day_index, :] .+
+            water_balance.snow_storage_before[day_index, :] .+
+            water_balance.precipitation[day_index, :] .-
+            water_balance.soil_storage_after[day_index, :] .-
+            water_balance.snow_storage_after[day_index, :] .-
+            water_balance.interception[day_index, :] .-
+            water_balance.transpiration[day_index, :] .-
+            water_balance.evaporation[day_index, :] .-
+            water_balance.surface_runoff[day_index, :] .-
+            water_balance.lateral_runoff[day_index, :] .-
+            water_balance.bottom_drainage[day_index, :]
+    end
+
+    return nothing
+end

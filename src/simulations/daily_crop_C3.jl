@@ -8,17 +8,32 @@ function daily_crop_C3!(start_day, end_day,
                         pftparameters,
                         climate, climbuf, crop, crop_cal, photos, pet, soil, managed_land, 
                         dailyWeather, output;
-                        irrigation = false
+                        irrigation = false,
+                        water_balance = nothing
 )
 
+    if water_balance !== nothing && irrigation
+        throw(ArgumentError("water-balance diagnostics currently support rainfed simulations only"))
+    end
+
     for day = start_day : end_day
+
+        diagnostic_day = day - start_day + 1
 
         day_of_year = day % 365 != 0 ? day % 365 : 365
         
         readclimate!(climate, dailyWeather, day)
 
+        if water_balance !== nothing
+            record_water_balance_start!(water_balance, diagnostic_day, soil, dailyWeather.prec)
+        end
+
         # snow
         snow!(soil, dailyWeather)
+
+        if water_balance !== nothing
+            record_water_balance_after_snow!(water_balance, diagnostic_day, dailyWeather.prec)
+        end
 
         # initial crop variables in sowing day and fertilizer
         cultivate!(crop, crop_cal, managed_land, soil, day_of_year)
@@ -59,6 +74,10 @@ function daily_crop_C3!(start_day, end_day,
 
         # soil water cycle
         soil_water!(soil, crop, dailyWeather.prec; irrigation = irrigation)
+
+        if water_balance !== nothing
+            record_water_balance_end!(water_balance, diagnostic_day, soil, crop)
+        end
 
     end
 end

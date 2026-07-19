@@ -28,6 +28,7 @@ export lpjmlparams, photoparams, soilparams, soil_decomp_params, snowparams, cft
 
 # INITIALIZATION
 export init_states!, init_climbuf, init_crop, init_pet, init_soil, init_output
+export WaterBalance, init_water_balance
 
 # CLIMATE
 export annual_climbuf!, daily_climbuf!, infil_perc!, spin_up_climbuf!, update_climbuf!, readclimate!, snow!         
@@ -72,6 +73,9 @@ include("parameters/pft.jl")
 include("processes/initialization/define_structs.jl")
 include("processes/initialization/init_states.jl")
 include("processes/initialization/init_structs.jl")
+
+# Diagnostics
+include("diagnostics/water_balance.jl")
 
 # Climate
 include("processes/climate/climbuf.jl")
