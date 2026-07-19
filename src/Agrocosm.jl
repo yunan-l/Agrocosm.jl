@@ -49,7 +49,7 @@ export waterlogging_stress!
 # SOIL
 export soiltemp_lag!
 export pedotransfer!, soil_carbon!, update_litc_tillage!, update_lit_winter_wheat!
-export evaporation!, soil_water!
+export evaporation!, soil_infiltration!, soil_evapotranspiration!
 export soil_nitrogen!, nitrogen_transform!, update_litn_tillage!
 export soil_decomp_response!
 

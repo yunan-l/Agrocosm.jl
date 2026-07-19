@@ -47,6 +47,11 @@ function daily_crop_C3!(start_day, end_day,
         phenology_crop!(crop, climbuf.V_req, pftparameters, dailyWeather.temp, pet.daylength)
         
         harvest_crop!(crop_cal, crop, soil, output, managed_land.residuefrac, day_of_year) # crop harvesting
+
+        # Interception and infiltration precede plant water stress, as in LPJmL.
+        interception!(crop, pftparameters, pet.eeq, dailyWeather.prec)
+        pedotransfer!(soil)
+        soil_infiltration!(soil, crop, dailyWeather.prec; irrigation = irrigation)
         
         apar_crop!(pftparameters, crop, pet) # crop absorbed photosynthetic radiation
         temp_stress(pftparameters, pet, photos, dailyWeather.temp) # temperature stress function
@@ -60,9 +65,7 @@ function daily_crop_C3!(start_day, end_day,
         # crop nitrogen allocation
         crop_nitrogen!(crop, pftparameters, soil, photos.vmax, pet.daylength, dailyWeather.temp) # nitrogen cycle
            
-        # evapotranspiration
-        interception!(crop, pftparameters, pet.eeq, dailyWeather.prec)
-        pedotransfer!(soil)
+        # evapotranspiration based on the post-infiltration soil water state
         transpiration!(photos.adtmm, pftparameters, crop, pet, soil, dailyWeather.annual_co2)
         evaporation!(pet.eeq, crop, soil)
 
@@ -72,8 +75,8 @@ function daily_crop_C3!(start_day, end_day,
         # soil nitrogen cycle
         soil_nitrogen!(crop_cal, soil)
 
-        # soil water cycle
-        soil_water!(soil, crop, dailyWeather.prec; irrigation = irrigation)
+        # Remove daily plant uptake and soil evaporation after demand/supply calculation.
+        soil_evapotranspiration!(soil, crop; irrigation = irrigation)
 
         if water_balance !== nothing
             record_water_balance_end!(water_balance, diagnostic_day, soil, crop)
