@@ -15,6 +15,20 @@ function crop_nitrogen!(crop::Crop,
     ndemand_crop!(crop, PFT, photos_vmax, pet_daylength, temp)
     nuptake_crop!(crop, PFT, soil)
 
+    allocate_crop_nitrogen!(crop, PFT)
+
+end
+
+"""
+    allocate_crop_nitrogen!(crop, PFT)
+
+Redistribute the complete plant nitrogen stock among crop organs. Organ pools
+are derived stocks, not daily uptake fluxes, so repeated calls with unchanged
+carbon and total nitrogen are idempotent.
+"""
+function allocate_crop_nitrogen!(crop::Crop,
+                                 PFT::PftParameters)
+
     launch_1D!(crop_nitrogen_kernel!,
                crop.nitrogen,
                crop.isgrowing,
@@ -49,48 +63,29 @@ end
 
      @unpack ratio = PFT
  
-     if (crop_isgrowing[cell] == 1) && (crop_nitrogen[cell] > 0)
-          nominator = crop_nitrogen[cell] * (crop_leafc[cell] * ratio.root * ratio.sto * ratio.pool +
-                      crop_rootc[cell] * ratio.sto * ratio.pool +
-                      crop_stoc[cell] * ratio.root * ratio.pool +
-                      crop_poolc[cell] * ratio.root * ratio.sto)
+     if (crop_isgrowing[cell] == 1) && (crop_nitrogen[cell] > zero(T)) && (crop_leafc[cell] > T(1e-7))
+          # LPJmL clears all four organ pools before calling solve(). With those
+          # inputs fixed at zero, solve() reduces exactly to these positive
+          # carbon-to-target-C:N weights. This form avoids reading stale organ N,
+          # uses fewer operations in a GPU kernel, and conserves total plant N.
+          leaf_weight = crop_leafc[cell]
+          root_weight = crop_rootc[cell] / T(ratio.root)
+          sto_weight = crop_stoc[cell] / T(ratio.sto)
+          pool_weight = crop_poolc[cell] / T(ratio.pool)
+          total_weight = leaf_weight + root_weight + sto_weight + pool_weight
 
-          a = (crop_leafc[cell] * crop_nitrogen[cell] * ratio.root * ratio.sto * ratio.pool +
-               crop_leafc[cell] * crop_rootn[cell] * ratio.root * ratio.sto * ratio.pool +
-               crop_leafc[cell] * crop_ston[cell] * ratio.root * ratio.sto * ratio.pool +
-               crop_leafc[cell] * crop_pooln[cell] * ratio.root * ratio.sto * ratio.pool -
-               crop_rootc[cell] * crop_leafn[cell] * ratio.sto * ratio.pool -
-               crop_stoc[cell] * crop_leafn[cell] * ratio.root * ratio.pool -
-               crop_poolc[cell] * crop_leafn[cell] * ratio.root * ratio.sto) / nominator
-
-          b = (-crop_leafc[cell] * crop_rootn[cell] * ratio.root * ratio.sto * ratio.pool +
-               crop_rootc[cell] * crop_nitrogen[cell] * ratio.sto * ratio.pool +
-               crop_rootc[cell] * crop_leafn[cell] * ratio.sto * ratio.pool +
-               crop_rootc[cell] * crop_ston[cell] * ratio.sto * ratio.pool +
-               crop_rootc[cell] * crop_pooln[cell] * ratio.sto * ratio.pool -
-               crop_stoc[cell] * crop_rootn[cell] * ratio.root * ratio.pool -
-               crop_poolc[cell] * crop_rootn[cell] * ratio.root * ratio.sto) / nominator
-
-          c = (-crop_leafc[cell] * crop_ston[cell] * ratio.root * ratio.sto * ratio.pool -
-               crop_rootc[cell] * crop_ston[cell] * ratio.sto * ratio.pool +
-               crop_stoc[cell] * crop_nitrogen[cell] * ratio.root * ratio.pool +
-               crop_stoc[cell] * crop_leafn[cell] * ratio.root * ratio.pool +
-               crop_stoc[cell] * crop_rootn[cell] * ratio.root * ratio.pool +
-               crop_stoc[cell] * crop_pooln[cell] * ratio.root * ratio.pool -
-               crop_poolc[cell] * crop_ston[cell] * ratio.root * ratio.sto) / nominator
-
-          d = (-crop_leafc[cell] * crop_pooln[cell] * ratio.root * ratio.sto * ratio.pool -
-               crop_rootc[cell] * crop_pooln[cell] * ratio.sto * ratio.pool -
-               crop_stoc[cell] * crop_pooln[cell] * ratio.root * ratio.pool +
-               crop_poolc[cell] * crop_nitrogen[cell] * ratio.root * ratio.sto +
-               crop_poolc[cell] * crop_leafn[cell] * ratio.root * ratio.sto +
-               crop_poolc[cell] * crop_rootn[cell] * ratio.root * ratio.sto +
-               crop_poolc[cell] * crop_ston[cell] * ratio.root * ratio.sto) / nominator
-
-          crop_leafn[cell] += a * crop_nitrogen[cell]
-          crop_rootn[cell] += b * crop_nitrogen[cell]
-          crop_ston[cell] += c * crop_nitrogen[cell]
-          crop_pooln[cell] += d * crop_nitrogen[cell]
+          if total_weight > zero(T)
+               scale = crop_nitrogen[cell] / total_weight
+               crop_leafn[cell] = leaf_weight * scale
+               crop_rootn[cell] = root_weight * scale
+               crop_ston[cell] = sto_weight * scale
+               crop_pooln[cell] = pool_weight * scale
+          else
+               crop_leafn[cell] = zero(T)
+               crop_rootn[cell] = zero(T)
+               crop_ston[cell] = zero(T)
+               crop_pooln[cell] = zero(T)
+          end
      else
           crop_leafn[cell] = zero(T)
           crop_rootn[cell] = zero(T)

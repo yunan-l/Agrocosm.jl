@@ -57,6 +57,12 @@ struct K_Litter10{T} # lower and upper coldest monthly mean temperature(deg C)
     root::T
 end
 
+struct NuptakeKinetics{T}
+    vmax::T # Maximum uptake per unit fine-root carbon (gN kgC-1 day-1)
+    kmin::T # Uptake term independent of Michaelis-Menten saturation
+    Km::T   # Half-saturation concentration (gN m-3)
+end
+
 @kwdef struct PftParameters{T <: AbstractFloat, S <: Integer}
     name::S
     plant_type::S
@@ -99,9 +105,8 @@ end
     emax::T
     gmin::T # Minimum canopy conductance (mm s-1)
     knstore::T
-    vmax_up::T
-    kNmin::T
-    KNmin::T
+    no3_uptake::NuptakeKinetics{T}
+    nh4_uptake::NuptakeKinetics{T}
     hiopt::T
     himin::T
 end
@@ -153,9 +158,8 @@ cft1 = PftParameters{Float32, Int32}(
     emax = 8.0,
     gmin = 1.0,
     knstore = 0.1,
-    vmax_up = 5.51,
-    kNmin = 0.05,
-    KNmin = 1.48,
+    no3_uptake = NuptakeKinetics{Float32}(1.5, 0.05, 0.70),
+    nh4_uptake = NuptakeKinetics{Float32}(4.7, 0.05, 0.45),
     hiopt = 0.60,
     himin = 0.20
 )
@@ -207,9 +211,8 @@ cft2 = PftParameters{Float32, Int32}(
     emax = 8.0,
     gmin = 1.0,
     knstore = 0.1,
-    vmax_up = 5.51,
-    kNmin = 0.05,
-    KNmin = 1.48,
+    no3_uptake = NuptakeKinetics{Float32}(1.5, 0.05, 0.70),
+    nh4_uptake = NuptakeKinetics{Float32}(4.7, 0.05, 0.45),
     hiopt = 0.60,
     himin = 0.25
 )
@@ -261,9 +264,8 @@ cft3 = PftParameters{Float32, Int32}(
     emax = 8.0,
     gmin = 1.2,
     knstore = 0.1,
-    vmax_up = 5.51,
-    kNmin = 0.05,
-    KNmin = 1.48,
+    no3_uptake = NuptakeKinetics{Float32}(1.5, 0.05, 0.70),
+    nh4_uptake = NuptakeKinetics{Float32}(4.7, 0.05, 0.45),
     hiopt = 0.60,
     himin = 0.30
 )
@@ -315,9 +317,8 @@ cft4 = PftParameters{Float32, Int32}(
     emax = 8.0,
     gmin = 1.2,
     knstore = 0.1,
-    vmax_up = 5.51,
-    kNmin = 0.05,
-    KNmin = 1.48,
+    no3_uptake = NuptakeKinetics{Float32}(1.5, 0.05, 0.70),
+    nh4_uptake = NuptakeKinetics{Float32}(4.7, 0.05, 0.45),
     hiopt = 0.40,
     himin = 0.10
 )

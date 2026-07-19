@@ -65,6 +65,7 @@ mutable struct Crop{T <: AbstractArray{ <: AbstractFloat}, B <: AbstractArray{ <
     init_vegc::T
     vegc::M
     nitrogen::T
+    nuptake::T
     leafn::T 
     rootn::T
     pooln::T
