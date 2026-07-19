@@ -9,6 +9,8 @@ using Test
     include("processes/crop/test_lambda_solver_c3.jl")
     include("processes/crop/test_lambda_solver_c4.jl")
     include("processes/crop/test_lambda_water_coupling.jl")
+    include("processes/crop/test_nitrogen_allocation.jl")
+    include("processes/crop/test_nitrogen_uptake.jl")
     include("processes/soil/test_soil_water.jl")
     include("diagnostics/test_water_balance.jl")
 end
