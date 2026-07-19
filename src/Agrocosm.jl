@@ -43,6 +43,8 @@ export phenology_crop!, lai_crop!, lai_deficit!, cultivate!, harvest_crop!, fert
 export transpiration!, interception!
 export crop_nitrogen!, ndemand_crop!, nuptake_crop!
 export root_distribution, temp_stress
+export lpj_bisect, solve_lambda_c3_lpj, solve_lambda_c4_lpj
+export solve_lambda_c3!, solve_lambda_c4!
 export crop_carbon!, crop_carbon_hybrid!, hybrid_photos_C3!, hybrid_photos_C4!
 export waterlogging_stress!
 
@@ -69,6 +71,9 @@ export daily_crop_C3!, daily_crop_C4!
 include("parameters/default_params.jl")
 include("parameters/pft.jl")
 
+# Numerics
+include("numerics/lpj_bisect.jl")
+
 # Initialization
 include("processes/initialization/define_structs.jl")
 include("processes/initialization/init_states.jl")
@@ -88,6 +93,7 @@ include("processes/climate/snow.jl")
 include("processes/crop/cultivate.jl")
 include("processes/crop/phenology.jl")
 include("processes/crop/photosynthesis.jl")
+include("processes/crop/lambda_solver.jl")
 include("processes/crop/carbon_allocation.jl")
 include("processes/crop/crop_carbon.jl")
 include("processes/crop/lai_crop.jl")
