@@ -35,7 +35,7 @@ water, nitrogen, and management process coefficients.
     MINERALDENS::T = 2700 # mineral density in kg/m3
     soildepth_evap::T = 300.0
     p::T = 25
-    k_temp::T = 0.02 # factor of temperature dependence of nitrogen demand for Rubisco activity
+    k_temp::T = 0.0693 # factor of temperature dependence of nitrogen demand for Rubisco activity
     T_0::T = -25.0 # parameter in N uptake temperature function
     T_m::T = 15.0 # parameter in N uptake temperature function
     T_r::T = 15.0 # parameter in N uptake temperature function

@@ -1,20 +1,28 @@
 """
 nuptake_crop!(crop, PFT, soil)
 
-Compute root uptake of mineral nitrogen from soil NH4/NO3 pools.
+Compute root uptake of mineral nitrogen from soil NH4/NO3 pools. When
+`auto_fertilizer=true`, supply the remaining plant demand as an explicit
+external N input after root uptake, following LPJmL's AUTO_FERTILIZER mode.
 """
 function nuptake_crop!(crop::Crop,
                        PFT::PftParameters,
                        soil::Soil;
+                       auto_fertilizer::Bool = false,
                        lpjmlparams::LPJmLParams = lpjmlparams
 )
 
-    kernel_params = (lpjmlparams = lpjmlparams, soil_layers = 5)
+    kernel_params = (
+        lpjmlparams = lpjmlparams,
+        soil_layers = 5,
+        auto_fertilizer = auto_fertilizer,
+    )
 
     launch_1D!(
         nuptake_crop_kernel!,
         crop.nitrogen,
         crop.nuptake,
+        crop.nautofertilizer,
         crop.leafn,
         crop.leafc,
         crop.rootn,
@@ -39,6 +47,7 @@ end
 @kernel inbounds = true function nuptake_crop_kernel!(
                                       crop_nitrogen::AbstractArray{T},
                                       crop_nuptake::AbstractArray{T},
+                                      crop_nautofertilizer::AbstractArray{T},
                                       crop_leafn::AbstractArray{T},
                                       crop_leafc::AbstractArray{T},
                                       crop_rootn::AbstractArray{T},
@@ -60,13 +69,14 @@ end
     
     cell = @index(Global)
     
-    @unpack lpjmlparams, soil_layers = kernel_params
+    @unpack lpjmlparams, soil_layers, auto_fertilizer = kernel_params
 
     @unpack T_0, T_m, T_r = lpjmlparams
     @unpack ncleaf, knstore, no3_uptake, nh4_uptake = PFT
 
     if crop_isgrowing[cell] == 1
         crop_nuptake[cell] = zero(T)
+        crop_nautofertilizer[cell] = zero(T)
 
         mobile_carbon = crop_leafc[cell] + crop_rootc[cell]
         NCplant = mobile_carbon > zero(T) ?
@@ -171,12 +181,22 @@ end
         end
 
         ndemand_leaf_opt = crop_ndemand_leaf[cell]
-        if crop_ndemand_tot[cell] > crop_nitrogen[cell]
+        nitrogen_deficit = max(zero(T), crop_ndemand_tot[cell] - crop_nitrogen[cell])
+        if auto_fertilizer && nitrogen_deficit > zero(T)
+            crop_nitrogen[cell] += nitrogen_deficit
+            crop_nuptake[cell] += nitrogen_deficit
+            crop_nautofertilizer[cell] = nitrogen_deficit
+            crop_vscal[cell] = one(T)
+        elseif nitrogen_deficit > zero(T)
             crop_ndemand_leaf[cell] = crop_leafn[cell]
-            if ndemand_leaf_opt < 1.0e-7
+            if ndemand_leaf_opt < T(1e-7)
                 crop_vscal[cell] = one(T)
             else
-                crop_vscal[cell] = min(one(T), (crop_ndemand_leaf[cell] / (ndemand_leaf_opt / (1 + knstore))))
+                crop_vscal[cell] = min(
+                    one(T),
+                    crop_ndemand_leaf[cell] /
+                    (ndemand_leaf_opt / (one(T) + T(knstore))),
+                )
             end
         else
             crop_vscal[cell] = one(T)
@@ -185,6 +205,7 @@ end
     else
         crop_nitrogen[cell] = zero(T)
         crop_nuptake[cell] = zero(T)
+        crop_nautofertilizer[cell] = zero(T)
         crop_vscal[cell] = zero(T)
     end
 end

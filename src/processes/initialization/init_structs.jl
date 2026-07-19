@@ -35,6 +35,7 @@ function init_crop(cell_size::Int,
         device(zeros(Float32, (carbon_pools, cell_size))),  # vegc: 0.0f0
         device(zeros(Float32, cell_size)),      # nitrogen
         device(zeros(Float32, cell_size)),      # daily nitrogen uptake
+        device(zeros(Float32, cell_size)),      # daily automatic-fertilizer N input
         device(zeros(Float32, cell_size)),      # leafn: 0.0f0
         device(zeros(Float32, cell_size)),      # rootn: 0.0f0
         device(zeros(Float32, cell_size)),      # pooln: 0.0f0

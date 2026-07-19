@@ -1,5 +1,5 @@
 """
-crop_nitrogen!(crop, PFT, soil, photos_vmax, pet_daylength, temp)
+crop_nitrogen!(crop, PFT, soil, photos_vmax, temp; auto_fertilizer=true)
 
 Allocate acquired crop nitrogen among leaf, root, storage, and pool compartments.
 """
@@ -7,13 +7,12 @@ function crop_nitrogen!(crop::Crop,
                         PFT::PftParameters,
                         soil::Soil,
                         photos_vmax::AbstractArray{T},
-                        pet_daylength::AbstractArray{T},
-                        temp::AbstractArray{T}
+                        temp::AbstractArray{T};
+                        auto_fertilizer::Bool = true
 ) where {T <: AbstractFloat}
 
-
-    ndemand_crop!(crop, PFT, photos_vmax, pet_daylength, temp)
-    nuptake_crop!(crop, PFT, soil)
+    ndemand_crop!(crop, PFT, photos_vmax, temp)
+    nuptake_crop!(crop, PFT, soil; auto_fertilizer = auto_fertilizer)
 
     allocate_crop_nitrogen!(crop, PFT)
 

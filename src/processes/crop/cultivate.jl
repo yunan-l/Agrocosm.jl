@@ -10,7 +10,8 @@ function cultivate!(crop::Crop,
                     soil::Soil,
                     day::Int;
                     lpjmlparams::LPJmLParams = lpjmlparams,
-                    manure = false
+                    manure = false,
+                    apply_prescribed_fertilizer::Bool = true
 )
 
     @unpack manure_cn, nfert_split_frac, nmanure_nh4_frac= lpjmlparams
@@ -24,8 +25,15 @@ function cultivate!(crop::Crop,
     crop_cal.scallback .= ifelse.(crop_cal.sdate .== day, 1, crop_cal.scallback)
     crop.isgrowing .= ifelse.(crop_cal.sdate .== day, 1, crop.isgrowing)
     crop_cal.scallback .= ifelse.(crop_cal.sdate .!= day, 0, crop_cal.scallback)
-    fertilizer!(crop_cal, ml, crop, soil, day)
-    if manure
+    fertilizer!(
+        crop_cal,
+        ml,
+        crop,
+        soil,
+        day;
+        enabled = apply_prescribed_fertilizer,
+    )
+    if manure && apply_prescribed_fertilizer
         soil.litc[2, :] = soil.litc[2, :] + (ml.manure * manure_cn * nfert_split_frac) .* reshape(crop_cal.scallback, (1, :))
         soil.litn[2, :] = soil.litn[2, :] + (ml.manure * (1 - nmanure_nh4_frac) * nfert_split_frac) .* reshape(crop_cal.scallback, (1, :))
     end

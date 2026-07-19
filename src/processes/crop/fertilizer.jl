@@ -8,10 +8,11 @@ function fertilizer!(crop_cal::Calendar,
                      crop::Crop,
                      soil::Soil,
                      day;
+                     enabled::Bool = true,
                      lpjmlparams::LPJmLParams = lpjmlparams
 )
 
-    kernel_params = (lpjmlparams = lpjmlparams, nitrogen_is_unlimited = true)
+    kernel_params = (lpjmlparams = lpjmlparams, enabled = enabled)
 
     launch_1D!(
         fertilizer_kernel!,
@@ -45,32 +46,29 @@ end
     
     cell = @index(Global)
 
-    @unpack lpjmlparams, nitrogen_is_unlimited = kernel_params
+    @unpack lpjmlparams, enabled = kernel_params
     @unpack nmanure_nh4_frac, nfert_split_frac, nfert_no3_frac = lpjmlparams
 
-    if crop_cal_sdate[cell] == day
-        soil_NH4[1, cell] += ml_manure[cell] * nmanure_nh4_frac * nfert_split_frac
-        crop_nmanure[cell] = ml_manure[cell] * (1 - nfert_split_frac)
+    if enabled
+        if crop_cal_sdate[cell] == day
+            soil_NH4[1, cell] += ml_manure[cell] * nmanure_nh4_frac * nfert_split_frac
+            crop_nmanure[cell] = ml_manure[cell] * (1 - nfert_split_frac)
 
-        soil_NO3[1, cell] += ml_fertilizer[cell] * nfert_no3_frac * nfert_split_frac
-        soil_NH4[1, cell] += ml_fertilizer[cell] * (1 - nfert_no3_frac) * nfert_split_frac
-        crop_nfertilizer[cell] = ml_fertilizer[cell] * (1 - nfert_split_frac)
-    end
+            soil_NO3[1, cell] += ml_fertilizer[cell] * nfert_no3_frac * nfert_split_frac
+            soil_NH4[1, cell] += ml_fertilizer[cell] * (1 - nfert_no3_frac) * nfert_split_frac
+            crop_nfertilizer[cell] = ml_fertilizer[cell] * (1 - nfert_split_frac)
+        end
 
-    if crop_fphu[cell] > T(0.25) && crop_nfertilizer[cell] > zero(T)
-        soil_NO3[1, cell] += crop_nfertilizer[cell]  * nfert_no3_frac
-        soil_NH4[1, cell] += crop_nfertilizer[cell] * (1 - nfert_no3_frac)
-        crop_nfertilizer[cell] = zero(T)
-    end
+        if crop_fphu[cell] > T(0.25) && crop_nfertilizer[cell] > zero(T)
+            soil_NO3[1, cell] += crop_nfertilizer[cell] * nfert_no3_frac
+            soil_NH4[1, cell] += crop_nfertilizer[cell] * (1 - nfert_no3_frac)
+            crop_nfertilizer[cell] = zero(T)
+        end
 
-    if crop_fphu[cell] > T(0.25) && crop_nmanure[cell] > zero(T)
-        soil_NH4[1, cell] += crop_nmanure[cell] * nmanure_nh4_frac
-        crop_nmanure[cell] = zero(T)
-    end
-
-    if nitrogen_is_unlimited
-        soil_NO3[1, cell] += T(1000)
-        soil_NH4[1, cell] += T(1000)
+        if crop_fphu[cell] > T(0.25) && crop_nmanure[cell] > zero(T)
+            soil_NH4[1, cell] += crop_nmanure[cell] * nmanure_nh4_frac
+            crop_nmanure[cell] = zero(T)
+        end
     end
 
 end

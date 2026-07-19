@@ -9,6 +9,7 @@ function daily_crop_C3!(start_day, end_day,
                         climate, climbuf, crop, crop_cal, photos, pet, soil, managed_land, 
                         dailyWeather, output;
                         irrigation = false,
+                        auto_fertilizer = true,
                         water_balance = nothing
 )
 
@@ -36,7 +37,14 @@ function daily_crop_C3!(start_day, end_day,
         end
 
         # initial crop variables in sowing day and fertilizer
-        cultivate!(crop, crop_cal, managed_land, soil, day_of_year)
+        cultivate!(
+            crop,
+            crop_cal,
+            managed_land,
+            soil,
+            day_of_year;
+            apply_prescribed_fertilizer = !auto_fertilizer,
+        )
 
         update_climbuf!(pftparameters, dailyWeather.temp, climbuf, day) # update climate buffer
         albedo!(pftparameters, crop, pet)  # compute albedo
@@ -72,7 +80,8 @@ function daily_crop_C3!(start_day, end_day,
         crop_carbon!(photos, crop, output, pftparameters, dailyWeather.temp)
 
         # crop nitrogen allocation
-        crop_nitrogen!(crop, pftparameters, soil, photos.vmax, pet.daylength, dailyWeather.temp) # nitrogen cycle
+        crop_nitrogen!(crop, pftparameters, soil, photos.vmax, dailyWeather.temp;
+                       auto_fertilizer = auto_fertilizer) # nitrogen cycle
 
         evaporation!(pet.eeq, crop, soil)
 
