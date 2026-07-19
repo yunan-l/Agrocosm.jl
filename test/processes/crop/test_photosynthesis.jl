@@ -70,7 +70,7 @@ end
         comp_vmax = true,
     )
 
-    @test photos.lambda == Float32[0.4]
+    @test photos.lambda == Float32[0.8]
     @test all(isfinite, photos.vmax)
     @test all(isfinite, photos.agd)
     @test all(isfinite, photos.rd)
