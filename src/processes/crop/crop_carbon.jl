@@ -15,8 +15,9 @@ function crop_carbon!(photos::Photos,
 
     # compute crop carbon allocation  
     carbon_allocation!(PFT, crop, photos)
-    crop.vegc = vcat(reshape(crop.rootc, (1, :)), reshape(crop.leafc, (1, :)), reshape(crop.stoc, (1, :)), reshape(crop.poolc, (1, :)))
+    # crop.vegc = vcat(reshape(crop.rootc, (1, :)), reshape(crop.leafc, (1, :)), reshape(crop.stoc, (1, :)), reshape(crop.poolc, (1, :)))
 
+    output.gpp = vcat(output.gpp, reshape(photos.agd, (1, :)))
     output.npp = vcat(output.npp, reshape(crop.npp, (1, :)))
     output.lai = vcat(output.lai, reshape(crop.lai, (1, :)))
     output.fphu = vcat(output.fphu, reshape(crop.fphu, (1, :)))

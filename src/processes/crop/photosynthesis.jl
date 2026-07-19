@@ -18,6 +18,7 @@ function photosynthesis_C3!(PFT::PftParameters,
     @unpack b = PFT
     @unpack ko25, kc25, alphac3, theta = lpjmlparams
     @unpack q10ko, q10kc, po2, tau25, q10tau, cmass, cq, p, lambdamc3 = photoparams
+    inactive = photos.tstress .< T(1e-2)
     
     ko = ko25 * q10ko .^ ((temp .- T(25.0)) * T(0.1))
     kc = kc25 * q10kc .^ ((temp .- T(25.0)) * T(0.1))
@@ -32,9 +33,10 @@ function photosynthesis_C3!(PFT::PftParameters,
         c2 = (p_i .- gammastar) ./ (p_i .+ fac)
         s = (24 ./ pet_daylength) * b
         sigma = 1.0f0 .- (c2 .- s) ./ (c2 .- theta * s)
-        sigma = sqrt.(max.(1f-7, sigma))
+        sigma = sqrt.(max.(zero(T), sigma))
         photos.lambda .= 0.8f0  
-        photos.vmax = (1.0f0 / b) * (c1 ./ c2) .* ((2.0f0 * theta - 1.0f0) .* s .- (2.0f0 * theta .* s .- c2) .* sigma) .* apar * cmass * cq
+        vmax = (1.0f0 / b) * (c1 ./ c2) .* ((2.0f0 * theta - 1.0f0) .* s .- (2.0f0 * theta .* s .- c2) .* sigma) .* apar * cmass * cq
+        photos.vmax = ifelse.(inactive, zero(T), max.(zero(T), vmax))
     end
 
     # calculation of C1C3, C2C3 with actual p_i (leaf internal partial pressure of CO2)
@@ -60,7 +62,9 @@ function photosynthesis_C3!(PFT::PftParameters,
     #   Calculation of daily gross photosynthesis, Agd, gC/m2/day
     #   Eqn 2, Haxeltine & Prentice 1996
 
-    photos.agd = (je .+ jc .- sqrt.(max.(1f-7, (je .+ jc) .* (je .+ jc) .- T(4.0) * theta * je .* jc))) ./ (T(2.0) * theta) .* pet_daylength
+    # round-off; a positive floor can make GPP negative at low light.
+    agd = (je .+ jc .- sqrt.(max.(zero(T), (je .+ jc) .* (je .+ jc) .- T(4.0) * theta .* je .* jc))) ./ (T(2.0) * theta) .* pet_daylength
+    photos.agd = ifelse.(inactive, zero(T), max.(zero(T), agd))
 
     #   Daily dark respiration, Rd, gC/m2/day
     #   Eqn 10, Haxeltine & Prentice 1996
@@ -70,13 +74,16 @@ function photosynthesis_C3!(PFT::PftParameters,
 
     #   Daily dark respiration, Rd, gC/m2/day
     #   Eqn 10, Haxeltine & Prentice 1996
-    photos.rd .= ifelse.(photos.tstress .< 1e-2, zero(T), b * photos.vmax)
-    photos.adt = photos.agd .- hour2day(pet_daylength) .* photos.rd
+    photos.rd .= ifelse.(inactive, zero(T), b .* photos.vmax)
+    adt = photos.agd .- hour2day(pet_daylength) .* photos.rd
 
     #   Convert adt from gC/m2/day to mm/m2/day using ideal gas equation
-    photos.adt = max.(photos.adt, zero(T))
-
-    photos.adtmm = photos.adt / cmass * T(8.314) .* degCtoK(temp) / p * T(1000.0)
+    photos.adt = max.(zero(T), adt)
+    photos.adtmm = ifelse.(
+        adt .<= zero(T),
+        zero(T),
+        adt ./ cmass .* T(8.314) .* degCtoK(temp) ./ p .* T(1000.0),
+    )
 
 end
 
@@ -99,6 +106,7 @@ function photosynthesis_C4!(PFT::PftParameters,
     @unpack b = PFT
     @unpack alphac4, theta = lpjmlparams
     @unpack lambdamc4, cmass, cq, p = photoparams
+    inactive = photos.tstress .< T(1e-2)
     
     #   Parameter accounting for effect of reduced intercellular CO2
     #   concentration on photosynthesis, Phipi.
@@ -110,9 +118,10 @@ function photosynthesis_C4!(PFT::PftParameters,
         s = (24 ./ pet_daylength) * b
         sigma = 1.0f0 .- (c2 .- s) ./ (c2 .- theta * s)
         # sigma = sqrt.(0.5f0 * (sigma .+ sqrt(sigma .* sigma .+ (1f-3)^2)))
-        sigma = sqrt.(max.(1f-7, sigma))
+        sigma = sqrt.(max.(zero(T), sigma))
         photos.lambda .= 0.4f0  
-        photos.vmax = (1.0f0 / b) * (c1 ./ c2) .* ((2.0f0 * theta - 1.0f0) .* s .- (2.0f0 * theta .* s .- c2) .* sigma) .* apar * cmass * cq
+        vmax = (1.0f0 / b) * (c1 ./ c2) .* ((2.0f0 * theta - 1.0f0) .* s .- (2.0f0 * theta .* s .- c2) .* sigma) .* apar * cmass * cq
+        photos.vmax = ifelse.(inactive, zero(T), max.(zero(T), vmax))
     end
 
     phipi = min.(one(T), photos.lambda/lambdamc4)
@@ -133,7 +142,9 @@ function photosynthesis_C4!(PFT::PftParameters,
     #   Calculation of daily gross photosynthesis, Agd, gC/m2/day
     #   Eqn 2, Haxeltine & Prentice 1996
 
-    photos.agd = (je .+ jc .- sqrt.(max.(1f-7, (je .+ jc) .* (je .+ jc) .- T(4.0) * theta * je .* jc))) ./ (T(2.0) * theta) .* pet_daylength
+    # round-off; a positive floor can make GPP negative at low light.
+    agd = (je .+ jc .- sqrt.(max.(zero(T), (je .+ jc) .* (je .+ jc) .- T(4.0) * theta .* je .* jc))) ./ (T(2.0) * theta) .* pet_daylength
+    photos.agd = ifelse.(inactive, zero(T), max.(zero(T), agd))
 
     #   Daily dark respiration, Rd, gC/m2/day
     #   Eqn 10, Haxeltine & Prentice 1996
@@ -141,12 +152,15 @@ function photosynthesis_C4!(PFT::PftParameters,
     #   Total daytime net photosynthesis, Adt, gC/m2/day
     #   Eqn 19, Haxeltine & Prentice 1996
 
-    photos.rd .= ifelse.(photos.tstress .< 1e-2, zero(T), b * photos.vmax)
-    photos.adt = photos.agd .- hour2day(pet_daylength) .* photos.rd
+    photos.rd .= ifelse.(inactive, zero(T), b .* photos.vmax)
+    adt = photos.agd .- hour2day(pet_daylength) .* photos.rd
 
     #   Convert adt from gC/m2/day to mm/m2/day using ideal gas equation
-    photos.adt = max.(photos.adt, zero(T))
-
-    photos.adtmm = photos.adt / cmass * T(8.314) .* degCtoK(temp) / p * T(1000.0)
+    photos.adt = max.(zero(T), adt)
+    photos.adtmm = ifelse.(
+        adt .<= zero(T),
+        zero(T),
+        adt ./ cmass .* T(8.314) .* degCtoK(temp) ./ p .* T(1000.0),
+    )
 
 end

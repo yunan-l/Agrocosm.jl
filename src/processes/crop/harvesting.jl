@@ -39,7 +39,6 @@ function harvest_crop!(crop_cal::Calendar,
     output.scallback = vcat(output.scallback, reshape(crop_cal.scallback, (1, :)))
     output.hcallback = vcat(output.hcallback, reshape(crop_cal.hcallback, (1, :)))
     output.wdf = vcat(output.wdf, reshape(mean((soil.swc ./ soil.layer_depth)[1:3, :], dims = 1), (1, :)))
-    # output.fphu = vcat(output.fphu, reshape(crop.fphu, (1, :)))
     if day == 365
         output.hdate = vcat(output.hdate, reshape(crop_cal.hdate, (1, :)))
         crop_cal.harvesting_year .= ifelse.(crop.yield .!= 0.0f0, 1, 0)
@@ -48,10 +47,10 @@ function harvest_crop!(crop_cal::Calendar,
         crop_cal.hdate .= 0
         output.harvesting_year = vcat(output.harvesting_year, reshape(crop_cal.harvesting_year, (1, :)))
     end
-    crop.vegc = crop.vegc .* (1 .- reshape(crop_cal.hcallback, (1, :)))
-    crop.rootc = crop.rootc .* (1 .- crop_cal.hcallback)
-    crop.leafc = crop.leafc .* (1 .- crop_cal.hcallback)
-    crop.stoc = crop.stoc .* (1 .- crop_cal.hcallback)
-    crop.poolc = crop.poolc .* (1 .- crop_cal.hcallback)
+    # crop.vegc = crop.vegc .* (1 .- reshape(crop_cal.hcallback, (1, :)))
+    # crop.rootc = crop.rootc .* (1 .- crop_cal.hcallback)
+    # crop.leafc = crop.leafc .* (1 .- crop_cal.hcallback)
+    # crop.stoc = crop.stoc .* (1 .- crop_cal.hcallback)
+    # crop.poolc = crop.poolc .* (1 .- crop_cal.hcallback)
 
 end
