@@ -102,7 +102,7 @@ function daily_crop_C4!(day_start, day_end,
         soil_carbon!(crop_cal, soil)
 
         # soil nitrogen cycle
-        soil_nitrogen!(crop_cal, soil)
+        soil_nitrogen!(crop_cal, soil; air_temperature = dailyWeather.temp)
 
         # Remove daily plant uptake and soil evaporation after demand/supply calculation.
         soil_evapotranspiration!(soil, crop; irrigation = irrigation)

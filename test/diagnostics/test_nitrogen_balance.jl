@@ -88,6 +88,10 @@ end
     soil.nitrogen.litter_response .= 0.1f0
     soil.decomposition.litter_response .= 1.0f0
     soil.decomposition.response .= 0.2f0
+    # `init_soil` allocates state only. In a simulation `init_states!` loads
+    # normalized vertical transfer coefficients whose sum is 1-atmfrac.
+    soil.nitrogen.shift_fast[1, 1] = 0.392f0
+    soil.nitrogen.shift_slow[1, 1] = 0.008f0
 
     Agrocosm.record_nitrogen_balance_start!(balance, 1, crop, soil)
     soil_nitrogen!(crop.calendar, soil)

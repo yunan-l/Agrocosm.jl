@@ -41,6 +41,12 @@ water, nitrogen, and management process coefficients.
     T_r::T = 15.0 # parameter in N uptake temperature function
     k_max::T = 0.10 # maximum fraction of soil->NH4 assumed to be nitrified
     k_2::T = 0.01 # fraction of nitrified N lost as N20 flux
+    soil_cn_ratio::T = 15.0 # soil organic matter C:N ratio
+    immobilization_k::T = 5.0e-3 # half-saturation coefficient for immobilization
+    nitrification_a::T = 0.45
+    nitrification_b::T = 1.27
+    nitrification_c::T = 0.0012
+    nitrification_d::T = 2.84
     CDN::T = 1.2 # shape factor for denitrification (LPJmL soil.h)
     n2o_denit_frac::T = 0.11 # fraction of denitrified N emitted as N2O
     volatil_wind::T = 1.5 # default wind speed (m/s) if no wind forcing is provided

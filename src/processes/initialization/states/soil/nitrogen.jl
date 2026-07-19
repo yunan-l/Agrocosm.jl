@@ -12,6 +12,14 @@ mutable struct SoilNitrogen{A, L, M}
     shift_fast::M
     shift_slow::M
     litter_response::A
+    mineralization::M
+    immobilization::M
+    nitrification::M
+    n2o_nitrification::M
+    denitrification::M
+    n2o_denitrification::M
+    n2_denitrification::M
+    volatilization::A
     leaching::A
 end
 
@@ -26,6 +34,9 @@ function init_soil_nitrogen(cell_size::Int, device;
         layer_state(), layer_state(), layer_state(), layer_state(),
         litter_state(), layer_state(), layer_state(),
         device(zeros(Float32, litter_layers)),
+        layer_state(), layer_state(), layer_state(), layer_state(),
+        layer_state(), layer_state(), layer_state(),
+        device(zeros(Float32, cell_size)),
         device(zeros(Float32, cell_size)),
     )
 end

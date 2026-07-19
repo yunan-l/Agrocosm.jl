@@ -24,6 +24,14 @@ mutable struct NitrogenBalance{M <: AbstractArray{<:AbstractFloat}}
     prescribed_manure_input::M
     automatic_fertilizer_input::M
     harvest_export::M
+    mineralization::M
+    immobilization::M
+    nitrification::M
+    n2o_nitrification::M
+    denitrification::M
+    n2o_denitrification::M
+    n2_denitrification::M
+    volatilization::M
     gaseous_loss::M
     leaching_loss::M
     residual::M
@@ -39,7 +47,9 @@ function init_nitrogen_balance(number_of_days::Integer,
         allocate(), allocate(), allocate(), allocate(), allocate(),
         allocate(), allocate(), allocate(), allocate(), allocate(),
         allocate(), allocate(), allocate(), allocate(), allocate(),
-        allocate(), allocate(), allocate(),
+        allocate(), allocate(), allocate(), allocate(), allocate(),
+        allocate(), allocate(), allocate(), allocate(), allocate(),
+        allocate(),
     )
 end
 
@@ -90,6 +100,26 @@ function record_nitrogen_balance_end!(balance::NitrogenBalance,
         balance.automatic_fertilizer_input[day_index, :] .=
             crop.nitrogen.auto_fertilizer
         balance.harvest_export[day_index, :] .= crop.nitrogen.harvest_export
+        balance.mineralization[day_index, :] .=
+            vec(sum(soil.nitrogen.mineralization; dims = 1))
+        balance.immobilization[day_index, :] .=
+            vec(sum(soil.nitrogen.immobilization; dims = 1))
+        balance.nitrification[day_index, :] .=
+            vec(sum(soil.nitrogen.nitrification; dims = 1))
+        balance.n2o_nitrification[day_index, :] .=
+            vec(sum(soil.nitrogen.n2o_nitrification; dims = 1))
+        balance.denitrification[day_index, :] .=
+            vec(sum(soil.nitrogen.denitrification; dims = 1))
+        balance.n2o_denitrification[day_index, :] .=
+            vec(sum(soil.nitrogen.n2o_denitrification; dims = 1))
+        balance.n2_denitrification[day_index, :] .=
+            vec(sum(soil.nitrogen.n2_denitrification; dims = 1))
+        balance.volatilization[day_index, :] .= soil.nitrogen.volatilization
+        balance.gaseous_loss[day_index, :] .=
+            balance.n2o_nitrification[day_index, :] .+
+            balance.n2o_denitrification[day_index, :] .+
+            balance.n2_denitrification[day_index, :] .+
+            balance.volatilization[day_index, :]
         balance.leaching_loss[day_index, :] .= soil.nitrogen.leaching
 
         balance.residual[day_index, :] .=

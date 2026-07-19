@@ -5,6 +5,7 @@ Update litter and soil nitrogen pools and crop-available mineral nitrogen.
 """
 function soil_nitrogen!(crop_cal::CropCalendar,
                         soil::Soil;
+                        air_temperature = nothing,
                         lpjmlparams::LPJmLParams = lpjmlparams,
                         soil_decomp_params::SoilDecompParams = soil_decomp_params
 )
@@ -32,22 +33,11 @@ function soil_nitrogen!(crop_cal::CropCalendar,
     soil.nitrogen.decomposed_slow = (1.0f0 .- exp.(-k_soil10.slow .* soil.decomposition.response)) .* soil.nitrogen.slow
     soil.nitrogen.slow = soil.nitrogen.slow + litter_to_slow - soil.nitrogen.decomposed_slow
 
-    # Conservative M1 mineralization baseline. Litter N not retained in the
-    # fast/slow organic pools, plus decomposed fast/slow N, becomes NH4. The
-    # M3 transformation module will later partition this mineral N and record
-    # nitrification, denitrification, volatilization, and leaching explicitly.
-    mineralized_litter = max.(
-        zero(eltype(soil.nitrogen.ammonium)),
-        vec(sum(soil.nitrogen.decomposed_litter; dims = 1)) .-
-        vec(sum(litter_to_fast .+ litter_to_slow; dims = 1)),
+    nitrogen_transform!(
+        soil;
+        air_temperature = air_temperature,
+        lpjmlparams = lpjmlparams,
     )
-    @views soil.nitrogen.ammonium[1, :] .+= mineralized_litter
-    soil.nitrogen.ammonium .+=
-        soil.nitrogen.decomposed_fast .+ soil.nitrogen.decomposed_slow
-
-    # Nitrogen mineralization/immobilization/nitrification updates.
-    # TODO: we do not yet test it, so we close it for now.
-    # nitrogen_transform!(soil; lpjmlparams = lpjmlparams)
 
 end
 
