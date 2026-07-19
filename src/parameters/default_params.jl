@@ -156,6 +156,30 @@ Default `SnowParams{Float32}` singleton used by `snow!`.
 """
 const snowparams = SnowParams{Float32}()
 
+"""Numerical and bulk-thermal constants for the layered soil heat solver."""
+@kwdef struct SoilThermalParams{T}
+    seconds_per_day::T = 86400.0
+    diffusivity_conversion::T = 0.0864 # mm² s⁻¹ to m² day⁻¹
+    soil_heat_capacity::T = 1.2e6 # J m⁻³ K⁻¹, LPJmL dry-soil baseline
+    litter_carbon_fraction::T = 0.42
+    litter_bulk_density::T = 71.1 # kg dry matter m⁻³
+    litter_porosity::T = 0.952
+    litter_conductivity_dry::T = 0.05 # W m⁻¹ K⁻¹
+    litter_conductivity_saturated_unfrozen::T = 0.554636
+    litter_conductivity_saturated_frozen::T = 2.106374
+    mineral_heat_capacity::T = 1.9259e6 # J m⁻³ K⁻¹
+    water_heat_capacity::T = 4.2e6 # J m⁻³ K⁻¹
+    ice_heat_capacity::T = 2.1e6 # J m⁻³ K⁻¹
+    volumetric_fusion_heat::T = 3.0e8 # J m⁻³ water
+    solid_conductivity::T = 8.0 # W m⁻¹ K⁻¹
+    water_conductivity::T = 0.57 # W m⁻¹ K⁻¹
+    ice_conductivity::T = 2.2 # W m⁻¹ K⁻¹
+    phase_change_substeps::Int32 = 24
+end
+
+"""Default `SoilThermalParams{Float32}` used by `soil_temperature!`."""
+const soil_thermal_params = SoilThermalParams{Float32}()
+
 
 """
 SoilDecompParams

@@ -33,10 +33,6 @@ using Test
         swdown = zeros(Float32, 2, 2),
         lwnet = zeros(Float32, 2, 2),
         co2 = Float32[400],
-        temp_n = zeros(Float32, 2, 2),
-        prec_n = zeros(Float32, 2, 2),
-        sw_n = zeros(Float32, 2, 2),
-        lw_n = zeros(Float32, 2, 2),
         windspeed = Float32[1 2; 3 4],
     )
     loaded = ClimateDataLoader(loader_input, [2], identity)

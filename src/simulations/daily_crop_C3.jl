@@ -14,7 +14,8 @@ function daily_crop_C3!(start_day, end_day,
                         nitrogen_limit_vmax = false,
                         water_balance = nothing,
                         nitrogen_balance = nothing,
-                        carbon_balance = nothing
+                        carbon_balance = nothing,
+                        thermal_balance = nothing
 )
 
     crop_cal = crop.calendar
@@ -69,7 +70,13 @@ function daily_crop_C3!(start_day, end_day,
         update_climbuf!(pftparameters, dailyWeather.temp, climbuf, day) # update climate buffer
         albedo!(pftparameters, crop, pet)  # compute albedo
         petpar!(pet, day_of_year, managed_land.latitude, dailyWeather.temp, dailyWeather.lwr, dailyWeather.swr) # compute crop potential evapotraspiration variables
-        soiltemp_lag!(soil, climbuf)  # compute soil temperature, using very siample linear method, now the five soil-layer temperature is same
+        update_surface_litter_properties!(soil)
+        # Thermal properties require current pore volume before phase partitioning.
+        pedotransfer!(soil)
+        soil_temperature!(soil, dailyWeather.temp, climbuf.atemp_mean)
+        if thermal_balance !== nothing
+            record_thermal_balance!(thermal_balance, diagnostic_day, soil)
+        end
 
         # compute phenology variables
         phenology_crop!(crop, climbuf.V_req, pftparameters, dailyWeather.temp, pet.daylength)

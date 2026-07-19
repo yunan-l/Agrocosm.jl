@@ -27,12 +27,20 @@ CUDA.allowscalar(false)
     @test crop.photosynthesis.gross_assimilation isa CuArray{Float32, 1}
     @test soil.properties.sand_fraction isa CuArray{Float32, 2}
     @test soil.water.storage isa CuArray{Float32, 2}
+    @test soil.water.ice_storage isa CuArray{Float32, 2}
+    @test soil.water.wilting_ice_fraction isa CuArray{Float32, 2}
+    @test soil.water.available_ice_storage isa CuArray{Float32, 2}
+    @test soil.water.free_ice_storage isa CuArray{Float32, 2}
     @test soil.thermal.temperature isa CuArray{Float32, 2}
+    @test soil.thermal.enthalpy isa CuArray{Float32, 2}
+    @test soil.thermal.frozen_fraction isa CuArray{Float32, 2}
+    @test soil.thermal.initialized isa CuArray{Bool, 1}
     @test soil.carbon.litter isa CuArray{Float32, 2}
     @test soil.nitrogen.nitrate isa CuArray{Float32, 2}
     @test soil.nitrogen.leaching isa CuArray{Float32, 1}
     @test soil.decomposition.response isa CuArray{Float32, 2}
     @test soil.management.tillage_fraction isa CuArray{Float32, 2}
+    @test soil.surface_litter.water_storage isa CuArray{Float32, 1}
     @test soil.snow.pack isa CuArray{Float32, 1}
     @test weather.temp isa CuArray{Float32, 1}
     @test output.crop.npp isa CuArray{Float32, 2}

@@ -4,7 +4,7 @@ using Test
 @testset "Daily water-balance diagnostics" begin
     soil = init_soil(1, soilparams.soildepth, identity)
     crop = init_crop(1, identity)
-    water_balance = init_water_balance(2, 1, identity)
+    water_balance = init_water_balance(3, 1, identity)
 
     soil.water.storage .= 20.0f0
     Agrocosm.record_water_balance_start!(water_balance, 1, soil, Float32[10.0])
@@ -44,4 +44,28 @@ using Test
     @test water_balance.snow_sublimation[2, 1] == 0.1f0
     @test water_balance.unaccounted_snow_flux[2, 1] ≈ 0.0f0 atol = 1.0f-6
     @test water_balance.residual[2, 1] ≈ 0.0f0 atol = 1.0f-6
+
+    # Litter interception is an internal transfer. Its storage change and
+    # subsequent evaporation must nevertheless close the total water budget.
+    soil.snow.pack .= 0.0f0
+    soil.snow.sublimation .= 0.0f0
+    soil.water.storage .= 20.0f0
+    soil.surface_litter.water_storage .= 1.0f0
+    Agrocosm.record_water_balance_start!(water_balance, 3, soil, Float32[4.0])
+    Agrocosm.record_water_balance_after_snow!(water_balance, 3, Float32[4.0])
+    soil.surface_litter.interception .= 2.0f0
+    soil.surface_litter.evaporation .= 0.5f0
+    soil.surface_litter.water_storage .= 2.5f0
+    soil.water.storage[1, 1] = 22.0f0
+    crop.water.interception .= 0.0f0
+    crop.water.transpiration_layer .= 0.0f0
+    soil.water.evaporation .= 0.0f0
+    soil.water.surface_runoff .= 0.0f0
+    soil.water.lateral_runoff .= 0.0f0
+    soil.water.bottom_drainage .= 0.0f0
+    Agrocosm.record_water_balance_end!(water_balance, 3, soil, crop)
+
+    @test water_balance.litter_interception[3, 1] == 2.0f0
+    @test water_balance.litter_evaporation[3, 1] == 0.5f0
+    @test water_balance.residual[3, 1] ≈ 0.0f0 atol = 1.0f-6
 end

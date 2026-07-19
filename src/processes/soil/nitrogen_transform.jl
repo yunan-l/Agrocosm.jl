@@ -40,6 +40,7 @@ function nitrogen_transform!(soil::Soil;
         soil.water.relative_content,
         soil.water.holding_capacity_storage,
         soil.water.wilting_storage,
+        soil.water.wilting_ice_fraction,
         soil.water.free_water,
         soil.water.saturation_storage,
         soil.thermal.temperature,
@@ -56,6 +57,7 @@ function nitrogen_transform!(soil::Soil;
         soil.water.relative_content,
         soil.water.holding_capacity_storage,
         soil.water.wilting_storage,
+        soil.water.wilting_ice_fraction,
         soil.water.free_water,
         soil.water.saturation_storage,
         soil.thermal.temperature,
@@ -184,6 +186,7 @@ end
     relative_water::AbstractArray{M},
     holding_storage::AbstractArray{M},
     wilting_storage::AbstractArray{M},
+    wilting_ice_fraction::AbstractArray{M},
     free_water::AbstractArray{M},
     saturation_storage::AbstractArray{M},
     soil_temperature::AbstractArray{M},
@@ -201,7 +204,9 @@ end
         n2o_nitrification[layer, cell] = zero(M)
         water_filled_pore_space = clamp(
             (relative_water[layer, cell] * holding_storage[layer, cell] +
-             wilting_storage[layer, cell] + free_water[layer, cell]) /
+             wilting_storage[layer, cell] *
+             (one(M) - wilting_ice_fraction[layer, cell]) +
+             free_water[layer, cell]) /
             max(saturation_storage[layer, cell], eps(M)),
             zero(M), one(M),
         )
@@ -242,6 +247,7 @@ end
     relative_water::AbstractArray{M},
     holding_storage::AbstractArray{M},
     wilting_storage::AbstractArray{M},
+    wilting_ice_fraction::AbstractArray{M},
     free_water::AbstractArray{M},
     saturation_storage::AbstractArray{M},
     soil_temperature::AbstractArray{M},
@@ -270,7 +276,8 @@ end
             M(0.0326)
         end
         water_filled_pore_space =
-            (wilting_storage[layer, cell] +
+            (wilting_storage[layer, cell] *
+             (one(M) - wilting_ice_fraction[layer, cell]) +
              relative_water[layer, cell] * holding_storage[layer, cell] +
              free_water[layer, cell]) /
             max(saturation_storage[layer, cell], eps(M))

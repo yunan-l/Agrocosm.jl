@@ -11,7 +11,10 @@ function soil_decomp_response!(soil::Soil;
 )
     @unpack intercept, moist3, moist2, moist1, eps = soil_decomp_params
 
-    moist = (soil.water.relative_content .* soil.water.holding_capacity_storage .+ soil.water.wilting_storage .+ soil.water.free_water) ./ max.(soil.water.saturation_storage, eps) # soil.water.saturation_storage .- soil.water.wilting_storage
+    liquid_pwp = soil.water.wilting_storage .* (1 .- soil.water.wilting_ice_fraction)
+    moist = (soil.water.relative_content .* soil.water.holding_capacity_storage .+
+             liquid_pwp .+ soil.water.free_water) ./
+            max.(soil.water.saturation_storage, eps)
     moist = clamp.(moist, eps, 1.0f0)
     gtemp_soil = temp_response(soil.thermal.temperature; lpjmlparams = lpjmlparams)
 
@@ -43,4 +46,3 @@ function temp_response(temp::AbstractArray{T};
     ))
     return ifelse.(temp .>= T(-15.0), response, zero(T))
 end
-

@@ -1,31 +1,121 @@
 using Agrocosm
 using Test
 
-@testset "Soil-temperature baseline" begin
-    # A perfect linear 31-day history must be recovered without an off-by-one.
-    x = Float32.(1:31)
-    climate_history = reshape(2.0f0 .+ 3.0f0 .* x, 31, 1)
-    intercept, slope = Agrocosm.linreg(climate_history)
-    @test intercept[1] ≈ 2.0f0 atol = 1.0f-4
-    @test slope[1] ≈ 3.0f0 atol = 1.0f-4
+@testset "Five-layer implicit soil heat conduction" begin
+    soil = init_soil(2, soilparams.soildepth, identity)
+    soil.thermal.diffusivity_0 .= 0.6f0
+    soil.thermal.diffusivity_15 .= 0.7f0
+    soil.water.relative_content .= 0.1f0
 
-    soil = init_soil(1, soilparams.soildepth, identity)
-    climbuf = init_climbuf(1, identity)
-    climbuf.temp[:, 1] .= Float32.(1:31)
-    climbuf.atemp_mean .= 16.0f0
-    soil.water.relative_content .= 0.5f0
-    soil.thermal.diffusivity_0 .= 0.5f0
-    soil.thermal.diffusivity_15 .= 0.6f0
+    # A profile in equilibrium with its upper boundary remains unchanged.
+    soil_temperature!(soil, Float32[10.0, 10.0], Float32[10.0, 10.0])
+    @test all(soil.thermal.initialized)
+    @test all(isapprox.(soil.thermal.temperature, 10.0f0; atol = 1.0f-5))
 
-    soiltemp_lag!(soil, climbuf)
+    # A surface warming step creates a finite, depth-damped vertical gradient.
+    soil_temperature!(soil, Float32[30.0, -10.0], Float32[10.0, 10.0])
+    warm_profile = soil.thermal.temperature[:, 1]
+    cold_profile = soil.thermal.temperature[:, 2]
 
     @test all(isfinite, soil.thermal.temperature)
-    @test all(soil.thermal.temperature[:, 1] .== soil.thermal.temperature[1, 1])
+    @test 10.0f0 < warm_profile[1] < 30.0f0
+    @test all(diff(warm_profile) .< 0.0f0)
+    @test -10.0f0 < cold_profile[1] < 10.0f0
+    @test all(diff(cold_profile) .> 0.0f0)
+    @test warm_profile[1] - 10.0f0 > warm_profile[5] - 10.0f0
+    @test 10.0f0 - cold_profile[1] > 10.0f0 - cold_profile[5]
 
-    # The current dry-soil fallback assigns buffered air temperature to all layers.
-    soil.water.relative_content[1, 1] = 0.0f0
-    soiltemp_lag!(soil, climbuf)
-    @test all(soil.thermal.temperature[:, 1] .== climbuf.temp[30, 1])
+    # Backward Euler remains bounded under sustained forcing.
+    for _ in 1:100
+        soil_temperature!(soil, Float32[30.0, -10.0])
+    end
+    @test all((soil.thermal.temperature[:, 1] .>= 10.0f0) .&
+              (soil.thermal.temperature[:, 1] .<= 30.0f0))
+    @test all((soil.thermal.temperature[:, 2] .>= -10.0f0) .&
+              (soil.thermal.temperature[:, 2] .<= 10.0f0))
+end
+
+@testset "Snow thermal resistance" begin
+    bare_soil = init_soil(1, soilparams.soildepth, identity)
+    snow_soil = init_soil(1, soilparams.soildepth, identity)
+    for soil in (bare_soil, snow_soil)
+        soil.thermal.diffusivity_0 .= 0.6f0
+        soil.thermal.diffusivity_15 .= 0.7f0
+        soil.water.relative_content .= 0.1f0
+    end
+    snow_soil.snow.height .= 0.67f0
+
+    soil_temperature!(bare_soil, Float32[30.0], Float32[0.0])
+    soil_temperature!(snow_soil, Float32[30.0], Float32[0.0])
+
+    @test 0.0f0 < snow_soil.thermal.temperature[1, 1] <
+                  bare_soil.thermal.temperature[1, 1]
+    @test sum(snow_soil.thermal.temperature) <
+          sum(bare_soil.thermal.temperature)
+    @test all(isfinite, snow_soil.thermal.temperature)
+
+    # Snow also damps a cold surface pulse rather than changing its direction.
+    bare_soil.thermal.temperature .= 0.0f0
+    snow_soil.thermal.temperature .= 0.0f0
+    soil_temperature!(bare_soil, Float32[-30.0])
+    soil_temperature!(snow_soil, Float32[-30.0])
+    @test bare_soil.thermal.temperature[1, 1] <
+          snow_soil.thermal.temperature[1, 1] < 0.0f0
+end
+
+@testset "Dry surface-litter thermal resistance" begin
+    bare_soil = init_soil(1, soilparams.soildepth, identity)
+    litter_soil = init_soil(1, soilparams.soildepth, identity)
+    for soil in (bare_soil, litter_soil)
+        soil.thermal.diffusivity_0 .= 0.6f0
+        soil.thermal.diffusivity_15 .= 0.7f0
+        soil.water.relative_content .= 0.1f0
+    end
+
+    # LPJmL test convention: this carbon stock corresponds to 2 cm dry litter.
+    litter_soil.carbon.litter[1, 1] =
+        20.0f0 * soil_thermal_params.litter_carbon_fraction *
+        soil_thermal_params.litter_bulk_density
+    update_surface_litter_properties!(litter_soil)
+    @test litter_soil.surface_litter.depth[1] ≈ 0.02f0 atol = 1.0f-6
+
+    soil_temperature!(bare_soil, Float32[30.0], Float32[0.0])
+    soil_temperature!(litter_soil, Float32[30.0], Float32[0.0])
+    @test 0.0f0 < litter_soil.thermal.temperature[1, 1] <
+                  bare_soil.thermal.temperature[1, 1]
+    @test sum(litter_soil.thermal.temperature) <
+          sum(bare_soil.thermal.temperature)
+
+    bare_soil.thermal.temperature .= 0.0f0
+    litter_soil.thermal.temperature .= 0.0f0
+    soil_temperature!(bare_soil, Float32[-30.0])
+    soil_temperature!(litter_soil, Float32[-30.0])
+    @test bare_soil.thermal.temperature[1, 1] <
+          litter_soil.thermal.temperature[1, 1] < 0.0f0
+end
+
+@testset "Wet surface litter conducts more heat than dry litter" begin
+    dry_soil = init_soil(1, soilparams.soildepth, identity)
+    wet_soil = init_soil(1, soilparams.soildepth, identity)
+    for soil in (dry_soil, wet_soil)
+        soil.thermal.diffusivity_0 .= 0.6f0
+        soil.thermal.diffusivity_15 .= 0.7f0
+        soil.water.relative_content .= 0.1f0
+        soil.carbon.litter[1, 1] =
+            20.0f0 * soil_thermal_params.litter_carbon_fraction *
+            soil_thermal_params.litter_bulk_density
+        update_surface_litter_properties!(soil)
+    end
+    wet_soil.surface_litter.water_storage .=
+        wet_soil.surface_litter.water_capacity
+
+    soil_temperature!(dry_soil, Float32[30.0], Float32[0.0])
+    soil_temperature!(wet_soil, Float32[30.0], Float32[0.0])
+    @test wet_soil.surface_litter.conductivity[1] >
+          dry_soil.surface_litter.conductivity[1]
+    @test dry_soil.thermal.temperature[1, 1] <
+          wet_soil.thermal.temperature[1, 1]
+    @test isfinite(wet_soil.surface_litter.temperature[1])
 end
 
 @testset "LPJmL soil decomposition temperature bounds" begin

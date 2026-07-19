@@ -31,13 +31,23 @@ using Test
     @test soil.properties isa SoilProperties
     @test soil.water isa SoilWater
     @test soil.thermal isa SoilThermal
+    @test length(soil.thermal.initialized) == cell_size
+    @test all(.!soil.thermal.initialized)
+    @test size(soil.thermal.enthalpy) == (5, cell_size)
+    @test size(soil.thermal.frozen_fraction) == (5, cell_size)
     @test soil.carbon isa SoilCarbon
     @test soil.nitrogen isa SoilNitrogen
     @test soil.decomposition isa SoilDecomposition
     @test soil.management isa SoilManagement
+    @test soil.surface_litter isa SoilSurfaceLitter
     @test soil.snow isa SoilSnow
     @test size(soil.water.storage) == (5, cell_size)
+    @test size(soil.water.ice_storage) == (5, cell_size)
+    @test size(soil.water.wilting_ice_fraction) == (5, cell_size)
+    @test size(soil.water.available_ice_storage) == (5, cell_size)
+    @test size(soil.water.free_ice_storage) == (5, cell_size)
     @test size(soil.carbon.litter) == (3, cell_size)
+    @test length(soil.surface_litter.water_storage) == cell_size
     @test length(weather.temp) == cell_size
     @test output.crop isa CropOutput
     @test output.soil isa SoilOutput

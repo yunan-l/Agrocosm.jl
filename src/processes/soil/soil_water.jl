@@ -11,11 +11,13 @@ function soil_infiltration!(soil::Soil,
                             irrigation = false
 ) where {T <: AbstractFloat}
     soil.water.infiltration .= prec - crop.water.interception
+    surface_litter_interception!(soil)
     infil_perc!(soil)
 
     if !irrigation
         soil.water.storage .= soil.water.storage .+ soil.water.percolation
     end
+    partition_soil_water_ice!(soil)
 
     return nothing
 end
@@ -36,6 +38,7 @@ function soil_evapotranspiration!(soil::Soil,
     else
         soil.water.storage .= soil.water.storage .- crop.water.transpiration_layer .- soil.water.evaporation
     end
+    partition_soil_water_ice!(soil)
 
     return nothing
 end

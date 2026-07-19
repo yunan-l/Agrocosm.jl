@@ -17,11 +17,14 @@ function evaporation!(pet_eeq::AbstractArray{T},
                crop.canopy.fpar,
                crop.water.transpiration_layer,
                crop.water.canopy_wet,
-               soil.water.storage,
-               soil.water.wilting_storage,
+               soil.water.relative_content,
+               soil.water.free_water,
                soil.water.holding_capacity_storage,
                soil.water.evaporation,
-               soil.properties.surface_litter_cover,
+               soil.surface_litter.cover,
+               soil.surface_litter.water_capacity,
+               soil.surface_litter.water_storage,
+               soil.surface_litter.evaporation,
                soil.properties.layer_depth,
                kernel_params)
 
@@ -32,11 +35,14 @@ end
                                      crop_fpar::AbstractArray{T},
                                      crop_trans_layer::AbstractArray{M},
                                      crop_canopy_wet::AbstractArray{T},
-                                     soil_swc::AbstractArray{M},
-                                     soil_wpwps::AbstractArray{M},
+                                     soil_w::AbstractArray{M},
+                                     soil_w_fw::AbstractArray{M},
                                      soil_whcs::AbstractArray{M},
                                      soil_evap::AbstractArray{M},
                                      soil_agtop_cover::AbstractArray{T},
+                                     litter_water_capacity::AbstractArray{T},
+                                     litter_water_storage::AbstractArray{T},
+                                     litter_evaporation::AbstractArray{T},
                                      soil_layer_depth::AbstractArray{T},
                                      kernel_params
 ) where {T <: AbstractFloat, M <: AbstractFloat}
@@ -57,6 +63,26 @@ end
         crop_trans_layer_sum += crop_trans_layer[l, cell]
     end
 
+    available_evaporation = max(
+        pet_eeq[cell] * PRIESTLEY_TAYLOR *
+        (one(T) - crop_canopy_wet[cell]) - crop_trans_layer_sum,
+        zero(T),
+    )
+    if litter_water_capacity[cell] > eps(T) && available_evaporation > zero(T)
+        litter_wetness = clamp(
+            litter_water_storage[cell] / litter_water_capacity[cell],
+            zero(T), one(T),
+        )
+        litter_evaporation[cell] = min(
+            evap_energy * litter_wetness * litter_wetness * soil_agtop_cover[cell],
+            litter_water_storage[cell],
+            available_evaporation,
+        )
+        litter_water_storage[cell] -= litter_evaporation[cell]
+    else
+        litter_evaporation[cell] = zero(T)
+    end
+
     evap_ratio = zero(T)
     if evap_energy > 1.0f-5 && (pet_eeq[cell] * PRIESTLEY_TAYLOR * (1 - crop_canopy_wet[cell]) - crop_trans_layer_sum) > 1.0f-5
         # w_evap is water content in soildepth_evap that can evaporate
@@ -66,7 +92,9 @@ end
         for l in 1:soil_layers
             if soildepth_evap > 0
                 fraction = min(1, soildepth_evap / soil_layer_depth[l])
-                w_evap += (soil_swc[l, cell] - soil_wpwps[l, cell] - crop_trans_layer[l, cell]) * fraction
+                liquid_above_pwp = soil_w[l, cell] * soil_whcs[l, cell] +
+                                   soil_w_fw[l, cell]
+                w_evap += max(liquid_above_pwp - crop_trans_layer[l, cell], zero(T)) * fraction
                 whcs_evap += soil_whcs[l, cell] * fraction
                 soildepth_evap -= soil_layer_depth[l]
             end
@@ -84,7 +112,9 @@ end
     for l in 1:soil_layers
         if soildepth_evap > 0
             fraction = min(1, soildepth_evap / soil_layer_depth[l])
-            soil_evap[l, cell] = (soil_swc[l, cell] - soil_wpwps[l, cell]) * evap_ratio * fraction
+            liquid_above_pwp = soil_w[l, cell] * soil_whcs[l, cell] +
+                               soil_w_fw[l, cell]
+            soil_evap[l, cell] = liquid_above_pwp * evap_ratio * fraction
             soildepth_evap -= soil_layer_depth[l]
         end
     end

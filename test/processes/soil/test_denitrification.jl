@@ -19,6 +19,7 @@ using Test
         soil.water.relative_content,
         soil.water.holding_capacity_storage,
         soil.water.wilting_storage,
+        soil.water.wilting_ice_fraction,
         soil.water.free_water,
         soil.water.saturation_storage,
         soil.thermal.temperature,

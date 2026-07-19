@@ -1,6 +1,14 @@
 """Layered soil water stocks, hydraulic properties, and daily fluxes."""
 mutable struct SoilWater{A, M}
     storage::M
+    """Total layer ice; conserved cache equal to the three LPJmL ice pools."""
+    ice_storage::M
+    """Fraction of permanent-wilting-point water stored as ice (`ice_pwp`)."""
+    wilting_ice_fraction::M
+    """Ice in the plant-available water interval (`ice_depth`, mm)."""
+    available_ice_storage::M
+    """Ice in gravitational/free water (`ice_fw`, mm)."""
+    free_ice_storage::M
     evaporation::M
     relative_content::M
     free_water::M
@@ -26,6 +34,10 @@ function init_soil_water(cell_size::Int, device; soil_layers::Int = 5)
     layer_state() = device(zeros(Float32, soil_layers, cell_size))
     cell_state() = device(zeros(Float32, cell_size))
     return SoilWater(
+        layer_state(),
+        layer_state(),
+        layer_state(),
+        layer_state(),
         layer_state(),
         layer_state(),
         layer_state(),

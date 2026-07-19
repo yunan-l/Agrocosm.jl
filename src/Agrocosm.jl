@@ -22,13 +22,13 @@ export LPJmLParams, PftParameters, PhotoParams, PetPar, Output
 export DailyWeather, ClimBuf, CO2
 export Crop, CropPhenology, CropCanopy, CropCarbon, CropNitrogen, CropWater
 export CropCalendar, CropPhotosynthesis, ManagedLand
-export SoilParams, SoilDecompParams, SnowParams, Soil
+export SoilParams, SoilDecompParams, SoilThermalParams, SnowParams, Soil
 export SoilProperties, SoilWater, SoilThermal, SoilCarbon, SoilNitrogen
-export SoilDecomposition, SoilManagement, SoilSnow
+export SoilDecomposition, SoilManagement, SoilSurfaceLitter, SoilSnow
 export CropOutput, SoilOutput, ClimateOutput, CalendarOutput
 
 # PARAMETERS (PFTs)
-export lpjmlparams, photoparams, soilparams, soil_decomp_params, snowparams, cft1, cft2, cft3, cft4
+export lpjmlparams, photoparams, soilparams, soil_decomp_params, soil_thermal_params, snowparams, cft1, cft2, cft3, cft4
 
 # INITIALIZATION
 export init_states!, init_climbuf, init_crop, init_pet, init_soil, init_output
@@ -36,6 +36,7 @@ export init_weather, init_managed_land
 export WaterBalance, init_water_balance
 export NitrogenBalance, init_nitrogen_balance
 export CarbonBalance, init_carbon_balance
+export ThermalBalance, init_thermal_balance
 
 # CLIMATE
 export annual_climbuf!, daily_climbuf!, infil_perc!, spin_up_climbuf!, update_climbuf!, readclimate!, snow!
@@ -57,11 +58,12 @@ export crop_carbon!, crop_carbon_hybrid!, hybrid_photos_C3!, hybrid_photos_C4!
 export waterlogging_stress!
 
 # SOIL
-export soiltemp_lag!
+export soil_temperature!
 export pedotransfer!, soil_carbon!, update_litc_tillage!, update_lit_winter_wheat!
 export evaporation!, soil_infiltration!, soil_evapotranspiration!
 export soil_nitrogen!, nitrogen_transform!, update_litn_tillage!
 export soil_decomp_response!
+export update_surface_litter_properties!, surface_litter_interception!
 
 # UNITS
 export deg2rad, ppm2Pa, ppm2bar, hour2day, hour2sec, degCtoK
@@ -101,6 +103,7 @@ include("processes/initialization/states/soil/carbon.jl")
 include("processes/initialization/states/soil/nitrogen.jl")
 include("processes/initialization/states/soil/decomposition.jl")
 include("processes/initialization/states/soil/management.jl")
+include("processes/initialization/states/soil/surface_litter.jl")
 include("processes/initialization/states/soil/snow.jl")
 include("processes/initialization/states/soil/soil.jl")
 include("processes/initialization/init_states.jl")
@@ -109,6 +112,7 @@ include("processes/initialization/init_states.jl")
 include("diagnostics/water_balance.jl")
 include("diagnostics/nitrogen_balance.jl")
 include("diagnostics/carbon_balance.jl")
+include("diagnostics/thermal_balance.jl")
 
 # Climate
 include("processes/climate/climbuf.jl")
@@ -139,9 +143,11 @@ include("processes/crop/harvesting.jl")
 include("processes/crop/waterlogging_stress.jl")
 
 # Soil
+include("processes/soil/water_ice_pools.jl")
 include("processes/soil/pedotransfer.jl")
 include("processes/soil/evaporation.jl")
 include("processes/soil/soil_temp.jl")
+include("processes/soil/surface_litter.jl")
 include("processes/soil/nitrogen_transform.jl")
 include("processes/soil/infil_perc.jl")
 include("processes/soil/soil_water.jl")

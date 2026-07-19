@@ -48,24 +48,13 @@ function pedotransfer!(soil::Soil;
     soil.water.holding_capacity_fraction .= soil.water.field_capacity - soil.water.wilting_fraction
     soil.water.holding_capacity_storage .= soil.water.holding_capacity_fraction .* soil.properties.layer_depth
 
-    # idx = (soil.water.storage - soil.water.wilting_storage) .> 1.0f-10
-    # soil.water.relative_content[idx] .= min.((soil.water.storage[idx] - soil.water.wilting_storage[idx]) ./ soil.water.holding_capacity_storage[idx], one(T))
-    # soil.water.free_water[idx] .= min.(soil.water.storage[idx] - soil.water.wilting_storage[idx] - soil.water.relative_content[idx] .* soil.water.holding_capacity_storage[idx], soil.water.saturation_storage[idx] - soil.water.field_capacity[idx] .* soil.properties.layer_depth)
-    # idx = (soil.water.storage - soil.water.wilting_storage) <= 1.0f-10
-    # soil.water.relative_content[idx] .= zero(T)
-    # soil.water.free_water[idx] .= zero(T)
-    soil.water.relative_content .= ifelse.((soil.water.storage - soil.water.wilting_storage) .> 1.0f-10, min.((soil.water.storage - soil.water.wilting_storage) ./ soil.water.holding_capacity_storage, 1.0f0), 0.0f0)
-    soil.water.free_water .= ifelse.((soil.water.storage - soil.water.wilting_storage) .> 1.0f-10, min.(soil.water.storage - soil.water.wilting_storage - soil.water.relative_content .* soil.water.holding_capacity_storage, soil.water.saturation_storage - soil.water.field_capacity .* soil.properties.layer_depth), 0.0f0)
+    # Reconstruct LPJmL's below-PWP, plant-available, and free-water pools
+    # after hydraulic capacities change. Total liquid water and total ice are
+    # the conserved states; the individual reservoirs are deterministic.
+    partition_soil_water_ice!(soil)
 
     # Calculation of Ks
     lambda = (log.(soil.water.field_capacity) - log.(soil.water.wilting_fraction)) / (log(1500) - log(33))
     soil.water.saturated_conductivity .= 1930 * (soil.water.saturation_fraction - soil.water.field_capacity) .^ (3 .- lambda)
 
-    # update agtop_cover
-    dm_sum = soil.carbon.litter[1, :]/0.42 # dm_sum+=stand->soil.litter.item[l].agtop.leaf.carbon/0.42; Accounting that C content in plant dry matter is 42%
-    # idx = dm_sum .< 0
-    # dm_sum[idx] .= zero(T)
-    # dm_sum .= ifelse.(dm_sum .< 0, 0.0, dm_sum)
-    dm_sum .= max.(dm_sum, 0.0f0)
-    soil.properties.surface_litter_cover .= 1 .- exp.(-6e-3 * dm_sum)
 end
