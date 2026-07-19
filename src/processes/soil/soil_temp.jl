@@ -31,6 +31,7 @@ function soil_temperature!(soil::Soil,
         soil.thermal.water_reference,
         soil.thermal.surface_energy_flux,
         soil.thermal.energy_residual,
+        soil.thermal.untracked_water_energy_flux,
         soil.thermal.diffusivity_0,
         soil.water.storage,
         soil.water.ice_storage,
@@ -155,6 +156,7 @@ end
     water_reference::AbstractArray{T},
     surface_energy_flux::AbstractArray{T},
     energy_residual::AbstractArray{T},
+    untracked_water_energy_flux::AbstractArray{T},
     diffusivity_0::AbstractArray{T},
     liquid_water::AbstractArray{T},
     ice_water::AbstractArray{T},
@@ -180,6 +182,10 @@ end
     dz3 = layer_depth_mm[3] * T(0.001)
     dz4 = layer_depth_mm[4] * T(0.001)
     dz5 = layer_depth_mm[5] * T(0.001)
+    stored_column_energy = initialized[cell] ?
+        enthalpy[1, cell] * dz1 + enthalpy[2, cell] * dz2 +
+        enthalpy[3, cell] * dz3 + enthalpy[4, cell] * dz4 +
+        enthalpy[5, cell] * dz5 : zero(T)
 
     total1 = max(liquid_water[1, cell] + ice_water[1, cell], zero(T))
     total2 = max(liquid_water[2, cell] + ice_water[2, cell], zero(T))
@@ -223,6 +229,14 @@ end
         e5 = temperature_phase_enthalpy(inittemp, initf5, cf5, cu5, lh5)
     end
 
+    rebased_column_energy = e1 * dz1 + e2 * dz2 + e3 * dz3 + e4 * dz4 + e5 * dz5
+    # LPJmL's apply_enth_of_untracked_mass_shifts: water changes not already
+    # represented by perc_energy (primarily yesterday's evaporation and
+    # transpiration) are assigned the enthalpy of water in the same layer, so
+    # the mass change itself does not create a temperature jump.
+    untracked_water_energy_flux[cell] = initialized[cell] ?
+        rebased_column_energy - stored_column_energy : zero(T)
+
     heat_capacity_frozen[1, cell] = cf1; heat_capacity_frozen[2, cell] = cf2
     heat_capacity_frozen[3, cell] = cf3; heat_capacity_frozen[4, cell] = cf4
     heat_capacity_frozen[5, cell] = cf5
@@ -254,7 +268,7 @@ end
     end
     litter_conductivity[cell] = conductivity_litter
 
-    energy_before = e1 * dz1 + e2 * dz2 + e3 * dz3 + e4 * dz4 + e5 * dz5
+    energy_before = rebased_column_energy
     surface_energy = zero(T)
     dt = seconds_per_day / T(phase_change_substeps)
     last_surface_resistance = one(T)

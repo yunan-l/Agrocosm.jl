@@ -17,6 +17,7 @@ using Test
     @test diagnostics.free_ice_storage[1, 1] >= 0.0f0
     @test diagnostics.ice_pool_residual[1, 1] <= 2.0f-5
     @test all(isfinite, diagnostics.energy_residual)
+    @test all(iszero, diagnostics.untracked_water_energy_flux)
     @test all(isfinite, diagnostics.percolation_energy_residual)
     @test all(iszero, diagnostics.rain_energy_input)
     @test all(iszero, diagnostics.snowmelt_energy_input)
