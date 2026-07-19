@@ -1,11 +1,17 @@
 """
-InitialDataLoader(data, data_index, device)
+InitialDataLoader(data, data_index, device;
+                  load_mineral_nitrogen_restart=false)
 
-Build initial model-state inputs from forcing/parameter datasets.
+Build initial model-state inputs from forcing/parameter datasets. Mineral-N
+restart pools are omitted by default because `init_states!` reconstructs NO₃
+and NH₄ from slow organic N using the LPJmL fresh-soil initialization rule.
+Set `load_mineral_nitrogen_restart=true` only when explicitly restoring a
+nitrogen-limited restart state.
 """
 function InitialDataLoader(data::NamedTuple,
                            data_index::Vector{Int},
-                           device
+                           device;
+                           load_mineral_nitrogen_restart::Bool = false
 )
 
 
@@ -40,9 +46,14 @@ function InitialDataLoader(data::NamedTuple,
         litn = initialLPJmL.u0.litn[:, data_index],
         fastn = initialLPJmL.u0.fastn[:, data_index],
         slown = initialLPJmL.u0.slown[:, data_index],
-        soil_NH4 = initialLPJmL.u0.soil_NH4[:, data_index],
-        soil_NO3 = initialLPJmL.u0.soil_NO3[:, data_index],
-    ) |> device
+    )
+    if load_mineral_nitrogen_restart
+        u0_set = merge(u0_set, (
+            soil_NH4 = initialLPJmL.u0.soil_NH4[:, data_index],
+            soil_NO3 = initialLPJmL.u0.soil_NO3[:, data_index],
+        ))
+    end
+    u0_set = u0_set |> device
 
     model_state = (
         crop = crop,

@@ -64,4 +64,7 @@ end
     @test_throws ArgumentError Agrocosm.initialize_soil_mineral_nitrogen!(
         soil, u0, :unknown,
     )
+    @test_throws ArgumentError Agrocosm.initialize_soil_mineral_nitrogen!(
+        soil, (slown = slow_n,), :restart,
+    )
 end

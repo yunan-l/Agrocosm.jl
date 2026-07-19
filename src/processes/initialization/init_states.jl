@@ -30,6 +30,12 @@ function initialize_soil_mineral_nitrogen!(soil::Soil,
                                            u0::NamedTuple,
                                            strategy::Symbol)
     if strategy === :restart
+        if !hasproperty(u0, :soil_NO3) || !hasproperty(u0, :soil_NH4)
+            throw(ArgumentError(
+                ":restart requires soil_NO3 and soil_NH4; construct inputs " *
+                "with load_mineral_nitrogen_restart=true",
+            ))
+        end
         soil.nitrogen.nitrate .= u0.soil_NO3
         soil.nitrogen.ammonium .= u0.soil_NH4
     elseif strategy === :lpjml_initsoil
@@ -49,7 +55,7 @@ end
 """
 init_states!(PFT, InitialData, cell_size, device;
              lpjmlparams=lpjmlparams,
-             mineral_nitrogen_initialization=:restart)
+             mineral_nitrogen_initialization=:lpjml_initsoil)
 
 Initialize and populate all runtime state structs from static parameters and
 input data for one simulation domain.
@@ -62,7 +68,7 @@ function init_states!(PFT::PftParameters,
                        cell_size::Int,
                        device;
                        lpjmlparams::LPJmLParams = lpjmlparams,
-                       mineral_nitrogen_initialization::Symbol = :restart
+                       mineral_nitrogen_initialization::Symbol = :lpjml_initsoil
 )
 
     @unpack residue_frac, fastfrac, atmfrac, k_soil10 = lpjmlparams
