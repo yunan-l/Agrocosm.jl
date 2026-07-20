@@ -175,8 +175,10 @@ end
 
 function test_balance_equivalence(gpu_balance, cpu_balance;
                                   group, rtol, atol,
-                                  field_atol = NamedTuple())
+                                  field_atol = NamedTuple(),
+                                  skip_fields = ())
     for field in fieldnames(typeof(cpu_balance))
+        field in skip_fields && continue
         comparison_atol = hasproperty(field_atol, field) ?
             getproperty(field_atol, field) : atol
         test_float_equivalence(
@@ -187,6 +189,38 @@ function test_balance_equivalence(gpu_balance, cpu_balance;
             label = "$group.$field",
         )
     end
+    return nothing
+end
+
+function test_thermal_closure(balance; label)
+    column_energy = host_array(balance.column_energy)
+    surface_energy = host_array(balance.surface_energy_flux)
+    energy_residual = host_array(balance.energy_residual)
+    energy_scale = max.(abs.(column_energy), abs.(surface_energy), 1.0f0)
+    # The five-layer column is O(1e8) J m-2 in Float32. Its daily closure is
+    # therefore tested against a small multiple of the ledger's representable
+    # spacing, rather than comparing two cancellation-sensitive residuals.
+    energy_tolerance = 16.0f0 .* eps(Float32) .* energy_scale .+ 1.0f0
+    maximum_absolute_residual = maximum(abs, energy_residual)
+    maximum_relative_residual = maximum(abs.(energy_residual) ./ energy_scale)
+    @info "Thermal energy closure" label maximum_absolute_residual maximum_relative_residual
+    @test all(isfinite, energy_residual)
+    @test all(abs.(energy_residual) .<= energy_tolerance)
+
+    percolation_residual = host_array(balance.percolation_energy_residual)
+    boundary_scale = max.(
+        abs.(host_array(balance.rain_energy_input)) .+
+        abs.(host_array(balance.snowmelt_energy_input)) .+
+        abs.(host_array(balance.lateral_runoff_energy_output)) .+
+        abs.(host_array(balance.bottom_drainage_energy_output)),
+        1.0f0,
+    )
+    percolation_tolerance = 5.0f-6 .* boundary_scale .+ 2.0f0
+    maximum_absolute_residual = maximum(abs, percolation_residual)
+    maximum_relative_residual = maximum(abs.(percolation_residual) ./ boundary_scale)
+    @info "Percolation energy closure" label maximum_absolute_residual maximum_relative_residual
+    @test all(isfinite, percolation_residual)
+    @test all(abs.(percolation_residual) .<= percolation_tolerance)
     return nothing
 end
 
@@ -340,11 +374,10 @@ end
     test_balance_equivalence(
         gpu.thermal, cpu.thermal;
         group = "thermal", rtol = 2.0f-3, atol = 1.0f-1,
-        # Energy residuals subtract O(1e8) J m-2 ledgers; keep state/flux fields
-        # strict while allowing sub-joule cancellation in diagnostic closures.
-        field_atol = (
-            energy_residual = 1.0f0,
-            percolation_energy_residual = 1.0f0,
-        ),
+        # Residuals are conservation tests, not trajectory state: validate each
+        # backend against its own physical ledger below.
+        skip_fields = (:energy_residual, :percolation_energy_residual),
     )
+    test_thermal_closure(cpu.thermal; label = "CPU")
+    test_thermal_closure(gpu.thermal; label = "GPU")
 end
