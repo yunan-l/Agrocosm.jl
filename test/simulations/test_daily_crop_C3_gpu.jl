@@ -174,13 +174,16 @@ function test_float_equivalence(gpu_values, cpu_values;
 end
 
 function test_balance_equivalence(gpu_balance, cpu_balance;
-                                  group, rtol, atol)
+                                  group, rtol, atol,
+                                  field_atol = NamedTuple())
     for field in fieldnames(typeof(cpu_balance))
+        comparison_atol = hasproperty(field_atol, field) ?
+            getproperty(field_atol, field) : atol
         test_float_equivalence(
             getproperty(gpu_balance, field),
             getproperty(cpu_balance, field);
             rtol = rtol,
-            atol = atol,
+            atol = comparison_atol,
             label = "$group.$field",
         )
     end
@@ -330,9 +333,18 @@ end
     test_balance_equivalence(
         gpu.carbon, cpu.carbon;
         group = "carbon", rtol = 2.0f-3, atol = 1.0f-3,
+        # The residual subtracts stocks of thousands of g C m-2. A 2 mg C m-2
+        # CPU/GPU tolerance covers only final-bit Float32 cancellation.
+        field_atol = (residual = 2.0f-3,),
     )
     test_balance_equivalence(
         gpu.thermal, cpu.thermal;
         group = "thermal", rtol = 2.0f-3, atol = 1.0f-1,
+        # Energy residuals subtract O(1e8) J m-2 ledgers; keep state/flux fields
+        # strict while allowing sub-joule cancellation in diagnostic closures.
+        field_atol = (
+            energy_residual = 1.0f0,
+            percolation_energy_residual = 1.0f0,
+        ),
     )
 end
