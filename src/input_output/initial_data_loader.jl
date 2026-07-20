@@ -1,17 +1,24 @@
 """
 InitialDataLoader(data, data_index, device;
-                  load_mineral_nitrogen_restart=false)
+                  load_mineral_nitrogen_restart=false,
+                  load_c_shift_restart=false)
 
 Build initial model-state inputs from forcing/parameter datasets. Mineral-N
 restart pools are omitted by default because `init_states!` reconstructs NO₃
 and NH₄ from slow organic N using the LPJmL fresh-soil initialization rule.
 Set `load_mineral_nitrogen_restart=true` only when explicitly restoring a
 nitrogen-limited restart state.
+
+`c_shift` is also omitted by default. `init_states!` then constructs LPJmL's
+fresh-soil distribution internally (0.55 in the top layer and 0.45 shared by
+the remaining layers). Set `load_c_shift_restart=true` only when restoring a
+post-spin-up or restart distribution.
 """
 function InitialDataLoader(data::NamedTuple,
                            data_index::Vector{Int},
                            device;
-                           load_mineral_nitrogen_restart::Bool = false
+                           load_mineral_nitrogen_restart::Bool = false,
+                           load_c_shift_restart::Bool = false
 )
 
 
@@ -55,12 +62,14 @@ function InitialDataLoader(data::NamedTuple,
     end
     u0_set = u0_set |> device
 
-    model_state = (
-        crop = crop,
-        c_shift_fast = initialLPJmL.c_shift_fast[:, data_index],
-        c_shift_slow = initialLPJmL.c_shift_slow[:, data_index],
-        u0 = u0_set
-    ) |> device
+    model_state = (crop = crop, u0 = u0_set)
+    if load_c_shift_restart
+        model_state = merge(model_state, (
+            c_shift_fast = initialLPJmL.c_shift_fast[:, data_index],
+            c_shift_slow = initialLPJmL.c_shift_slow[:, data_index],
+        ))
+    end
+    model_state = model_state |> device
 
     InitialData = (
         latitude = latitude_set,

@@ -9,7 +9,7 @@ function soil_carbon!(crop_cal::CropCalendar,
                       soil_decomp_params::SoilDecompParams = soil_decomp_params
 )
 
-    @unpack atmfrac, k_soil10 = lpjmlparams
+    @unpack atmfrac, fastfrac, k_soil10 = lpjmlparams
     @unpack e0, intercept, moist3, moist2, moist1, eps = soil_decomp_params
 
     # soil decomposition response
@@ -29,11 +29,15 @@ function soil_carbon!(crop_cal::CropCalendar,
 
     # soil.carbon.decomposed_fast = (1.0f0 .- exp.(-soil.response_fastc .* response / 50)) .* soil.carbon.fast
     soil.carbon.decomposed_fast = (1.0f0 .- exp.(-k_soil10.fast .* soil.decomposition.response)) .* soil.carbon.fast
-    soil.carbon.fast = soil.carbon.fast + soil.carbon.shift_fast .* sum(soil.carbon.decomposed_litter, dims = 1) - soil.carbon.decomposed_fast
+    soil.carbon.litter_to_fast .= soil.carbon.shift_fast .*
+        sum(soil.carbon.decomposed_litter, dims = 1) .* fastfrac .* (1.0f0 - atmfrac)
+    soil.carbon.fast = soil.carbon.fast + soil.carbon.litter_to_fast - soil.carbon.decomposed_fast
 
     # soil.carbon.decomposed_slow = (1.0f0 .- exp.(-soil.response_slowc .* response / 10)) .* soil.carbon.slow
     soil.carbon.decomposed_slow = (1.0f0 .- exp.(-k_soil10.slow .* soil.decomposition.response)) .* soil.carbon.slow
-    soil.carbon.slow = soil.carbon.slow + soil.carbon.shift_slow .* sum(soil.carbon.decomposed_litter, dims = 1) - soil.carbon.decomposed_slow
+    soil.carbon.litter_to_slow .= soil.carbon.shift_slow .*
+        sum(soil.carbon.decomposed_litter, dims = 1) .* (1.0f0 - fastfrac) .* (1.0f0 - atmfrac)
+    soil.carbon.slow = soil.carbon.slow + soil.carbon.litter_to_slow - soil.carbon.decomposed_slow
 
     soil.carbon.heterotrophic_respiration = vec(sum(soil.carbon.decomposed_litter, dims = 1) * atmfrac .+ sum(soil.carbon.decomposed_fast, dims = 1) .+ sum(soil.carbon.decomposed_slow, dims = 1))
 

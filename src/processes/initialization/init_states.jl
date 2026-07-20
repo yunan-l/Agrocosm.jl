@@ -68,10 +68,11 @@ function init_states!(PFT::PftParameters,
                        cell_size::Int,
                        device;
                        lpjmlparams::LPJmLParams = lpjmlparams,
-                       mineral_nitrogen_initialization::Symbol = :lpjml_initsoil
+                       mineral_nitrogen_initialization::Symbol = :lpjml_initsoil,
+                       c_shift_initialization::Symbol = :lpjml_initsoil
 )
 
-    @unpack residue_frac, fastfrac, atmfrac, k_soil10 = lpjmlparams
+    @unpack residue_frac = lpjmlparams
     @unpack k_litter10, beta_root = PFT
 
     @unpack latitude, soilparams, ModelState = InitialData
@@ -81,8 +82,6 @@ function init_states!(PFT::PftParameters,
     manure = ModelState.crop.manure
     fertilizer = ModelState.crop.fertilizer
     residuefrac = ModelState.crop.residuefrac
-    c_shift_fast = ModelState.c_shift_fast
-    c_shift_slow = ModelState.c_shift_slow
     u0 = ModelState.u0
 
     dailyWeather = init_weather(cell_size, device)
@@ -126,15 +125,12 @@ function init_states!(PFT::PftParameters,
     soil.thermal.diffusivity_15 = soilparams.tdiff_15
 
     soil.management.tillage_fraction = device([(1 - residue_frac) 0.0f0 0.0f0; residue_frac 1.0f0 0.0f0; 0.0f0 0.0f0 1.0f0])
-    soil.carbon.shift_fast = device(c_shift_fast * fastfrac * (1.0f0 - atmfrac))
-    soil.carbon.shift_slow = device(c_shift_slow * (1.0f0 - fastfrac) * (1.0f0 - atmfrac))
+    initialize_soil_c_shift!(soil, ModelState, c_shift_initialization)
     days_per_year = 365.0f0
     soil.carbon.litter_response = device(
         [k_litter10.leaf, k_litter10.leaf, k_litter10.root] ./ days_per_year,
     )
 
-    soil.nitrogen.shift_fast = device(c_shift_fast * fastfrac * (1.0f0 - atmfrac))
-    soil.nitrogen.shift_slow = device(c_shift_slow * (1.0f0 - fastfrac) * (1.0f0 - atmfrac))
     soil.nitrogen.litter_response = device(
         [k_litter10.leaf, k_litter10.leaf, k_litter10.root] ./ days_per_year,
     )
@@ -142,4 +138,49 @@ function init_states!(PFT::PftParameters,
     output = init_output(cell_size, device)
 
     return climbuf, crop, pet, soil, managed_land, dailyWeather, output
+end
+
+"""
+    initialize_soil_c_shift!(soil, model_state, strategy)
+
+Initialize the normalized vertical distribution used to route decomposed
+litter into fast and slow soil pools.
+
+`:lpjml_initsoil` reproduces LPJmL's fresh-soil initialization: 0.55 in the
+top layer and 0.45 distributed uniformly over all remaining layers. `:restart`
+restores the fast and slow distributions supplied in `model_state`.
+"""
+function initialize_soil_c_shift!(soil::Soil,
+                                  model_state::NamedTuple,
+                                  strategy::Symbol)
+    if strategy === :lpjml_initsoil
+        layers = size(soil.carbon.shift_fast, 1)
+        layers > 1 || throw(ArgumentError("LPJmL c_shift initialization requires at least two soil layers"))
+        T = eltype(soil.carbon.shift_fast)
+        lower_layer_fraction = T(0.45) / T(layers - 1)
+
+        fill!(soil.carbon.shift_fast, lower_layer_fraction)
+        fill!(soil.carbon.shift_slow, lower_layer_fraction)
+        soil.carbon.shift_fast[1:1, :] .= T(0.55)
+        soil.carbon.shift_slow[1:1, :] .= T(0.55)
+    elseif strategy === :restart
+        hasproperty(model_state, :c_shift_fast) ||
+            throw(ArgumentError("c_shift_initialization=:restart requires ModelState.c_shift_fast"))
+        hasproperty(model_state, :c_shift_slow) ||
+            throw(ArgumentError("c_shift_initialization=:restart requires ModelState.c_shift_slow"))
+        size(model_state.c_shift_fast) == size(soil.carbon.shift_fast) ||
+            throw(DimensionMismatch("c_shift_fast must match the soil layer-by-cell shape"))
+        size(model_state.c_shift_slow) == size(soil.carbon.shift_slow) ||
+            throw(DimensionMismatch("c_shift_slow must match the soil layer-by-cell shape"))
+        soil.carbon.shift_fast .= model_state.c_shift_fast
+        soil.carbon.shift_slow .= model_state.c_shift_slow
+    else
+        throw(ArgumentError("unknown c_shift initialization strategy: $strategy"))
+    end
+
+    # Carbon and nitrogen use the same fixed routing distribution. Keep it
+    # separate from fastfrac and atmfrac, which belong to the daily fluxes.
+    soil.nitrogen.shift_fast .= soil.carbon.shift_fast
+    soil.nitrogen.shift_slow .= soil.carbon.shift_slow
+    return nothing
 end

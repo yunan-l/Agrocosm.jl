@@ -11,7 +11,7 @@ function soil_nitrogen!(crop_cal::CropCalendar,
                         soil_decomp_params::SoilDecompParams = soil_decomp_params
 )
 
-    @unpack k_soil10 = lpjmlparams
+    @unpack atmfrac, fastfrac, k_soil10 = lpjmlparams
     @unpack intercept, moist3, moist2, moist1, eps = soil_decomp_params
 
     # compute soil carbon: litter carbon and soil carbon
@@ -22,16 +22,18 @@ function soil_nitrogen!(crop_cal::CropCalendar,
 
     route_harvest_nitrogen_input!(soil, crop_cal)
 
-    litter_to_fast = soil.nitrogen.shift_fast .* sum(soil.nitrogen.decomposed_litter, dims = 1)
-    litter_to_slow = soil.nitrogen.shift_slow .* sum(soil.nitrogen.decomposed_litter, dims = 1)
+    soil.nitrogen.litter_to_fast .= soil.nitrogen.shift_fast .*
+        sum(soil.nitrogen.decomposed_litter, dims = 1) .* fastfrac .* (1.0f0 - atmfrac)
+    soil.nitrogen.litter_to_slow .= soil.nitrogen.shift_slow .*
+        sum(soil.nitrogen.decomposed_litter, dims = 1) .* (1.0f0 - fastfrac) .* (1.0f0 - atmfrac)
 
     # soil.nitrogen.decomposed_fast = (1.0f0 .- exp.(-soil.response_fastn .* response / 50)) .* soil.nitrogen.fast
     soil.nitrogen.decomposed_fast = (1.0f0 .- exp.(-k_soil10.fast .* soil.decomposition.response)) .* soil.nitrogen.fast
-    soil.nitrogen.fast = soil.nitrogen.fast + litter_to_fast - soil.nitrogen.decomposed_fast
+    soil.nitrogen.fast = soil.nitrogen.fast + soil.nitrogen.litter_to_fast - soil.nitrogen.decomposed_fast
 
     # soil.nitrogen.decomposed_slow = (1.0f0 .- exp.(-soil.response_slown .* response / 10)) .* soil.nitrogen.slow
     soil.nitrogen.decomposed_slow = (1.0f0 .- exp.(-k_soil10.slow .* soil.decomposition.response)) .* soil.nitrogen.slow
-    soil.nitrogen.slow = soil.nitrogen.slow + litter_to_slow - soil.nitrogen.decomposed_slow
+    soil.nitrogen.slow = soil.nitrogen.slow + soil.nitrogen.litter_to_slow - soil.nitrogen.decomposed_slow
 
     nitrogen_transform!(
         soil;

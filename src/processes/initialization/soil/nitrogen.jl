@@ -1,4 +1,9 @@
-"""Mineral and organic soil nitrogen pools, inputs, and decomposition fluxes."""
+"""
+Mineral and organic soil nitrogen pools, inputs, and decomposition fluxes.
+
+The shift arrays are fixed normalized post-spin-up distributions; the
+`litter_to_*` arrays store the actual daily layer-resolved retained-N fluxes.
+"""
 mutable struct SoilNitrogen{A, L, M}
     nitrate::M
     ammonium::M
@@ -11,6 +16,8 @@ mutable struct SoilNitrogen{A, L, M}
     input::L
     shift_fast::M
     shift_slow::M
+    litter_to_fast::M
+    litter_to_slow::M
     litter_response::A
     mineralization::M
     immobilization::M
@@ -32,7 +39,7 @@ function init_soil_nitrogen(cell_size::Int, device;
         layer_state(), layer_state(),
         litter_state(), litter_state(),
         layer_state(), layer_state(), layer_state(), layer_state(),
-        litter_state(), layer_state(), layer_state(),
+        litter_state(), layer_state(), layer_state(), layer_state(), layer_state(),
         device(zeros(Float32, litter_layers)),
         layer_state(), layer_state(), layer_state(), layer_state(),
         layer_state(), layer_state(), layer_state(),

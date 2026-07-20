@@ -74,26 +74,4 @@ using Test
         @test soil.management.tillage_nitrogen[1] ≈ 0.1425f0
     end
 
-    @testset "c_shift, not rootdist, routes decomposed litter to soil layers" begin
-        soil = init_soil(1, soilparams.soildepth, identity)
-        crop = init_crop(1, identity)
-        soil.carbon.litter[3, 1] = 10.0f0
-        soil.carbon.litter_response .= 0.0f0
-        soil.carbon.litter_response[3] = 1.0f0
-        soil.decomposition.litter_response .= 1.0f0
-        soil.decomposition.response .= 0.0f0
-        soil.carbon.shift_fast[:, 1] .= Float32[0.20, 0.12, 0.08, 0.05, 0.04]
-        soil.carbon.shift_slow[:, 1] .= Float32[0.004, 0.002, 0.002, 0.001, 0.001]
-
-        soil_carbon!(crop.calendar, soil)
-        decomposed = soil.carbon.decomposed_litter[3, 1]
-
-        @test soil.carbon.fast[:, 1] ≈ soil.carbon.shift_fast[:, 1] .* decomposed
-        @test soil.carbon.slow[:, 1] ≈ soil.carbon.shift_slow[:, 1] .* decomposed
-        @test sum(soil.carbon.shift_fast[:, 1]) ≈
-              lpjmlparams.fastfrac * (1.0f0 - lpjmlparams.atmfrac)
-        @test sum(soil.carbon.shift_slow[:, 1]) ≈
-              (1.0f0 - lpjmlparams.fastfrac) * (1.0f0 - lpjmlparams.atmfrac)
-        @test sum(root_distribution(0.96f0)) ≈ 1.0 atol = 1.0e-6
-    end
 end

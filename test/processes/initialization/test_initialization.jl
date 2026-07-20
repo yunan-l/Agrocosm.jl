@@ -48,12 +48,99 @@ using Test
     @test size(soil.water.available_ice_storage) == (5, cell_size)
     @test size(soil.water.free_ice_storage) == (5, cell_size)
     @test size(soil.carbon.litter) == (3, cell_size)
+    @test size(soil.carbon.litter_to_fast) == (5, cell_size)
+    @test size(soil.carbon.litter_to_slow) == (5, cell_size)
+    @test size(soil.nitrogen.litter_to_fast) == (5, cell_size)
+    @test size(soil.nitrogen.litter_to_slow) == (5, cell_size)
     @test length(soil.surface_litter.water_storage) == cell_size
     @test length(weather.temp) == cell_size
     @test output.crop isa CropOutput
     @test output.soil isa SoilOutput
     @test output.climate isa ClimateOutput
     @test output.calendar isa CalendarOutput
+end
+
+@testset "LPJmL c_shift initialization strategies" begin
+    cells = 2
+    soil = init_soil(cells, soilparams.soildepth, identity)
+    model_state = (u0 = nothing,)
+
+    Agrocosm.initialize_soil_c_shift!(soil, model_state, :lpjml_initsoil)
+    expected = Float32[0.55, 0.1125, 0.1125, 0.1125, 0.1125]
+    @test soil.carbon.shift_fast == repeat(expected, 1, cells)
+    @test soil.carbon.shift_slow == repeat(expected, 1, cells)
+    @test soil.nitrogen.shift_fast == soil.carbon.shift_fast
+    @test soil.nitrogen.shift_slow == soil.carbon.shift_slow
+    @test vec(sum(soil.carbon.shift_fast; dims = 1)) ≈ ones(Float32, cells)
+
+    restart_fast = repeat(Float32[0.4, 0.25, 0.15, 0.1, 0.1], 1, cells)
+    restart_slow = repeat(Float32[0.5, 0.2, 0.15, 0.1, 0.05], 1, cells)
+    restart_state = (c_shift_fast = restart_fast, c_shift_slow = restart_slow)
+    Agrocosm.initialize_soil_c_shift!(soil, restart_state, :restart)
+    @test soil.carbon.shift_fast == restart_fast
+    @test soil.carbon.shift_slow == restart_slow
+    @test soil.nitrogen.shift_fast == restart_fast
+    @test soil.nitrogen.shift_slow == restart_slow
+
+    @test_throws ArgumentError Agrocosm.initialize_soil_c_shift!(
+        soil, model_state, :restart,
+    )
+    @test_throws ArgumentError Agrocosm.initialize_soil_c_shift!(
+        soil, model_state, :unknown,
+    )
+end
+
+@testset "Initial data loader makes c_shift optional" begin
+    cells = 2
+    layers = 5
+    u0 = (
+        swc = fill(100.0f0, layers, cells),
+        litc = fill(1.0f0, 3, cells),
+        fastc = fill(10.0f0, layers, cells),
+        slowc = fill(100.0f0, layers, cells),
+        litn = fill(0.1f0, 3, cells),
+        fastn = fill(1.0f0, layers, cells),
+        slown = fill(10.0f0, layers, cells),
+    )
+    initial_without_shift = (u0 = u0,)
+    data_without_shift = (
+        latitude = Float32[45, 46],
+        crop = (
+            sdate = Int32[100, 101],
+            phu = Float32[1200, 1250],
+            manure = zeros(Float32, cells),
+            fertilizer = fill(50.0f0, cells),
+            residuefrac = fill(0.3f0, cells),
+        ),
+        soilparam = (
+            soilph = fill(6.5f0, cells),
+            w_sat = fill(0.45f0, layers, cells),
+            sand = fill(0.4f0, cells),
+            clay = fill(0.2f0, cells),
+            tdiff_0 = fill(0.2f0, cells),
+            tdiff_15 = fill(0.5f0, cells),
+            soildepth = Float32[200, 300, 500, 700, 1300],
+        ),
+        initialLPJmL = initial_without_shift,
+    )
+
+    loaded = InitialDataLoader(data_without_shift, [1, 2], identity)
+    @test !hasproperty(loaded.ModelState, :c_shift_fast)
+    @test !hasproperty(loaded.ModelState, :c_shift_slow)
+
+    fast_shift = repeat(Float32[0.4, 0.25, 0.15, 0.1, 0.1], 1, cells)
+    slow_shift = repeat(Float32[0.5, 0.2, 0.15, 0.1, 0.05], 1, cells)
+    data_with_shift = merge(data_without_shift, (
+        initialLPJmL = merge(initial_without_shift, (
+            c_shift_fast = fast_shift,
+            c_shift_slow = slow_shift,
+        )),
+    ))
+    restart = InitialDataLoader(
+        data_with_shift, [1, 2], identity; load_c_shift_restart = true,
+    )
+    @test restart.ModelState.c_shift_fast == fast_shift
+    @test restart.ModelState.c_shift_slow == slow_shift
 end
 
 @testset "LPJmL mineral-N initialization strategies" begin

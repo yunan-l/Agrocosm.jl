@@ -1,4 +1,10 @@
-"""Soil carbon inputs, pools, decomposition fluxes, and respiration."""
+"""
+Soil carbon inputs, pools, decomposition fluxes, and respiration.
+
+`shift_fast` and `shift_slow` are fixed post-spin-up vertical distributions;
+each sums to one per cell. `litter_to_fast` and `litter_to_slow` are the daily
+layer-resolved fluxes after applying fastfrac and the retained carbon fraction.
+"""
 mutable struct SoilCarbon{A, L, M}
     input::L
     litter::L
@@ -9,6 +15,8 @@ mutable struct SoilCarbon{A, L, M}
     decomposed_slow::M
     shift_fast::M
     shift_slow::M
+    litter_to_fast::M
+    litter_to_slow::M
     litter_response::A
     heterotrophic_respiration::A
 end
@@ -21,7 +29,7 @@ function init_soil_carbon(cell_size::Int, device;
     return SoilCarbon(
         litter_state(), litter_state(), litter_state(),
         layer_state(), layer_state(), layer_state(), layer_state(),
-        layer_state(), layer_state(),
+        layer_state(), layer_state(), layer_state(), layer_state(),
         device(zeros(Float32, litter_layers)),
         device(zeros(Float32, cell_size)),
     )

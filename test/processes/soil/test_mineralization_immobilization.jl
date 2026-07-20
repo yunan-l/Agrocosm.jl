@@ -7,8 +7,8 @@ using Test
     soil.carbon.decomposed_litter .= 0.0f0
     soil.nitrogen.decomposed_litter[1, 1] = 0.1f0
     soil.carbon.decomposed_litter[1, 1] = 3.0f0
-    soil.nitrogen.shift_fast[1, 1] = 0.49f0
-    soil.nitrogen.shift_slow[1, 1] = 0.01f0
+    soil.nitrogen.shift_fast[1, 1] = 1.0f0
+    soil.nitrogen.shift_slow[1, 1] = 1.0f0
     soil.nitrogen.ammonium .= 0.2f0
     soil.nitrogen.nitrate .= 0.1f0
 

@@ -36,7 +36,11 @@ CUDA.allowscalar(false)
     @test soil.thermal.frozen_fraction isa CuArray{Float32, 2}
     @test soil.thermal.initialized isa CuArray{Bool, 1}
     @test soil.carbon.litter isa CuArray{Float32, 2}
+    @test soil.carbon.litter_to_fast isa CuArray{Float32, 2}
+    @test soil.carbon.litter_to_slow isa CuArray{Float32, 2}
     @test soil.nitrogen.nitrate isa CuArray{Float32, 2}
+    @test soil.nitrogen.litter_to_fast isa CuArray{Float32, 2}
+    @test soil.nitrogen.litter_to_slow isa CuArray{Float32, 2}
     @test soil.nitrogen.leaching isa CuArray{Float32, 1}
     @test soil.decomposition.response isa CuArray{Float32, 2}
     @test soil.management.tillage_fraction isa CuArray{Float32, 2}
@@ -64,4 +68,11 @@ CUDA.allowscalar(false)
     Agrocosm.initialize_soil_mineral_nitrogen!(soil, u0, :lpjml_initsoil)
     @test all(Array(soil.nitrogen.nitrate) .== 1.0f0)
     @test all(Array(soil.nitrogen.ammonium) .== 1.0f0)
+
+    Agrocosm.initialize_soil_c_shift!(soil, (u0 = nothing,), :lpjml_initsoil)
+    expected_shift = Float32[0.55, 0.1125, 0.1125, 0.1125, 0.1125]
+    @test Array(soil.carbon.shift_fast) == repeat(expected_shift, 1, cell_size)
+    @test Array(soil.carbon.shift_slow) == repeat(expected_shift, 1, cell_size)
+    @test Array(soil.nitrogen.shift_fast) == Array(soil.carbon.shift_fast)
+    @test Array(soil.nitrogen.shift_slow) == Array(soil.carbon.shift_slow)
 end

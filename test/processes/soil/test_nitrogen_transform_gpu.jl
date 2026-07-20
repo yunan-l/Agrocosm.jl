@@ -13,8 +13,8 @@ CUDA.allowscalar(false)
     soil.nitrogen.nitrate .= 0.1f0
     soil.nitrogen.fast .= 2.0f0
     soil.nitrogen.slow .= 4.0f0
-    soil.nitrogen.shift_fast[1, :] .= 0.49f0
-    soil.nitrogen.shift_slow[1, :] .= 0.01f0
+    soil.nitrogen.shift_fast[1, :] .= 1.0f0
+    soil.nitrogen.shift_slow[1, :] .= 1.0f0
     soil.water.relative_content .= 0.7f0
     soil.water.holding_capacity_storage .= 100.0f0
     soil.water.saturation_storage .= 120.0f0

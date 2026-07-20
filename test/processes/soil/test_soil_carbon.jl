@@ -9,8 +9,8 @@ using Test
     soil.carbon.fast .= 3.0f0
     soil.carbon.slow .= 4.0f0
     soil.carbon.litter_response .= Float32[0.97, 0.97, 0.30]
-    soil.carbon.shift_fast[1, 1] = 0.49f0
-    soil.carbon.shift_slow[1, 1] = 0.01f0
+    soil.carbon.shift_fast[1, 1] = 1.0f0
+    soil.carbon.shift_slow[1, 1] = 1.0f0
     soil.thermal.temperature .= 10.0f0
     soil.water.relative_content .= 0.5f0
     soil.water.holding_capacity_storage .= 80.0f0

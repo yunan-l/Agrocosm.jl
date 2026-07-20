@@ -108,9 +108,8 @@ end
 ) where {T <: AbstractFloat, M <: AbstractFloat}
     cell = @index(Global)
     @unpack lpjmlparams, soil_layers = kernel_params
-    @unpack atmfrac, soil_cn_ratio, immobilization_k = lpjmlparams
+    @unpack atmfrac, fastfrac, soil_cn_ratio, immobilization_k = lpjmlparams
 
-    retained_fraction = max(one(T) - T(atmfrac), eps(T))
     carbon_nitrogen_deficit =
         decomposed_litter_carbon[cell] / T(soil_cn_ratio) -
         decomposed_litter_nitrogen[cell]
@@ -119,13 +118,13 @@ end
         mineralization[layer, cell] = zero(M)
         immobilization[layer, cell] = zero(M)
 
-        # Stored shift coefficients already contain fast/slow partitioning and
-        # (1-atmfrac). Undo only the retained fraction to obtain LPJmL's
-        # layer-resolved litter mineralization term.
+        # LPJmL keeps c_shift as a normalized vertical distribution. Apply the
+        # fast/slow split and atmospheric fraction explicitly to each flux.
         litter_mineralization = max(
             zero(M),
-            decomposed_litter_nitrogen[cell] * T(atmfrac) /
-            retained_fraction * (shift_fast[layer, cell] + shift_slow[layer, cell]),
+            decomposed_litter_nitrogen[cell] * T(atmfrac) *
+            (T(fastfrac) * shift_fast[layer, cell] +
+             (one(T) - T(fastfrac)) * shift_slow[layer, cell]),
         )
         som_mineralization = max(
             zero(M),
@@ -144,7 +143,8 @@ end
 
                 fast_immobilization = max(
                     zero(M),
-                    carbon_nitrogen_deficit * shift_fast[layer, cell] * limitation,
+                    carbon_nitrogen_deficit * T(fastfrac) *
+                    (one(T) - T(atmfrac)) * shift_fast[layer, cell] * limitation,
                 )
                 fast_immobilization = min(fast_immobilization, available)
                 if fast_immobilization > zero(M)
@@ -161,7 +161,8 @@ end
                     limitation = concentration / (T(immobilization_k) + concentration)
                     slow_immobilization = max(
                         zero(M),
-                        carbon_nitrogen_deficit * shift_slow[layer, cell] * limitation,
+                        carbon_nitrogen_deficit * (one(T) - T(fastfrac)) *
+                        (one(T) - T(atmfrac)) * shift_slow[layer, cell] * limitation,
                     )
                     slow_immobilization = min(slow_immobilization, available)
                     if slow_immobilization > zero(M)
