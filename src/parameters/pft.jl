@@ -52,9 +52,9 @@ struct ncleaf{T} # relative C:N ratios
     high::T
 end
 
-struct K_Litter10{T} # lower and upper coldest monthly mean temperature(deg C)
-    leaf::T
-    root::T
+struct K_Litter10{T}
+    leaf::T # annual turnover rate at 10 °C (yr⁻¹)
+    root::T # annual below-ground turnover rate at 10 °C (yr⁻¹)
 end
 
 struct NuptakeKinetics{T}

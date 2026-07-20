@@ -38,6 +38,7 @@ using Test
     @test soil.carbon isa SoilCarbon
     @test soil.nitrogen isa SoilNitrogen
     @test soil.decomposition isa SoilDecomposition
+    @test size(soil.decomposition.litter_response) == (3, cell_size)
     @test soil.management isa SoilManagement
     @test soil.surface_litter isa SoilSurfaceLitter
     @test soil.snow isa SoilSnow

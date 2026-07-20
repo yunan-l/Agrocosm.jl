@@ -128,11 +128,16 @@ function init_states!(PFT::PftParameters,
     soil.management.tillage_fraction = device([(1 - residue_frac) 0.0f0 0.0f0; residue_frac 1.0f0 0.0f0; 0.0f0 0.0f0 1.0f0])
     soil.carbon.shift_fast = device(c_shift_fast * fastfrac * (1.0f0 - atmfrac))
     soil.carbon.shift_slow = device(c_shift_slow * (1.0f0 - fastfrac) * (1.0f0 - atmfrac))
-    soil.carbon.litter_response = device([k_litter10.leaf, k_litter10.leaf, k_litter10.root])
+    days_per_year = 365.0f0
+    soil.carbon.litter_response = device(
+        [k_litter10.leaf, k_litter10.leaf, k_litter10.root] ./ days_per_year,
+    )
 
     soil.nitrogen.shift_fast = device(c_shift_fast * fastfrac * (1.0f0 - atmfrac))
     soil.nitrogen.shift_slow = device(c_shift_slow * (1.0f0 - fastfrac) * (1.0f0 - atmfrac))
-    soil.nitrogen.litter_response = device([k_litter10.leaf, k_litter10.leaf, k_litter10.root])
+    soil.nitrogen.litter_response = device(
+        [k_litter10.leaf, k_litter10.leaf, k_litter10.root] ./ days_per_year,
+    )
 
     output = init_output(cell_size, device)
 

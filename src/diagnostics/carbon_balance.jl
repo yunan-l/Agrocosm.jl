@@ -22,6 +22,9 @@ mutable struct CarbonBalance{M <: AbstractArray{<:AbstractFloat}}
     residue_transfer::M
     harvest_export::M
     heterotrophic_respiration::M
+    litter_respiration::M
+    fast_pool_respiration::M
+    slow_pool_respiration::M
     residual::M
     relative_residual::M
 end
@@ -34,7 +37,8 @@ function init_carbon_balance(number_of_days::Integer,
     return CarbonBalance(
         allocate(), allocate(), allocate(), allocate(), allocate(),
         allocate(), allocate(), allocate(), allocate(), allocate(),
-        allocate(), allocate(), allocate(), allocate(),
+        allocate(), allocate(), allocate(), allocate(), allocate(),
+        allocate(), allocate(),
     )
 end
 
@@ -97,7 +101,8 @@ end
 function record_carbon_balance_end!(balance::CarbonBalance,
                                     day_index::Integer,
                                     crop::Crop,
-                                    soil::Soil)
+                                    soil::Soil;
+                                    lpjmlparams::LPJmLParams = lpjmlparams)
     @views begin
         balance.plant_after[day_index, :] .= crop_carbon_stock(crop)
         balance.soil_after[day_index, :] .= soil_carbon_stock(soil)
@@ -107,6 +112,12 @@ function record_carbon_balance_end!(balance::CarbonBalance,
         balance.net_primary_production[day_index, :] .= crop.carbon.npp
         balance.heterotrophic_respiration[day_index, :] .=
             soil.carbon.heterotrophic_respiration
+        balance.litter_respiration[day_index, :] .=
+            vec(sum(soil.carbon.decomposed_litter; dims = 1)) .* lpjmlparams.atmfrac
+        balance.fast_pool_respiration[day_index, :] .=
+            vec(sum(soil.carbon.decomposed_fast; dims = 1))
+        balance.slow_pool_respiration[day_index, :] .=
+            vec(sum(soil.carbon.decomposed_slow; dims = 1))
 
         balance.residual[day_index, :] .=
             balance.total_before[day_index, :] .+

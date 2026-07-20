@@ -7,8 +7,8 @@ using Test
     soil.carbon.decomposed_litter .= 0.0f0
     soil.nitrogen.decomposed_litter[1, 1] = 0.1f0
     soil.carbon.decomposed_litter[1, 1] = 3.0f0
-    soil.nitrogen.shift_fast[1, 1] = 0.392f0
-    soil.nitrogen.shift_slow[1, 1] = 0.008f0
+    soil.nitrogen.shift_fast[1, 1] = 0.49f0
+    soil.nitrogen.shift_slow[1, 1] = 0.01f0
     soil.nitrogen.ammonium .= 0.2f0
     soil.nitrogen.nitrate .= 0.1f0
 
@@ -40,7 +40,7 @@ using Test
     mineral_after = sum(soil.nitrogen.ammonium .+ soil.nitrogen.nitrate)
     organic_after = sum(soil.nitrogen.fast .+ soil.nitrogen.slow)
 
-    @test gross_mineralization ≈ 0.06f0 atol = 1.0f-6
+    @test gross_mineralization ≈ 0.05f0 atol = 1.0f-6
     @test immobilization > 0.0f0
     @test mineral_after - mineral_before ≈
           gross_mineralization - immobilization atol = 1.0f-6

@@ -26,6 +26,7 @@ using Test
     include("processes/soil/test_water_ice_pools.jl")
     include("processes/soil/test_percolation_enthalpy.jl")
     include("processes/soil/test_untracked_water_enthalpy.jl")
+    include("processes/soil/test_soil_decomposition_response.jl")
     include("processes/soil/test_soil_carbon.jl")
     include("diagnostics/test_water_balance.jl")
     include("diagnostics/test_nitrogen_balance.jl")

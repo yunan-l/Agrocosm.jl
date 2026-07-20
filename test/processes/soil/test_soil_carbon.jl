@@ -9,8 +9,8 @@ using Test
     soil.carbon.fast .= 3.0f0
     soil.carbon.slow .= 4.0f0
     soil.carbon.litter_response .= Float32[0.97, 0.97, 0.30]
-    soil.carbon.shift_fast[1, 1] = 0.392f0
-    soil.carbon.shift_slow[1, 1] = 0.008f0
+    soil.carbon.shift_fast[1, 1] = 0.49f0
+    soil.carbon.shift_slow[1, 1] = 0.01f0
     soil.thermal.temperature .= 10.0f0
     soil.water.relative_content .= 0.5f0
     soil.water.holding_capacity_storage .= 80.0f0
@@ -26,6 +26,9 @@ using Test
     @test carbon_after < carbon_before
     @test carbon_after + sum(soil.carbon.heterotrophic_respiration) ≈
           carbon_before atol = 1.0f-5
+    @test soil.carbon.heterotrophic_respiration[1] ≈
+          sum(soil.carbon.decomposed_litter) * lpjmlparams.atmfrac +
+          sum(soil.carbon.decomposed_fast) + sum(soil.carbon.decomposed_slow)
     @test all(soil.carbon.litter .>= 0.0f0)
     @test all(soil.carbon.fast .>= 0.0f0)
     @test all(soil.carbon.slow .>= 0.0f0)

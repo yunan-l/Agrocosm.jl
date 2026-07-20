@@ -25,9 +25,11 @@ water, nitrogen, and management process coefficients.
     e0::T = 308.56
     temp_response::T = 56.02
     residue_frac::T = 0.95 # fraction of residues to be submerged by tillage
-    k_soil10::K_Soil10{T} = K_Soil10{T}(0.03, 0.001)
+    # LPJmL reads annual turnover rates (0.04 and 0.001 yr⁻¹) and converts
+    # them to daily rates in fscanparam.c before the process routines use them.
+    k_soil10::K_Soil10{T} = K_Soil10{T}(T(0.04 / 365), T(0.001 / 365))
     fastfrac::T = 0.98
-    atmfrac::T = 0.6
+    atmfrac::T = 0.5
     ALPHAM::T = 1.485
     GM::T = 2.41
     LAMBDA_OPT::T = 0.8
