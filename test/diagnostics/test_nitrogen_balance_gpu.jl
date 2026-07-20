@@ -9,7 +9,7 @@ CUDA.allowscalar(false)
     cell_size = 2
     crop = init_crop(cell_size, CuArray)
     soil = init_soil(cell_size, soilparams.soildepth, CuArray)
-    balance = @inferred init_nitrogen_balance(1, cell_size, CuArray)
+    balance = init_nitrogen_balance(1, cell_size, CuArray)
 
     crop.nitrogen.total .= 1.0f0
     soil.nitrogen.nitrate .= 0.2f0
