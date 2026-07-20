@@ -8,7 +8,8 @@ mutable struct SoilSnow{A}
     fraction::A
 end
 
-function init_soil_snow(cell_size::Int, device)
-    cell_state() = device(zeros(Float32, cell_size))
+init_soil_snow(cell_size::Int, device) = init_soil_snow(Float32, cell_size, device)
+function init_soil_snow(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
+    cell_state() = device(zeros(T, cell_size))
     return SoilSnow(ntuple(_ -> cell_state(), 6)...)
 end

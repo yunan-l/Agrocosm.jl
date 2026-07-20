@@ -29,35 +29,40 @@ mutable struct ClimBuf{A, M}
     V_req::A
 end
 
-function init_weather(cell_size::Int, device)
-    cell_state() = device(zeros(Float32, cell_size))
+init_weather(cell_size::Int, device) = init_weather(Float32, cell_size, device)
+function init_weather(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
+    cell_state() = device(zeros(T, cell_size))
     return DailyWeather(
         ntuple(_ -> cell_state(), 4)...,
-        device(fill(lpjmlparams.volatil_wind, cell_size)),
+        device(fill(T(lpjmlparams.volatil_wind), cell_size)),
         cell_state(),
-        device(zeros(Float32, 1)),
+        device(zeros(T, 1)),
     )
 end
 
-function init_pet(cell_size::Int, device)
-    cell_state() = device(zeros(Float32, cell_size))
+init_pet(cell_size::Int, device) = init_pet(Float32, cell_size, device)
+function init_pet(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
+    cell_state() = device(zeros(T, cell_size))
     return PetPar(ntuple(_ -> cell_state(), 4)...)
 end
 
-function init_climbuf(cell_size::Int,
+init_climbuf(cell_size::Int, device; kwargs...) =
+    init_climbuf(Float32, cell_size, device; kwargs...)
+function init_climbuf(::Type{T},
+                      cell_size::Int,
                       device;
                       NDAYS::Int = 31,
                       NMONTH::Int = 12,
                       NDAYS_YEAR::Int = 365,
-                      n::Int = 5)
+                      n::Int = 5) where {T <: AbstractFloat}
     return ClimBuf(
-        device(zeros(Float32, NDAYS, cell_size)),
-        device(zeros(Float32, NMONTH, cell_size)),
-        device(fill(-9999.0f0, NMONTH, cell_size)),
-        device(zeros(Float32, n, cell_size)),
-        device(zeros(Float32, NDAYS_YEAR, cell_size)),
-        device(zeros(Float32, cell_size)),
-        device(zeros(Float32, cell_size)),
-        device(fill(-9999.0f0, cell_size)),
+        device(zeros(T, NDAYS, cell_size)),
+        device(zeros(T, NMONTH, cell_size)),
+        device(fill(T(-9999), NMONTH, cell_size)),
+        device(zeros(T, n, cell_size)),
+        device(zeros(T, NDAYS_YEAR, cell_size)),
+        device(zeros(T, cell_size)),
+        device(zeros(T, cell_size)),
+        device(fill(T(-9999), cell_size)),
     )
 end

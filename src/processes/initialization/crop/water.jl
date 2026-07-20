@@ -15,16 +15,19 @@ mutable struct CropWater{A, M}
     root_zone_water::A
 end
 
-function init_crop_water(cell_size::Int, device; soil_layers::Int = 5)
-    float_state() = device(zeros(Float32, cell_size))
+init_crop_water(cell_size::Int, device; kwargs...) =
+    init_crop_water(Float32, cell_size, device; kwargs...)
+function init_crop_water(::Type{T}, cell_size::Int, device;
+                         soil_layers::Int = 5) where {T <: AbstractFloat}
+    float_state() = device(zeros(T, cell_size))
 
     return CropWater(
         float_state(),
         float_state(),
         float_state(),
         float_state(),
-        device(zeros(Float32, soil_layers, cell_size)),
-        device(zeros(Float32, soil_layers)),
+        device(zeros(T, soil_layers, cell_size)),
+        device(zeros(T, soil_layers)),
         float_state(),
         float_state(),
         float_state(),

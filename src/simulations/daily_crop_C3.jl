@@ -15,8 +15,18 @@ function daily_crop_C3!(start_day, end_day,
                         water_balance = nothing,
                         nitrogen_balance = nothing,
                         carbon_balance = nothing,
-                        thermal_balance = nothing
+                        thermal_balance = nothing,
+                        model_parameters::ModelParameters = ModelParameters(eltype(crop.canopy.lai)),
 )
+
+    T = eltype(crop.canopy.lai)
+    pftparameters = convert_precision(T, pftparameters)
+    model_parameters = convert_precision(T, model_parameters)
+    global_params = model_parameters.lpjml
+    photo_params = model_parameters.photosynthesis
+    snow_params = model_parameters.snow
+    thermal_params = model_parameters.soil_thermal
+    decomp_params = model_parameters.soil_decomposition
 
     crop_cal = crop.calendar
     photos = crop.photosynthesis
@@ -51,7 +61,11 @@ function daily_crop_C3!(start_day, end_day,
         end
 
         # snow
-        snow!(soil, dailyWeather)
+        snow!(
+            soil, dailyWeather;
+            snowparams = snow_params,
+            lpjmlparams = global_params,
+        )
 
         if water_balance !== nothing
             record_water_balance_after_snow!(water_balance, diagnostic_day, dailyWeather.prec)
@@ -66,6 +80,7 @@ function daily_crop_C3!(start_day, end_day,
             day_of_year;
             manure = manure,
             apply_prescribed_fertilizer = !auto_fertilizer,
+            lpjmlparams = global_params,
         )
 
         if carbon_balance !== nothing
@@ -75,15 +90,19 @@ function daily_crop_C3!(start_day, end_day,
         # LPJmL tills existing litter at cultivation, then applies the daily
         # agtop -> agsub bioturbation transfer before surface-litter physics.
         litter_tillage!(soil, crop_cal)
-        litter_bioturbation!(soil)
+        litter_bioturbation!(soil; lpjmlparams = global_params)
 
         update_climbuf!(pftparameters, dailyWeather.temp, climbuf, day) # update climate buffer
         albedo!(pftparameters, crop, pet)  # compute albedo
         petpar!(pet, day_of_year, managed_land.latitude, dailyWeather.temp, dailyWeather.lwr, dailyWeather.swr) # compute crop potential evapotraspiration variables
-        update_surface_litter_properties!(soil)
+        update_surface_litter_properties!(soil; thermalparams = thermal_params)
         # Thermal properties require current pore volume before phase partitioning.
-        pedotransfer!(soil)
-        soil_temperature!(soil, dailyWeather.temp, climbuf.atemp_mean)
+        pedotransfer!(soil; lpjmlparams = global_params)
+        soil_temperature!(
+            soil, dailyWeather.temp, climbuf.atemp_mean;
+            thermalparams = thermal_params,
+            snowparams = snow_params,
+        )
 
         # compute phenology variables
         phenology_crop!(crop, climbuf.V_req, pftparameters, dailyWeather.temp, pet.daylength)
@@ -105,8 +124,11 @@ function daily_crop_C3!(start_day, end_day,
         end
 
         # Interception and infiltration precede plant water stress, as in LPJmL.
-        interception!(crop, pftparameters, pet.eeq, dailyWeather.prec)
-        pedotransfer!(soil)
+        interception!(
+            crop, pftparameters, pet.eeq, dailyWeather.prec;
+            lpjmlparams = global_params,
+        )
+        pedotransfer!(soil; lpjmlparams = global_params)
         soil_infiltration!(
             soil,
             crop,
@@ -114,38 +136,49 @@ function daily_crop_C3!(start_day, end_day,
             irrigation = irrigation,
             snowmelt = soil.snow.melt,
             air_temperature = dailyWeather.temp,
+            lpjmlparams = global_params,
+            thermalparams = thermal_params,
         )
         if thermal_balance !== nothing
             record_thermal_balance!(thermal_balance, diagnostic_day, soil)
         end
 
         apar_crop!(pftparameters, crop, pet) # crop absorbed photosynthetic radiation
-        temp_stress(pftparameters, pet, photos, dailyWeather.temp) # temperature stress function
+        temp_stress(
+            pftparameters, pet, photos, dailyWeather.temp;
+            photoparams = photo_params,
+        ) # temperature stress function
 
         # C3 photosynthesis
-        photosynthesis_C3!(pftparameters, photos, crop.canopy.apar, pet.daylength, dailyWeather.temp, current_co2; comp_vmax = true)
+        photosynthesis_C3!(pftparameters, photos, crop.canopy.apar, pet.daylength, dailyWeather.temp, current_co2;
+                           comp_vmax = true, lpjmlparams = global_params, photoparams = photo_params)
 
         # LPJmL first uses lambda_opt photosynthesis to obtain potential
         # conductance, then constrains conductance by water supply.
-        transpiration!(photos.water_limited_assimilation, pftparameters, crop, pet, soil, current_co2)
+        transpiration!(photos.water_limited_assimilation, pftparameters, crop, pet, soil, current_co2;
+                       lpjmlparams = global_params)
 
         # Solve the water-limited lambda on the active backend (CPU or GPU),
         # then recompute photosynthesis with fixed vmax and actual lambda.
-        solve_lambda_c3!(pftparameters, photos, crop, pet, dailyWeather.temp, current_co2)
+        solve_lambda_c3!(pftparameters, photos, crop, pet, dailyWeather.temp, current_co2;
+                         lpjmlparams = global_params, photoparams = photo_params)
 
         if nitrogen_limit_vmax
             # LPJmL obtains N using the potential capacity, constrains Vmax
             # only when leaf N remains insufficient, then recomputes carbon.
             crop_nitrogen!(crop, pftparameters, soil, photos.potential_vmax, dailyWeather.temp;
-                           auto_fertilizer = auto_fertilizer)
-            limit_vmax_by_nitrogen!(crop, pftparameters, dailyWeather.temp)
+                           auto_fertilizer = auto_fertilizer, lpjmlparams = global_params)
+            limit_vmax_by_nitrogen!(crop, pftparameters, dailyWeather.temp;
+                                    lpjmlparams = global_params)
         end
-        photosynthesis_C3!(pftparameters, photos, crop.canopy.apar, pet.daylength, dailyWeather.temp, current_co2; comp_vmax = false)
+        photosynthesis_C3!(pftparameters, photos, crop.canopy.apar, pet.daylength, dailyWeather.temp, current_co2;
+                           comp_vmax = false, lpjmlparams = global_params, photoparams = photo_params)
 
         # crop respiration and carbon allocation
         crop_carbon!(
             photos, crop, output, pftparameters, dailyWeather.temp;
             output_row = output_row,
+            lpjmlparams = global_params,
         )
 
         # crop nitrogen allocation
@@ -155,18 +188,22 @@ function daily_crop_C3!(start_day, end_day,
             allocate_crop_nitrogen!(crop, pftparameters)
         else
             crop_nitrogen!(crop, pftparameters, soil, photos.vmax, dailyWeather.temp;
-                           auto_fertilizer = auto_fertilizer) # nitrogen cycle
+                           auto_fertilizer = auto_fertilizer,
+                           lpjmlparams = global_params) # nitrogen cycle
         end
 
-        evaporation!(pet.eeq, crop, soil)
+        evaporation!(pet.eeq, crop, soil; lpjmlparams = global_params)
 
         # soil carbon cycle
-        soil_carbon!(crop_cal, soil)
+        soil_carbon!(crop_cal, soil;
+                     lpjmlparams = global_params, soil_decomp_params = decomp_params)
 
         # soil nitrogen cycle
         soil_nitrogen!(crop_cal, soil;
                        air_temperature = dailyWeather.temp,
-                       wind_speed = dailyWeather.wind)
+                       wind_speed = dailyWeather.wind,
+                       lpjmlparams = global_params,
+                       soil_decomp_params = decomp_params)
 
         # Remove daily plant uptake and soil evaporation after demand/supply calculation.
         soil_evapotranspiration!(soil, crop; irrigation = irrigation)

@@ -17,6 +17,7 @@ post-spin-up or restart distribution.
 function InitialDataLoader(data::NamedTuple,
                            data_index::Vector{Int},
                            device;
+                           T::Type{<:AbstractFloat} = Float32,
                            load_mineral_nitrogen_restart::Bool = false,
                            load_c_shift_restart::Bool = false
 )
@@ -24,40 +25,40 @@ function InitialDataLoader(data::NamedTuple,
 
     @unpack latitude, crop, soilparam, initialLPJmL = data
 
-    latitude_set = latitude[data_index] |> device
+    latitude_set = T.(latitude[data_index]) |> device
 
     crop = (
         sdate = Int32.(crop.sdate[data_index]),
-        phu = crop.phu[data_index],
-        manure = crop.manure[data_index],
-        fertilizer = crop.fertilizer[data_index],
-        residuefrac = crop.residuefrac[data_index]
+        phu = T.(crop.phu[data_index]),
+        manure = T.(crop.manure[data_index]),
+        fertilizer = T.(crop.fertilizer[data_index]),
+        residuefrac = T.(crop.residuefrac[data_index])
     ) |> device
 
     soilparam_set = (
-        ph = soilparam.soilph[data_index],
-        w_sat = soilparam.w_sat[:, data_index],
-        sand = reshape(soilparam.sand[data_index], (1, :)),
-        clay = reshape(soilparam.clay[data_index], (1, :)),
+        ph = T.(soilparam.soilph[data_index]),
+        w_sat = T.(soilparam.w_sat[:, data_index]),
+        sand = reshape(T.(soilparam.sand[data_index]), (1, :)),
+        clay = reshape(T.(soilparam.clay[data_index]), (1, :)),
         # silt = soilparam.silt[data_index],
-        tdiff_0 = soilparam.tdiff_0[data_index],
-        tdiff_15 = soilparam.tdiff_15[data_index],
-        soildepth = soilparam.soildepth,
+        tdiff_0 = T.(soilparam.tdiff_0[data_index]),
+        tdiff_15 = T.(soilparam.tdiff_15[data_index]),
+        soildepth = T.(soilparam.soildepth),
     ) |> device
 
     u0_set = (
-        swc = initialLPJmL.u0.swc[:, data_index],
-        litc = initialLPJmL.u0.litc[:, data_index],
-        fastc = initialLPJmL.u0.fastc[:, data_index],
-        slowc = initialLPJmL.u0.slowc[:, data_index],
-        litn = initialLPJmL.u0.litn[:, data_index],
-        fastn = initialLPJmL.u0.fastn[:, data_index],
-        slown = initialLPJmL.u0.slown[:, data_index],
+        swc = T.(initialLPJmL.u0.swc[:, data_index]),
+        litc = T.(initialLPJmL.u0.litc[:, data_index]),
+        fastc = T.(initialLPJmL.u0.fastc[:, data_index]),
+        slowc = T.(initialLPJmL.u0.slowc[:, data_index]),
+        litn = T.(initialLPJmL.u0.litn[:, data_index]),
+        fastn = T.(initialLPJmL.u0.fastn[:, data_index]),
+        slown = T.(initialLPJmL.u0.slown[:, data_index]),
     )
     if load_mineral_nitrogen_restart
         u0_set = merge(u0_set, (
-            soil_NH4 = initialLPJmL.u0.soil_NH4[:, data_index],
-            soil_NO3 = initialLPJmL.u0.soil_NO3[:, data_index],
+            soil_NH4 = T.(initialLPJmL.u0.soil_NH4[:, data_index]),
+            soil_NO3 = T.(initialLPJmL.u0.soil_NO3[:, data_index]),
         ))
     end
     u0_set = u0_set |> device
@@ -65,8 +66,8 @@ function InitialDataLoader(data::NamedTuple,
     model_state = (crop = crop, u0 = u0_set)
     if load_c_shift_restart
         model_state = merge(model_state, (
-            c_shift_fast = initialLPJmL.c_shift_fast[:, data_index],
-            c_shift_slow = initialLPJmL.c_shift_slow[:, data_index],
+            c_shift_fast = T.(initialLPJmL.c_shift_fast[:, data_index]),
+            c_shift_slow = T.(initialLPJmL.c_shift_slow[:, data_index]),
         ))
     end
     model_state = model_state |> device

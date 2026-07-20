@@ -11,10 +11,13 @@ mutable struct SoilManagement{M, A}
     bioturbation_nitrogen::A
 end
 
-function init_soil_management(cell_size::Int, device; litter_layers::Int = 3)
-    cell_state() = device(zeros(Float32, cell_size))
+init_soil_management(cell_size::Int, device; kwargs...) =
+    init_soil_management(Float32, cell_size, device; kwargs...)
+function init_soil_management(::Type{T}, cell_size::Int, device;
+                              litter_layers::Int = 3) where {T <: AbstractFloat}
+    cell_state() = device(zeros(T, cell_size))
     return SoilManagement(
-        device(zeros(Float32, litter_layers, litter_layers)),
+        device(zeros(T, litter_layers, litter_layers)),
         cell_state(), cell_state(), cell_state(), cell_state(),
     )
 end

@@ -10,8 +10,9 @@ mutable struct CropCanopy{A}
     apar::A
 end
 
-function init_crop_canopy(cell_size::Int, device)
-    float_state() = device(zeros(Float32, cell_size))
+init_crop_canopy(cell_size::Int, device) = init_crop_canopy(Float32, cell_size, device)
+function init_crop_canopy(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
+    float_state() = device(zeros(T, cell_size))
 
     return CropCanopy(
         float_state(),

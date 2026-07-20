@@ -13,9 +13,9 @@ function petpar_reference!(pet::PetPar,
 ) where {T <: AbstractFloat}
 
 
-    delta = Float32(deg2rad(-23.4 * cos(2 * π * (day + 10) / 365)))
-    u = Float32.(sin.(deg2rad.(lat)) * sin(delta))
-    v = Float32.(cos.(deg2rad.(lat)) * cos(delta))
+    delta = T(deg2rad(-23.4 * cos(2 * π * (day + 10) / 365)))
+    u = T.(sin.(deg2rad.(lat)) * sin(delta))
+    v = T.(cos.(deg2rad.(lat)) * cos(delta))
 
     launch_1D!(
         daylength_kernel!,
@@ -26,14 +26,16 @@ function petpar_reference!(pet::PetPar,
 
     swnet = (1 .- pet.albedo) .* swdown
 
-    pet.par .= dayseconds .* swdown ./ 2
+    pet.par .= T(dayseconds) .* swdown ./ T(2)
 
-    s = 2.503f6 * exp.(17.269f0 * temp ./ (237.3f0 .+ temp)) ./ ((237.3f0 .+ temp).^2)
+    s = T(2.503e6) * exp.(T(17.269) * temp ./ (T(237.3) .+ temp)) ./
+        ((T(237.3) .+ temp).^2)
 
-    gamma_t = 65.05f0 .+ 0.064f0 * temp
-    lambda = 2.495f6 .- 2380f0 * temp
+    gamma_t = T(65.05) .+ T(0.064) * temp
+    lambda = T(2.495e6) .- T(2380) * temp
 
-    pet.eeq .= dayseconds * (s ./ (s .+ gamma_t) ./ lambda) .* (swnet .+ lwnet .* (pet.daylength / 24))
+    pet.eeq .= T(dayseconds) * (s ./ (s .+ gamma_t) ./ lambda) .*
+        (swnet .+ lwnet .* (pet.daylength / T(24)))
 
     # idx = pet.eeq .< 0
     # pet.eeq[idx] .= zero(T)
@@ -41,7 +43,7 @@ function petpar_reference!(pet::PetPar,
     pet.eeq .= max.(pet.eeq, zero(T))
 
     ## check equilibrium evapotranspiration
-    pet.eeq .= min.(pet.eeq, 15.0f0) ##  set an upper bound for pet.eeq to avoid extreme values to stop GPU computing
+    pet.eeq .= min.(pet.eeq, T(15)) ##  set an upper bound for pet.eeq to avoid extreme values to stop GPU computing
 
 end
 

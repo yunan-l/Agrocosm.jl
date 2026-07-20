@@ -11,7 +11,9 @@ mutable struct CropPhotosynthesis{A}
     temperature_stress::A
 end
 
-function init_crop_photosynthesis(cell_size::Int, device)
-    float_state() = device(zeros(Float32, cell_size))
+init_crop_photosynthesis(cell_size::Int, device) =
+    init_crop_photosynthesis(Float32, cell_size, device)
+function init_crop_photosynthesis(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
+    float_state() = device(zeros(T, cell_size))
     return CropPhotosynthesis(ntuple(_ -> float_state(), 9)...)
 end

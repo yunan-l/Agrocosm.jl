@@ -11,13 +11,19 @@ function soil_infiltration!(soil::Soil,
                             irrigation = false,
                             snowmelt::Union{Nothing, AbstractArray{T}} = nothing,
                             air_temperature::Union{Nothing, AbstractArray{T}} = nothing,
+                            lpjmlparams::LPJmLParams = lpjmlparams,
+                            thermalparams::SoilThermalParams{T} = SoilThermalParams{T}(),
 ) where {T <: AbstractFloat}
     surface_litter_interception!(soil, prec, crop.water.interception)
     transfer_heat = !irrigation && snowmelt !== nothing && air_temperature !== nothing
     if transfer_heat
-        infil_perc!(soil, prec, snowmelt, air_temperature)
+        infil_perc!(
+            soil, prec, snowmelt, air_temperature;
+            lpjmlparams = lpjmlparams,
+            thermalparams = thermalparams,
+        )
     else
-        infil_perc!(soil)
+        infil_perc!(soil; lpjmlparams = lpjmlparams)
     end
 
     if !irrigation
@@ -34,7 +40,7 @@ function soil_infiltration!(soil::Soil,
         # Agrocosm preserves the same water/energy ledger but applies it once
         # after the GPU column kernel, avoiding device synchronization inside
         # the iterative hydrology loop.
-        apply_percolation_enthalpy!(soil)
+        apply_percolation_enthalpy!(soil; thermalparams = thermalparams)
     else
         partition_soil_water_ice!(soil)
     end

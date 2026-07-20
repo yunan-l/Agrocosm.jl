@@ -63,6 +63,21 @@ struct NuptakeKinetics{T}
     Km::T   # Half-saturation concentration (gN m-3)
 end
 
+_convert_precision(::Type{T}, value::AbstractFloat) where {T <: AbstractFloat} = T(value)
+_convert_precision(::Type{T}, value::Integer) where {T <: AbstractFloat} = value
+_convert_precision(::Type{T}, value::Temp) where {T <: AbstractFloat} = Temp{T}(T(value.low), T(value.high))
+_convert_precision(::Type{T}, value::TempCO2) where {T <: AbstractFloat} = TempCO2{T}(T(value.low), T(value.high))
+_convert_precision(::Type{T}, value::TempPhotos) where {T <: AbstractFloat} = TempPhotos{T}(T(value.low), T(value.high))
+_convert_precision(::Type{T}, value::TvEff) where {T <: AbstractFloat} = TvEff{T}(T(value.low), T(value.high))
+_convert_precision(::Type{T}, value::TvOpt) where {T <: AbstractFloat} = TvOpt{T}(T(value.low), T(value.high))
+_convert_precision(::Type{T}, value::BaseTemp) where {T <: AbstractFloat} = BaseTemp{T}(T(value.low), T(value.high))
+_convert_precision(::Type{T}, value::nc_ratio) where {T <: AbstractFloat} = nc_ratio{T}(T(value.root), T(value.sto), T(value.pool))
+_convert_precision(::Type{T}, value::ratio) where {T <: AbstractFloat} = ratio{T}(T(value.root), T(value.sto), T(value.pool))
+_convert_precision(::Type{T}, value::ncleaf) where {T <: AbstractFloat} = ncleaf{T}(T(value.low), T(value.median), T(value.high))
+_convert_precision(::Type{T}, value::K_Litter10) where {T <: AbstractFloat} = K_Litter10{T}(T(value.leaf), T(value.root))
+_convert_precision(::Type{T}, value::NuptakeKinetics) where {T <: AbstractFloat} =
+    NuptakeKinetics{T}(T(value.vmax), T(value.kmin), T(value.Km))
+
 @kwdef struct PftParameters{T <: AbstractFloat, S <: Integer}
     name::S
     plant_type::S
@@ -109,6 +124,14 @@ end
     nh4_uptake::NuptakeKinetics{T}
     hiopt::T
     himin::T
+end
+
+"""Return a PFT parameter set whose floating fields consistently use `T`."""
+function convert_precision(::Type{T}, pft::PftParameters{<:AbstractFloat, S}) where {T <: AbstractFloat, S <: Integer}
+    names = fieldnames(typeof(pft))
+    values = map(name -> _convert_precision(T, getfield(pft, name)), names)
+    kwargs = NamedTuple{names}(values)
+    return PftParameters{T, S}(; kwargs...)
 end
 
 """

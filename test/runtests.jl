@@ -36,4 +36,5 @@ using Test
     include("diagnostics/test_water_balance.jl")
     include("diagnostics/test_nitrogen_balance.jl")
     include("diagnostics/test_thermal_balance.jl")
+    include("simulations/test_daily_crop_C3_precision.jl")
 end

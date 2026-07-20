@@ -20,7 +20,8 @@ mutable struct CropNitrogen{A}
     deficit::A
 end
 
-function init_crop_nitrogen(cell_size::Int, device)
-    float_state() = device(zeros(Float32, cell_size))
+init_crop_nitrogen(cell_size::Int, device) = init_crop_nitrogen(Float32, cell_size, device)
+function init_crop_nitrogen(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
+    float_state() = device(zeros(T, cell_size))
     return CropNitrogen(ntuple(_ -> float_state(), 18)...)
 end

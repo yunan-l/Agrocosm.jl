@@ -24,9 +24,12 @@ mutable struct SoilThermal{A, B, M}
     diffusivity_15::A
 end
 
-function init_soil_thermal(cell_size::Int, device; soil_layers::Int = 5)
-    layer_state() = device(zeros(Float32, soil_layers, cell_size))
-    cell_state() = device(zeros(Float32, cell_size))
+init_soil_thermal(cell_size::Int, device; kwargs...) =
+    init_soil_thermal(Float32, cell_size, device; kwargs...)
+function init_soil_thermal(::Type{T}, cell_size::Int, device;
+                           soil_layers::Int = 5) where {T <: AbstractFloat}
+    layer_state() = device(zeros(T, soil_layers, cell_size))
+    cell_state() = device(zeros(T, cell_size))
     return SoilThermal(
         layer_state(),
         layer_state(),

@@ -5,15 +5,18 @@ Compute normalized root fractions across the default five soil layers from
 the LPJmL-style exponential root profile parameter `beta_root`.
 """
 function root_distribution(beta_root::AbstractFloat)
-
-    layerbound = Float32.([200.0, 500.0, 1000.0, 2000.0, 3000.0])
+    T = typeof(beta_root)
+    layerbound = T[200.0, 500.0, 1000.0, 2000.0, 3000.0]
 
     BOTTOMLAYER = length(layerbound)
-    totalroots = 1 - beta_root^(layerbound[BOTTOMLAYER] / 10)
-    rootdist = zeros(BOTTOMLAYER)
-    rootdist[1] = (1 - beta_root^(layerbound[1] / 10)) / totalroots
+    totalroots = one(T) - beta_root^(layerbound[BOTTOMLAYER] / T(10))
+    rootdist = zeros(T, BOTTOMLAYER)
+    rootdist[1] = (one(T) - beta_root^(layerbound[1] / T(10))) / totalroots
     for l in 2:BOTTOMLAYER
-        rootdist[l] = (beta_root^(layerbound[l-1] / 10) - beta_root^(layerbound[l] / 10)) / totalroots
+        rootdist[l] = (
+            beta_root^(layerbound[l-1] / T(10)) -
+            beta_root^(layerbound[l] / T(10))
+        ) / totalroots
     end
 
     return rootdist
@@ -67,6 +70,7 @@ function init_states!(PFT::PftParameters,
                        InitialData::NamedTuple,
                        cell_size::Int,
                        device;
+                       T::Type{<:AbstractFloat} = Float32,
                        lpjmlparams::LPJmLParams = lpjmlparams,
                        mineral_nitrogen_initialization::Symbol = :lpjml_initsoil,
                        c_shift_initialization::Symbol = :lpjml_initsoil
@@ -84,13 +88,15 @@ function init_states!(PFT::PftParameters,
     residuefrac = ModelState.crop.residuefrac
     u0 = ModelState.u0
 
-    dailyWeather = init_weather(cell_size, device)
+    to_float(values) = device(T.(values))
+    to_integer(values) = device(Int32.(values))
 
-    climbuf = init_climbuf(cell_size, device)
-    crop = init_crop(cell_size, device)
-    managed_land = init_managed_land(cell_size, device)
-    crop.phenology.phu = copy(phu)
-    rootdist = root_distribution(beta_root)
+    dailyWeather = init_weather(T, cell_size, device)
+    climbuf = init_climbuf(T, cell_size, device)
+    crop = init_crop(T, cell_size, device)
+    managed_land = init_managed_land(T, cell_size, device)
+    crop.phenology.phu = to_float(phu)
+    rootdist = root_distribution(T(beta_root))
     # idx = crop.phenology.phu .< 0
     # crop.phenology.winter_type[idx] .= true
     # crop.phenology.phu[idx] .= -crop.phenology.phu[idx]
@@ -98,44 +104,48 @@ function init_states!(PFT::PftParameters,
     crop.phenology.phu .= ifelse.(crop.phenology.phu .< 0, -crop.phenology.phu, crop.phenology.phu)
     crop.water.root_distribution .= device(rootdist)
 
-    crop.calendar.sowing_date = sdate
-    managed_land.manure = manure
-    managed_land.fertilizer = fertilizer
-    managed_land.residue_fraction = residuefrac
-    managed_land.latitude = latitude
-    pet = init_pet(cell_size, device)
-    soil = init_soil(cell_size, soilparams.soildepth, device)
-    soil.carbon.litter = copy(u0.litc)
-    soil.carbon.fast = copy(u0.fastc)
-    soil.carbon.slow = copy(u0.slowc)
-    soil.nitrogen.litter = copy(u0.litn)
-    soil.nitrogen.fast = copy(u0.fastn)
-    soil.nitrogen.slow = copy(u0.slown)
-    soil.water.storage = copy(u0.swc)
+    crop.calendar.sowing_date = to_integer(sdate)
+    managed_land.manure = to_float(manure)
+    managed_land.fertilizer = to_float(fertilizer)
+    managed_land.residue_fraction = to_float(residuefrac)
+    managed_land.latitude = to_float(latitude)
+    pet = init_pet(T, cell_size, device)
+    soil = init_soil(T, cell_size, T.(soilparams.soildepth), device)
+    soil.carbon.litter = to_float(u0.litc)
+    soil.carbon.fast = to_float(u0.fastc)
+    soil.carbon.slow = to_float(u0.slowc)
+    soil.nitrogen.litter = to_float(u0.litn)
+    soil.nitrogen.fast = to_float(u0.fastn)
+    soil.nitrogen.slow = to_float(u0.slown)
+    soil.water.storage = to_float(u0.swc)
     initialize_soil_mineral_nitrogen!(
         soil,
         u0,
         mineral_nitrogen_initialization,
     )
-    soil.water.saturation_fraction = copy(soilparams.w_sat)
-    soil.properties.ph = soilparams.ph
-    soil.properties.sand_fraction = soilparams.sand
-    soil.properties.clay_fraction = soilparams.clay
-    soil.thermal.diffusivity_0 = soilparams.tdiff_0
-    soil.thermal.diffusivity_15 = soilparams.tdiff_15
+    soil.water.saturation_fraction = to_float(soilparams.w_sat)
+    soil.properties.ph = to_float(soilparams.ph)
+    soil.properties.sand_fraction = to_float(soilparams.sand)
+    soil.properties.clay_fraction = to_float(soilparams.clay)
+    soil.thermal.diffusivity_0 = to_float(soilparams.tdiff_0)
+    soil.thermal.diffusivity_15 = to_float(soilparams.tdiff_15)
 
-    soil.management.tillage_fraction = device([(1 - residue_frac) 0.0f0 0.0f0; residue_frac 1.0f0 0.0f0; 0.0f0 0.0f0 1.0f0])
+    soil.management.tillage_fraction = device(T[
+        1 - residue_frac 0 0
+        residue_frac 1 0
+        0 0 1
+    ])
     initialize_soil_c_shift!(soil, ModelState, c_shift_initialization)
-    days_per_year = 365.0f0
+    days_per_year = T(365)
     soil.carbon.litter_response = device(
-        [k_litter10.leaf, k_litter10.leaf, k_litter10.root] ./ days_per_year,
+        T[k_litter10.leaf, k_litter10.leaf, k_litter10.root] ./ days_per_year,
     )
 
     soil.nitrogen.litter_response = device(
-        [k_litter10.leaf, k_litter10.leaf, k_litter10.root] ./ days_per_year,
+        T[k_litter10.leaf, k_litter10.leaf, k_litter10.root] ./ days_per_year,
     )
 
-    output = init_output(cell_size, device)
+    output = init_output(T, cell_size, device)
 
     return climbuf, crop, pet, soil, managed_land, dailyWeather, output
 end

@@ -21,16 +21,18 @@ mutable struct SoilCarbon{A, L, M}
     heterotrophic_respiration::A
 end
 
-function init_soil_carbon(cell_size::Int, device;
+init_soil_carbon(cell_size::Int, device; kwargs...) =
+    init_soil_carbon(Float32, cell_size, device; kwargs...)
+function init_soil_carbon(::Type{T}, cell_size::Int, device;
                           litter_layers::Int = 3,
-                          soil_layers::Int = 5)
-    litter_state() = device(zeros(Float32, litter_layers, cell_size))
-    layer_state() = device(zeros(Float32, soil_layers, cell_size))
+                          soil_layers::Int = 5) where {T <: AbstractFloat}
+    litter_state() = device(zeros(T, litter_layers, cell_size))
+    layer_state() = device(zeros(T, soil_layers, cell_size))
     return SoilCarbon(
         litter_state(), litter_state(), litter_state(),
         layer_state(), layer_state(), layer_state(), layer_state(),
         layer_state(), layer_state(), layer_state(), layer_state(),
-        device(zeros(Float32, litter_layers)),
-        device(zeros(Float32, cell_size)),
+        device(zeros(T, litter_layers)),
+        device(zeros(T, cell_size)),
     )
 end

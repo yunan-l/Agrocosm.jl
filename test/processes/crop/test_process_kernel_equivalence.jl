@@ -108,22 +108,24 @@ end
 
 @testset "PET/PAR kernel matches vector reference" begin
     cells = 8
-    reference = init_pet(cells, identity)
-    kernel = init_pet(cells, identity)
-    albedo = Float32.(range(0.1, 0.4; length = cells))
-    reference.albedo .= albedo
-    kernel.albedo .= albedo
-    latitude = Float32[-70, -45, -10, 0, 10, 45, 70, 80]
-    temperature = Float32[-20, -5, 0, 10, 20, 30, 35, 40]
-    longwave = Float32.(range(-120, 40; length = cells))
-    shortwave = Float32.(range(0, 350; length = cells))
-    daylength_destination = kernel.daylength
-    Agrocosm.petpar_reference!(
-        reference, 172, latitude, temperature, longwave, shortwave,
-    )
-    petpar!(kernel, 172, latitude, temperature, longwave, shortwave)
-    @test kernel.daylength === daylength_destination
-    compare_fields(reference, kernel, (:daylength, :par, :eeq); rtol = 3.0f-6)
+    for T in (Float32, Float64)
+        reference = init_pet(T, cells, identity)
+        kernel = init_pet(T, cells, identity)
+        albedo = T.(range(0.1, 0.4; length = cells))
+        reference.albedo .= albedo
+        kernel.albedo .= albedo
+        latitude = T[-70, -45, -10, 0, 10, 45, 70, 80]
+        temperature = T[-20, -5, 0, 10, 20, 30, 35, 40]
+        longwave = T.(range(-120, 40; length = cells))
+        shortwave = T.(range(0, 350; length = cells))
+        daylength_destination = kernel.daylength
+        Agrocosm.petpar_reference!(
+            reference, 172, latitude, temperature, longwave, shortwave,
+        )
+        petpar!(kernel, 172, latitude, temperature, longwave, shortwave)
+        @test kernel.daylength === daylength_destination
+        compare_fields(reference, kernel, (:daylength, :par, :eeq); rtol = T(3e-6))
+    end
 end
 
 @testset "C3/C4 kernels match vector references" begin

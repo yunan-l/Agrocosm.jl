@@ -11,7 +11,9 @@ mutable struct SoilSurfaceLitter{A}
     conductivity::A
 end
 
-function init_soil_surface_litter(cell_size::Int, device)
-    state() = device(zeros(Float32, cell_size))
+init_soil_surface_litter(cell_size::Int, device) =
+    init_soil_surface_litter(Float32, cell_size, device)
+function init_soil_surface_litter(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
+    state() = device(zeros(T, cell_size))
     return SoilSurfaceLitter(ntuple(_ -> state(), 9)...)
 end

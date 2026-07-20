@@ -8,11 +8,16 @@ function crop_nitrogen!(crop::Crop,
                         soil::Soil,
                         photos_vmax::AbstractArray{T},
                         temp::AbstractArray{T};
-                        auto_fertilizer::Bool = true
+                        auto_fertilizer::Bool = true,
+                        lpjmlparams::LPJmLParams = lpjmlparams,
 ) where {T <: AbstractFloat}
 
-    ndemand_crop!(crop, PFT, photos_vmax, temp)
-    nuptake_crop!(crop, PFT, soil; auto_fertilizer = auto_fertilizer)
+    ndemand_crop!(crop, PFT, photos_vmax, temp; lpjmlparams = lpjmlparams)
+    nuptake_crop!(
+        crop, PFT, soil;
+        auto_fertilizer = auto_fertilizer,
+        lpjmlparams = lpjmlparams,
+    )
 
     allocate_crop_nitrogen!(crop, PFT)
 

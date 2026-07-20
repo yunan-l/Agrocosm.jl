@@ -13,8 +13,9 @@ mutable struct CropPhenology{A, B, I}
     is_growing::I
 end
 
-function init_crop_phenology(cell_size::Int, device)
-    float_state() = device(zeros(Float32, cell_size))
+init_crop_phenology(cell_size::Int, device) = init_crop_phenology(Float32, cell_size, device)
+function init_crop_phenology(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
+    float_state() = device(zeros(T, cell_size))
     bool_state(value = false) = device(fill(value, cell_size))
 
     return CropPhenology(

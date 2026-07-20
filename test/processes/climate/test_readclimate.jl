@@ -38,6 +38,11 @@ using Test
     loaded = ClimateDataLoader(loader_input, [2], identity)
     @test hasproperty(loaded, :wind)
     @test loaded.wind == Float32[2; 4;;]
+
+    loaded64 = ClimateDataLoader(loader_input, [2], identity; T = Float64)
+    @test eltype(loaded64.temp) == Float64
+    @test eltype(loaded64.co2) == Float64
+    @test eltype(loaded64.wind) == Float64
 end
 
 

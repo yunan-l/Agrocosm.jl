@@ -13,9 +13,12 @@ mutable struct CropCarbon{A, M}
     temperature_response::A
 end
 
-function init_crop_carbon(cell_size::Int, device; carbon_pools::Int = 4)
-    float_state() = device(zeros(Float32, cell_size))
-    initial_organs = Float32[8.0, 0.0113804, 0.0, 11.9886196]
+init_crop_carbon(cell_size::Int, device; kwargs...) =
+    init_crop_carbon(Float32, cell_size, device; kwargs...)
+function init_crop_carbon(::Type{T}, cell_size::Int, device;
+                          carbon_pools::Int = 4) where {T <: AbstractFloat}
+    float_state() = device(zeros(T, cell_size))
+    initial_organs = T[8.0, 0.0113804, 0.0, 11.9886196]
 
     return CropCarbon(
         float_state(),
@@ -24,7 +27,7 @@ function init_crop_carbon(cell_size::Int, device; carbon_pools::Int = 4)
         float_state(),
         float_state(),
         device(initial_organs),
-        device(zeros(Float32, carbon_pools, cell_size)),
+        device(zeros(T, carbon_pools, cell_size)),
         float_state(),
         float_state(),
         float_state(),

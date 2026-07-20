@@ -6,11 +6,13 @@ mutable struct SoilProperties{A, M}
     layer_depth::A
 end
 
-function init_soil_properties(cell_size::Int, soildepth, device)
+init_soil_properties(cell_size::Int, soildepth, device) =
+    init_soil_properties(Float32, cell_size, soildepth, device)
+function init_soil_properties(::Type{T}, cell_size::Int, soildepth, device) where {T <: AbstractFloat}
     return SoilProperties(
-        device(zeros(Float32, 1, cell_size)),
-        device(zeros(Float32, 1, cell_size)),
-        device(zeros(Float32, cell_size)),
-        device(soildepth),
+        device(zeros(T, 1, cell_size)),
+        device(zeros(T, 1, cell_size)),
+        device(zeros(T, cell_size)),
+        device(T.(soildepth)),
     )
 end

@@ -56,34 +56,37 @@ mutable struct Output{C, S, F, K}
     calendar::K
 end
 
-function init_output(cell_size::Int,
+init_output(cell_size::Int, device; kwargs...) =
+    init_output(Float32, cell_size, device; kwargs...)
+function init_output(::Type{T},
+                     cell_size::Int,
                      device;
                      vegc_pools::Int = 4,
                      litc_layers::Int = 3,
-                     soil_layers::Int = 5)
+                     soil_layers::Int = 5) where {T <: AbstractFloat}
     # Output rows represent completed simulation steps only. Initial model
     # state lives in `crop`/`soil`; it is not a synthetic day-zero output.
-    scalar_output() = device(zeros(Float32, 0, cell_size))
+    scalar_output() = device(zeros(T, 0, cell_size))
     integer_output() = device(zeros(Int32, 0, cell_size))
 
     crop = CropOutput(
         scalar_output(), scalar_output(), scalar_output(), scalar_output(),
         scalar_output(), scalar_output(), scalar_output(), scalar_output(),
         scalar_output(), scalar_output(), scalar_output(),
-        device(zeros(Float32, 0, vegc_pools * cell_size)),
-        device(zeros(Float32, 0, vegc_pools * cell_size)),
+        device(zeros(T, 0, vegc_pools * cell_size)),
+        device(zeros(T, 0, vegc_pools * cell_size)),
         scalar_output(), scalar_output(), integer_output(),
     )
 
     soil = SoilOutput(
         scalar_output(),
-        device(zeros(Float32, 0, litc_layers * cell_size)),
-        device(zeros(Float32, 0, soil_layers * cell_size)),
-        device(zeros(Float32, 0, soil_layers * cell_size)),
-        device(zeros(Float32, 0, soil_layers * cell_size)),
-        device(zeros(Float32, 0, litc_layers * cell_size)),
-        device(zeros(Float32, 0, soil_layers * cell_size)),
-        device(zeros(Float32, 0, soil_layers * cell_size)),
+        device(zeros(T, 0, litc_layers * cell_size)),
+        device(zeros(T, 0, soil_layers * cell_size)),
+        device(zeros(T, 0, soil_layers * cell_size)),
+        device(zeros(T, 0, soil_layers * cell_size)),
+        device(zeros(T, 0, litc_layers * cell_size)),
+        device(zeros(T, 0, soil_layers * cell_size)),
+        device(zeros(T, 0, soil_layers * cell_size)),
         scalar_output(), scalar_output(),
     )
 

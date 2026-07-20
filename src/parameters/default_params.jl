@@ -150,7 +150,7 @@ Physical constants for snow accumulation, insulation, and melt processes.
     snow_skin_depth::T = 40.0 # snow skin layer depth (mm water equivalent)
     th_diff_snow ::T = 0.2/6.3f5 # thermal diffusivity of snow [m2/s]
     lambda_snow::T = 0.2
-    c_water2ice::T = 0.3f9 # the energy that is needed/released during water/ice conversion (J/m3)
+    c_water2ice::T = 3.0e8 # the energy that is needed/released during water/ice conversion (J/m3)
     c_watertosnow::T = 6.70 # Conversion factor from water to snowdepth, i.e. 1 cm water equals 6.7 cm of snow
     c_roughness::T = 0.06 # height of vegetation below the canopy
 end
@@ -205,3 +205,77 @@ soil_decomp_params
 Default `SoilDecompParams{Float32}` singleton used by soil decomposition routines.
 """
 const soil_decomp_params = SoilDecompParams{Float32}()
+
+"""
+ModelParameters{T}
+
+Precision-consistent collection of the global process parameter sets.  This
+keeps model constants in the same floating-point type as the runtime state and
+provides one object that can be passed through a simulation.
+"""
+struct ModelParameters{T <: AbstractFloat}
+    lpjml::LPJmLParams{T}
+    photosynthesis::PhotoParams{T}
+    snow::SnowParams{T}
+    soil_thermal::SoilThermalParams{T}
+    soil_decomposition::SoilDecompParams{T}
+end
+
+function ModelParameters(::Type{T}) where {T <: AbstractFloat}
+    return ModelParameters{T}(
+        LPJmLParams{T}(),
+        PhotoParams{T}(),
+        SnowParams{T}(),
+        SoilThermalParams{T}(),
+        SoilDecompParams{T}(),
+    )
+end
+
+ModelParameters() = ModelParameters(Float32)
+
+_convert_parameter_value(::Type{T}, value::AbstractFloat) where {T <: AbstractFloat} = T(value)
+_convert_parameter_value(::Type{T}, value::Integer) where {T <: AbstractFloat} = value
+_convert_parameter_value(::Type{T}, value::K_Soil10) where {T <: AbstractFloat} =
+    K_Soil10{T}(T(value.fast), T(value.slow))
+
+function _convert_parameter_struct(::Type{T}, ::Type{P}, params) where {T <: AbstractFloat, P}
+    names = fieldnames(typeof(params))
+    values = map(name -> _convert_parameter_value(T, getfield(params, name)), names)
+    return P(; NamedTuple{names}(values)...)
+end
+
+convert_precision(::Type{T}, params::LPJmLParams) where {T <: AbstractFloat} =
+    _convert_parameter_struct(T, LPJmLParams{T}, params)
+convert_precision(::Type{T}, params::PhotoParams) where {T <: AbstractFloat} =
+    _convert_parameter_struct(T, PhotoParams{T}, params)
+convert_precision(::Type{T}, params::SnowParams) where {T <: AbstractFloat} =
+    _convert_parameter_struct(T, SnowParams{T}, params)
+convert_precision(::Type{T}, params::SoilThermalParams) where {T <: AbstractFloat} =
+    _convert_parameter_struct(T, SoilThermalParams{T}, params)
+convert_precision(::Type{T}, params::SoilDecompParams) where {T <: AbstractFloat} =
+    _convert_parameter_struct(T, SoilDecompParams{T}, params)
+
+"""Return a copy of a global parameter bundle converted to precision `T`."""
+function convert_precision(::Type{T}, params::ModelParameters) where {T <: AbstractFloat}
+    return ModelParameters{T}(
+        convert_precision(T, params.lpjml),
+        convert_precision(T, params.photosynthesis),
+        convert_precision(T, params.snow),
+        convert_precision(T, params.soil_thermal),
+        convert_precision(T, params.soil_decomposition),
+    )
+end
+
+"""Construct the default soil lookup table in floating-point precision `T`."""
+function SoilParams(::Type{T}) where {T <: AbstractFloat}
+    return SoilParams{T}(
+        T.(sand), T.(silt), T.(clay), T.(w_sat), T.(tdiff_0), T.(tdiff_15),
+        T.(soildepth),
+    )
+end
+
+convert_precision(::Type{T}, params::SoilParams) where {T <: AbstractFloat} =
+    SoilParams{T}(
+        T.(params.sand), T.(params.silt), T.(params.clay), T.(params.w_sat),
+        T.(params.tdiff_0), T.(params.tdiff_15), T.(params.soildepth),
+    )

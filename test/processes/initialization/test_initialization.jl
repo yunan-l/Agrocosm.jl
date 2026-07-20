@@ -73,6 +73,95 @@ using Test
     @test size(output.calendar.harvest_date) == (1, cell_size)
 end
 
+@testset "Selectable floating-point state precision" begin
+    cells = 2
+    crop = init_crop(Float64, cells, identity)
+    managed_land = init_managed_land(Float64, cells, identity)
+    soil = init_soil(Float64, cells, soilparams.soildepth, identity)
+    weather = init_weather(Float64, cells, identity)
+    pet = init_pet(Float64, cells, identity)
+    climbuf = init_climbuf(Float64, cells, identity)
+    output = init_output(Float64, cells, identity)
+    water = init_water_balance(2, cells, identity; T = Float64)
+    nitrogen = init_nitrogen_balance(2, cells, identity; T = Float64)
+    carbon = init_carbon_balance(2, cells, identity; T = Float64)
+    thermal = init_thermal_balance(2, cells, identity; T = Float64)
+
+    @test eltype(crop.canopy.lai) == Float64
+    @test eltype(crop.carbon.organs) == Float64
+    @test eltype(crop.photosynthesis.lambda) == Float64
+    @test eltype(managed_land.latitude) == Float64
+    @test eltype(soil.properties.layer_depth) == Float64
+    @test eltype(soil.water.storage) == Float64
+    @test eltype(soil.thermal.enthalpy) == Float64
+    @test eltype(soil.carbon.fast) == Float64
+    @test eltype(soil.nitrogen.nitrate) == Float64
+    @test eltype(weather.temp) == Float64
+    @test eltype(weather.annual_co2) == Float64
+    @test eltype(pet.eeq) == Float64
+    @test eltype(climbuf.atemp) == Float64
+    @test eltype(output.crop.npp) == Float64
+    @test eltype(water.residual) == Float64
+    @test eltype(nitrogen.residual) == Float64
+    @test eltype(carbon.residual) == Float64
+    @test eltype(thermal.energy_residual) == Float64
+    @test eltype(crop.phenology.is_growing) == Int32
+    @test eltype(crop.calendar.sowing_date) == Int32
+
+    pft64 = convert_precision(Float64, cft1)
+    parameters64 = ModelParameters(Float64)
+    soilparams64 = convert_precision(Float64, soilparams)
+    @test pft64 isa PftParameters{Float64, Int32}
+    @test parameters64 isa ModelParameters{Float64}
+    @test parameters64.lpjml isa LPJmLParams{Float64}
+    @test parameters64.photosynthesis isa PhotoParams{Float64}
+    @test parameters64.snow isa SnowParams{Float64}
+    @test parameters64.soil_thermal isa SoilThermalParams{Float64}
+    @test parameters64.soil_decomposition isa SoilDecompParams{Float64}
+    @test soilparams64 isa SoilParams{Float64}
+
+    layers = 5
+    initial_data = (
+        latitude = Float32[45, 46],
+        soilparams = (
+            ph = fill(6.5f0, cells),
+            w_sat = fill(0.45f0, layers, cells),
+            sand = fill(0.4f0, 1, cells),
+            clay = fill(0.2f0, 1, cells),
+            tdiff_0 = fill(0.2f0, cells),
+            tdiff_15 = fill(0.5f0, cells),
+            soildepth = Float32[200, 300, 500, 1000, 1000],
+        ),
+        ModelState = (
+            crop = (
+                sdate = Int32[100, 101],
+                phu = Float32[543, 620],
+                manure = zeros(Float32, cells),
+                fertilizer = fill(20.0f0, cells),
+                residuefrac = fill(0.5f0, cells),
+            ),
+            u0 = (
+                swc = fill(100.0f0, layers, cells),
+                litc = fill(1.0f0, 3, cells),
+                fastc = fill(10.0f0, layers, cells),
+                slowc = fill(100.0f0, layers, cells),
+                litn = fill(0.1f0, 3, cells),
+                fastn = fill(1.0f0, layers, cells),
+                slown = fill(10.0f0, layers, cells),
+            ),
+        ),
+    )
+    _, crop64, pet64, soil64, managed64, weather64, output64 = init_states!(
+        cft1, initial_data, cells, identity; T = Float64,
+    )
+    @test eltype(crop64.canopy.lai) == Float64
+    @test eltype(pet64.eeq) == Float64
+    @test eltype(soil64.water.storage) == Float64
+    @test eltype(managed64.latitude) == Float64
+    @test eltype(weather64.temp) == Float64
+    @test eltype(output64.crop.npp) == Float64
+end
+
 @testset "LPJmL c_shift initialization strategies" begin
     cells = 2
     soil = init_soil(cells, soilparams.soildepth, identity)
@@ -140,6 +229,14 @@ end
     loaded = InitialDataLoader(data_without_shift, [1, 2], identity)
     @test !hasproperty(loaded.ModelState, :c_shift_fast)
     @test !hasproperty(loaded.ModelState, :c_shift_slow)
+
+    loaded64 = InitialDataLoader(
+        data_without_shift, [1, 2], identity; T = Float64,
+    )
+    @test eltype(loaded64.latitude) == Float64
+    @test eltype(loaded64.ModelState.crop.phu) == Float64
+    @test eltype(loaded64.ModelState.crop.sdate) == Int32
+    @test eltype(loaded64.ModelState.u0.swc) == Float64
 
     fast_shift = repeat(Float32[0.4, 0.25, 0.15, 0.1, 0.1], 1, cells)
     slow_shift = repeat(Float32[0.5, 0.2, 0.15, 0.1, 0.05], 1, cells)

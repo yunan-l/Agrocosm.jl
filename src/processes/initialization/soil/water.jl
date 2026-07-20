@@ -30,9 +30,12 @@ mutable struct SoilWater{A, M}
     percolation::M
 end
 
-function init_soil_water(cell_size::Int, device; soil_layers::Int = 5)
-    layer_state() = device(zeros(Float32, soil_layers, cell_size))
-    cell_state() = device(zeros(Float32, cell_size))
+init_soil_water(cell_size::Int, device; kwargs...) =
+    init_soil_water(Float32, cell_size, device; kwargs...)
+function init_soil_water(::Type{T}, cell_size::Int, device;
+                         soil_layers::Int = 5) where {T <: AbstractFloat}
+    layer_state() = device(zeros(T, soil_layers, cell_size))
+    cell_state() = device(zeros(T, cell_size))
     return SoilWater(
         layer_state(),
         layer_state(),
