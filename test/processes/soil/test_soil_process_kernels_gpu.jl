@@ -41,16 +41,16 @@ CUDA.allowscalar(false)
         @test Array(getproperty(gpu.water, field)) ≈
             getproperty(reference.water, field) rtol = 8.0f-6 atol = 8.0f-6
     end
-    pedotransfer_bytes = CUDA.@allocated begin
-        pedotransfer!(gpu)
-        synchronize()
-    end
-
     for soil in (reference,)
         soil.water.saturation_storage .= 180.0f0
         soil.water.holding_capacity_storage .= 100.0f0
         soil.water.wilting_storage .= 30.0f0
         soil.water.relative_content .= 0.55f0
+        soil.water.free_water .= 0.0f0
+        soil.water.ice_storage .= 0.0f0
+        soil.water.wilting_ice_fraction .= 0.0f0
+        soil.water.available_ice_storage .= 0.0f0
+        soil.water.free_ice_storage .= 0.0f0
         soil.thermal.temperature .= 15.0f0
         soil.surface_litter.temperature .= 12.0f0
         soil.surface_litter.water_capacity .= 4.0f0
@@ -74,6 +74,9 @@ CUDA.allowscalar(false)
     for (field, value) in (
         (:saturation_storage, 180.0f0), (:holding_capacity_storage, 100.0f0),
         (:wilting_storage, 30.0f0), (:relative_content, 0.55f0),
+        (:free_water, 0.0f0), (:ice_storage, 0.0f0),
+        (:wilting_ice_fraction, 0.0f0), (:available_ice_storage, 0.0f0),
+        (:free_ice_storage, 0.0f0),
     )
         getproperty(gpu.water, field) .= value
     end
@@ -110,6 +113,12 @@ CUDA.allowscalar(false)
         crop_gpu.calendar, gpu; air_temperature = air_gpu, wind_speed = wind_gpu,
     )
     synchronize()
+    @test Array(gpu.decomposition.response) ≈
+        reference.decomposition.response rtol = 1.0f-5 atol = 5.0f-6
+    @test Array(gpu.carbon.decomposed_litter) ≈
+        reference.carbon.decomposed_litter rtol = 1.0f-5 atol = 5.0f-6
+    @test Array(gpu.nitrogen.decomposed_litter) ≈
+        reference.nitrogen.decomposed_litter rtol = 1.0f-5 atol = 5.0f-6
     @test Array(gpu.carbon.heterotrophic_respiration) ≈
         reference.carbon.heterotrophic_respiration rtol = 1.0f-5 atol = 5.0f-6
     @test Array(gpu.nitrogen.nitrate) ≈ reference.nitrogen.nitrate rtol = 1.0f-5 atol = 5.0f-6
@@ -148,6 +157,14 @@ CUDA.allowscalar(false)
     synchronize()
     water_update_bytes = CUDA.@allocated begin
         soil_evapotranspiration!(gpu, crop_gpu)
+        synchronize()
+    end
+    # Measure this mutating kernel last: a second pedotransfer call uses the
+    # previously updated saturation fraction and therefore changes the model
+    # state. Running it before the equivalence checks would no longer compare
+    # the same one-step CPU and GPU trajectories.
+    pedotransfer_bytes = CUDA.@allocated begin
+        pedotransfer!(gpu)
         synchronize()
     end
     @test pedotransfer_bytes == 0
