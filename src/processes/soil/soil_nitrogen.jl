@@ -18,7 +18,7 @@ function soil_nitrogen_reference!(crop_cal::CropCalendar,
     # soil.nitrogen.decomposed_litter = (1.0f0 .- exp.(-soil.nitrogen.litter_response / 100)) .* soil.nitrogen.litter
 
     soil.nitrogen.decomposed_litter .=
-        (1.0f0 .- exp.(-soil.nitrogen.litter_response .* soil.decomposition.litter_response)) .* soil.nitrogen.litter
+        -expm1.(-soil.nitrogen.litter_response .* soil.decomposition.litter_response) .* soil.nitrogen.litter
     soil.nitrogen.litter .-= soil.nitrogen.decomposed_litter
 
     route_harvest_nitrogen_input_reference!(soil, crop_cal)
@@ -36,14 +36,14 @@ function soil_nitrogen_reference!(crop_cal::CropCalendar,
     # soil.nitrogen.decomposed_fast = (1.0f0 .- exp.(-soil.response_fastn .* response / 50)) .* soil.nitrogen.fast
     soil.nitrogen.decomposed_fast .= max.(
         0.0f0,
-        (1.0f0 .- exp.(-k_soil10.fast .* soil.decomposition.response)) .* soil.nitrogen.fast,
+        -expm1.(-k_soil10.fast .* soil.decomposition.response) .* soil.nitrogen.fast,
     )
     soil.nitrogen.fast .+= soil.nitrogen.litter_to_fast .- soil.nitrogen.decomposed_fast
 
     # soil.nitrogen.decomposed_slow = (1.0f0 .- exp.(-soil.response_slown .* response / 10)) .* soil.nitrogen.slow
     soil.nitrogen.decomposed_slow .= max.(
         0.0f0,
-        (1.0f0 .- exp.(-k_soil10.slow .* soil.decomposition.response)) .* soil.nitrogen.slow,
+        -expm1.(-k_soil10.slow .* soil.decomposition.response) .* soil.nitrogen.slow,
     )
     soil.nitrogen.slow .+= soil.nitrogen.litter_to_slow .- soil.nitrogen.decomposed_slow
 
@@ -118,9 +118,9 @@ end
     cell = @index(Global)
     litter_flux = zero(T)
     for pool in 1:3
-        decomposition = (one(T) - exp(
+        decomposition = -expm1(
             -litter_rate[pool] * litter_environment[pool, cell],
-        )) * litter[pool, cell]
+        ) * litter[pool, cell]
         decomposed_litter[pool, cell] = decomposition
         litter[pool, cell] -= decomposition
         litter_flux += decomposition
@@ -129,12 +129,12 @@ end
     for layer in 1:soil_layers
         fast_decomposition = max(
             zero(T),
-            (one(T) - exp(-fast_rate * soil_environment[layer, cell])) *
+            -expm1(-fast_rate * soil_environment[layer, cell]) *
             fast[layer, cell],
         )
         slow_decomposition = max(
             zero(T),
-            (one(T) - exp(-slow_rate * soil_environment[layer, cell])) *
+            -expm1(-slow_rate * soil_environment[layer, cell]) *
             slow[layer, cell],
         )
         to_fast = shift_fast[layer, cell] * litter_flux * fast_fraction *

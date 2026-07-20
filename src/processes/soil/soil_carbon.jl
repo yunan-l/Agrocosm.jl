@@ -20,8 +20,10 @@ function soil_carbon_reference!(crop_cal::CropCalendar,
 
     # Litter decomposition is represented as three aggregated litter pools.
     # We use top-layer response (LPJmL uses top/root layer litter environments).
+    # `-expm1(-x)` is mathematically identical to `1-exp(-x)` but avoids
+    # cancellation for the small daily rates used here on Float32 CPU/GPU.
     soil.carbon.decomposed_litter .=
-        (1.0f0 .- exp.(-soil.carbon.litter_response .* soil.decomposition.litter_response)) .* soil.carbon.litter
+        -expm1.(-soil.carbon.litter_response .* soil.decomposition.litter_response) .* soil.carbon.litter
     soil.carbon.litter .-= soil.carbon.decomposed_litter
 
     # LPJmL harvest first creates agtop/bg litter, then the KILL -> setaside
@@ -31,7 +33,7 @@ function soil_carbon_reference!(crop_cal::CropCalendar,
     # soil.carbon.decomposed_fast = (1.0f0 .- exp.(-soil.response_fastc .* response / 50)) .* soil.carbon.fast
     soil.carbon.decomposed_fast .= max.(
         0.0f0,
-        (1.0f0 .- exp.(-k_soil10.fast .* soil.decomposition.response)) .* soil.carbon.fast,
+        -expm1.(-k_soil10.fast .* soil.decomposition.response) .* soil.carbon.fast,
     )
     decomposed_litter = soil.decomposition.surface_scratch_1
     @views decomposed_litter .=
@@ -45,7 +47,7 @@ function soil_carbon_reference!(crop_cal::CropCalendar,
     # soil.carbon.decomposed_slow = (1.0f0 .- exp.(-soil.response_slowc .* response / 10)) .* soil.carbon.slow
     soil.carbon.decomposed_slow .= max.(
         0.0f0,
-        (1.0f0 .- exp.(-k_soil10.slow .* soil.decomposition.response)) .* soil.carbon.slow,
+        -expm1.(-k_soil10.slow .* soil.decomposition.response) .* soil.carbon.slow,
     )
     soil.carbon.litter_to_slow .= soil.carbon.shift_slow .*
         reshape(decomposed_litter, 1, :) .* (1.0f0 - fastfrac) .* (1.0f0 - atmfrac)
@@ -119,9 +121,9 @@ end
     cell = @index(Global)
     litter_flux = zero(T)
     for pool in 1:3
-        decomposition = (one(T) - exp(
+        decomposition = -expm1(
             -litter_rate[pool] * litter_environment[pool, cell],
-        )) * litter[pool, cell]
+        ) * litter[pool, cell]
         decomposed_litter[pool, cell] = decomposition
         litter[pool, cell] -= decomposition
         litter_flux += decomposition
@@ -131,12 +133,12 @@ end
     for layer in 1:soil_layers
         fast_decomposition = max(
             zero(T),
-            (one(T) - exp(-fast_rate * soil_environment[layer, cell])) *
+            -expm1(-fast_rate * soil_environment[layer, cell]) *
             fast[layer, cell],
         )
         slow_decomposition = max(
             zero(T),
-            (one(T) - exp(-slow_rate * soil_environment[layer, cell])) *
+            -expm1(-slow_rate * soil_environment[layer, cell]) *
             slow[layer, cell],
         )
         to_fast = shift_fast[layer, cell] * litter_flux * fast_fraction *

@@ -115,6 +115,8 @@ CUDA.allowscalar(false)
     synchronize()
     @test Array(gpu.decomposition.response) ≈
         reference.decomposition.response rtol = 1.0f-5 atol = 5.0f-6
+    @test Array(gpu.decomposition.litter_response) ≈
+        reference.decomposition.litter_response rtol = 1.0f-5 atol = 5.0f-6
     @test Array(gpu.carbon.decomposed_litter) ≈
         reference.carbon.decomposed_litter rtol = 1.0f-5 atol = 5.0f-6
     @test Array(gpu.nitrogen.decomposed_litter) ≈

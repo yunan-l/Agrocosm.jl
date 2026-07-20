@@ -42,7 +42,7 @@ using Test
     soil_carbon!(crop.calendar, decay_soil)
     response = decay_soil.decomposition.response[1, 1]
     @test decay_soil.carbon.decomposed_fast[1, 1] ≈
-        100.0f0 * (1.0f0 - exp(-0.04f0 / 365.0f0 * response)) rtol = 2.0f-5
+        -100.0f0 * expm1(-0.04f0 / 365.0f0 * response) rtol = 2.0f-5
     @test decay_soil.carbon.decomposed_slow[1, 1] ≈
-        100.0f0 * (1.0f0 - exp(-0.001f0 / 365.0f0 * response)) rtol = 2.0f-4
+        -100.0f0 * expm1(-0.001f0 / 365.0f0 * response) rtol = 2.0f-4
 end
