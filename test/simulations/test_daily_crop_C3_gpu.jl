@@ -150,23 +150,38 @@ end
 host_array(values) = Array(values)
 
 function test_float_equivalence(gpu_values, cpu_values;
-                                rtol = 1.0f-3, atol = 5.0f-4)
+                                rtol = 1.0f-3, atol = 5.0f-4,
+                                label = "unnamed")
     gpu_host = host_array(gpu_values)
     cpu_host = host_array(cpu_values)
     @test size(gpu_host) == size(cpu_host)
     @test all(isfinite, gpu_host)
     @test all(isfinite, cpu_host)
-    @test gpu_host ≈ cpu_host rtol = rtol atol = atol
+    # Array `isapprox` uses a norm, so thousands of individually acceptable
+    # daily Float32 differences can fail after accumulation. Model equivalence
+    # is a pointwise requirement: every day/cell must satisfy the tolerance.
+    matches = isapprox.(gpu_host, cpu_host; rtol = rtol, atol = atol)
+    if !all(matches)
+        first_bad = findfirst(.!matches)
+        gpu_value = gpu_host[first_bad]
+        cpu_value = cpu_host[first_bad]
+        absolute_error = abs(gpu_value - cpu_value)
+        relative_error = absolute_error / max(abs(cpu_value), atol)
+        @info "CPU/GPU first pointwise mismatch" label first_bad gpu_value cpu_value absolute_error relative_error rtol atol
+    end
+    @test all(matches)
     return nothing
 end
 
-function test_balance_equivalence(gpu_balance, cpu_balance; rtol, atol)
+function test_balance_equivalence(gpu_balance, cpu_balance;
+                                  group, rtol, atol)
     for field in fieldnames(typeof(cpu_balance))
         test_float_equivalence(
             getproperty(gpu_balance, field),
             getproperty(cpu_balance, field);
             rtol = rtol,
             atol = atol,
+            label = "$group.$field",
         )
     end
     return nothing
@@ -193,10 +208,18 @@ end
         cpu_values = getproperty(cpu.output.crop, field)
         gpu_values = getproperty(gpu.output.crop, field)
         # Explicit one-year checkpoint and complete two-year trajectory.
-        test_float_equivalence(gpu_values[1:365, :], cpu_values[1:365, :])
-        test_float_equivalence(gpu_values, cpu_values)
+        test_float_equivalence(
+            gpu_values[1:365, :], cpu_values[1:365, :];
+            label = "output.crop.$field[1:365]",
+        )
+        test_float_equivalence(
+            gpu_values, cpu_values; label = "output.crop.$field[1:730]",
+        )
     end
-    test_float_equivalence(gpu.output.crop.yield, cpu.output.crop.yield)
+    test_float_equivalence(
+        gpu.output.crop.yield, cpu.output.crop.yield;
+        label = "output.crop.yield",
+    )
 
     for field in (:growing_mask,)
         @test host_array(getproperty(gpu.output.crop, field)) ==
@@ -211,41 +234,52 @@ end
     end
 
     crop_state_fields = (
-        (cpu.crop.carbon.organs, gpu.crop.carbon.organs),
-        (cpu.crop.nitrogen.total, gpu.crop.nitrogen.total),
-        (cpu.crop.nitrogen.leaf, gpu.crop.nitrogen.leaf),
-        (cpu.crop.nitrogen.root, gpu.crop.nitrogen.root),
-        (cpu.crop.nitrogen.pool, gpu.crop.nitrogen.pool),
-        (cpu.crop.nitrogen.storage, gpu.crop.nitrogen.storage),
-        (cpu.crop.canopy.lai, gpu.crop.canopy.lai),
-        (cpu.crop.phenology.fphu, gpu.crop.phenology.fphu),
+        ("crop.carbon.organs", cpu.crop.carbon.organs, gpu.crop.carbon.organs),
+        ("crop.nitrogen.total", cpu.crop.nitrogen.total, gpu.crop.nitrogen.total),
+        ("crop.nitrogen.leaf", cpu.crop.nitrogen.leaf, gpu.crop.nitrogen.leaf),
+        ("crop.nitrogen.root", cpu.crop.nitrogen.root, gpu.crop.nitrogen.root),
+        ("crop.nitrogen.pool", cpu.crop.nitrogen.pool, gpu.crop.nitrogen.pool),
+        ("crop.nitrogen.storage", cpu.crop.nitrogen.storage, gpu.crop.nitrogen.storage),
+        ("crop.canopy.lai", cpu.crop.canopy.lai, gpu.crop.canopy.lai),
+        ("crop.phenology.fphu", cpu.crop.phenology.fphu, gpu.crop.phenology.fphu),
     )
-    for (cpu_values, gpu_values) in crop_state_fields
-        test_float_equivalence(gpu_values, cpu_values)
+    for (label, cpu_values, gpu_values) in crop_state_fields
+        test_float_equivalence(gpu_values, cpu_values; label = label)
     end
 
     soil_state_fields = (
-        (cpu.soil.water.storage, gpu.soil.water.storage),
-        (cpu.soil.water.ice_storage, gpu.soil.water.ice_storage),
-        (cpu.soil.thermal.temperature, gpu.soil.thermal.temperature),
-        (cpu.soil.thermal.enthalpy, gpu.soil.thermal.enthalpy),
-        (cpu.soil.carbon.litter, gpu.soil.carbon.litter),
-        (cpu.soil.carbon.fast, gpu.soil.carbon.fast),
-        (cpu.soil.carbon.slow, gpu.soil.carbon.slow),
-        (cpu.soil.nitrogen.litter, gpu.soil.nitrogen.litter),
-        (cpu.soil.nitrogen.fast, gpu.soil.nitrogen.fast),
-        (cpu.soil.nitrogen.slow, gpu.soil.nitrogen.slow),
-        (cpu.soil.nitrogen.nitrate, gpu.soil.nitrogen.nitrate),
-        (cpu.soil.nitrogen.ammonium, gpu.soil.nitrogen.ammonium),
+        ("soil.water.storage", cpu.soil.water.storage, gpu.soil.water.storage),
+        ("soil.water.ice_storage", cpu.soil.water.ice_storage, gpu.soil.water.ice_storage),
+        ("soil.thermal.temperature", cpu.soil.thermal.temperature, gpu.soil.thermal.temperature),
+        ("soil.thermal.enthalpy", cpu.soil.thermal.enthalpy, gpu.soil.thermal.enthalpy),
+        ("soil.carbon.litter", cpu.soil.carbon.litter, gpu.soil.carbon.litter),
+        ("soil.carbon.fast", cpu.soil.carbon.fast, gpu.soil.carbon.fast),
+        ("soil.carbon.slow", cpu.soil.carbon.slow, gpu.soil.carbon.slow),
+        ("soil.nitrogen.litter", cpu.soil.nitrogen.litter, gpu.soil.nitrogen.litter),
+        ("soil.nitrogen.fast", cpu.soil.nitrogen.fast, gpu.soil.nitrogen.fast),
+        ("soil.nitrogen.slow", cpu.soil.nitrogen.slow, gpu.soil.nitrogen.slow),
+        ("soil.nitrogen.nitrate", cpu.soil.nitrogen.nitrate, gpu.soil.nitrogen.nitrate),
+        ("soil.nitrogen.ammonium", cpu.soil.nitrogen.ammonium, gpu.soil.nitrogen.ammonium),
     )
-    for (cpu_values, gpu_values) in soil_state_fields
-        test_float_equivalence(gpu_values, cpu_values)
+    for (label, cpu_values, gpu_values) in soil_state_fields
+        test_float_equivalence(gpu_values, cpu_values; label = label)
     end
     @test host_array(gpu.soil.thermal.initialized) ==
         host_array(cpu.soil.thermal.initialized)
 
-    test_balance_equivalence(gpu.water, cpu.water; rtol = 1.0f-3, atol = 5.0f-4)
-    test_balance_equivalence(gpu.nitrogen, cpu.nitrogen; rtol = 2.0f-3, atol = 1.0f-3)
-    test_balance_equivalence(gpu.carbon, cpu.carbon; rtol = 2.0f-3, atol = 1.0f-3)
-    test_balance_equivalence(gpu.thermal, cpu.thermal; rtol = 2.0f-3, atol = 1.0f-1)
+    test_balance_equivalence(
+        gpu.water, cpu.water; group = "water", rtol = 1.0f-3, atol = 5.0f-4,
+    )
+    test_balance_equivalence(
+        gpu.nitrogen, cpu.nitrogen;
+        group = "nitrogen", rtol = 2.0f-3, atol = 1.0f-3,
+    )
+    test_balance_equivalence(
+        gpu.carbon, cpu.carbon;
+        group = "carbon", rtol = 2.0f-3, atol = 1.0f-3,
+    )
+    test_balance_equivalence(
+        gpu.thermal, cpu.thermal;
+        group = "thermal", rtol = 2.0f-3, atol = 1.0f-1,
+    )
 end
