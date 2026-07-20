@@ -1,2 +1,3 @@
 /Manifest*.toml
 /notebooks
+.DS_Store
