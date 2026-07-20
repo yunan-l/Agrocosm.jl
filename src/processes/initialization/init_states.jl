@@ -63,8 +63,8 @@ init_states!(PFT, InitialData, cell_size, device;
 Initialize and populate all runtime state structs from static parameters and
 input data for one simulation domain.
 Returns `(climbuf, crop, pet, soil, managed_land, dailyWeather, output)`.
-Crop calendar and photosynthesis state are available as `crop.calendar` and
-`crop.photosynthesis`.
+Crop storage is separated by lifetime into `crop.state`, `crop.fluxes`,
+`crop.auxiliary`, and `crop.workspace`.
 """
 function init_states!(PFT::PftParameters,
                        InitialData::NamedTuple,
@@ -95,16 +95,16 @@ function init_states!(PFT::PftParameters,
     climbuf = init_climbuf(T, cell_size, device)
     crop = init_crop(T, cell_size, device)
     managed_land = init_managed_land(T, cell_size, device)
-    crop.phenology.phu = to_float(phu)
+    crop.state.phenology.phu = to_float(phu)
     rootdist = root_distribution(T(beta_root))
-    # idx = crop.phenology.phu .< 0
-    # crop.phenology.winter_type[idx] .= true
-    # crop.phenology.phu[idx] .= -crop.phenology.phu[idx]
-    crop.phenology.winter_type .= ifelse.(crop.phenology.phu .< 0, true, crop.phenology.winter_type)
-    crop.phenology.phu .= ifelse.(crop.phenology.phu .< 0, -crop.phenology.phu, crop.phenology.phu)
-    crop.water.root_distribution .= device(rootdist)
+    # idx = crop.state.phenology.phu .< 0
+    # crop.state.phenology.winter_type[idx] .= true
+    # crop.state.phenology.phu[idx] .= -crop.state.phenology.phu[idx]
+    crop.state.phenology.winter_type .= ifelse.(crop.state.phenology.phu .< 0, true, crop.state.phenology.winter_type)
+    crop.state.phenology.phu .= ifelse.(crop.state.phenology.phu .< 0, -crop.state.phenology.phu, crop.state.phenology.phu)
+    crop.auxiliary.stress.root_distribution .= device(rootdist)
 
-    crop.calendar.sowing_date = to_integer(sdate)
+    crop.state.calendar.sowing_date = to_integer(sdate)
     managed_land.manure = to_float(manure)
     managed_land.fertilizer = to_float(fertilizer)
     managed_land.residue_fraction = to_float(residuefrac)

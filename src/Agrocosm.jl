@@ -20,8 +20,11 @@ import MuladdMacro: @muladd
 # STRUCTURES
 export LPJmLParams, PftParameters, PhotoParams, ModelParameters, PetPar, Output
 export DailyWeather, ClimBuf, CO2
-export Crop, CropPhenology, CropCanopy, CropCarbon, CropNitrogen, CropWater
-export CropCalendar, CropPhotosynthesis, ManagedLand
+export Crop, CropState, CropFluxes, CropAuxiliary, CropWorkspace
+export CropPhenology, CropCanopyState, CropCarbonState, CropNitrogenState, CropWaterState
+export CropCalendarState, CropCanopyAuxiliary, CropPhotosynthesisAuxiliary
+export CropCarbonFluxes, CropNitrogenFluxes, CropWaterFluxes, CropEvents
+export CropStressAuxiliary, ManagedLand
 export SoilParams, SoilDecompParams, SoilThermalParams, SnowParams, Soil
 export SoilProperties, SoilWater, SoilThermal, SoilCarbon, SoilNitrogen
 export SoilDecomposition, SoilManagement, SoilSurfaceLitter, SoilSnow
@@ -60,7 +63,7 @@ export waterlogging_stress!
 
 # SOIL
 export apply_percolation_enthalpy!, soil_temperature!
-export pedotransfer!, soil_carbon!, update_lit_winter_wheat!
+export pedotransfer!, soil_carbon!
 export evaporation!, soil_infiltration!, soil_evapotranspiration!
 export soil_nitrogen!, nitrogen_transform!, soil_cn_decomposition!, post_crop_nitrogen_losses!
 export soil_decomp_response!
@@ -169,7 +172,6 @@ include("utils/kernel_launch.jl")
 include("utils/visualization.jl")
 include("utils/conversions.jl")
 include("utils/load_nc.jl")
-include("utils/callback.jl")
 include("utils/tools.jl")
 
 # Daily crop simulations

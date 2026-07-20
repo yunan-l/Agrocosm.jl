@@ -8,7 +8,7 @@ function initialized_thermal_soil(; storage = Float32[40, 60, 100, 200, 200],
     soil.properties.sand_fraction .= 0.4f0
     soil.properties.clay_fraction .= 0.2f0
     soil.water.storage .= reshape(storage, 5, 1)
-    crop.water.interception .= 0.0f0
+    crop.fluxes.water.interception .= 0.0f0
     pedotransfer!(soil)
     soil_temperature!(soil, Float32[temperature], Float32[temperature])
     return soil, crop

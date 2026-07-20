@@ -14,28 +14,28 @@ function transpiration!(photos_adtmm::AbstractArray{T},
 
     # Root-zone weighted water availability is accumulated inside the cell
     # kernel, avoiding a separate broadcast and reduction array every day.
-    # supply = emax * wr .* (1 .- exp.(-0.04f0 * crop.carbon.root))
-    # demand = ifelse.(crop.water.canopy_conductance .> 0, (1 .- crop.water.canopy_wet) .* pet.eeq * ALPHAM ./ (1 .+ (GM * ALPHAM) ./ crop.water.canopy_conductance), zero(T))
+    # supply = emax * wr .* (1 .- exp.(-0.04f0 * crop.state.carbon.root))
+    # demand = ifelse.(crop.auxiliary.canopy.canopy_conductance .> 0, (1 .- crop.auxiliary.canopy.canopy_wet) .* pet.eeq * ALPHAM ./ (1 .+ (GM * ALPHAM) ./ crop.auxiliary.canopy.canopy_conductance), zero(T))
     # transp = ifelse.(wr .> 0, min.(supply, demand) ./ wr .* fpc, zero(T)) # here the crop.fpc = 1, so we just omit it in the kernel fucntion
 
     kernel_params = (lpjmlparams = lpjmlparams, soil_layers = 5)
 
     launch_1D!(water_demand_supply_kernel!,
-               crop.water.canopy_conductance,
+               crop.auxiliary.canopy.canopy_conductance,
                photos_adtmm,
                co2,
                pet.daylength,
-               crop.canopy.fpar,
-               crop.water.transpiration_layer,
-               crop.water.demand_sum,
-               crop.water.supply_sum,
-               crop.water.deficit,
-               crop.water.stress,
-               crop.carbon.root,
-               crop.water.canopy_wet,
-               crop.phenology.is_growing,
+               crop.auxiliary.canopy.fpar,
+               crop.fluxes.water.transpiration_layer,
+               crop.state.water.demand_sum,
+               crop.state.water.supply_sum,
+               crop.auxiliary.stress.water_deficit,
+               crop.auxiliary.stress.water,
+               crop.state.carbon.root,
+               crop.auxiliary.canopy.canopy_wet,
+               crop.state.phenology.is_growing,
                pet.eeq,
-               crop.water.root_distribution,
+               crop.auxiliary.stress.root_distribution,
                soil.water.relative_content,
                soil.water.holding_capacity_storage,
                PFT,

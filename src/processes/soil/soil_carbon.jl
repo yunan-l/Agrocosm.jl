@@ -1,9 +1,9 @@
 """
-soil_carbon!(crop_cal, crop, soil)
+soil_carbon!(crop, soil)
 
 Update litter and soil carbon pools and heterotrophic respiration terms.
 """
-function soil_carbon_reference!(crop_cal::CropCalendar,
+function soil_carbon_reference!(crop::Crop,
                                 soil::Soil;
                                 lpjmlparams::LPJmLParams = lpjmlparams,
                                 soil_decomp_params::SoilDecompParams = soil_decomp_params
@@ -28,7 +28,7 @@ function soil_carbon_reference!(crop_cal::CropCalendar,
 
     # LPJmL harvest first creates agtop/bg litter, then the KILL -> setaside
     # transition tills agtop into agsub on the same day.
-    route_harvest_carbon_input_reference!(soil, crop_cal)
+    route_harvest_carbon_input_reference!(soil, crop)
 
     # soil.carbon.decomposed_fast = (1.0f0 .- exp.(-soil.response_fastc .* response / 50)) .* soil.carbon.fast
     soil.carbon.decomposed_fast .= max.(
@@ -97,20 +97,20 @@ function soil_carbon_decomposition!(soil::Soil;
 end
 
 """
-    soil_carbon!(crop_cal, soil; ...)
+    soil_carbon!(crop, soil; ...)
 
 Compatibility entry point for the former combined operation: decompose the
 carbon pools, then route harvest-day residues without decomposing those new
 residues until the following day.
 """
-function soil_carbon!(crop_cal::CropCalendar,
+function soil_carbon!(crop::Crop,
                       soil::Soil;
                       lpjmlparams::LPJmLParams = lpjmlparams,
                       soil_decomp_params::SoilDecompParams = soil_decomp_params)
     soil_carbon_decomposition!(
         soil; lpjmlparams = lpjmlparams, soil_decomp_params = soil_decomp_params,
     )
-    route_harvest_carbon_input!(soil, crop_cal)
+    route_harvest_carbon_input!(soil, crop)
     return nothing
 end
 

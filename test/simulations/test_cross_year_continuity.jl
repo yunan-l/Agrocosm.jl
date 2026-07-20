@@ -34,7 +34,7 @@ end
     run_simulation!(chunked, [first_year, second_year]; spinup = false)
 
     @test chunked.simulated_days == days
-    for field in (:sowing_callback, :harvest_callback, :harvesting_mask)
+    for field in (:sowing_event, :harvest_event, :harvesting_mask)
         @test getproperty(chunked.output.calendar, field) ==
             getproperty(continuous.output.calendar, field)
     end
@@ -57,7 +57,7 @@ end
     )
         @test chunked_state ≈ continuous_state
     end
-    @test callback_days(chunked.output.calendar.sowing_callback) == [100, 465]
-    @test callback_days(chunked.output.calendar.harvest_callback) == [137, 502]
+    @test event_days(chunked.output.calendar.sowing_event) == [100, 465]
+    @test event_days(chunked.output.calendar.harvest_event) == [137, 502]
 end
 

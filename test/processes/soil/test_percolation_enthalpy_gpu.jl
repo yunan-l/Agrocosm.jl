@@ -12,7 +12,7 @@ CUDA.allowscalar(false)
     soil.properties.sand_fraction .= 0.4f0
     soil.properties.clay_fraction .= 0.2f0
     soil.water.storage .= CuArray(repeat(Float32[40, 60, 100, 200, 200], 1, cells))
-    crop.water.interception .= 0.0f0
+    crop.fluxes.water.interception .= 0.0f0
     pedotransfer!(soil)
     soil_temperature!(soil, CUDA.fill(10.0f0, cells), CUDA.fill(10.0f0, cells))
     soil_infiltration!(

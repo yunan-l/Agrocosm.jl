@@ -43,8 +43,8 @@ function init_carbon_balance(number_of_days::Integer,
 end
 
 function crop_carbon_stock(crop::Crop)
-    return crop.carbon.leaf .+ crop.carbon.root .+
-           crop.carbon.pool .+ crop.carbon.storage
+    return crop.state.carbon.leaf .+ crop.state.carbon.root .+
+           crop.state.carbon.pool .+ crop.state.carbon.storage
 end
 
 function soil_carbon_stock(soil::Soil)
@@ -74,9 +74,9 @@ function record_carbon_balance_after_cultivate!(balance::CarbonBalance,
         balance.seed_input[day_index, :] .=
             max.(crop_carbon_stock(crop) .-
                  balance.plant_before[day_index, :], zero(eltype(balance.seed_input))) .*
-            crop.calendar.sowing_callback
+            crop.events.sowing
         balance.manure_input[day_index, :] .=
-            crop.nitrogen.prescribed_manure_input .* lpjmlparams.manure_cn
+            crop.fluxes.nitrogen.prescribed_manure_input .* lpjmlparams.manure_cn
     end
     return nothing
 end
@@ -86,14 +86,14 @@ function record_carbon_balance_after_harvest!(balance::CarbonBalance,
                                               crop::Crop,
                                               soil::Soil,
                                               residue_fraction)
-    callback = crop.calendar.harvest_callback
+    event = crop.events.harvest
     @views begin
         balance.residue_transfer[day_index, :] .=
             vec(sum(soil.carbon.input; dims = 1))
         balance.harvest_export[day_index, :] .=
-            (crop.carbon.storage .+
-             (crop.carbon.leaf .+ crop.carbon.pool) .* (one(eltype(residue_fraction)) .- residue_fraction)) .*
-            callback
+            (crop.state.carbon.storage .+
+             (crop.state.carbon.leaf .+ crop.state.carbon.pool) .* (one(eltype(residue_fraction)) .- residue_fraction)) .*
+            event
     end
     return nothing
 end
@@ -109,7 +109,7 @@ function record_carbon_balance_end!(balance::CarbonBalance,
         balance.total_after[day_index, :] .=
             balance.plant_after[day_index, :] .+
             balance.soil_after[day_index, :]
-        balance.net_primary_production[day_index, :] .= crop.carbon.npp
+        balance.net_primary_production[day_index, :] .= crop.fluxes.carbon.npp
         balance.heterotrophic_respiration[day_index, :] .=
             soil.carbon.heterotrophic_respiration
         balance.litter_respiration[day_index, :] .=

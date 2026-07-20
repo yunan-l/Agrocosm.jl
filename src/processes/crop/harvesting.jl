@@ -1,10 +1,9 @@
 """
-harvest_crop!(crop_cal, crop, soil, day)
+harvest_crop!(crop, soil, output, residue_fraction, day)
 
 Handle harvest-day biomass removal, residue transfer, and crop state reset.
 """
-function harvest_crop!(crop_cal::CropCalendar,
-                       crop::Crop,
+function harvest_crop!(crop::Crop,
                        soil::Soil,
                        output::Output,
                        residue_frac::AbstractArray{T},
@@ -15,21 +14,21 @@ function harvest_crop!(crop_cal::CropCalendar,
 
     launch_1D!(
         harvest_state_kernel!,
-        crop_cal.harvest_callback,
-        crop_cal.harvest_date,
-        crop.phenology.harvesting_previous,
-        crop.phenology.harvesting,
-        crop.phenology.is_growing,
-        crop.carbon.yield,
-        crop.carbon.storage,
-        crop.carbon.leaf,
-        crop.carbon.pool,
-        crop.carbon.root,
-        crop.nitrogen.harvest_export,
-        crop.nitrogen.storage,
-        crop.nitrogen.leaf,
-        crop.nitrogen.pool,
-        crop.nitrogen.root,
+        crop.events.harvest,
+        crop.state.calendar.harvest_date,
+        crop.state.phenology.harvesting_previous,
+        crop.state.phenology.harvesting,
+        crop.state.phenology.is_growing,
+        crop.fluxes.carbon.yield,
+        crop.state.carbon.storage,
+        crop.state.carbon.leaf,
+        crop.state.carbon.pool,
+        crop.state.carbon.root,
+        crop.fluxes.nitrogen.harvest_export,
+        crop.state.nitrogen.storage,
+        crop.state.nitrogen.leaf,
+        crop.state.nitrogen.pool,
+        crop.state.nitrogen.root,
         soil.carbon.input,
         soil.nitrogen.input,
         residue_frac,
@@ -40,36 +39,36 @@ function harvest_crop!(crop_cal::CropCalendar,
     # so the later same-day crop_nitrogen! call clears total N in
     # nuptake_crop! and all organ N pools in allocate_crop_nitrogen!. Keeping
     # that operation in the kernels avoids five redundant GPU broadcasts.
-    # crop.nitrogen.total .*= one(T) .- crop_cal.harvest_callback
-    # crop.nitrogen.leaf .*= one(T) .- crop_cal.harvest_callback
-    # crop.nitrogen.root .*= one(T) .- crop_cal.harvest_callback
-    # crop.nitrogen.storage .*= one(T) .- crop_cal.harvest_callback
-    # crop.nitrogen.pool .*= one(T) .- crop_cal.harvest_callback
+    # crop.state.nitrogen.total .*= one(T) .- crop.events.harvest
+    # crop.state.nitrogen.leaf .*= one(T) .- crop.events.harvest
+    # crop.state.nitrogen.root .*= one(T) .- crop.events.harvest
+    # crop.state.nitrogen.storage .*= one(T) .- crop.events.harvest
+    # crop.state.nitrogen.pool .*= one(T) .- crop.events.harvest
 
-    # soil.carbon.input .= vcat(reshape((crop.carbon.leaf .+ crop.carbon.pool) .* residue_frac, (1, :)), device(zeros(Float32, (1, cell_size))), reshape(crop.carbon.root, (1, :))) .* reshape(crop_cal.harvest_callback, (1, :))
-    # soil.nitrogen.input .= vcat(reshape((crop.nitrogen.leaf .+ crop.nitrogen.pool) .* residue_frac, (1, :)), device(zeros(Float32, (1, cell_size))), reshape(crop.nitrogen.root, (1, :))) .* reshape(crop_cal.harvest_callback, (1, :))
-    # idx = ((crop.phenology.harvesting_previous .== true) .& (crop.phenology.harvesting .== true)) .| ((crop.phenology.harvesting_previous .== true) .& (crop.phenology.harvesting .== false)) .| ((crop.phenology.harvesting_previous .== false) .& (crop.phenology.harvesting .== false))
-    # crop_cal.harvest_callback[idx] .= 0
-    # crop_cal.harvest_callback .= ifelse.(((crop.phenology.harvesting_previous .== true) .& (crop.phenology.harvesting .== true)) .| ((crop.phenology.harvesting_previous .== true) .& (crop.phenology.harvesting .== false)) .| ((crop.phenology.harvesting_previous .== false) .& (crop.phenology.harvesting .== false)), 0, crop_cal.harvest_callback)
+    # soil.carbon.input .= vcat(reshape((crop.state.carbon.leaf .+ crop.state.carbon.pool) .* residue_frac, (1, :)), device(zeros(Float32, (1, cell_size))), reshape(crop.state.carbon.root, (1, :))) .* reshape(crop.events.harvest, (1, :))
+    # soil.nitrogen.input .= vcat(reshape((crop.state.nitrogen.leaf .+ crop.state.nitrogen.pool) .* residue_frac, (1, :)), device(zeros(Float32, (1, cell_size))), reshape(crop.state.nitrogen.root, (1, :))) .* reshape(crop.events.harvest, (1, :))
+    # idx = ((crop.state.phenology.harvesting_previous .== true) .& (crop.state.phenology.harvesting .== true)) .| ((crop.state.phenology.harvesting_previous .== true) .& (crop.state.phenology.harvesting .== false)) .| ((crop.state.phenology.harvesting_previous .== false) .& (crop.state.phenology.harvesting .== false))
+    # crop.events.harvest[idx] .= 0
+    # crop.events.harvest .= ifelse.(((crop.state.phenology.harvesting_previous .== true) .& (crop.state.phenology.harvesting .== true)) .| ((crop.state.phenology.harvesting_previous .== true) .& (crop.state.phenology.harvesting .== false)) .| ((crop.state.phenology.harvesting_previous .== false) .& (crop.state.phenology.harvesting .== false)), 0, crop.events.harvest)
 
     # update harvesting variables
     launch_1D!(
         root_zone_mean_water_kernel!,
-        crop.water.root_zone_water,
+        crop.auxiliary.stress.root_zone_water,
         soil.water.storage,
         soil.properties.layer_depth,
         3,
     )
     daily_sources = (
         crop = (
-            growing_mask = crop.phenology.is_growing,
-            storage_carbon = crop.carbon.storage,
-            water_deficit = crop.water.root_zone_water,
+            growing_mask = crop.state.phenology.is_growing,
+            storage_carbon = crop.state.carbon.storage,
+            water_deficit = crop.auxiliary.stress.root_zone_water,
         ),
         calendar = (
-            harvesting_mask = crop_cal.harvest_callback,
-            sowing_callback = crop_cal.sowing_callback,
-            harvest_callback = crop_cal.harvest_callback,
+            harvesting_mask = crop.events.harvest,
+            sowing_event = crop.events.sowing,
+            harvest_event = crop.events.harvest,
         ),
     )
     for (container_name, sources) in pairs(daily_sources)
@@ -87,42 +86,41 @@ function harvest_crop!(crop_cal::CropCalendar,
         end
     end
     if day == 365
-        crop_cal.harvesting_year .= ifelse.(crop.carbon.yield .!= 0.0f0, 1, 0)
-        crop.carbon.yield .= max.(crop.carbon.yield, 0.0f0)
+        crop.state.calendar.harvesting_year .= ifelse.(crop.fluxes.carbon.yield .!= 0.0f0, 1, 0)
+        crop.fluxes.carbon.yield .= max.(crop.fluxes.carbon.yield, 0.0f0)
         if annual_output_row === nothing
             output.calendar.harvest_date = _append_output_row(
-                output.calendar.harvest_date, crop_cal.harvest_date,
+                output.calendar.harvest_date, crop.state.calendar.harvest_date,
             )
             output.crop.yield = _append_output_row(
-                output.crop.yield, crop.carbon.yield,
+                output.crop.yield, crop.fluxes.carbon.yield,
             )
             output.calendar.harvesting_year = _append_output_row(
-                output.calendar.harvesting_year, crop_cal.harvesting_year,
+                output.calendar.harvesting_year, crop.state.calendar.harvesting_year,
             )
         else
             _write_output_row!(
-                output.calendar.harvest_date, annual_output_row, crop_cal.harvest_date,
+                output.calendar.harvest_date, annual_output_row, crop.state.calendar.harvest_date,
             )
-            _write_output_row!(output.crop.yield, annual_output_row, crop.carbon.yield)
+            _write_output_row!(output.crop.yield, annual_output_row, crop.fluxes.carbon.yield)
             _write_output_row!(
                 output.calendar.harvesting_year,
                 annual_output_row,
-                crop_cal.harvesting_year,
+                crop.state.calendar.harvesting_year,
             )
         end
-        crop.carbon.yield .= 0.0f0
-        crop_cal.harvest_date .= 0
+        crop.fluxes.carbon.yield .= 0.0f0
+        crop.state.calendar.harvest_date .= 0
     end
-    # crop.carbon.organs = crop.carbon.organs .* (1 .- reshape(crop_cal.harvest_callback, (1, :)))
-    # crop.carbon.root = crop.carbon.root .* (1 .- crop_cal.harvest_callback)
-    # crop.carbon.leaf = crop.carbon.leaf .* (1 .- crop_cal.harvest_callback)
-    # crop.carbon.storage = crop.carbon.storage .* (1 .- crop_cal.harvest_callback)
-    # crop.carbon.pool = crop.carbon.pool .* (1 .- crop_cal.harvest_callback)
+    # crop.state.carbon.root = crop.state.carbon.root .* (1 .- crop.events.harvest)
+    # crop.state.carbon.leaf = crop.state.carbon.leaf .* (1 .- crop.events.harvest)
+    # crop.state.carbon.storage = crop.state.carbon.storage .* (1 .- crop.events.harvest)
+    # crop.state.carbon.pool = crop.state.carbon.pool .* (1 .- crop.events.harvest)
 
 end
 
 @kernel inbounds = true function harvest_state_kernel!(
-    harvest_callback::AbstractVector{S},
+    harvest_event::AbstractVector{S},
     harvest_date::AbstractVector{S},
     harvesting_previous::AbstractVector{B},
     harvesting::AbstractVector{B},
@@ -144,8 +142,8 @@ end
 ) where {T <: AbstractFloat, S <: Integer, B <: Bool}
     cell = @index(Global)
     harvested = !harvesting_previous[cell] && harvesting[cell]
-    callback = harvested ? one(S) : zero(S)
-    harvest_callback[cell] = callback
+    event = harvested ? one(S) : zero(S)
+    harvest_event[cell] = event
     if harvested
         harvest_date[cell] = S(day)
         is_growing[cell] = zero(S)

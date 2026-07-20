@@ -9,7 +9,7 @@ LPJmL commit `572e2b906ac2c55b2ee6661a93e4633b126254e4`.
   harvest transition per year. Growth is active only between those events and
   `fphu` is monotonic within each crop season.
 - **S1 — cultivation and management:** cultivation, tillage, seed input and
-  the first prescribed fertilizer fraction occur only on the sowing callback.
+  the first prescribed fertilizer fraction occur only on the sowing event.
   The pending fraction is applied once after the previous day's `fphu` exceeds
   0.25, matching `daily_agriculture.c` before its current-day phenology call.
 - **S2 — prescribed phenology:** heat units, senescence and the `hlimit`

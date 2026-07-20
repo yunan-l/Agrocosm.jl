@@ -7,7 +7,7 @@ CUDA.allowscalar(false)
 
 @testset "CUDA C3 lambda solver" begin
     crop = init_crop(2, CuArray)
-    photos = crop.photosynthesis
+    photos = crop.auxiliary.photosynthesis
     pet = init_pet(2, CuArray)
 
     target_lambda = 0.5f0
@@ -29,22 +29,22 @@ CUDA.allowscalar(false)
 
     photos.vmax .= vmax
     photos.temperature_stress .= tstress
-    crop.canopy.apar .= apar
-    crop.canopy.fpar .= fpar
-    crop.water.canopy_conductance .= target_conductance
+    crop.auxiliary.canopy.apar .= apar
+    crop.auxiliary.canopy.fpar .= fpar
+    crop.auxiliary.canopy.canopy_conductance .= target_conductance
     pet.daylength .= daylength
 
     solve_lambda_c3!(
-        cft1, photos, crop, pet, CuArray(temp_cpu), CuArray(co2_cpu),
+        cft1, crop, pet, CuArray(temp_cpu), CuArray(co2_cpu),
     )
 
     lambda_cpu = Array(photos.lambda)
     @test lambda_cpu[1] ≈ target_lambda atol = 2.0f-3
     @test lambda_cpu[2] ≈ target_lambda atol = 2.0f-3
 
-    crop.water.canopy_conductance .= CuArray(Float32[target_conductance, 0.0])
+    crop.auxiliary.canopy.canopy_conductance .= CuArray(Float32[target_conductance, 0.0])
     solve_lambda_c3!(
-        cft1, photos, crop, pet, CuArray(temp_cpu), CuArray(co2_cpu),
+        cft1, crop, pet, CuArray(temp_cpu), CuArray(co2_cpu),
     )
     @test Array(photos.lambda)[2] == 0.0f0
 end

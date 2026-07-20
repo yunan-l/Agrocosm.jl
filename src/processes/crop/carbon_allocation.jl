@@ -4,32 +4,31 @@ carbon_allocation!(PFT, crop, photos)
 Partition crop biomass among leaf/root/storage/pool carbon compartments.
 """
 function carbon_allocation!(PFT::PftParameters,
-                            crop::Crop,
-                            photos::CropPhotosynthesis
+                            crop::Crop
 )
-    # 1D cell-wise allocation; crop.carbon.storage provides launch length and kernel arg #1.
+    # 1D cell-wise allocation; crop.state.carbon.storage provides launch length and kernel arg #1.
     kernel_params = (FROOTMAX = 0.4f0, FROOTMIN = 0.3f0)
 
     launch_1D!(carbon_allocation_kernel!,
-               crop.carbon.storage,
-               crop.phenology.is_growing,
-               crop.phenology.growing_days,
-               crop.nitrogen.stress_sum,
-               crop.nitrogen.stress,
-               crop.nitrogen.deficit,
-               crop.water.deficit,
-               crop.phenology.fphu,
-               crop.phenology.senescence,
-               crop.carbon.biomass,
-               crop.carbon.respiration,
-               photos.gross_assimilation,
-               photos.leaf_respiration,
-               crop.carbon.npp,
-               crop.canopy.lai,
-               crop.carbon.leaf,
-               crop.carbon.root,
-               crop.carbon.pool,
-               crop.canopy.lai_npp_deficit,
+               crop.state.carbon.storage,
+               crop.state.phenology.is_growing,
+               crop.state.phenology.growing_days,
+               crop.state.nitrogen.stress_sum,
+               crop.auxiliary.stress.nitrogen,
+               crop.auxiliary.stress.nitrogen_deficit,
+               crop.auxiliary.stress.water_deficit,
+               crop.state.phenology.fphu,
+               crop.state.phenology.senescence,
+               crop.state.carbon.biomass,
+               crop.fluxes.carbon.respiration,
+               crop.fluxes.carbon.gross_assimilation,
+               crop.fluxes.carbon.leaf_respiration,
+               crop.fluxes.carbon.npp,
+               crop.state.canopy.lai,
+               crop.state.carbon.leaf,
+               crop.state.carbon.root,
+               crop.state.carbon.pool,
+               crop.state.canopy.lai_npp_deficit,
                PFT,
                kernel_params)
 

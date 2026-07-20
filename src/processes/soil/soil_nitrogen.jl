@@ -1,9 +1,9 @@
 """
-soil_nitrogen!(crop_cal, crop, soil)
+soil_nitrogen!(crop, soil)
 
 Update litter and soil nitrogen pools and crop-available mineral nitrogen.
 """
-function soil_nitrogen_reference!(crop_cal::CropCalendar,
+function soil_nitrogen_reference!(crop::Crop,
                                   soil::Soil;
                                   air_temperature = nothing,
                                   wind_speed = nothing,
@@ -21,7 +21,7 @@ function soil_nitrogen_reference!(crop_cal::CropCalendar,
         -expm1.(-soil.nitrogen.litter_response .* soil.decomposition.litter_response) .* soil.nitrogen.litter
     soil.nitrogen.litter .-= soil.nitrogen.decomposed_litter
 
-    route_harvest_nitrogen_input_reference!(soil, crop_cal)
+    route_harvest_nitrogen_input_reference!(soil, crop)
 
     decomposed_litter = soil.decomposition.surface_scratch_1
     @views decomposed_litter .=
@@ -120,18 +120,18 @@ function soil_cn_decomposition!(soil::Soil;
 end
 
 """Route new harvest-day carbon and nitrogen residues together."""
-function route_harvest_residues!(soil::Soil, crop_cal::CropCalendar)
-    route_harvest_carbon_input!(soil, crop_cal)
-    route_harvest_nitrogen_input!(soil, crop_cal)
+function route_harvest_residues!(soil::Soil, crop::Crop)
+    route_harvest_carbon_input!(soil, crop)
+    route_harvest_nitrogen_input!(soil, crop)
     return nothing
 end
 
 """
-    soil_nitrogen!(crop_cal, soil; ...)
+    soil_nitrogen!(crop, soil; ...)
 
 Compatibility entry point for the former combined operation.
 """
-function soil_nitrogen!(crop_cal::CropCalendar,
+function soil_nitrogen!(crop::Crop,
                         soil::Soil;
                         air_temperature = nothing,
                         wind_speed = nothing,
@@ -140,7 +140,7 @@ function soil_nitrogen!(crop_cal::CropCalendar,
     soil_nitrogen_decomposition!(
         soil; lpjmlparams = lpjmlparams, soil_decomp_params = soil_decomp_params,
     )
-    route_harvest_nitrogen_input!(soil, crop_cal)
+    route_harvest_nitrogen_input!(soil, crop)
     nitrogen_transform!(
         soil;
         air_temperature = air_temperature,

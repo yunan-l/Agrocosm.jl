@@ -15,7 +15,7 @@ CUDA.allowscalar(false)
     pedotransfer!(soil)
     soil_temperature!(soil, CUDA.fill(5.0f0, cells), CUDA.fill(5.0f0, cells))
 
-    crop.water.transpiration_layer .= 0.5f0
+    crop.fluxes.water.transpiration_layer .= 0.5f0
     soil.water.evaporation .= 0.25f0
     soil_evapotranspiration!(soil, crop)
     soil_temperature!(soil, CUDA.fill(5.0f0, cells))

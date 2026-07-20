@@ -100,17 +100,17 @@ CUDA.allowscalar(false)
     gpu.nitrogen.nitrate .= 0.8f0
     gpu.properties.ph .= 6.5f0
 
-    Agrocosm.soil_carbon_reference!(crop_reference.calendar, reference)
-    soil_carbon!(crop_gpu.calendar, gpu)
+    Agrocosm.soil_carbon_reference!(crop_reference, reference)
+    soil_carbon!(crop_gpu, gpu)
     air = fill(15.0f0, cells)
     wind = fill(2.0f0, cells)
     Agrocosm.soil_nitrogen_reference!(
-        crop_reference.calendar, reference; air_temperature = air, wind_speed = wind,
+        crop_reference, reference; air_temperature = air, wind_speed = wind,
     )
     air_gpu = CuArray(air)
     wind_gpu = CuArray(wind)
     soil_nitrogen!(
-        crop_gpu.calendar, gpu; air_temperature = air_gpu, wind_speed = wind_gpu,
+        crop_gpu, gpu; air_temperature = air_gpu, wind_speed = wind_gpu,
     )
     synchronize()
     @test Array(gpu.decomposition.response) ≈
@@ -126,15 +126,15 @@ CUDA.allowscalar(false)
     @test Array(gpu.nitrogen.nitrate) ≈ reference.nitrogen.nitrate rtol = 1.0f-5 atol = 5.0f-6
     @test Array(gpu.nitrogen.ammonium) ≈ reference.nitrogen.ammonium rtol = 1.0f-5 atol = 5.0f-6
 
-    soil_carbon!(crop_gpu.calendar, gpu)
-    soil_nitrogen!(crop_gpu.calendar, gpu; air_temperature = air_gpu, wind_speed = wind_gpu)
+    soil_carbon!(crop_gpu, gpu)
+    soil_nitrogen!(crop_gpu, gpu; air_temperature = air_gpu, wind_speed = wind_gpu)
     synchronize()
     carbon_bytes = CUDA.@allocated begin
-        soil_carbon!(crop_gpu.calendar, gpu)
+        soil_carbon!(crop_gpu, gpu)
         synchronize()
     end
     nitrogen_bytes = CUDA.@allocated begin
-        soil_nitrogen!(crop_gpu.calendar, gpu; air_temperature = air_gpu, wind_speed = wind_gpu)
+        soil_nitrogen!(crop_gpu, gpu; air_temperature = air_gpu, wind_speed = wind_gpu)
         synchronize()
     end
 
@@ -143,17 +143,17 @@ CUDA.allowscalar(false)
         0.95 1 0
         0 0 1
     ])
-    crop_gpu.calendar.sowing_callback .= Int32(1)
-    litter_tillage!(gpu, crop_gpu.calendar)
+    crop_gpu.events.sowing .= Int32(1)
+    litter_tillage!(gpu, crop_gpu)
     litter_bioturbation!(gpu)
     synchronize()
     litter_bytes = CUDA.@allocated begin
-        litter_tillage!(gpu, crop_gpu.calendar)
+        litter_tillage!(gpu, crop_gpu)
         litter_bioturbation!(gpu)
         synchronize()
     end
 
-    crop_gpu.water.transpiration_layer .= 0.01f0
+    crop_gpu.fluxes.water.transpiration_layer .= 0.01f0
     gpu.water.evaporation .= 0.01f0
     soil_evapotranspiration!(gpu, crop_gpu)
     synchronize()

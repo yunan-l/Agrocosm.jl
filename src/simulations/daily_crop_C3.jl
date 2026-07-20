@@ -16,12 +16,12 @@ function daily_crop_C3!(start_day, end_day,
                         nitrogen_balance = nothing,
                         carbon_balance = nothing,
                         thermal_balance = nothing,
-                        model_parameters::ModelParameters = ModelParameters(eltype(crop.canopy.lai)),
+                        model_parameters::ModelParameters = ModelParameters(eltype(crop.state.canopy.lai)),
                         simulation_day_offset::Integer = 0,
                         diagnostic_offset::Integer = 0,
 )
 
-    T = eltype(crop.canopy.lai)
+    T = eltype(crop.state.canopy.lai)
     pftparameters = convert_precision(T, pftparameters)
     model_parameters = convert_precision(T, model_parameters)
     global_params = model_parameters.lpjml
@@ -29,9 +29,6 @@ function daily_crop_C3!(start_day, end_day,
     snow_params = model_parameters.snow
     thermal_params = model_parameters.soil_thermal
     decomp_params = model_parameters.soil_decomposition
-
-    crop_cal = crop.calendar
-    photos = crop.photosynthesis
 
     if water_balance !== nothing && irrigation
         throw(ArgumentError("water-balance diagnostics currently support rainfed simulations only"))
@@ -81,7 +78,6 @@ function daily_crop_C3!(start_day, end_day,
         # initial crop variables in sowing day and fertilizer
         cultivate!(
             crop,
-            crop_cal,
             managed_land,
             soil,
             day_of_year;
@@ -97,7 +93,7 @@ function daily_crop_C3!(start_day, end_day,
 
         # LPJmL tills existing litter at cultivation, then applies the daily
         # agtop -> agsub bioturbation transfer before surface-litter physics.
-        litter_tillage!(soil, crop_cal)
+        litter_tillage!(soil, crop)
         litter_bioturbation!(soil; lpjmlparams = global_params)
 
         update_climbuf!(pftparameters, dailyWeather.temp, climbuf, day) # update climate buffer
@@ -127,13 +123,13 @@ function daily_crop_C3!(start_day, end_day,
         annual_output_row = day_of_year == 365 ?
             output_rows.first_annual_row + annual_output_offset : nothing
         harvest_crop!(
-            crop_cal, crop, soil, output, managed_land.residue_fraction, day_of_year;
+            crop, soil, output, managed_land.residue_fraction, day_of_year;
             output_row = output_row,
             annual_output_row = annual_output_row,
         ) # crop harvesting
         # New residues enter after today's decomposition and first become
         # eligible for decomposition on the following day.
-        route_harvest_residues!(soil, crop_cal)
+        route_harvest_residues!(soil, crop)
         annual_output_offset += day_of_year == 365
 
         if carbon_balance !== nothing
@@ -165,38 +161,38 @@ function daily_crop_C3!(start_day, end_day,
 
         apar_crop!(pftparameters, crop, pet) # crop absorbed photosynthetic radiation
         temp_stress(
-            pftparameters, pet, photos, dailyWeather.temp;
+            pftparameters, pet, crop, dailyWeather.temp;
             photoparams = photo_params,
         ) # temperature stress function
 
         # C3 photosynthesis
-        photosynthesis_C3!(pftparameters, photos, crop.canopy.apar, pet.daylength, dailyWeather.temp, current_co2;
+        photosynthesis_C3!(pftparameters, crop, crop.auxiliary.canopy.apar, pet.daylength, dailyWeather.temp, current_co2;
                            comp_vmax = true, lpjmlparams = global_params, photoparams = photo_params)
 
         # LPJmL first uses lambda_opt photosynthesis to obtain potential
         # conductance, then constrains conductance by water supply.
-        transpiration!(photos.water_limited_assimilation, pftparameters, crop, pet, soil, current_co2;
+        transpiration!(crop.fluxes.carbon.water_limited_assimilation, pftparameters, crop, pet, soil, current_co2;
                        lpjmlparams = global_params)
 
         # Solve the water-limited lambda on the active backend (CPU or GPU),
         # then recompute photosynthesis with fixed vmax and actual lambda.
-        solve_lambda_c3!(pftparameters, photos, crop, pet, dailyWeather.temp, current_co2;
+        solve_lambda_c3!(pftparameters, crop, pet, dailyWeather.temp, current_co2;
                          lpjmlparams = global_params, photoparams = photo_params)
 
         if nitrogen_limit_vmax
             # LPJmL obtains N using the potential capacity, constrains Vmax
             # only when leaf N remains insufficient, then recomputes carbon.
-            crop_nitrogen!(crop, pftparameters, soil, photos.potential_vmax, dailyWeather.temp;
+            crop_nitrogen!(crop, pftparameters, soil, crop.auxiliary.photosynthesis.potential_vmax, dailyWeather.temp;
                            auto_fertilizer = auto_fertilizer, lpjmlparams = global_params)
             limit_vmax_by_nitrogen!(crop, pftparameters, dailyWeather.temp;
                                     lpjmlparams = global_params)
         end
-        photosynthesis_C3!(pftparameters, photos, crop.canopy.apar, pet.daylength, dailyWeather.temp, current_co2;
+        photosynthesis_C3!(pftparameters, crop, crop.auxiliary.canopy.apar, pet.daylength, dailyWeather.temp, current_co2;
                            comp_vmax = false, lpjmlparams = global_params, photoparams = photo_params)
 
         # crop respiration and carbon allocation
         crop_carbon!(
-            photos, crop, output, pftparameters, dailyWeather.temp;
+            crop, output, pftparameters, dailyWeather.temp;
             output_row = output_row,
             lpjmlparams = global_params,
         )
@@ -207,7 +203,7 @@ function daily_crop_C3!(start_day, end_day,
             # conserved plant N without performing a second uptake.
             allocate_crop_nitrogen!(crop, pftparameters)
         else
-            crop_nitrogen!(crop, pftparameters, soil, photos.vmax, dailyWeather.temp;
+            crop_nitrogen!(crop, pftparameters, soil, crop.auxiliary.photosynthesis.vmax, dailyWeather.temp;
                            auto_fertilizer = auto_fertilizer,
                            lpjmlparams = global_params) # nitrogen cycle
         end

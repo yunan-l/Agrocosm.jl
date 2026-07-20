@@ -6,7 +6,7 @@ using Test
     soil = init_soil(1, soilparams.soildepth, identity)
     balance = @inferred init_nitrogen_balance(4, 1, identity)
 
-    crop.nitrogen.total .= 1.0f0
+    crop.state.nitrogen.total .= 1.0f0
     soil.nitrogen.nitrate .= 0.2f0
     soil.nitrogen.ammonium .= 0.1f0
     soil.nitrogen.litter .= 0.3f0
@@ -24,8 +24,8 @@ using Test
     # Root uptake is an internal soil-to-plant transfer, not a boundary input.
     Agrocosm.record_nitrogen_balance_start!(balance, 2, crop, soil)
     soil.nitrogen.nitrate[1, 1] -= 0.25f0
-    crop.nitrogen.total[1] += 0.25f0
-    crop.nitrogen.uptake[1] = 0.25f0
+    crop.state.nitrogen.total[1] += 0.25f0
+    crop.fluxes.nitrogen.uptake[1] = 0.25f0
     Agrocosm.record_nitrogen_balance_end!(balance, 2, crop, soil)
 
     @test balance.root_uptake[2, 1] == 0.25f0
@@ -33,12 +33,12 @@ using Test
 
     # Explicit external inputs must explain the corresponding stock increase.
     Agrocosm.record_nitrogen_balance_start!(balance, 3, crop, soil)
-    crop.nitrogen.total[1] += 0.7f0
-    crop.nitrogen.seed_input[1] = 0.7f0
+    crop.state.nitrogen.total[1] += 0.7f0
+    crop.fluxes.nitrogen.seed_input[1] = 0.7f0
     soil.nitrogen.ammonium[1, 1] += 0.2f0
-    crop.nitrogen.prescribed_fertilizer_input[1] = 0.2f0
-    crop.nitrogen.auto_fertilizer[1] = 0.3f0
-    crop.nitrogen.total[1] += 0.3f0
+    crop.fluxes.nitrogen.prescribed_fertilizer_input[1] = 0.2f0
+    crop.fluxes.nitrogen.auto_fertilizer[1] = 0.3f0
+    crop.state.nitrogen.total[1] += 0.3f0
     Agrocosm.record_nitrogen_balance_end!(balance, 3, crop, soil)
 
     @test balance.seed_input[3, 1] == 0.7f0
@@ -47,17 +47,17 @@ using Test
     @test balance.residual[3, 1] ≈ 0.0f0 atol = 2.0f-6
 
     # Harvest transfers residues internally and exports the remaining organ N.
-    crop.nitrogen.total .= 1.0f0
-    crop.nitrogen.leaf .= 0.2f0
-    crop.nitrogen.root .= 0.3f0
-    crop.nitrogen.storage .= 0.3f0
-    crop.nitrogen.pool .= 0.2f0
-    crop.nitrogen.seed_input .= 0.0f0
-    crop.nitrogen.prescribed_fertilizer_input .= 0.0f0
-    crop.nitrogen.prescribed_manure_input .= 0.0f0
-    crop.nitrogen.auto_fertilizer .= 0.0f0
-    crop.phenology.harvesting_previous .= false
-    crop.phenology.harvesting .= true
+    crop.state.nitrogen.total .= 1.0f0
+    crop.state.nitrogen.leaf .= 0.2f0
+    crop.state.nitrogen.root .= 0.3f0
+    crop.state.nitrogen.storage .= 0.3f0
+    crop.state.nitrogen.pool .= 0.2f0
+    crop.fluxes.nitrogen.seed_input .= 0.0f0
+    crop.fluxes.nitrogen.prescribed_fertilizer_input .= 0.0f0
+    crop.fluxes.nitrogen.prescribed_manure_input .= 0.0f0
+    crop.fluxes.nitrogen.auto_fertilizer .= 0.0f0
+    crop.state.phenology.harvesting_previous .= false
+    crop.state.phenology.harvesting .= true
     soil.nitrogen.litter .= 0.0f0
     soil.nitrogen.fast .= 0.0f0
     soil.nitrogen.slow .= 0.0f0
@@ -67,17 +67,17 @@ using Test
     output = init_output(1, identity)
 
     Agrocosm.record_nitrogen_balance_start!(balance, 4, crop, soil)
-    harvest_crop!(crop.calendar, crop, soil, output, Float32[0.5], 100)
+    harvest_crop!(crop, soil, output, Float32[0.5], 100)
     # Follow the production daily loop: harvest_crop! sets is_growing = 0,
     # then crop_nitrogen! clears total and organ N through its inactive branch.
     crop_nitrogen!(
         crop, cft1, soil, zeros(Float32, 1), fill(20.0f0, 1);
         auto_fertilizer = false,
     )
-    soil_nitrogen!(crop.calendar, soil)
+    soil_nitrogen!(crop, soil)
     Agrocosm.record_nitrogen_balance_end!(balance, 4, crop, soil)
 
-    @test crop.nitrogen.total[1] == 0.0f0
+    @test crop.state.nitrogen.total[1] == 0.0f0
     @test balance.harvest_export[4, 1] ≈ 0.5f0 atol = 1.0f-6
     @test balance.organic_after[4, 1] ≈ 0.5f0 atol = 1.0f-6
     @test balance.residual[4, 1] ≈ 0.0f0 atol = 1.0f-6
@@ -100,7 +100,7 @@ end
     soil.nitrogen.shift_slow[1, 1] = 1.0f0
 
     Agrocosm.record_nitrogen_balance_start!(balance, 1, crop, soil)
-    soil_nitrogen!(crop.calendar, soil)
+    soil_nitrogen!(crop, soil)
     Agrocosm.record_nitrogen_balance_end!(balance, 1, crop, soil)
 
     @test balance.organic_after[1, 1] < balance.organic_before[1, 1]

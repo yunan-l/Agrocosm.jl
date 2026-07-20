@@ -14,7 +14,7 @@ function albedo_reference!(PFT::PftParameters,
 
     crop_albedo!(PFT, crop)
 
-    pet.albedo .= crop.canopy.albedo .+ (1 .- fpc .* crop.phenology.is_growing) .* soil_albedo
+    pet.albedo .= crop.auxiliary.canopy.albedo .+ (1 .- fpc .* crop.state.phenology.is_growing) .* soil_albedo
 
 end
 
@@ -26,9 +26,9 @@ function albedo!(PFT::PftParameters,
     launch_1D!(
         albedo_kernel!,
         pet.albedo,
-        crop.canopy.albedo,
-        crop.canopy.phenology_fraction,
-        crop.phenology.is_growing,
+        crop.auxiliary.canopy.albedo,
+        crop.auxiliary.canopy.phenology_fraction,
+        crop.state.phenology.is_growing,
         T(PFT.albedo_leaf),
         T(PFT.albedo_litter),
         T(PFT.fpc),
@@ -64,9 +64,9 @@ function crop_albedo!(PFT::PftParameters,
     @unpack albedo_leaf, albedo_litter, fpc = PFT
 
     # Fuse green-leaf and brown-litter terms into the preallocated canopy buffer.
-    crop.canopy.albedo .= fpc .* (
-        crop.canopy.phenology_fraction .* albedo_leaf .+
-        (1 .- crop.canopy.phenology_fraction) .* albedo_litter
+    crop.auxiliary.canopy.albedo .= fpc .* (
+        crop.auxiliary.canopy.phenology_fraction .* albedo_leaf .+
+        (1 .- crop.auxiliary.canopy.phenology_fraction) .* albedo_litter
     )
 
 end

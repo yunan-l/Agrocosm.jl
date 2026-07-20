@@ -1,27 +1,31 @@
-"""Plant nitrogen stocks, demands, management buffers, and stress state."""
-mutable struct CropNitrogen{A}
+"""Persistent plant nitrogen stocks and seasonal memory."""
+mutable struct CropNitrogenState{A}
     total::A
-    uptake::A
-    auto_fertilizer::A
     leaf::A
     root::A
     pool::A
     storage::A
-    demand_total::A
-    demand_leaf::A
     pending_manure::A
     pending_fertilizer::A
+    stress_sum::A
+end
+
+"""Current-day plant and management nitrogen fluxes."""
+mutable struct CropNitrogenFluxes{A}
+    uptake::A
+    auto_fertilizer::A
     seed_input::A
     prescribed_manure_input::A
     prescribed_fertilizer_input::A
     harvest_export::A
-    stress_sum::A
-    stress::A
-    deficit::A
 end
 
-init_crop_nitrogen(cell_size::Int, device) = init_crop_nitrogen(Float32, cell_size, device)
-function init_crop_nitrogen(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
+function init_crop_nitrogen_state(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
     float_state() = device(zeros(T, cell_size))
-    return CropNitrogen(ntuple(_ -> float_state(), 18)...)
+    return CropNitrogenState(ntuple(_ -> float_state(), 8)...)
+end
+
+function init_crop_nitrogen_fluxes(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
+    float_flux() = device(zeros(T, cell_size))
+    return CropNitrogenFluxes(ntuple(_ -> float_flux(), 6)...)
 end

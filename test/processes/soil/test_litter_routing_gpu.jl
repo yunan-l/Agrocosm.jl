@@ -14,11 +14,11 @@ CUDA.functional() || error("CUDA is required for this independent GPU test")
     ])
     soil.carbon.litter .= CuArray(Float32[10 4; 2 3; 5 6])
     soil.nitrogen.litter .= CuArray(Float32[1 0.4; 0.2 0.3; 0.5 0.6])
-    crop.calendar.sowing_callback .= CuArray(Int32[1, 0])
+    crop.events.sowing .= CuArray(Int32[1, 0])
 
     carbon_before = Array(sum(soil.carbon.litter, dims = 1))
     nitrogen_before = Array(sum(soil.nitrogen.litter, dims = 1))
-    litter_tillage!(soil, crop.calendar)
+    litter_tillage!(soil, crop)
     litter_bioturbation!(soil)
 
     @test Array(sum(soil.carbon.litter, dims = 1)) ≈ carbon_before atol = 2.0f-6

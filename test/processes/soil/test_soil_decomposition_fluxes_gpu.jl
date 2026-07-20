@@ -24,8 +24,8 @@ CUDA.allowscalar(false)
     soil.water.relative_content .= 0.5f0
     soil.thermal.temperature .= -20.0f0
 
-    soil_carbon!(crop.calendar, soil)
-    soil_nitrogen!(crop.calendar, soil)
+    soil_carbon!(crop, soil)
+    soil_nitrogen!(crop, soil)
     synchronize()
 
     @test all(iszero, Array(soil.carbon.decomposed_litter))
@@ -42,8 +42,8 @@ CUDA.allowscalar(false)
     soil.carbon.slow .= -1.0f0
     soil.nitrogen.fast .= -1.0f0
     soil.nitrogen.slow .= -1.0f0
-    soil_carbon!(crop.calendar, soil)
-    soil_nitrogen!(crop.calendar, soil)
+    soil_carbon!(crop, soil)
+    soil_nitrogen!(crop, soil)
     synchronize()
 
     @test all(iszero, Array(soil.carbon.decomposed_fast))

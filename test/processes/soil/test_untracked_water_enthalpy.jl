@@ -10,9 +10,9 @@ using Test
     pedotransfer!(soil)
     soil_temperature!(soil, Float32[5.0], Float32[5.0])
 
-    crop.water.transpiration_layer .= 0.5f0
+    crop.fluxes.water.transpiration_layer .= 0.5f0
     soil.water.evaporation .= 0.25f0
-    removed_water = sum(crop.water.transpiration_layer) + sum(soil.water.evaporation)
+    removed_water = sum(crop.fluxes.water.transpiration_layer) + sum(soil.water.evaporation)
     soil_evapotranspiration!(soil, crop)
     soil_temperature!(soil, Float32[5.0])
 

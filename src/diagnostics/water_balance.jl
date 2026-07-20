@@ -92,12 +92,12 @@ function record_water_balance_end!(water_balance::WaterBalance,
         water_balance.snowmelt[day_index, :] .= soil.snow.melt
         water_balance.snow_sublimation[day_index, :] .= soil.snow.sublimation
         water_balance.snow_runoff[day_index, :] .= soil.snow.runoff
-        water_balance.interception[day_index, :] .= crop.water.interception
+        water_balance.interception[day_index, :] .= crop.fluxes.water.interception
         water_balance.litter_interception[day_index, :] .=
             soil.surface_litter.interception
         water_balance.litter_evaporation[day_index, :] .=
             soil.surface_litter.evaporation
-        water_balance.transpiration[day_index, :] .= vec(sum(crop.water.transpiration_layer; dims = 1))
+        water_balance.transpiration[day_index, :] .= vec(sum(crop.fluxes.water.transpiration_layer; dims = 1))
         water_balance.evaporation[day_index, :] .= vec(sum(soil.water.evaporation; dims = 1))
         water_balance.surface_runoff[day_index, :] .= soil.water.surface_runoff
         water_balance.lateral_runoff[day_index, :] .= vec(sum(soil.water.lateral_runoff; dims = 1))

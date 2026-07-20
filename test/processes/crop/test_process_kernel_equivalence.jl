@@ -20,14 +20,14 @@ end
         growing = Int32[0, 1, 1, 0, 1, 1, 0, 1]
         par = Float32.(range(0, 25; length = cells))
         for (crop, pet) in ((reference, pet_reference), (kernel, pet_kernel))
-            crop.canopy.lai .= lai
-            crop.canopy.phenology_fraction .= phenology_fraction
-            crop.phenology.is_growing .= growing
+            crop.state.canopy.lai .= lai
+            crop.auxiliary.canopy.phenology_fraction .= phenology_fraction
+            crop.state.phenology.is_growing .= growing
             pet.par .= par
         end
         Agrocosm.albedo_reference!(pft, reference, pet_reference)
         albedo!(pft, kernel, pet_kernel)
-        @test kernel.canopy.albedo ≈ reference.canopy.albedo rtol = 2.0f-6
+        @test kernel.auxiliary.canopy.albedo ≈ reference.auxiliary.canopy.albedo rtol = 2.0f-6
         @test pet_kernel.albedo ≈ pet_reference.albedo rtol = 2.0f-6
 
         if pft === cft3
@@ -37,8 +37,8 @@ end
             Agrocosm.apar_crop_reference!(pft, reference, pet_reference)
             apar_crop!(pft, kernel, pet_kernel)
         end
-        @test kernel.canopy.fpar ≈ reference.canopy.fpar rtol = 2.0f-6
-        @test kernel.canopy.apar ≈ reference.canopy.apar rtol = 2.0f-6
+        @test kernel.auxiliary.canopy.fpar ≈ reference.auxiliary.canopy.fpar rtol = 2.0f-6
+        @test kernel.auxiliary.canopy.apar ≈ reference.auxiliary.canopy.apar rtol = 2.0f-6
     end
 end
 
@@ -51,30 +51,30 @@ end
     reference_land = init_managed_land(cells, identity)
     kernel_land = init_managed_land(cells, identity)
     sowing_dates = Int32[100, 99, 100, 101, 100, 200]
-    reference.calendar.sowing_date .= sowing_dates
-    kernel.calendar.sowing_date .= sowing_dates
-    reference.carbon.biomass .= 3.0f0
-    kernel.carbon.biomass .= 3.0f0
-    reference.nitrogen.total .= 0.2f0
-    kernel.nitrogen.total .= 0.2f0
+    reference.state.calendar.sowing_date .= sowing_dates
+    kernel.state.calendar.sowing_date .= sowing_dates
+    reference.state.carbon.biomass .= 3.0f0
+    kernel.state.carbon.biomass .= 3.0f0
+    reference.state.nitrogen.total .= 0.2f0
+    kernel.state.nitrogen.total .= 0.2f0
     Agrocosm.cultivate_reference!(
-        reference, reference.calendar, reference_land, reference_soil, 100;
+        reference, reference_land, reference_soil, 100;
         apply_prescribed_fertilizer = false,
     )
     cultivate!(
-        kernel, kernel.calendar, kernel_land, kernel_soil, 100;
+        kernel, kernel_land, kernel_soil, 100;
         apply_prescribed_fertilizer = false,
     )
-    for (container, fields) in (
-        (:phenology, (:harvesting, :is_growing)),
-        (:canopy, (:lai,)),
-        (:carbon, (:biomass, :root, :leaf, :storage, :pool)),
-        (:nitrogen, (:seed_input, :total)),
-        (:calendar, (:sowing_callback,)),
+    for (reference_container, kernel_container, fields) in (
+        (reference.state.phenology, kernel.state.phenology, (:harvesting, :is_growing)),
+        (reference.state.canopy, kernel.state.canopy, (:lai,)),
+        (reference.state.carbon, kernel.state.carbon, (:biomass, :root, :leaf, :storage, :pool)),
+        (reference.state.nitrogen, kernel.state.nitrogen, (:total,)),
+        (reference.fluxes.nitrogen, kernel.fluxes.nitrogen, (:seed_input,)),
+        (reference.events, kernel.events, (:sowing,)),
     )
         for field in fields
-            @test getproperty(getproperty(kernel, container), field) ≈
-                getproperty(getproperty(reference, container), field)
+            @test getproperty(kernel_container, field) ≈ getproperty(reference_container, field)
         end
     end
 end
@@ -91,19 +91,19 @@ end
     gross = Float32.(range(0, 18; length = cells))
     leaf_respiration = Float32.(range(0, 2; length = cells))
     for crop in (reference, kernel)
-        crop.carbon.root .= root
-        crop.carbon.storage .= storage
-        crop.carbon.pool .= pool
-        crop.phenology.is_growing .= growing
+        crop.state.carbon.root .= root
+        crop.state.carbon.storage .= storage
+        crop.state.carbon.pool .= pool
+        crop.state.phenology.is_growing .= growing
     end
-    destination = kernel.carbon.respiration
+    destination = kernel.fluxes.carbon.respiration
     Agrocosm.respiration_reference!(
         reference, cft1, temperature, gross .- leaf_respiration,
     )
     respiration!(kernel, cft1, temperature, gross, leaf_respiration)
-    @test kernel.carbon.respiration === destination
-    @test kernel.carbon.temperature_response ≈ reference.carbon.temperature_response rtol = 1.0f-6
-    @test kernel.carbon.respiration ≈ reference.carbon.respiration rtol = 2.0f-6 atol = 2.0f-7
+    @test kernel.fluxes.carbon.respiration === destination
+    @test kernel.workspace.respiration_temperature_response ≈ reference.workspace.respiration_temperature_response rtol = 1.0f-6
+    @test kernel.fluxes.carbon.respiration ≈ reference.fluxes.carbon.respiration rtol = 2.0f-6 atol = 2.0f-7
 end
 
 @testset "PET/PAR kernel matches vector reference" begin
@@ -135,21 +135,15 @@ end
     temperature = Float32[-10, 0, 10, 20, 25, 30, 35, 40]
     co2 = Float32[40]
     stress = Float32[0, 0.005, 0.2, 0.5, 0.8, 1, 0.7, 0.3]
-    fields = (
-        :gross_assimilation, :net_assimilation, :water_limited_assimilation,
-        :leaf_respiration, :potential_vmax, :vmax,
-        :nitrogen_limitation, :lambda,
-    )
-
     for (pft, reference_function, kernel_function) in (
         (cft1, Agrocosm.photosynthesis_C3_reference!, photosynthesis_C3!),
         (cft3, Agrocosm.photosynthesis_C4_reference!, photosynthesis_C4!),
     )
-        reference = init_crop(cells, identity).photosynthesis
-        kernel = init_crop(cells, identity).photosynthesis
-        reference.temperature_stress .= stress
-        kernel.temperature_stress .= stress
-        gross_destination = kernel.gross_assimilation
+        reference = init_crop(cells, identity)
+        kernel = init_crop(cells, identity)
+        reference.auxiliary.photosynthesis.temperature_stress .= stress
+        kernel.auxiliary.photosynthesis.temperature_stress .= stress
+        gross_destination = kernel.fluxes.carbon.gross_assimilation
         if pft === cft1
             reference_function(pft, reference, apar, daylength, temperature, co2; comp_vmax = true)
             kernel_function(pft, kernel, apar, daylength, temperature, co2; comp_vmax = true)
@@ -157,12 +151,22 @@ end
             reference_function(pft, reference, apar, daylength, temperature; comp_vmax = true)
             kernel_function(pft, kernel, apar, daylength, temperature; comp_vmax = true)
         end
-        @test kernel.gross_assimilation === gross_destination
-        compare_fields(reference, kernel, fields; rtol = 4.0f-6, atol = 3.0f-7)
+        @test kernel.fluxes.carbon.gross_assimilation === gross_destination
+        compare_fields(
+            reference.fluxes.carbon, kernel.fluxes.carbon,
+            (:gross_assimilation, :net_assimilation, :water_limited_assimilation,
+             :leaf_respiration);
+            rtol = 4.0f-6, atol = 3.0f-7,
+        )
+        compare_fields(
+            reference.auxiliary.photosynthesis, kernel.auxiliary.photosynthesis,
+            (:potential_vmax, :vmax, :nitrogen_limitation, :lambda);
+            rtol = 4.0f-6, atol = 3.0f-7,
+        )
 
         new_lambda = Float32.(range(0.45, 0.85; length = cells))
-        reference.lambda .= new_lambda
-        kernel.lambda .= new_lambda
+        reference.auxiliary.photosynthesis.lambda .= new_lambda
+        kernel.auxiliary.photosynthesis.lambda .= new_lambda
         if pft === cft1
             reference_function(pft, reference, apar, daylength, temperature, co2; comp_vmax = false)
             kernel_function(pft, kernel, apar, daylength, temperature, co2; comp_vmax = false)
@@ -171,10 +175,11 @@ end
             kernel_function(pft, kernel, apar, daylength, temperature; comp_vmax = false)
         end
         compare_fields(
-            reference, kernel,
+            reference.fluxes.carbon, kernel.fluxes.carbon,
             (:gross_assimilation, :net_assimilation, :water_limited_assimilation,
-             :leaf_respiration, :vmax);
+             :leaf_respiration);
             rtol = 4.0f-6, atol = 3.0f-7,
         )
+        @test reference.auxiliary.photosynthesis.vmax ≈ kernel.auxiliary.photosynthesis.vmax
     end
 end

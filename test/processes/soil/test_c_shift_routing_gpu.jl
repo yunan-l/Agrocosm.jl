@@ -29,9 +29,9 @@ CUDA.allowscalar(false)
     soil.nitrogen.ammonium .= 0.2f0
     soil.nitrogen.nitrate .= 0.1f0
 
-    soil_carbon!(crop.calendar, soil)
+    soil_carbon!(crop, soil)
     soil_nitrogen!(
-        crop.calendar, soil;
+        crop.state.calendar, soil;
         air_temperature = CUDA.fill(10.0f0, cells),
         wind_speed = CUDA.fill(1.5f0, cells),
     )

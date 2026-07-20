@@ -44,7 +44,7 @@ end
 @testset "Litter routing kernels match vector references" begin
     cells = 5
     base = init_soil(cells, soilparams.soildepth, identity)
-    calendar = init_crop(cells, identity).calendar
+    crop = init_crop(cells, identity)
     base.management.tillage_fraction .= Float32[
         0.05 0 0
         0.95 1 0
@@ -57,9 +57,9 @@ end
 
     reference = deepcopy(base)
     kernel = deepcopy(base)
-    calendar.sowing_callback .= Int32[1, 0, 1, 0, 0]
-    Agrocosm.litter_tillage_reference!(reference, calendar)
-    litter_tillage!(kernel, calendar)
+    crop.events.sowing .= Int32[1, 0, 1, 0, 0]
+    Agrocosm.litter_tillage_reference!(reference, crop)
+    litter_tillage!(kernel, crop)
     @test kernel.carbon.litter ≈ reference.carbon.litter
     @test kernel.nitrogen.litter ≈ reference.nitrogen.litter
     @test kernel.management.tillage_carbon ≈ reference.management.tillage_carbon
@@ -74,11 +74,11 @@ end
 
     reference = deepcopy(base)
     kernel = deepcopy(base)
-    calendar.harvest_callback .= Int32[0, 1, 0, 1, 0]
-    Agrocosm.route_harvest_carbon_input_reference!(reference, calendar)
-    Agrocosm.route_harvest_nitrogen_input_reference!(reference, calendar)
-    Agrocosm.route_harvest_carbon_input!(kernel, calendar)
-    Agrocosm.route_harvest_nitrogen_input!(kernel, calendar)
+    crop.events.harvest .= Int32[0, 1, 0, 1, 0]
+    Agrocosm.route_harvest_carbon_input_reference!(reference, crop)
+    Agrocosm.route_harvest_nitrogen_input_reference!(reference, crop)
+    Agrocosm.route_harvest_carbon_input!(kernel, crop)
+    Agrocosm.route_harvest_nitrogen_input!(kernel, crop)
     @test kernel.carbon.litter ≈ reference.carbon.litter rtol = 3.0f-6
     @test kernel.nitrogen.litter ≈ reference.nitrogen.litter rtol = 3.0f-6
     @test kernel.management.tillage_carbon ≈ reference.management.tillage_carbon
@@ -122,23 +122,23 @@ function decomposition_fixture(cells = 5)
         0.95 1 0
         0 0 1
     ]
-    crop.calendar.harvest_callback .= Int32[0, 1, 0, 1, 0]
+    crop.events.harvest .= Int32[0, 1, 0, 1, 0]
     soil.carbon.input .= 0.1f0
     soil.nitrogen.input .= 0.01f0
-    return soil, crop.calendar
+    return soil, crop
 end
 
 @testset "Soil response and C/N kernels match vector references" begin
-    base, calendar = decomposition_fixture()
+    base, crop = decomposition_fixture()
     reference = deepcopy(base)
     kernel = deepcopy(base)
-    reference_calendar = deepcopy(calendar)
-    kernel_calendar = deepcopy(calendar)
+    reference_crop = deepcopy(crop)
+    kernel_crop = deepcopy(crop)
     air_temperature = Float32.(range(5, 25; length = 5))
     wind = Float32.(range(1, 5; length = 5))
 
-    Agrocosm.soil_carbon_reference!(reference_calendar, reference)
-    soil_carbon!(kernel_calendar, kernel)
+    Agrocosm.soil_carbon_reference!(reference_crop, reference)
+    soil_carbon!(kernel_crop, kernel)
     for field in (
         :litter, :fast, :slow, :decomposed_litter, :decomposed_fast,
         :decomposed_slow, :litter_to_fast, :litter_to_slow,
@@ -154,11 +154,11 @@ end
         reference.decomposition.litter_response rtol = 5.0f-6
 
     Agrocosm.soil_nitrogen_reference!(
-        reference_calendar, reference;
+        reference_crop, reference;
         air_temperature = air_temperature, wind_speed = wind,
     )
     soil_nitrogen!(
-        kernel_calendar, kernel;
+        kernel_crop, kernel;
         air_temperature = air_temperature, wind_speed = wind,
     )
     for field in (

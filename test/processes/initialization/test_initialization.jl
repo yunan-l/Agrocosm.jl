@@ -11,27 +11,32 @@ using Test
     climbuf = @inferred init_climbuf(cell_size, identity)
     output = @inferred init_output(cell_size, identity)
 
-    @test size(crop.carbon.organs) == (4, cell_size)
-    @test length(crop.carbon.temperature_response) == cell_size
-    @test size(crop.water.transpiration_layer) == (5, cell_size)
-    @test length(crop.water.root_zone_water) == cell_size
-    @test length(crop.calendar.sowing_date) == cell_size
+    @test propertynames(crop) == (:state, :fluxes, :auxiliary, :events, :workspace)
+    @test propertynames(crop.state) == (:phenology, :canopy, :carbon, :nitrogen, :water, :calendar)
+    @test propertynames(crop.fluxes) == (:carbon, :nitrogen, :water)
+    @test propertynames(crop.auxiliary) == (:canopy, :photosynthesis, :stress)
+    @test propertynames(crop.events) == (:sowing, :harvest)
+    @test size(crop.state.carbon.leaf) == (cell_size,)
+    @test length(crop.workspace.respiration_temperature_response) == cell_size
+    @test size(crop.fluxes.water.transpiration_layer) == (5, cell_size)
+    @test length(crop.auxiliary.stress.root_zone_water) == cell_size
+    @test length(crop.state.calendar.sowing_date) == cell_size
     @test length(managed_land.latitude) == cell_size
-    @test length(crop.photosynthesis.gross_assimilation) == cell_size
+    @test length(crop.fluxes.carbon.gross_assimilation) == cell_size
     @test length(pet.daylength) == cell_size
     @test size(climbuf.temp) == (31, cell_size)
-    @test eltype(crop.canopy.lai) == Float32
-    @test eltype(crop.phenology.is_growing) == Int32
-    @test all(iszero, crop.phenology.is_growing)
-    @test all(iszero, crop.canopy.lai)
-    @test all(iszero, crop.photosynthesis.gross_assimilation)
-    @test crop.phenology isa CropPhenology
-    @test crop.canopy isa CropCanopy
-    @test crop.carbon isa CropCarbon
-    @test crop.nitrogen isa CropNitrogen
-    @test crop.water isa CropWater
-    @test crop.calendar isa CropCalendar
-    @test crop.photosynthesis isa CropPhotosynthesis
+    @test eltype(crop.state.canopy.lai) == Float32
+    @test eltype(crop.state.phenology.is_growing) == Int32
+    @test all(iszero, crop.state.phenology.is_growing)
+    @test all(iszero, crop.state.canopy.lai)
+    @test all(iszero, crop.fluxes.carbon.gross_assimilation)
+    @test crop.state.phenology isa CropPhenology
+    @test crop.state.canopy isa CropCanopyState
+    @test crop.state.carbon isa CropCarbonState
+    @test crop.state.nitrogen isa CropNitrogenState
+    @test crop.state.water isa CropWaterState
+    @test crop.state.calendar isa CropCalendarState
+    @test crop.auxiliary.photosynthesis isa CropPhotosynthesisAuxiliary
     @test soil.properties isa SoilProperties
     @test soil.water isa SoilWater
     @test soil.thermal isa SoilThermal
@@ -69,7 +74,7 @@ using Test
     @test rows == (first_daily_row = 1, first_annual_row = 1)
     @test size(output.crop.npp) == (3, cell_size)
     @test size(output.crop.yield) == (1, cell_size)
-    @test size(output.calendar.harvest_callback) == (3, cell_size)
+    @test size(output.calendar.harvest_event) == (3, cell_size)
     @test size(output.calendar.harvest_date) == (1, cell_size)
 end
 
@@ -87,9 +92,9 @@ end
     carbon = init_carbon_balance(2, cells, identity; T = Float64)
     thermal = init_thermal_balance(2, cells, identity; T = Float64)
 
-    @test eltype(crop.canopy.lai) == Float64
-    @test eltype(crop.carbon.organs) == Float64
-    @test eltype(crop.photosynthesis.lambda) == Float64
+    @test eltype(crop.state.canopy.lai) == Float64
+    @test eltype(crop.state.carbon.leaf) == Float64
+    @test eltype(crop.auxiliary.photosynthesis.lambda) == Float64
     @test eltype(managed_land.latitude) == Float64
     @test eltype(soil.properties.layer_depth) == Float64
     @test eltype(soil.water.storage) == Float64
@@ -105,8 +110,8 @@ end
     @test eltype(nitrogen.residual) == Float64
     @test eltype(carbon.residual) == Float64
     @test eltype(thermal.energy_residual) == Float64
-    @test eltype(crop.phenology.is_growing) == Int32
-    @test eltype(crop.calendar.sowing_date) == Int32
+    @test eltype(crop.state.phenology.is_growing) == Int32
+    @test eltype(crop.state.calendar.sowing_date) == Int32
 
     pft64 = convert_precision(Float64, cft1)
     parameters64 = ModelParameters(Float64)
@@ -154,7 +159,7 @@ end
     _, crop64, pet64, soil64, managed64, weather64, output64 = init_states!(
         cft1, initial_data, cells, identity; T = Float64,
     )
-    @test eltype(crop64.canopy.lai) == Float64
+    @test eltype(crop64.state.canopy.lai) == Float64
     @test eltype(pet64.eeq) == Float64
     @test eltype(soil64.water.storage) == Float64
     @test eltype(managed64.latitude) == Float64

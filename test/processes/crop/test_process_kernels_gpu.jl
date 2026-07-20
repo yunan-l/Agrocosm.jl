@@ -34,12 +34,12 @@ CUDA.allowscalar(false)
 
     crop_reference = init_crop(cells, identity)
     crop_gpu = init_crop(cells, CuArray)
-    crop_reference.photosynthesis.temperature_stress .= stress_cpu
-    crop_gpu.photosynthesis.temperature_stress .= CuArray(stress_cpu)
-    c3_gross_destination = crop_gpu.photosynthesis.gross_assimilation
-    c3_vmax_destination = crop_gpu.photosynthesis.vmax
+    crop_reference.auxiliary.photosynthesis.temperature_stress .= stress_cpu
+    crop_gpu.auxiliary.photosynthesis.temperature_stress .= CuArray(stress_cpu)
+    c3_gross_destination = crop_gpu.fluxes.carbon.gross_assimilation
+    c3_vmax_destination = crop_gpu.auxiliary.photosynthesis.vmax
     Agrocosm.photosynthesis_C3_reference!(
-        cft1, crop_reference.photosynthesis, apar_cpu, daylength_cpu,
+        cft1, crop_reference, apar_cpu, daylength_cpu,
         temperature_cpu, Float32[40]; comp_vmax = true,
     )
     apar_gpu = CuArray(apar_cpu)
@@ -47,34 +47,34 @@ CUDA.allowscalar(false)
     temperature_gpu = CuArray(temperature_cpu)
     co2_gpu = CuArray(Float32[40])
     photosynthesis_C3!(
-        cft1, crop_gpu.photosynthesis, apar_gpu, daylength_gpu,
+        cft1, crop_gpu, apar_gpu, daylength_gpu,
         temperature_gpu, co2_gpu; comp_vmax = true,
     )
     synchronize()
-    @test crop_gpu.photosynthesis.gross_assimilation === c3_gross_destination
-    @test crop_gpu.photosynthesis.vmax === c3_vmax_destination
-    @test Array(crop_gpu.photosynthesis.vmax) ≈
-        crop_reference.photosynthesis.vmax rtol = 5.0f-6 atol = 3.0f-7
-    @test Array(crop_gpu.photosynthesis.gross_assimilation) ≈
-        crop_reference.photosynthesis.gross_assimilation rtol = 5.0f-6 atol = 3.0f-7
+    @test crop_gpu.fluxes.carbon.gross_assimilation === c3_gross_destination
+    @test crop_gpu.auxiliary.photosynthesis.vmax === c3_vmax_destination
+    @test Array(crop_gpu.auxiliary.photosynthesis.vmax) ≈
+        crop_reference.auxiliary.photosynthesis.vmax rtol = 5.0f-6 atol = 3.0f-7
+    @test Array(crop_gpu.fluxes.carbon.gross_assimilation) ≈
+        crop_reference.fluxes.carbon.gross_assimilation rtol = 5.0f-6 atol = 3.0f-7
 
     crop_c4_reference = init_crop(cells, identity)
     crop_c4_gpu = init_crop(cells, CuArray)
-    crop_c4_reference.photosynthesis.temperature_stress .= stress_cpu
-    crop_c4_gpu.photosynthesis.temperature_stress .= CuArray(stress_cpu)
+    crop_c4_reference.auxiliary.photosynthesis.temperature_stress .= stress_cpu
+    crop_c4_gpu.auxiliary.photosynthesis.temperature_stress .= CuArray(stress_cpu)
     Agrocosm.photosynthesis_C4_reference!(
-        cft3, crop_c4_reference.photosynthesis, apar_cpu, daylength_cpu,
+        cft3, crop_c4_reference, apar_cpu, daylength_cpu,
         temperature_cpu; comp_vmax = true,
     )
     photosynthesis_C4!(
-        cft3, crop_c4_gpu.photosynthesis, apar_gpu, daylength_gpu,
+        cft3, crop_c4_gpu, apar_gpu, daylength_gpu,
         temperature_gpu; comp_vmax = true,
     )
     synchronize()
-    @test Array(crop_c4_gpu.photosynthesis.vmax) ≈
-        crop_c4_reference.photosynthesis.vmax rtol = 5.0f-6 atol = 3.0f-7
-    @test Array(crop_c4_gpu.photosynthesis.gross_assimilation) ≈
-        crop_c4_reference.photosynthesis.gross_assimilation rtol = 5.0f-6 atol = 3.0f-7
+    @test Array(crop_c4_gpu.auxiliary.photosynthesis.vmax) ≈
+        crop_c4_reference.auxiliary.photosynthesis.vmax rtol = 5.0f-6 atol = 3.0f-7
+    @test Array(crop_c4_gpu.fluxes.carbon.gross_assimilation) ≈
+        crop_c4_reference.fluxes.carbon.gross_assimilation rtol = 5.0f-6 atol = 3.0f-7
 
     root = Float32.(range(1, 30; length = cells))
     storage = Float32.(range(0, 20; length = cells))
@@ -83,22 +83,22 @@ CUDA.allowscalar(false)
     gross = Float32.(range(0, 18; length = cells))
     leaf = Float32.(range(0, 2; length = cells))
     for (field, values) in ((:root, root), (:storage, storage), (:pool, pool))
-        getproperty(crop_reference.carbon, field) .= values
-        getproperty(crop_gpu.carbon, field) .= CuArray(values)
+        getproperty(crop_reference.state.carbon, field) .= values
+        getproperty(crop_gpu.state.carbon, field) .= CuArray(values)
     end
-    crop_reference.phenology.is_growing .= growing
-    crop_gpu.phenology.is_growing .= CuArray(growing)
+    crop_reference.state.phenology.is_growing .= growing
+    crop_gpu.state.phenology.is_growing .= CuArray(growing)
     Agrocosm.respiration_reference!(
         crop_reference, cft1, temperature_cpu, gross .- leaf,
     )
     gross_gpu = CuArray(gross)
     leaf_gpu = CuArray(leaf)
-    respiration_destination = crop_gpu.carbon.respiration
+    respiration_destination = crop_gpu.fluxes.carbon.respiration
     respiration!(crop_gpu, cft1, temperature_gpu, gross_gpu, leaf_gpu)
     synchronize()
-    @test crop_gpu.carbon.respiration === respiration_destination
-    @test Array(crop_gpu.carbon.respiration) ≈
-        crop_reference.carbon.respiration rtol = 4.0f-6 atol = 3.0f-7
+    @test crop_gpu.fluxes.carbon.respiration === respiration_destination
+    @test Array(crop_gpu.fluxes.carbon.respiration) ≈
+        crop_reference.fluxes.carbon.respiration rtol = 4.0f-6 atol = 3.0f-7
 
     # Warmed kernels must not request new device memory; all results are
     # written into arrays allocated by init_crop/init_pet.
@@ -122,14 +122,14 @@ CUDA.allowscalar(false)
     end
     steady_photo_device_bytes = CUDA.@allocated begin
         photosynthesis_C3!(
-            cft1, crop_gpu.photosynthesis, apar_gpu, daylength_gpu,
+            cft1, crop_gpu, apar_gpu, daylength_gpu,
             temperature_gpu, co2_gpu; comp_vmax = true,
         )
         synchronize()
     end
     steady_c4_device_bytes = CUDA.@allocated begin
         photosynthesis_C4!(
-            cft3, crop_c4_gpu.photosynthesis, apar_gpu, daylength_gpu,
+            cft3, crop_c4_gpu, apar_gpu, daylength_gpu,
             temperature_gpu; comp_vmax = true,
         )
         synchronize()
@@ -143,23 +143,23 @@ CUDA.allowscalar(false)
     pet_vector_gpu = init_pet(cells, CuArray)
     pet_vector_gpu.albedo .= pet_gpu.albedo
     photo_vector_gpu = init_crop(cells, CuArray)
-    photo_vector_gpu.photosynthesis.temperature_stress .= crop_gpu.photosynthesis.temperature_stress
+    photo_vector_gpu.auxiliary.photosynthesis.temperature_stress .= crop_gpu.auxiliary.photosynthesis.temperature_stress
     c4_vector_gpu = init_crop(cells, CuArray)
-    c4_vector_gpu.photosynthesis.temperature_stress .= crop_c4_gpu.photosynthesis.temperature_stress
+    c4_vector_gpu.auxiliary.photosynthesis.temperature_stress .= crop_c4_gpu.auxiliary.photosynthesis.temperature_stress
     respiration_vector_gpu = init_crop(cells, CuArray)
-    respiration_vector_gpu.carbon.root .= crop_gpu.carbon.root
-    respiration_vector_gpu.carbon.storage .= crop_gpu.carbon.storage
-    respiration_vector_gpu.carbon.pool .= crop_gpu.carbon.pool
-    respiration_vector_gpu.phenology.is_growing .= crop_gpu.phenology.is_growing
+    respiration_vector_gpu.state.carbon.root .= crop_gpu.state.carbon.root
+    respiration_vector_gpu.state.carbon.storage .= crop_gpu.state.carbon.storage
+    respiration_vector_gpu.state.carbon.pool .= crop_gpu.state.carbon.pool
+    respiration_vector_gpu.state.phenology.is_growing .= crop_gpu.state.phenology.is_growing
     Agrocosm.petpar_reference!(
         pet_vector_gpu, 172, latitude_gpu, temperature_gpu, longwave_gpu, shortwave_gpu,
     )
     Agrocosm.photosynthesis_C3_reference!(
-        cft1, photo_vector_gpu.photosynthesis, apar_gpu, daylength_gpu,
+        cft1, photo_vector_gpu, apar_gpu, daylength_gpu,
         temperature_gpu, co2_gpu; comp_vmax = true,
     )
     Agrocosm.photosynthesis_C4_reference!(
-        cft3, c4_vector_gpu.photosynthesis, apar_gpu, daylength_gpu,
+        cft3, c4_vector_gpu, apar_gpu, daylength_gpu,
         temperature_gpu; comp_vmax = true,
     )
     Agrocosm.respiration_reference!(
@@ -174,14 +174,14 @@ CUDA.allowscalar(false)
     end
     vector_photo_device_bytes = CUDA.@allocated begin
         Agrocosm.photosynthesis_C3_reference!(
-            cft1, photo_vector_gpu.photosynthesis, apar_gpu, daylength_gpu,
+            cft1, photo_vector_gpu, apar_gpu, daylength_gpu,
             temperature_gpu, co2_gpu; comp_vmax = true,
         )
         synchronize()
     end
     vector_c4_device_bytes = CUDA.@allocated begin
         Agrocosm.photosynthesis_C4_reference!(
-            cft3, c4_vector_gpu.photosynthesis, apar_gpu, daylength_gpu,
+            cft3, c4_vector_gpu, apar_gpu, daylength_gpu,
             temperature_gpu; comp_vmax = true,
         )
         synchronize()
@@ -211,7 +211,7 @@ CUDA.allowscalar(false)
     photo_seconds = @elapsed begin
         for _ in 1:50
             photosynthesis_C3!(
-                cft1, crop_gpu.photosynthesis, apar_gpu, daylength_gpu,
+                cft1, crop_gpu, apar_gpu, daylength_gpu,
                 temperature_gpu, co2_gpu; comp_vmax = true,
             )
         end
@@ -220,7 +220,7 @@ CUDA.allowscalar(false)
     c4_seconds = @elapsed begin
         for _ in 1:50
             photosynthesis_C4!(
-                cft3, crop_c4_gpu.photosynthesis, apar_gpu, daylength_gpu,
+                cft3, crop_c4_gpu, apar_gpu, daylength_gpu,
                 temperature_gpu; comp_vmax = true,
             )
         end
@@ -244,7 +244,7 @@ CUDA.allowscalar(false)
     vector_photo_seconds = @elapsed begin
         for _ in 1:20
             Agrocosm.photosynthesis_C3_reference!(
-                cft1, photo_vector_gpu.photosynthesis, apar_gpu, daylength_gpu,
+                cft1, photo_vector_gpu, apar_gpu, daylength_gpu,
                 temperature_gpu, co2_gpu; comp_vmax = true,
             )
         end

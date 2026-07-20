@@ -28,8 +28,8 @@ using Test
     @test sum(soil.carbon.shift_fast; dims = 1)[1] ≈ 1.0f0
     @test sum(soil.carbon.shift_slow; dims = 1)[1] ≈ 1.0f0
 
-    soil_carbon!(crop.calendar, soil)
-    soil_nitrogen!(crop.calendar, soil; air_temperature = Float32[10], wind_speed = Float32[1.5])
+    soil_carbon!(crop, soil)
+    soil_nitrogen!(crop, soil; air_temperature = Float32[10], wind_speed = Float32[1.5])
 
     decomposed_carbon = sum(soil.carbon.decomposed_litter)
     decomposed_nitrogen = sum(soil.nitrogen.decomposed_litter)

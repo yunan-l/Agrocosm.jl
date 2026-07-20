@@ -5,14 +5,14 @@ Compute temperature stress scalar used by photosynthesis routines.
 """
 function temp_stress(PFT::PftParameters,
                      pet::PetPar,
-                     photos::CropPhotosynthesis,
+                     crop::Crop,
                      temp::AbstractArray{T};
                      photoparams::PhotoParams = photoparams
 ) where {T <: AbstractFloat}
 
     launch_1D!(
         temp_stress_kernel!,
-        photos.temperature_stress,
+        crop.auxiliary.photosynthesis.temperature_stress,
         pet.daylength,
         temp,
         PFT,

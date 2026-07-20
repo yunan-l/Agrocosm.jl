@@ -11,8 +11,8 @@ using Test
     Agrocosm.record_water_balance_after_snow!(water_balance, 1, Float32[10.0])
 
     soil.water.storage[1, 1] = 24.5f0
-    crop.water.interception .= 1.0f0
-    crop.water.transpiration_layer .= 0.4f0
+    crop.fluxes.water.interception .= 1.0f0
+    crop.fluxes.water.transpiration_layer .= 0.4f0
     soil.water.evaporation .= 0.2f0
     soil.water.surface_runoff .= 0.5f0
     soil.water.lateral_runoff .= 0.1f0
@@ -33,8 +33,8 @@ using Test
     Agrocosm.record_water_balance_after_snow!(water_balance, 2, Float32[0.0])
     soil.snow.pack .= 4.9f0
     soil.snow.sublimation .= 0.1f0
-    crop.water.interception .= 0.0f0
-    crop.water.transpiration_layer .= 0.0f0
+    crop.fluxes.water.interception .= 0.0f0
+    crop.fluxes.water.transpiration_layer .= 0.0f0
     soil.water.evaporation .= 0.0f0
     soil.water.surface_runoff .= 0.0f0
     soil.water.lateral_runoff .= 0.0f0
@@ -57,8 +57,8 @@ using Test
     soil.surface_litter.evaporation .= 0.5f0
     soil.surface_litter.water_storage .= 2.5f0
     soil.water.storage[1, 1] = 22.0f0
-    crop.water.interception .= 0.0f0
-    crop.water.transpiration_layer .= 0.0f0
+    crop.fluxes.water.interception .= 0.0f0
+    crop.fluxes.water.transpiration_layer .= 0.0f0
     soil.water.evaporation .= 0.0f0
     soil.water.surface_runoff .= 0.0f0
     soil.water.lateral_runoff .= 0.0f0

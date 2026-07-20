@@ -9,17 +9,17 @@ using Test
     soil.properties.clay_fraction .= 0.2f0
     soil.water.storage .= Float32[40, 60, 100, 200, 200]
     soil.nitrogen.nitrate .= reshape(Float32[10, 20, 30, 40, 50], 5, 1)
-    crop.water.interception .= 0.0f0
-    crop.water.root_distribution .= 0.0f0
-    crop.water.root_distribution[1, 1] = 1.0f0
+    crop.fluxes.water.interception .= 0.0f0
+    crop.auxiliary.stress.root_distribution .= 0.0f0
+    crop.auxiliary.stress.root_distribution[1, 1] = 1.0f0
     pedotransfer!(soil)
 
     storage_before = sum(soil.water.storage)
     nitrate_before = sum(soil.nitrogen.nitrate)
-    water_availability_before = sum(soil.water.relative_content .* crop.water.root_distribution)
+    water_availability_before = sum(soil.water.relative_content .* crop.auxiliary.stress.root_distribution)
     soil_infiltration!(soil, crop, Float32[10.0])
     storage_after_infiltration = sum(soil.water.storage)
-    water_availability_after = sum(soil.water.relative_content .* crop.water.root_distribution)
+    water_availability_after = sum(soil.water.relative_content .* crop.auxiliary.stress.root_distribution)
 
     @test storage_after_infiltration > storage_before
     @test storage_after_infiltration + soil.water.surface_runoff[1] +
@@ -27,7 +27,7 @@ using Test
     @test water_availability_after >= water_availability_before
     @test sum(soil.nitrogen.nitrate) + soil.nitrogen.leaching[1] ≈ nitrate_before atol = 1.0f-4
 
-    crop.water.transpiration_layer .= 0.4f0
+    crop.fluxes.water.transpiration_layer .= 0.4f0
     soil.water.evaporation .= 0.2f0
     soil_evapotranspiration!(soil, crop)
 
@@ -42,12 +42,12 @@ end
     dry_soil.properties.sand_fraction .= 0.4f0
     dry_soil.properties.clay_fraction .= 0.2f0
     dry_soil.water.storage .= Float32[25, 60, 100, 200, 200]
-    dry_crop.phenology.is_growing .= 1
-    dry_crop.carbon.root .= 50.0f0
-    dry_crop.water.root_distribution .= 0.0f0
-    dry_crop.water.root_distribution[1, 1] = 1.0f0
-    dry_crop.water.canopy_wet .= 0.0f0
-    dry_crop.water.interception .= 0.0f0
+    dry_crop.state.phenology.is_growing .= 1
+    dry_crop.state.carbon.root .= 50.0f0
+    dry_crop.auxiliary.stress.root_distribution .= 0.0f0
+    dry_crop.auxiliary.stress.root_distribution[1, 1] = 1.0f0
+    dry_crop.auxiliary.canopy.canopy_wet .= 0.0f0
+    dry_crop.fluxes.water.interception .= 0.0f0
     pet.eeq .= 5.0f0
     pet.daylength .= 12.0f0
     pedotransfer!(dry_soil)
@@ -61,7 +61,7 @@ end
     transpiration!(assimilation, cft1, dry_crop, pet, dry_soil, co2)
     transpiration!(assimilation, cft1, wet_crop, pet, wet_soil, co2)
 
-    @test wet_crop.water.supply_sum[1] > dry_crop.water.supply_sum[1]
-    @test wet_crop.water.stress[1] > dry_crop.water.stress[1]
-    @test sum(wet_crop.water.transpiration_layer) > sum(dry_crop.water.transpiration_layer)
+    @test wet_crop.state.water.supply_sum[1] > dry_crop.state.water.supply_sum[1]
+    @test wet_crop.auxiliary.stress.water[1] > dry_crop.auxiliary.stress.water[1]
+    @test sum(wet_crop.fluxes.water.transpiration_layer) > sum(dry_crop.fluxes.water.transpiration_layer)
 end

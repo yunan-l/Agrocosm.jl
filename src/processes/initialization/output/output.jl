@@ -44,8 +44,8 @@ mutable struct CalendarOutput{I}
     harvesting_mask::I
     harvesting_year::I
     harvest_date::I
-    sowing_callback::I
-    harvest_callback::I
+    sowing_event::I
+    harvest_event::I
 end
 
 """Process-grouped model output container."""
@@ -131,7 +131,7 @@ function prepare_output_block!(output::Output,
             _extend_output_rows(getproperty(output.crop, field), daily_rows),
         )
     end
-    for field in (:harvesting_mask, :sowing_callback, :harvest_callback)
+    for field in (:harvesting_mask, :sowing_event, :harvest_event)
         setproperty!(
             output.calendar,
             field,

@@ -39,7 +39,7 @@ using Test
     decay_soil.water.relative_content .= 0.5f0
     decay_soil.carbon.fast .= 100.0f0
     decay_soil.carbon.slow .= 100.0f0
-    soil_carbon!(crop.calendar, decay_soil)
+    soil_carbon!(crop, decay_soil)
     response = decay_soil.decomposition.response[1, 1]
     @test decay_soil.carbon.decomposed_fast[1, 1] ≈
         -100.0f0 * expm1(-0.04f0 / 365.0f0 * response) rtol = 2.0f-5

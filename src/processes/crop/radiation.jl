@@ -145,20 +145,20 @@ function apar_crop_reference!(PFT::PftParameters,
 
     @unpack name, lightextcoeff, albedo_leaf, alphaa  = PFT
 
-    # crop.canopy.fpar .= (1 .- exp.(-lightextcoeff * max.(0.0f0, crop.canopy.lai .- crop.canopy.lai_npp_deficit))) # if maize, crop.canopy.fpar = min.(1.0f0, max.(0.0f0, 0.2558f0 * max.(0.01f0, crop.canopy.lai .- crop.canopy.lai_npp_deficit) .- 0.0024f0))
-    crop.canopy.fpar .= 1 .- exp.(-lightextcoeff * max.(0.0f0, crop.canopy.lai))
+    # crop.auxiliary.canopy.fpar .= (1 .- exp.(-lightextcoeff * max.(0.0f0, crop.state.canopy.lai .- crop.state.canopy.lai_npp_deficit))) # if maize, crop.auxiliary.canopy.fpar = min.(1.0f0, max.(0.0f0, 0.2558f0 * max.(0.01f0, crop.state.canopy.lai .- crop.state.canopy.lai_npp_deficit) .- 0.0024f0))
+    crop.auxiliary.canopy.fpar .= 1 .- exp.(-lightextcoeff * max.(0.0f0, crop.state.canopy.lai))
 
-    crop.canopy.apar .= pet.par * (1 - albedo_leaf) * alphaa .* crop.canopy.fpar
+    crop.auxiliary.canopy.apar .= pet.par * (1 - albedo_leaf) * alphaa .* crop.auxiliary.canopy.fpar
 
 end
 
 function apar_crop!(PFT::PftParameters, crop::Crop, pet::PetPar)
-    T = eltype(crop.canopy.apar)
+    T = eltype(crop.auxiliary.canopy.apar)
     launch_1D!(
         apar_crop_kernel!,
-        crop.canopy.apar,
-        crop.canopy.fpar,
-        crop.canopy.lai,
+        crop.auxiliary.canopy.apar,
+        crop.auxiliary.canopy.fpar,
+        crop.state.canopy.lai,
         pet.par,
         T(PFT.lightextcoeff),
         T(PFT.albedo_leaf),
@@ -181,21 +181,21 @@ function apar_crop_maize_reference!(PFT::PftParameters,
 
     @unpack name, lightextcoeff, albedo_leaf, alphaa  = PFT
 
-    # crop.canopy.fpar = min.(1.0f0, max.(0.0f0, 0.2558f0 * max.(0.01f0, crop.canopy.lai .- crop.canopy.lai_npp_deficit) .- 0.0024f0))
-    crop.canopy.fpar .= min.(1.0f0, max.(0.0f0, 0.2558f0 * max.(0.01f0, crop.canopy.lai) .- 0.0024f0))
+    # crop.auxiliary.canopy.fpar = min.(1.0f0, max.(0.0f0, 0.2558f0 * max.(0.01f0, crop.state.canopy.lai .- crop.state.canopy.lai_npp_deficit) .- 0.0024f0))
+    crop.auxiliary.canopy.fpar .= min.(1.0f0, max.(0.0f0, 0.2558f0 * max.(0.01f0, crop.state.canopy.lai) .- 0.0024f0))
 
-    crop.canopy.apar .= pet.par * (1 - albedo_leaf) * alphaa .* crop.canopy.fpar
+    crop.auxiliary.canopy.apar .= pet.par * (1 - albedo_leaf) * alphaa .* crop.auxiliary.canopy.fpar
 
 end
 
 
 function apar_crop_maize!(PFT::PftParameters, crop::Crop, pet::PetPar)
-    T = eltype(crop.canopy.apar)
+    T = eltype(crop.auxiliary.canopy.apar)
     launch_1D!(
         apar_crop_kernel!,
-        crop.canopy.apar,
-        crop.canopy.fpar,
-        crop.canopy.lai,
+        crop.auxiliary.canopy.apar,
+        crop.auxiliary.canopy.fpar,
+        crop.state.canopy.lai,
         pet.par,
         T(PFT.lightextcoeff),
         T(PFT.albedo_leaf),

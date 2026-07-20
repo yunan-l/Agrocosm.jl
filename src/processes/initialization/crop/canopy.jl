@@ -1,27 +1,35 @@
-"""Canopy geometry and radiation state stored as backend arrays."""
-mutable struct CropCanopy{A}
+"""Canopy variables whose previous-day values affect the next daily state."""
+mutable struct CropCanopyState{A}
     lai::A
-    flaimax::A
     laimax_adjusted::A
     lai_npp_deficit::A
+end
+
+"""Current-day canopy geometry, radiation, and conductance variables."""
+mutable struct CropCanopyAuxiliary{A}
+    flaimax::A
     phenology_fraction::A
     albedo::A
     fpar::A
     apar::A
+    canopy_conductance::A
+    canopy_wet::A
 end
 
-init_crop_canopy(cell_size::Int, device) = init_crop_canopy(Float32, cell_size, device)
-function init_crop_canopy(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
+function init_crop_canopy_state(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
     float_state() = device(zeros(T, cell_size))
+    return CropCanopyState(ntuple(_ -> float_state(), 3)...)
+end
 
-    return CropCanopy(
-        float_state(),
-        float_state(),
-        float_state(),
-        float_state(),
-        float_state(),
-        float_state(),
-        float_state(),
-        float_state(),
+function init_crop_canopy_auxiliary(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
+    float_auxiliary() = device(zeros(T, cell_size))
+    return CropCanopyAuxiliary(
+        float_auxiliary(),
+        float_auxiliary(),
+        float_auxiliary(),
+        float_auxiliary(),
+        float_auxiliary(),
+        float_auxiliary(),
+        float_auxiliary(),
     )
 end

@@ -34,16 +34,16 @@ function allocate_crop_nitrogen!(crop::Crop,
                                  PFT::PftParameters)
 
     launch_1D!(crop_nitrogen_kernel!,
-               crop.nitrogen.total,
-               crop.phenology.is_growing,
-               crop.carbon.leaf,
-               crop.carbon.root,
-               crop.carbon.storage,
-               crop.carbon.pool,
-               crop.nitrogen.leaf,
-               crop.nitrogen.root,
-               crop.nitrogen.storage,
-               crop.nitrogen.pool,
+               crop.state.nitrogen.total,
+               crop.state.phenology.is_growing,
+               crop.state.carbon.leaf,
+               crop.state.carbon.root,
+               crop.state.carbon.storage,
+               crop.state.carbon.pool,
+               crop.state.nitrogen.leaf,
+               crop.state.nitrogen.root,
+               crop.state.nitrogen.storage,
+               crop.state.nitrogen.pool,
                PFT)
 
 end

@@ -12,11 +12,11 @@ using Test
         ]
         soil.carbon.litter .= Float32[10 4; 2 3; 5 6]
         soil.nitrogen.litter .= Float32[1 0.4; 0.2 0.3; 0.5 0.6]
-        crop.calendar.sowing_callback .= Int32[1, 0]
+        crop.events.sowing .= Int32[1, 0]
 
         carbon_before = vec(sum(soil.carbon.litter, dims = 1))
         nitrogen_before = vec(sum(soil.nitrogen.litter, dims = 1))
-        litter_tillage!(soil, crop.calendar)
+        litter_tillage!(soil, crop)
 
         @test soil.carbon.litter[:, 1] ≈ Float32[0.5, 11.5, 5]
         @test soil.carbon.litter[:, 2] == Float32[4, 3, 6]
@@ -50,23 +50,23 @@ using Test
         soil = init_soil(1, soilparams.soildepth, identity)
         crop = init_crop(1, identity)
         output = init_output(1, identity)
-        crop.carbon.leaf .= 2.0f0
-        crop.carbon.pool .= 1.0f0
-        crop.carbon.root .= 4.0f0
-        crop.nitrogen.leaf .= 0.2f0
-        crop.nitrogen.pool .= 0.1f0
-        crop.nitrogen.root .= 0.4f0
-        crop.phenology.harvesting_previous .= false
-        crop.phenology.harvesting .= true
+        crop.state.carbon.leaf .= 2.0f0
+        crop.state.carbon.pool .= 1.0f0
+        crop.state.carbon.root .= 4.0f0
+        crop.state.nitrogen.leaf .= 0.2f0
+        crop.state.nitrogen.pool .= 0.1f0
+        crop.state.nitrogen.root .= 0.4f0
+        crop.state.phenology.harvesting_previous .= false
+        crop.state.phenology.harvesting .= true
 
-        harvest_crop!(crop.calendar, crop, soil, output, Float32[0.5], 100)
+        harvest_crop!(crop, soil, output, Float32[0.5], 100)
         soil.management.tillage_fraction .= Float32[
             0.05 0 0
             0.95 1 0
             0 0 1
         ]
-        Agrocosm.route_harvest_carbon_input!(soil, crop.calendar)
-        Agrocosm.route_harvest_nitrogen_input!(soil, crop.calendar)
+        Agrocosm.route_harvest_carbon_input!(soil, crop)
+        Agrocosm.route_harvest_nitrogen_input!(soil, crop)
 
         @test soil.carbon.litter[:, 1] ≈ Float32[0.075, 1.425, 4]
         @test soil.nitrogen.litter[:, 1] ≈ Float32[0.0075, 0.1425, 0.4]

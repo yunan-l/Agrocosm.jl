@@ -3,8 +3,7 @@ crop_carbon!(photos, PFT, crop, pet, soil, temp, co2)
 
 Run the daily crop carbon process chain: respiration, allocation, and phenology coupling.
 """
-function crop_carbon!(photos::CropPhotosynthesis,
-                      crop::Crop,
+function crop_carbon!(crop::Crop,
                       output::Output,
                       PFT::PftParameters,
                       temp::AbstractArray{T};
@@ -15,26 +14,25 @@ function crop_carbon!(photos::CropPhotosynthesis,
     # compute crop respiration
     respiration!(
         crop, PFT, temp,
-        photos.gross_assimilation,
-        photos.leaf_respiration;
+        crop.fluxes.carbon.gross_assimilation,
+        crop.fluxes.carbon.leaf_respiration;
         lpjmlparams = lpjmlparams,
     )
 
     # compute crop carbon allocation
-    carbon_allocation!(PFT, crop, photos)
-    # crop.carbon.organs = vcat(reshape(crop.carbon.root, (1, :)), reshape(crop.carbon.leaf, (1, :)), reshape(crop.carbon.storage, (1, :)), reshape(crop.carbon.pool, (1, :)))
+    carbon_allocation!(PFT, crop)
 
     sources = (
-        gpp = photos.gross_assimilation,
-        npp = crop.carbon.npp,
-        lambda = photos.lambda,
-        potential_vmax = photos.potential_vmax,
-        vmax = photos.vmax,
-        nitrogen_limitation = photos.nitrogen_limitation,
-        respiration = crop.carbon.respiration,
-        lai = crop.canopy.lai,
-        fphu = crop.phenology.fphu,
-        biomass = crop.carbon.biomass,
+        gpp = crop.fluxes.carbon.gross_assimilation,
+        npp = crop.fluxes.carbon.npp,
+        lambda = crop.auxiliary.photosynthesis.lambda,
+        potential_vmax = crop.auxiliary.photosynthesis.potential_vmax,
+        vmax = crop.auxiliary.photosynthesis.vmax,
+        nitrogen_limitation = crop.auxiliary.photosynthesis.nitrogen_limitation,
+        respiration = crop.fluxes.carbon.respiration,
+        lai = crop.state.canopy.lai,
+        fphu = crop.state.phenology.fphu,
+        biomass = crop.state.carbon.biomass,
     )
     for (field, source) in pairs(sources)
         if output_row === nothing

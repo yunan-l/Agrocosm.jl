@@ -3,7 +3,7 @@ using Test
 
 @testset "Backend-compatible C3 lambda kernel" begin
     crop = init_crop(2, identity)
-    photos = crop.photosynthesis
+    photos = crop.auxiliary.photosynthesis
     pet = init_pet(2, identity)
 
     target_lambda = 0.5f0
@@ -25,18 +25,18 @@ using Test
 
     photos.vmax .= vmax
     photos.temperature_stress .= tstress
-    crop.canopy.apar .= apar
-    crop.canopy.fpar .= fpar
-    crop.water.canopy_conductance .= target_conductance
+    crop.auxiliary.canopy.apar .= apar
+    crop.auxiliary.canopy.fpar .= fpar
+    crop.auxiliary.canopy.canopy_conductance .= target_conductance
     pet.daylength .= daylength
 
-    solve_lambda_c3!(cft1, photos, crop, pet, temp, co2)
+    solve_lambda_c3!(cft1, crop, pet, temp, co2)
 
     @test photos.lambda[1] ≈ target_lambda atol = 2.0f-3
     @test photos.lambda[2] ≈ target_lambda atol = 2.0f-3
 
-    crop.water.canopy_conductance[2] = 0.0f0
-    solve_lambda_c3!(cft1, photos, crop, pet, temp, co2)
+    crop.auxiliary.canopy.canopy_conductance[2] = 0.0f0
+    solve_lambda_c3!(cft1, crop, pet, temp, co2)
     @test photos.lambda[2] == 0.0f0
 end
 
@@ -56,20 +56,20 @@ end
     @test target_adtmm > 0.0f0
 
     crop = init_crop(1, identity)
-    photos = crop.photosynthesis
+    photos = crop.auxiliary.photosynthesis
     photos.temperature_stress .= tstress
     photos.lambda .= target_lambda
     photos.vmax .= vmax
     photosynthesis_C3!(
         cft1,
-        photos,
+        crop,
         Float32[apar],
         Float32[daylength],
         Float32[temp],
         Float32[co2];
         comp_vmax = false,
     )
-    @test target_adtmm ≈ photos.water_limited_assimilation[1] atol = 1.0f-6
+    @test target_adtmm ≈ crop.fluxes.carbon.water_limited_assimilation[1] atol = 1.0f-6
 
     fac = target_adtmm / (1.0f0 - target_lambda)
 

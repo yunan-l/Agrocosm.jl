@@ -11,7 +11,7 @@ CUDA.allowscalar(false)
     soil = init_soil(cell_size, soilparams.soildepth, CuArray)
     balance = init_nitrogen_balance(1, cell_size, CuArray)
 
-    crop.nitrogen.total .= 1.0f0
+    crop.state.nitrogen.total .= 1.0f0
     soil.nitrogen.nitrate .= 0.2f0
     soil.nitrogen.ammonium .= 0.1f0
     soil.nitrogen.litter .= 0.3f0
@@ -22,8 +22,8 @@ CUDA.allowscalar(false)
 
     # Root uptake only transfers N within the tracked plant-soil system.
     @views soil.nitrogen.nitrate[1, :] .-= 0.25f0
-    crop.nitrogen.total .+= 0.25f0
-    crop.nitrogen.uptake .= 0.25f0
+    crop.state.nitrogen.total .+= 0.25f0
+    crop.fluxes.nitrogen.uptake .= 0.25f0
 
     Agrocosm.record_nitrogen_balance_end!(balance, 1, crop, soil)
 

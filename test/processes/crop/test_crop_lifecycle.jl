@@ -8,68 +8,68 @@ include("../../helpers/crop_lifecycle_fixture.jl")
         crop = init_crop(T, 2, identity)
         soil = init_soil(T, 2, soilparams.soildepth, identity)
         managed_land = init_managed_land(T, 2, identity)
-        crop.calendar.sowing_date .= Int32[100, 101]
+        crop.state.calendar.sowing_date .= Int32[100, 101]
 
         # Emulate stale state from a completed previous crop season.
         for values in (
-            crop.phenology.vdsum, crop.phenology.husum, crop.phenology.fphu,
-            crop.canopy.lai_npp_deficit, crop.nitrogen.leaf,
-            crop.nitrogen.root, crop.nitrogen.pool, crop.nitrogen.storage,
-            crop.nitrogen.pending_fertilizer, crop.nitrogen.pending_manure,
-            crop.nitrogen.stress_sum, crop.water.demand_sum,
-            crop.water.supply_sum, crop.water.waterlogging_days,
+            crop.state.phenology.vdsum, crop.state.phenology.husum, crop.state.phenology.fphu,
+            crop.state.canopy.lai_npp_deficit, crop.state.nitrogen.leaf,
+            crop.state.nitrogen.root, crop.state.nitrogen.pool, crop.state.nitrogen.storage,
+            crop.state.nitrogen.pending_fertilizer, crop.state.nitrogen.pending_manure,
+            crop.state.nitrogen.stress_sum, crop.state.water.demand_sum,
+            crop.state.water.supply_sum, crop.state.water.waterlogging_days,
         )
             values .= T(9)
         end
-        crop.phenology.senescence .= true
-        crop.phenology.senescence_previous .= true
-        crop.phenology.growing_days .= Int32(99)
-        crop.nitrogen.stress .= T(0.2)
-        crop.water.stress .= T(0.3)
-        crop.water.waterlogging_stress .= T(0.4)
-        crop.carbon.yield .= T(7)
+        crop.state.phenology.senescence .= true
+        crop.state.phenology.senescence_previous .= true
+        crop.state.phenology.growing_days .= Int32(99)
+        crop.auxiliary.stress.nitrogen .= T(0.2)
+        crop.auxiliary.stress.water .= T(0.3)
+        crop.auxiliary.stress.waterlogging .= T(0.4)
+        crop.fluxes.carbon.yield .= T(7)
         soil_carbon_before = copy(soil.carbon.slow)
 
         cultivate!(
-            crop, crop.calendar, managed_land, soil, 100;
+        crop, managed_land, soil, 100;
             apply_prescribed_fertilizer = false,
             laimax = cft1.laimax,
         )
 
-        @test crop.calendar.sowing_callback == Int32[1, 0]
-        @test crop.phenology.is_growing[1] == 1
-        @test crop.phenology.growing_days[1] == 0
-        @test crop.phenology.vdsum[1] == zero(T)
-        @test crop.phenology.husum[1] == zero(T)
-        @test crop.phenology.fphu[1] == zero(T)
-        @test !crop.phenology.senescence[1]
-        @test !crop.phenology.senescence_previous[1]
-        @test crop.canopy.flaimax[1] == T(0.000083)
-        @test crop.canopy.lai[1] == T(0.000083) * T(cft1.laimax)
-        @test crop.canopy.laimax_adjusted[1] == one(T)
-        @test crop.nitrogen.total[1] == T(0.7)
-        @test crop.nitrogen.leaf[1] == zero(T)
-        @test crop.nitrogen.pending_fertilizer[1] == zero(T)
-        @test crop.nitrogen.stress_sum[1] == zero(T)
-        @test crop.nitrogen.stress[1] == one(T)
-        @test crop.water.demand_sum[1] == zero(T)
-        @test crop.water.supply_sum[1] == zero(T)
-        @test crop.water.stress[1] == one(T)
-        @test crop.water.waterlogging_days[1] == zero(T)
-        @test crop.water.waterlogging_stress[1] == one(T)
+        @test crop.events.sowing == Int32[1, 0]
+        @test crop.state.phenology.is_growing[1] == 1
+        @test crop.state.phenology.growing_days[1] == 0
+        @test crop.state.phenology.vdsum[1] == zero(T)
+        @test crop.state.phenology.husum[1] == zero(T)
+        @test crop.state.phenology.fphu[1] == zero(T)
+        @test !crop.state.phenology.senescence[1]
+        @test !crop.state.phenology.senescence_previous[1]
+        @test crop.auxiliary.canopy.flaimax[1] == T(0.000083)
+        @test crop.state.canopy.lai[1] == T(0.000083) * T(cft1.laimax)
+        @test crop.state.canopy.laimax_adjusted[1] == one(T)
+        @test crop.state.nitrogen.total[1] == T(0.7)
+        @test crop.state.nitrogen.leaf[1] == zero(T)
+        @test crop.state.nitrogen.pending_fertilizer[1] == zero(T)
+        @test crop.state.nitrogen.stress_sum[1] == zero(T)
+        @test crop.auxiliary.stress.nitrogen[1] == one(T)
+        @test crop.state.water.demand_sum[1] == zero(T)
+        @test crop.state.water.supply_sum[1] == zero(T)
+        @test crop.auxiliary.stress.water[1] == one(T)
+        @test crop.state.water.waterlogging_days[1] == zero(T)
+        @test crop.auxiliary.stress.waterlogging[1] == one(T)
 
         # Cultivation rebuilds only the new crop; annual output and soil memory persist.
-        @test crop.carbon.yield == T[7, 7]
+        @test crop.fluxes.carbon.yield == T[7, 7]
         @test soil.carbon.slow == soil_carbon_before
-        @test crop.phenology.husum[2] == T(9)
-        @test crop.nitrogen.pending_fertilizer[2] == T(9)
+        @test crop.state.phenology.husum[2] == T(9)
+        @test crop.state.nitrogen.pending_fertilizer[2] == T(9)
     end
 end
 
 @testset "Two-year prescribed crop lifecycle has one ordered event sequence per year" begin
     simulation = run_lifecycle_fixture()
-    sowing_days = callback_days(simulation.output.calendar.sowing_callback)
-    harvest_days = callback_days(simulation.output.calendar.harvest_callback)
+    sowing_days = event_days(simulation.output.calendar.sowing_event)
+    harvest_days = event_days(simulation.output.calendar.harvest_event)
     growing = vec(Array(simulation.output.crop.growing_mask))
     fphu = vec(Array(simulation.output.crop.fphu))
 
@@ -102,54 +102,59 @@ end
         @test all(iszero, values[inactive_days, :])
     end
     @test all(iszero, Array(simulation.output.crop.growing_mask)[inactive_days, :])
-    for field in (:harvesting_mask, :sowing_callback, :harvest_callback)
+    for field in (:harvesting_mask, :sowing_event, :harvest_event)
         values = Array(getproperty(simulation.output.calendar, field))
         @test all(iszero, values[inactive_days, :])
     end
 
     # Final day 730 is fallow. Static templates and environmental diagnostics
-    # are excluded: phu/winter_type, initial_organs, root_distribution, albedo,
+    # are excluded: phu/winter_type, root_distribution, albedo,
     # root_zone_water, temperature responses, and neutral waterlogging stress.
     for (container, fields) in (
-        (simulation.crop.phenology,
+        (simulation.crop.state.phenology,
          (:vdsum, :husum, :fphu, :growing_days, :is_growing)),
-        (simulation.crop.canopy,
-         (:lai, :flaimax, :laimax_adjusted, :lai_npp_deficit,
-          :phenology_fraction, :fpar, :apar)),
-        (simulation.crop.carbon,
-         (:biomass, :leaf, :root, :pool, :storage, :organs, :yield,
-          :npp, :respiration)),
-        (simulation.crop.nitrogen,
-         (:total, :uptake, :auto_fertilizer, :leaf, :root, :pool, :storage,
-          :demand_total, :demand_leaf, :pending_manure, :pending_fertilizer,
-          :seed_input, :prescribed_manure_input,
-          :prescribed_fertilizer_input, :harvest_export, :stress_sum,
-          :stress, :deficit)),
-        (simulation.crop.water,
-         (:canopy_conductance, :transpiration, :canopy_wet, :interception,
-          :transpiration_layer, :deficit, :demand_sum, :supply_sum, :stress,
-          :waterlogging_days)),
-        (simulation.crop.photosynthesis,
-         (:gross_assimilation, :net_assimilation,
-          :water_limited_assimilation, :leaf_respiration, :potential_vmax,
-          :vmax, :nitrogen_limitation, :lambda)),
+        (simulation.crop.state.canopy,
+         (:lai, :laimax_adjusted, :lai_npp_deficit)),
+        (simulation.crop.auxiliary.canopy,
+         (:flaimax, :phenology_fraction, :fpar, :apar,
+          :canopy_conductance, :canopy_wet)),
+        (simulation.crop.state.carbon,
+         (:biomass, :leaf, :root, :pool, :storage)),
+        (simulation.crop.fluxes.carbon,
+         (:yield, :npp, :respiration, :gross_assimilation, :net_assimilation,
+          :water_limited_assimilation, :leaf_respiration)),
+        (simulation.crop.state.nitrogen,
+         (:total, :leaf, :root, :pool, :storage, :pending_manure,
+          :pending_fertilizer, :stress_sum)),
+        (simulation.crop.fluxes.nitrogen,
+         (:uptake, :auto_fertilizer, :seed_input, :prescribed_manure_input,
+          :prescribed_fertilizer_input, :harvest_export)),
+        (simulation.crop.state.water,
+         (:demand_sum, :supply_sum, :waterlogging_days)),
+        (simulation.crop.fluxes.water,
+         (:transpiration, :interception, :transpiration_layer)),
+        (simulation.crop.auxiliary.stress,
+         (:nitrogen_demand_total, :nitrogen_demand_leaf, :nitrogen,
+          :nitrogen_deficit, :water_deficit, :water)),
+        (simulation.crop.auxiliary.photosynthesis,
+         (:potential_vmax, :vmax, :nitrogen_limitation, :lambda)),
     )
         for field in fields
             @test all(iszero, Array(getproperty(container, field)))
         end
     end
-    @test !simulation.crop.phenology.senescence[1]
-    @test !simulation.crop.phenology.senescence_previous[1]
-    @test simulation.crop.phenology.harvesting[1]
-    @test simulation.crop.phenology.harvesting_previous[1]
-    @test simulation.crop.water.waterlogging_stress[1] == 1.0f0
+    @test !simulation.crop.state.phenology.senescence[1]
+    @test !simulation.crop.state.phenology.senescence_previous[1]
+    @test simulation.crop.state.phenology.harvesting[1]
+    @test simulation.crop.state.phenology.harvesting_previous[1]
+    @test simulation.crop.auxiliary.stress.waterlogging[1] == 1.0f0
 end
 
 @testset "Cultivation, fertilizer, and tillage are single-trigger events" begin
     crop = init_crop(1, identity)
     soil = init_soil(1, soilparams.soildepth, identity)
     managed_land = init_managed_land(1, identity)
-    crop.calendar.sowing_date .= Int32(100)
+    crop.state.calendar.sowing_date .= Int32(100)
     managed_land.fertilizer .= 10.0f0
     soil.management.tillage_fraction .= Float32[
         0.05 0 0
@@ -161,44 +166,44 @@ end
     mineral_before = sum(soil.nitrogen.nitrate) + sum(soil.nitrogen.ammonium)
 
     cultivate!(
-        crop, crop.calendar, managed_land, soil, 99;
+        crop, managed_land, soil, 99;
         apply_prescribed_fertilizer = true,
     )
-    litter_tillage!(soil, crop.calendar)
-    @test crop.calendar.sowing_callback[1] == 0
+    litter_tillage!(soil, crop)
+    @test crop.events.sowing[1] == 0
     @test sum(soil.carbon.litter) == carbon_before
     @test sum(soil.nitrogen.nitrate) + sum(soil.nitrogen.ammonium) == mineral_before
 
     cultivate!(
-        crop, crop.calendar, managed_land, soil, 100;
+        crop, managed_land, soil, 100;
         apply_prescribed_fertilizer = true,
     )
-    litter_tillage!(soil, crop.calendar)
+    litter_tillage!(soil, crop)
     carbon_after_sowing = copy(soil.carbon.litter)
-    @test crop.calendar.sowing_callback[1] == 1
+    @test crop.events.sowing[1] == 1
     @test carbon_after_sowing[1, 1] < 100.0f0
     @test sum(carbon_after_sowing) == carbon_before
-    @test crop.nitrogen.prescribed_fertilizer_input[1] == 2.0f0
-    @test crop.nitrogen.pending_fertilizer[1] == 8.0f0
+    @test crop.fluxes.nitrogen.prescribed_fertilizer_input[1] == 2.0f0
+    @test crop.state.nitrogen.pending_fertilizer[1] == 8.0f0
 
-    crop.phenology.fphu .= 0.3f0
+    crop.state.phenology.fphu .= 0.3f0
     cultivate!(
-        crop, crop.calendar, managed_land, soil, 101;
+        crop, managed_land, soil, 101;
         apply_prescribed_fertilizer = true,
     )
-    litter_tillage!(soil, crop.calendar)
-    @test crop.calendar.sowing_callback[1] == 0
+    litter_tillage!(soil, crop)
+    @test crop.events.sowing[1] == 0
     @test soil.carbon.litter == carbon_after_sowing
-    @test crop.nitrogen.prescribed_fertilizer_input[1] == 8.0f0
-    @test crop.nitrogen.pending_fertilizer[1] == 0.0f0
+    @test crop.fluxes.nitrogen.prescribed_fertilizer_input[1] == 8.0f0
+    @test crop.state.nitrogen.pending_fertilizer[1] == 0.0f0
     @test sum(soil.nitrogen.nitrate) + sum(soil.nitrogen.ammonium) ≈
         mineral_before + 10.0f0
 
     cultivate!(
-        crop, crop.calendar, managed_land, soil, 102;
+        crop, managed_land, soil, 102;
         apply_prescribed_fertilizer = true,
     )
-    @test crop.nitrogen.prescribed_fertilizer_input[1] == 0.0f0
+    @test crop.fluxes.nitrogen.prescribed_fertilizer_input[1] == 0.0f0
     @test sum(soil.nitrogen.nitrate) + sum(soil.nitrogen.ammonium) ≈
         mineral_before + 10.0f0
 end

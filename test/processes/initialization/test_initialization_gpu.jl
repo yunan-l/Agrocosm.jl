@@ -17,20 +17,20 @@ CUDA.allowscalar(false)
     output = init_output(cell_size, CuArray)
     nitrogen_balance = init_nitrogen_balance(3, cell_size, CuArray)
 
-    @test crop.phenology.phu isa CuArray{Float32, 1}
-    @test crop.phenology.is_growing isa CuArray{Int32, 1}
-    @test all(Array(crop.phenology.is_growing) .== Int32(0))
-    @test crop.canopy.lai isa CuArray{Float32, 1}
-    @test crop.carbon.organs isa CuArray{Float32, 2}
-    @test crop.carbon.temperature_response isa CuArray{Float32, 1}
-    @test crop.nitrogen.total isa CuArray{Float32, 1}
-    @test crop.nitrogen.seed_input isa CuArray{Float32, 1}
-    @test crop.nitrogen.harvest_export isa CuArray{Float32, 1}
-    @test crop.water.transpiration_layer isa CuArray{Float32, 2}
-    @test crop.water.root_zone_water isa CuArray{Float32, 1}
-    @test crop.calendar.sowing_date isa CuArray{Int32, 1}
+    @test crop.state.phenology.phu isa CuArray{Float32, 1}
+    @test crop.state.phenology.is_growing isa CuArray{Int32, 1}
+    @test all(Array(crop.state.phenology.is_growing) .== Int32(0))
+    @test crop.state.canopy.lai isa CuArray{Float32, 1}
+    @test crop.state.carbon.leaf isa CuArray{Float32, 1}
+    @test crop.workspace.respiration_temperature_response isa CuArray{Float32, 1}
+    @test crop.state.nitrogen.total isa CuArray{Float32, 1}
+    @test crop.fluxes.nitrogen.seed_input isa CuArray{Float32, 1}
+    @test crop.fluxes.nitrogen.harvest_export isa CuArray{Float32, 1}
+    @test crop.fluxes.water.transpiration_layer isa CuArray{Float32, 2}
+    @test crop.auxiliary.stress.root_zone_water isa CuArray{Float32, 1}
+    @test crop.state.calendar.sowing_date isa CuArray{Int32, 1}
     @test managed_land.latitude isa CuArray{Float32, 1}
-    @test crop.photosynthesis.gross_assimilation isa CuArray{Float32, 1}
+    @test crop.fluxes.carbon.gross_assimilation isa CuArray{Float32, 1}
     @test soil.properties.sand_fraction isa CuArray{Float32, 2}
     @test soil.water.storage isa CuArray{Float32, 2}
     @test soil.water.ice_storage isa CuArray{Float32, 2}
@@ -63,10 +63,10 @@ CUDA.allowscalar(false)
     @test output.calendar.harvest_date isa CuArray{Int32, 2}
     @test nitrogen_balance.residual isa CuArray{Float32, 2}
 
-    @test size(crop.carbon.organs) == (4, cell_size)
-    @test size(crop.water.transpiration_layer) == (5, cell_size)
+    @test size(crop.state.carbon.leaf) == (cell_size,)
+    @test size(crop.fluxes.water.transpiration_layer) == (5, cell_size)
     @test size(nitrogen_balance.residual) == (3, cell_size)
-    @test all(Array(crop.canopy.lai) .== 0.0f0)
+    @test all(Array(crop.state.canopy.lai) .== 0.0f0)
 
     rows = Agrocosm.prepare_output_block!(output, 3, 1)
     @test rows == (first_daily_row = 1, first_annual_row = 1)

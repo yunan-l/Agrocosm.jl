@@ -224,7 +224,7 @@ function test_thermal_closure(balance; label)
     return nothing
 end
 
-function callback_days(values, cell)
+function event_days(values, cell)
     host = host_array(values)
     return findall(!iszero, view(host, :, cell))
 end
@@ -232,10 +232,10 @@ end
 function log_first_crop_divergence(cpu, gpu;
                                    rtol = 1.0f-5, atol = 1.0f-6)
     for cell in 1:C3_E2E_CELLS
-        cpu_sowing = callback_days(cpu.output.calendar.sowing_callback, cell)
-        gpu_sowing = callback_days(gpu.output.calendar.sowing_callback, cell)
-        cpu_harvest = callback_days(cpu.output.calendar.harvest_callback, cell)
-        gpu_harvest = callback_days(gpu.output.calendar.harvest_callback, cell)
+        cpu_sowing = event_days(cpu.output.calendar.sowing_event, cell)
+        gpu_sowing = event_days(gpu.output.calendar.sowing_event, cell)
+        cpu_harvest = event_days(cpu.output.calendar.harvest_event, cell)
+        gpu_harvest = event_days(gpu.output.calendar.harvest_event, cell)
         @info "CPU/GPU crop event days" cell cpu_sowing gpu_sowing cpu_harvest gpu_harvest
     end
 
@@ -278,8 +278,8 @@ end
     @test size(cpu.output.crop.npp) == (730, C3_E2E_CELLS)
     @test size(gpu.output.crop.npp) == (730, C3_E2E_CELLS)
     @test maximum(cpu.output.crop.npp) > 0.0f0
-    @test sum(cpu.output.calendar.sowing_callback) > 0
-    @test sum(cpu.output.calendar.harvest_callback) > 0
+    @test sum(cpu.output.calendar.sowing_event) > 0
+    @test sum(cpu.output.calendar.harvest_event) > 0
 
     log_first_crop_divergence(cpu, gpu)
 
@@ -314,7 +314,7 @@ end
     end
     for field in (
         :harvesting_mask, :harvesting_year, :harvest_date,
-        :sowing_callback, :harvest_callback,
+        :sowing_event, :harvest_event,
     )
         test_exact_equivalence(
             getproperty(gpu.output.calendar, field),
@@ -324,14 +324,17 @@ end
     end
 
     crop_state_fields = (
-        ("crop.carbon.organs", cpu.crop.carbon.organs, gpu.crop.carbon.organs),
-        ("crop.nitrogen.total", cpu.crop.nitrogen.total, gpu.crop.nitrogen.total),
-        ("crop.nitrogen.leaf", cpu.crop.nitrogen.leaf, gpu.crop.nitrogen.leaf),
-        ("crop.nitrogen.root", cpu.crop.nitrogen.root, gpu.crop.nitrogen.root),
-        ("crop.nitrogen.pool", cpu.crop.nitrogen.pool, gpu.crop.nitrogen.pool),
-        ("crop.nitrogen.storage", cpu.crop.nitrogen.storage, gpu.crop.nitrogen.storage),
-        ("crop.canopy.lai", cpu.crop.canopy.lai, gpu.crop.canopy.lai),
-        ("crop.phenology.fphu", cpu.crop.phenology.fphu, gpu.crop.phenology.fphu),
+        ("crop.state.carbon.leaf", cpu.crop.state.carbon.leaf, gpu.crop.state.carbon.leaf),
+        ("crop.state.carbon.root", cpu.crop.state.carbon.root, gpu.crop.state.carbon.root),
+        ("crop.state.carbon.pool", cpu.crop.state.carbon.pool, gpu.crop.state.carbon.pool),
+        ("crop.state.carbon.storage", cpu.crop.state.carbon.storage, gpu.crop.state.carbon.storage),
+        ("crop.state.nitrogen.total", cpu.crop.state.nitrogen.total, gpu.crop.state.nitrogen.total),
+        ("crop.state.nitrogen.leaf", cpu.crop.state.nitrogen.leaf, gpu.crop.state.nitrogen.leaf),
+        ("crop.state.nitrogen.root", cpu.crop.state.nitrogen.root, gpu.crop.state.nitrogen.root),
+        ("crop.state.nitrogen.pool", cpu.crop.state.nitrogen.pool, gpu.crop.state.nitrogen.pool),
+        ("crop.state.nitrogen.storage", cpu.crop.state.nitrogen.storage, gpu.crop.state.nitrogen.storage),
+        ("crop.state.canopy.lai", cpu.crop.state.canopy.lai, gpu.crop.state.canopy.lai),
+        ("crop.state.phenology.fphu", cpu.crop.state.phenology.fphu, gpu.crop.state.phenology.fphu),
     )
     for (label, cpu_values, gpu_values) in crop_state_fields
         test_float_equivalence(gpu_values, cpu_values; label = label)

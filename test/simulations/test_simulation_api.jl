@@ -83,7 +83,7 @@ end
 
     @test simulation.crop === simulation.state.crop
     @test simulation.output === simulation.state.output
-    @test eltype(simulation.crop.canopy.lai) == Float64
+    @test eltype(simulation.crop.state.canopy.lai) == Float64
     @test eltype(simulation.water_balance.residual) == Float64
 
     returned = run_simulation!(simulation, climate; spinup = false)
@@ -125,9 +125,12 @@ end
 
     @test chunked.simulated_days == 4
     @test chunked.output.crop.npp ≈ single.output.crop.npp
-    @test chunked.output.calendar.sowing_callback == single.output.calendar.sowing_callback
-    @test findall(!iszero, vec(chunked.output.calendar.sowing_callback)) == [1]
-    @test chunked.crop.carbon.organs ≈ single.crop.carbon.organs
+    @test chunked.output.calendar.sowing_event == single.output.calendar.sowing_event
+    @test findall(!iszero, vec(chunked.output.calendar.sowing_event)) == [1]
+    @test chunked.crop.state.carbon.leaf ≈ single.crop.state.carbon.leaf
+    @test chunked.crop.state.carbon.root ≈ single.crop.state.carbon.root
+    @test chunked.crop.state.carbon.pool ≈ single.crop.state.carbon.pool
+    @test chunked.crop.state.carbon.storage ≈ single.crop.state.carbon.storage
     @test chunked.soil.water.storage ≈ single.soil.water.storage
     @test chunked.water_balance.precipitation == reshape(Float64[1, 1, 3, 3], 4, 1)
 

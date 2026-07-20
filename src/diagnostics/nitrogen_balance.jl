@@ -58,7 +58,7 @@ function record_nitrogen_balance_start!(balance::NitrogenBalance,
                                         crop::Crop,
                                         soil::Soil)
     @views begin
-        balance.plant_before[day_index, :] .= crop.nitrogen.total
+        balance.plant_before[day_index, :] .= crop.state.nitrogen.total
         balance.mineral_before[day_index, :] .= vec(sum(
             soil.nitrogen.nitrate .+ soil.nitrogen.ammonium; dims = 1,
         ))
@@ -78,7 +78,7 @@ function record_nitrogen_balance_end!(balance::NitrogenBalance,
                                       crop::Crop,
                                       soil::Soil)
     @views begin
-        balance.plant_after[day_index, :] .= crop.nitrogen.total
+        balance.plant_after[day_index, :] .= crop.state.nitrogen.total
         balance.mineral_after[day_index, :] .= vec(sum(
             soil.nitrogen.nitrate .+ soil.nitrogen.ammonium; dims = 1,
         ))
@@ -91,15 +91,15 @@ function record_nitrogen_balance_end!(balance::NitrogenBalance,
             balance.organic_after[day_index, :]
 
         balance.root_uptake[day_index, :] .=
-            crop.nitrogen.uptake .- crop.nitrogen.auto_fertilizer
-        balance.seed_input[day_index, :] .= crop.nitrogen.seed_input
+            crop.fluxes.nitrogen.uptake .- crop.fluxes.nitrogen.auto_fertilizer
+        balance.seed_input[day_index, :] .= crop.fluxes.nitrogen.seed_input
         balance.prescribed_fertilizer_input[day_index, :] .=
-            crop.nitrogen.prescribed_fertilizer_input
+            crop.fluxes.nitrogen.prescribed_fertilizer_input
         balance.prescribed_manure_input[day_index, :] .=
-            crop.nitrogen.prescribed_manure_input
+            crop.fluxes.nitrogen.prescribed_manure_input
         balance.automatic_fertilizer_input[day_index, :] .=
-            crop.nitrogen.auto_fertilizer
-        balance.harvest_export[day_index, :] .= crop.nitrogen.harvest_export
+            crop.fluxes.nitrogen.auto_fertilizer
+        balance.harvest_export[day_index, :] .= crop.fluxes.nitrogen.harvest_export
         balance.mineralization[day_index, :] .=
             vec(sum(soil.nitrogen.mineralization; dims = 1))
         balance.immobilization[day_index, :] .=

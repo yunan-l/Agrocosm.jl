@@ -1,20 +1,20 @@
 """
-    litter_tillage!(soil, crop_cal)
+    litter_tillage!(soil, crop)
 
 On sowing days, transfer the configured fraction of existing surface litter
 to the incorporated litter pool. This follows LPJmL's `cultivate.c` ->
 `tillage.c` order.
 """
-function litter_tillage_reference!(soil::Soil, crop_cal::CropCalendar)
-    callback = reshape(crop_cal.sowing_callback, (1, :))
+function litter_tillage_reference!(soil::Soil, crop::Crop)
+    event = reshape(crop.events.sowing, (1, :))
 
     surface_carbon_before = copy(@view soil.carbon.litter[SURFACE_LITTER, :])
     surface_nitrogen_before = copy(@view soil.nitrogen.litter[SURFACE_LITTER, :])
 
     tilled_carbon = soil.management.tillage_fraction * soil.carbon.litter
     tilled_nitrogen = soil.management.tillage_fraction * soil.nitrogen.litter
-    soil.carbon.litter .= soil.carbon.litter .* (1 .- callback) .+ tilled_carbon .* callback
-    soil.nitrogen.litter .= soil.nitrogen.litter .* (1 .- callback) .+ tilled_nitrogen .* callback
+    soil.carbon.litter .= soil.carbon.litter .* (1 .- event) .+ tilled_carbon .* event
+    soil.nitrogen.litter .= soil.nitrogen.litter .* (1 .- event) .+ tilled_nitrogen .* event
 
     soil.management.tillage_carbon .=
         max.(surface_carbon_before .- @view(soil.carbon.litter[SURFACE_LITTER, :]), zero(eltype(surface_carbon_before)))
@@ -23,14 +23,14 @@ function litter_tillage_reference!(soil::Soil, crop_cal::CropCalendar)
     return nothing
 end
 
-function litter_tillage!(soil::Soil, crop_cal::CropCalendar)
+function litter_tillage!(soil::Soil, crop::Crop)
     launch_custom!(
         litter_tillage_kernel!,
         soil.carbon.litter,
         size(soil.carbon.litter, 2),
         soil.nitrogen.litter,
         soil.management.tillage_fraction,
-        crop_cal.sowing_callback,
+        crop.events.sowing,
         soil.management.tillage_carbon,
         soil.management.tillage_nitrogen,
     )
@@ -41,13 +41,13 @@ end
     carbon_litter::AbstractMatrix{T},
     nitrogen_litter::AbstractMatrix{T},
     tillage_fraction::AbstractMatrix{T},
-    sowing_callback::AbstractVector{S},
+    sowing_event::AbstractVector{S},
     tillage_carbon::AbstractVector{T},
     tillage_nitrogen::AbstractVector{T},
 ) where {T <: AbstractFloat, S <: Integer}
     cell = @index(Global)
-    callback = sowing_callback[cell]
-    if callback != 0
+    event = sowing_event[cell]
+    if event != 0
         carbon_1 = carbon_litter[1, cell]
         carbon_2 = carbon_litter[2, cell]
         carbon_3 = carbon_litter[3, cell]
@@ -133,57 +133,57 @@ The harvested stand is then marked `KILL`; the same day's `killstand()` calls
 `setaside()`, which calls `tillage()` when tillage is enabled. The root pool is
 unchanged by the tillage matrix.
 """
-function route_harvest_carbon_input_reference!(soil::Soil, crop_cal::CropCalendar)
-    callback = reshape(crop_cal.harvest_callback, (1, :))
+function route_harvest_carbon_input_reference!(soil::Soil, crop::Crop)
+    event = reshape(crop.events.harvest, (1, :))
     litter_with_input = soil.carbon.litter .+
                         max.(soil.carbon.input, zero(eltype(soil.carbon.input)))
     routed_litter = soil.management.tillage_fraction * litter_with_input
     soil.management.tillage_carbon .+=
         max.((@view litter_with_input[SURFACE_LITTER, :]) .-
              (@view routed_litter[SURFACE_LITTER, :]),
-             zero(eltype(litter_with_input))) .* vec(crop_cal.harvest_callback)
-    soil.carbon.litter .= soil.carbon.litter .* (1 .- callback) .+
-                          routed_litter .* callback
+             zero(eltype(litter_with_input))) .* vec(crop.events.harvest)
+    soil.carbon.litter .= soil.carbon.litter .* (1 .- event) .+
+                          routed_litter .* event
     return nothing
 end
 
-function route_harvest_carbon_input!(soil::Soil, crop_cal::CropCalendar)
+function route_harvest_carbon_input!(soil::Soil, crop::Crop)
     launch_custom!(
         route_harvest_litter_kernel!,
         soil.carbon.litter,
         size(soil.carbon.litter, 2),
         soil.carbon.input,
         soil.management.tillage_fraction,
-        crop_cal.harvest_callback,
+        crop.events.harvest,
         soil.management.tillage_carbon,
     )
     return nothing
 end
 
 """Route today's harvested nitrogen residues through post-harvest tillage."""
-function route_harvest_nitrogen_input_reference!(soil::Soil, crop_cal::CropCalendar)
-    callback = reshape(crop_cal.harvest_callback, (1, :))
+function route_harvest_nitrogen_input_reference!(soil::Soil, crop::Crop)
+    event = reshape(crop.events.harvest, (1, :))
     litter_with_input = soil.nitrogen.litter .+
                         max.(soil.nitrogen.input, zero(eltype(soil.nitrogen.input)))
     routed_litter = soil.management.tillage_fraction * litter_with_input
     soil.management.tillage_nitrogen .+=
         max.((@view litter_with_input[SURFACE_LITTER, :]) .-
              (@view routed_litter[SURFACE_LITTER, :]),
-             zero(eltype(litter_with_input))) .* vec(crop_cal.harvest_callback)
-    soil.nitrogen.litter .= soil.nitrogen.litter .* (1 .- callback) .+
-                            routed_litter .* callback
+             zero(eltype(litter_with_input))) .* vec(crop.events.harvest)
+    soil.nitrogen.litter .= soil.nitrogen.litter .* (1 .- event) .+
+                            routed_litter .* event
     return nothing
 end
 
 
-function route_harvest_nitrogen_input!(soil::Soil, crop_cal::CropCalendar)
+function route_harvest_nitrogen_input!(soil::Soil, crop::Crop)
     launch_custom!(
         route_harvest_litter_kernel!,
         soil.nitrogen.litter,
         size(soil.nitrogen.litter, 2),
         soil.nitrogen.input,
         soil.management.tillage_fraction,
-        crop_cal.harvest_callback,
+        crop.events.harvest,
         soil.management.tillage_nitrogen,
     )
     return nothing
@@ -193,11 +193,11 @@ end
     litter::AbstractMatrix{T},
     litter_input::AbstractMatrix{T},
     tillage_fraction::AbstractMatrix{T},
-    harvest_callback::AbstractVector{S},
+    harvest_event::AbstractVector{S},
     tillage_flux::AbstractVector{T},
 ) where {T <: AbstractFloat, S <: Integer}
     cell = @index(Global)
-    if harvest_callback[cell] != 0
+    if harvest_event[cell] != 0
         litter_1 = litter[1, cell] + max(litter_input[1, cell], zero(T))
         litter_2 = litter[2, cell] + max(litter_input[2, cell], zero(T))
         litter_3 = litter[3, cell] + max(litter_input[3, cell], zero(T))

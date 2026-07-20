@@ -14,7 +14,7 @@ function soil_infiltration!(soil::Soil,
                             lpjmlparams::LPJmLParams = lpjmlparams,
                             thermalparams::SoilThermalParams{T} = SoilThermalParams{T}(),
 ) where {T <: AbstractFloat}
-    surface_litter_interception!(soil, prec, crop.water.interception)
+    surface_litter_interception!(soil, prec, crop.fluxes.water.interception)
     transfer_heat = !irrigation && snowmelt !== nothing && air_temperature !== nothing
     if transfer_heat
         infil_perc!(
@@ -72,7 +72,7 @@ function soil_evapotranspiration!(soil::Soil,
             remove_evapotranspiration_kernel!,
             soil.water.storage,
             size(soil.water.storage, 2),
-            crop.water.transpiration_layer,
+            crop.fluxes.water.transpiration_layer,
             soil.water.evaporation,
             size(soil.water.storage, 1),
         )

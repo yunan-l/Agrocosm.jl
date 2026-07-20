@@ -1,10 +1,9 @@
 """
-cultivate!(crop, crop_cal, day)
+cultivate!(crop, managed_land, soil, day)
 
 Handle sowing-day state transitions and activate crop growth state.
 """
 function cultivate_reference!(crop::Crop,
-                              crop_cal::CropCalendar,
                               ml::ManagedLand,
                               soil::Soil,
                               day::Int;
@@ -14,60 +13,65 @@ function cultivate_reference!(crop::Crop,
                               laimax = cft1.laimax,
 )
 
-    T = eltype(crop.canopy.lai)
-    sowing = crop_cal.sowing_date .== day
+    T = eltype(crop.state.canopy.lai)
+    sowing = crop.state.calendar.sowing_date .== day
     seed_flaimax = T(0.000083)
     seed_lai = seed_flaimax * T(laimax)
-    crop.phenology.harvesting .= ifelse.(sowing, false, crop.phenology.harvesting)
-    crop_cal.sowing_callback .= ifelse.(sowing, 1, 0)
-    crop.phenology.is_growing .= ifelse.(sowing, 1, crop.phenology.is_growing)
+    crop.state.phenology.harvesting .= ifelse.(sowing, false, crop.state.phenology.harvesting)
+    crop.events.sowing .= ifelse.(sowing, 1, 0)
+    crop.state.phenology.is_growing .= ifelse.(sowing, 1, crop.state.phenology.is_growing)
 
     # LPJmL allocates a fresh Pftcrop at every cultivation. Agrocosm keeps a
     # persistent struct for GPU execution, so sowing must explicitly reproduce
     # the seasonal part of new_crop() without clearing soil or annual outputs.
     for field in (:vdsum, :husum, :fphu)
-        values = getproperty(crop.phenology, field)
+        values = getproperty(crop.state.phenology, field)
         values .= ifelse.(sowing, zero(T), values)
     end
-    crop.phenology.senescence .= ifelse.(sowing, false, crop.phenology.senescence)
-    crop.phenology.senescence_previous .= ifelse.(sowing, false, crop.phenology.senescence_previous)
-    crop.phenology.harvesting_previous .= ifelse.(sowing, false, crop.phenology.harvesting_previous)
-    crop.phenology.growing_days .= ifelse.(sowing, 0, crop.phenology.growing_days)
+    crop.state.phenology.senescence .= ifelse.(sowing, false, crop.state.phenology.senescence)
+    crop.state.phenology.senescence_previous .= ifelse.(sowing, false, crop.state.phenology.senescence_previous)
+    crop.state.phenology.harvesting_previous .= ifelse.(sowing, false, crop.state.phenology.harvesting_previous)
+    crop.state.phenology.growing_days .= ifelse.(sowing, 0, crop.state.phenology.growing_days)
 
-    crop.canopy.lai .= ifelse.(sowing, seed_lai, crop.canopy.lai)
-    crop.canopy.flaimax .= ifelse.(sowing, seed_flaimax, crop.canopy.flaimax)
-    crop.canopy.laimax_adjusted .= ifelse.(sowing, one(T), crop.canopy.laimax_adjusted)
-    crop.canopy.lai_npp_deficit .= ifelse.(sowing, zero(T), crop.canopy.lai_npp_deficit)
-    crop.canopy.phenology_fraction .= ifelse.(sowing, seed_flaimax, crop.canopy.phenology_fraction)
-    crop.carbon.biomass .= ifelse.(sowing, T(20), crop.carbon.biomass)
-    crop.carbon.root .= ifelse.(sowing, T(8), crop.carbon.root)
-    crop.carbon.leaf .= ifelse.(sowing, T(0.0113804), crop.carbon.leaf)
-    crop.carbon.storage .= ifelse.(sowing, zero(T), crop.carbon.storage)
-    crop.carbon.pool .= ifelse.(sowing, T(11.9886196), crop.carbon.pool)
+    crop.state.canopy.lai .= ifelse.(sowing, seed_lai, crop.state.canopy.lai)
+    crop.auxiliary.canopy.flaimax .= ifelse.(sowing, seed_flaimax, crop.auxiliary.canopy.flaimax)
+    crop.state.canopy.laimax_adjusted .= ifelse.(sowing, one(T), crop.state.canopy.laimax_adjusted)
+    crop.state.canopy.lai_npp_deficit .= ifelse.(sowing, zero(T), crop.state.canopy.lai_npp_deficit)
+    crop.auxiliary.canopy.phenology_fraction .= ifelse.(sowing, seed_flaimax, crop.auxiliary.canopy.phenology_fraction)
+    crop.state.carbon.biomass .= ifelse.(sowing, T(20), crop.state.carbon.biomass)
+    crop.state.carbon.root .= ifelse.(sowing, T(8), crop.state.carbon.root)
+    crop.state.carbon.leaf .= ifelse.(sowing, T(0.0113804), crop.state.carbon.leaf)
+    crop.state.carbon.storage .= ifelse.(sowing, zero(T), crop.state.carbon.storage)
+    crop.state.carbon.pool .= ifelse.(sowing, T(11.9886196), crop.state.carbon.pool)
     init_nitrogen = T(0.7) # C:N ratio of seed = 29
-    crop.nitrogen.seed_input .= ifelse.(sowing, init_nitrogen, zero(T))
-    crop.nitrogen.total .= ifelse.(sowing, init_nitrogen, crop.nitrogen.total)
+    crop.fluxes.nitrogen.seed_input .= ifelse.(sowing, init_nitrogen, zero(T))
+    crop.state.nitrogen.total .= ifelse.(sowing, init_nitrogen, crop.state.nitrogen.total)
     for field in (:leaf, :root, :pool, :storage, :pending_manure,
-                  :pending_fertilizer, :stress_sum, :deficit)
-        values = getproperty(crop.nitrogen, field)
+                  :pending_fertilizer, :stress_sum)
+        values = getproperty(crop.state.nitrogen, field)
         values .= ifelse.(sowing, zero(T), values)
     end
-    crop.nitrogen.stress .= ifelse.(sowing, one(T), crop.nitrogen.stress)
+    crop.auxiliary.stress.nitrogen_deficit .= ifelse.(
+        sowing, zero(T), crop.auxiliary.stress.nitrogen_deficit,
+    )
+    crop.auxiliary.stress.nitrogen .= ifelse.(sowing, one(T), crop.auxiliary.stress.nitrogen)
 
-    for field in (:deficit, :demand_sum, :supply_sum, :waterlogging_days)
-        values = getproperty(crop.water, field)
+    for field in (:demand_sum, :supply_sum, :waterlogging_days)
+        values = getproperty(crop.state.water, field)
         values .= ifelse.(sowing, zero(T), values)
     end
-    crop.water.stress .= ifelse.(sowing, one(T), crop.water.stress)
-    crop.water.waterlogging_stress .= ifelse.(sowing, one(T), crop.water.waterlogging_stress)
+    crop.auxiliary.stress.water_deficit .= ifelse.(
+        sowing, zero(T), crop.auxiliary.stress.water_deficit,
+    )
+    crop.auxiliary.stress.water .= ifelse.(sowing, one(T), crop.auxiliary.stress.water)
+    crop.auxiliary.stress.waterlogging .= ifelse.(sowing, one(T), crop.auxiliary.stress.waterlogging)
 
     # Daily fluxes and diagnostics (NPP, respiration, uptake, demand, current
     # management input, and harvest export) are intentionally not reset here:
     # their owning process overwrites them later in this same daily step.
     fertilizer!(
-        crop_cal,
-        ml,
         crop,
+        ml,
         soil,
         day;
         enabled = apply_prescribed_fertilizer,
@@ -78,7 +82,6 @@ function cultivate_reference!(crop::Crop,
 end
 
 function cultivate!(crop::Crop,
-                    crop_cal::CropCalendar,
                     ml::ManagedLand,
                     soil::Soil,
                     day::Int;
@@ -86,53 +89,53 @@ function cultivate!(crop::Crop,
                     manure = false,
                     apply_prescribed_fertilizer::Bool = true,
                     laimax = cft1.laimax)
-    T = eltype(crop.canopy.lai)
+    T = eltype(crop.state.canopy.lai)
     launch_1D!(
         cultivate_kernel!,
-        crop_cal.sowing_date,
-        crop_cal.sowing_callback,
-        crop.phenology.harvesting,
-        crop.phenology.harvesting_previous,
-        crop.phenology.is_growing,
-        crop.phenology.vdsum,
-        crop.phenology.husum,
-        crop.phenology.fphu,
-        crop.phenology.senescence,
-        crop.phenology.senescence_previous,
-        crop.phenology.growing_days,
-        crop.canopy.lai,
-        crop.canopy.flaimax,
-        crop.canopy.laimax_adjusted,
-        crop.canopy.lai_npp_deficit,
-        crop.canopy.phenology_fraction,
-        crop.carbon.biomass,
-        crop.carbon.root,
-        crop.carbon.leaf,
-        crop.carbon.storage,
-        crop.carbon.pool,
-        crop.nitrogen.seed_input,
-        crop.nitrogen.total,
-        crop.nitrogen.leaf,
-        crop.nitrogen.root,
-        crop.nitrogen.pool,
-        crop.nitrogen.storage,
-        crop.nitrogen.pending_manure,
-        crop.nitrogen.pending_fertilizer,
-        crop.nitrogen.stress_sum,
-        crop.nitrogen.stress,
-        crop.nitrogen.deficit,
-        crop.water.deficit,
-        crop.water.demand_sum,
-        crop.water.supply_sum,
-        crop.water.stress,
-        crop.water.waterlogging_days,
-        crop.water.waterlogging_stress,
+        crop.state.calendar.sowing_date,
+        crop.events.sowing,
+        crop.state.phenology.harvesting,
+        crop.state.phenology.harvesting_previous,
+        crop.state.phenology.is_growing,
+        crop.state.phenology.vdsum,
+        crop.state.phenology.husum,
+        crop.state.phenology.fphu,
+        crop.state.phenology.senescence,
+        crop.state.phenology.senescence_previous,
+        crop.state.phenology.growing_days,
+        crop.state.canopy.lai,
+        crop.auxiliary.canopy.flaimax,
+        crop.state.canopy.laimax_adjusted,
+        crop.state.canopy.lai_npp_deficit,
+        crop.auxiliary.canopy.phenology_fraction,
+        crop.state.carbon.biomass,
+        crop.state.carbon.root,
+        crop.state.carbon.leaf,
+        crop.state.carbon.storage,
+        crop.state.carbon.pool,
+        crop.fluxes.nitrogen.seed_input,
+        crop.state.nitrogen.total,
+        crop.state.nitrogen.leaf,
+        crop.state.nitrogen.root,
+        crop.state.nitrogen.pool,
+        crop.state.nitrogen.storage,
+        crop.state.nitrogen.pending_manure,
+        crop.state.nitrogen.pending_fertilizer,
+        crop.state.nitrogen.stress_sum,
+        crop.auxiliary.stress.nitrogen,
+        crop.auxiliary.stress.nitrogen_deficit,
+        crop.auxiliary.stress.water_deficit,
+        crop.state.water.demand_sum,
+        crop.state.water.supply_sum,
+        crop.auxiliary.stress.water,
+        crop.state.water.waterlogging_days,
+        crop.auxiliary.stress.waterlogging,
         T(0.000083),
         T(0.000083) * T(laimax),
         day,
     )
     fertilizer!(
-        crop_cal, ml, crop, soil, day;
+        crop, ml, soil, day;
         enabled = apply_prescribed_fertilizer,
         manure = manure,
         lpjmlparams = lpjmlparams,
@@ -142,7 +145,7 @@ end
 
 @kernel inbounds = true function cultivate_kernel!(
     sowing_date::AbstractVector{S},
-    sowing_callback::AbstractVector{S},
+    sowing_event::AbstractVector{S},
     harvesting::AbstractVector{B},
     harvesting_previous::AbstractVector{B},
     is_growing::AbstractVector{S},
@@ -185,7 +188,7 @@ end
 ) where {T <: AbstractFloat, S <: Integer, B <: Bool}
     cell = @index(Global)
     sowing = sowing_date[cell] == day
-    sowing_callback[cell] = sowing ? one(S) : zero(S)
+    sowing_event[cell] = sowing ? one(S) : zero(S)
     if sowing
         harvesting[cell] = false
         harvesting_previous[cell] = false

@@ -20,8 +20,8 @@ using Test
     soil.thermal.temperature[:, 1] .= -20.0f0
     soil.thermal.temperature[:, 2] .= 10.0f0
 
-    soil_carbon!(crop.calendar, soil)
-    soil_nitrogen!(crop.calendar, soil)
+    soil_carbon!(crop, soil)
+    soil_nitrogen!(crop, soil)
 
     # LPJmL gates the entire litter block with top-layer gtemp_soil > 0.
     @test all(iszero, soil.carbon.decomposed_litter[:, 1])
@@ -44,8 +44,8 @@ using Test
     invalid.nitrogen.fast .= -1.0f0
     invalid.nitrogen.slow .= -1.0f0
 
-    soil_carbon!(invalid_crop.calendar, invalid)
-    soil_nitrogen!(invalid_crop.calendar, invalid)
+    soil_carbon!(invalid_crop, invalid)
+    soil_nitrogen!(invalid_crop, invalid)
 
     # Match LPJmL's max(0, flux) guard: an invalid negative pool must not
     # create a reverse decomposition flux that increases respiration.

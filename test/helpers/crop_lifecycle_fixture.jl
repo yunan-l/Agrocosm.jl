@@ -61,4 +61,4 @@ function run_lifecycle_fixture(device = identity; T = Float32, days = 730)
     return simulation
 end
 
-callback_days(values) = findall(!iszero, vec(Array(values)))
+event_days(values) = findall(!iszero, vec(Array(values)))
