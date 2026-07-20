@@ -50,7 +50,8 @@ end
     target_lambda = 0.2f0
     vmax = 2.0f0
     tstress = 1.0f0
-    co2 = Float32[40.0, 40.0]
+    # Annual CO2 is a shared scalar buffer in the full simulation.
+    co2 = Float32[40.0]
     temp = Float32[25.0, 25.0]
     apar = 1.0f6
     daylength = 12.0f0
@@ -67,12 +68,16 @@ end
     photos.temperature_stress .= tstress
     crop.canopy.apar .= apar
     crop.canopy.fpar .= fpar
-    crop.water.canopy_conductance .= Float32[target_conductance, 0.0]
+    crop.water.canopy_conductance .= target_conductance
     pet.daylength .= daylength
 
     solve_lambda_c4!(cft3, photos, crop, pet, temp, co2)
 
     @test photos.lambda[1] ≈ target_lambda atol = 2.0f-3
+    @test photos.lambda[2] ≈ target_lambda atol = 2.0f-3
+
+    crop.water.canopy_conductance[2] = 0.0f0
+    solve_lambda_c4!(cft3, photos, crop, pet, temp, co2)
     @test photos.lambda[2] == 0.0f0
 
     photosynthesis_C4!(

@@ -187,6 +187,51 @@ function test_balance_equivalence(gpu_balance, cpu_balance;
     return nothing
 end
 
+function callback_days(values, cell)
+    host = host_array(values)
+    return findall(!iszero, view(host, :, cell))
+end
+
+function log_first_crop_divergence(cpu, gpu;
+                                   rtol = 1.0f-5, atol = 1.0f-6)
+    for cell in 1:C3_E2E_CELLS
+        cpu_sowing = callback_days(cpu.output.calendar.sowing_callback, cell)
+        gpu_sowing = callback_days(gpu.output.calendar.sowing_callback, cell)
+        cpu_harvest = callback_days(cpu.output.calendar.harvest_callback, cell)
+        gpu_harvest = callback_days(gpu.output.calendar.harvest_callback, cell)
+        @info "CPU/GPU crop event days" cell cpu_sowing gpu_sowing cpu_harvest gpu_harvest
+    end
+
+    # Follow the daily causal chain from phenology/photosynthesis to crop state.
+    for field in (:fphu, :lambda, :gpp, :respiration, :npp, :biomass, :lai)
+        cpu_values = host_array(getproperty(cpu.output.crop, field))
+        gpu_values = host_array(getproperty(gpu.output.crop, field))
+        matches = isapprox.(gpu_values, cpu_values; rtol = rtol, atol = atol)
+        first_bad = findfirst(.!matches)
+        first_bad === nothing && continue
+        gpu_value = gpu_values[first_bad]
+        cpu_value = cpu_values[first_bad]
+        absolute_error = abs(gpu_value - cpu_value)
+        relative_error = absolute_error / max(abs(cpu_value), atol)
+        @info "CPU/GPU key crop divergence" field first_bad gpu_value cpu_value absolute_error relative_error rtol atol
+    end
+    return nothing
+end
+
+function test_exact_equivalence(gpu_values, cpu_values; label)
+    gpu_host = host_array(gpu_values)
+    cpu_host = host_array(cpu_values)
+    matches = gpu_host .== cpu_host
+    if !all(matches)
+        first_bad = findfirst(.!matches)
+        gpu_value = gpu_host[first_bad]
+        cpu_value = cpu_host[first_bad]
+        @info "CPU/GPU first exact mismatch" label first_bad gpu_value cpu_value
+    end
+    @test all(matches)
+    return nothing
+end
+
 @testset "CUDA C3 rainfed wheat 365/730-day end-to-end equivalence" begin
     host_climate = c3_e2e_climate_host()
     cpu = run_c3_e2e(identity, host_climate)
@@ -198,6 +243,8 @@ end
     @test maximum(cpu.output.crop.npp) > 0.0f0
     @test sum(cpu.output.calendar.sowing_callback) > 0
     @test sum(cpu.output.calendar.harvest_callback) > 0
+
+    log_first_crop_divergence(cpu, gpu)
 
     daily_float_fields = (
         :gpp, :npp, :lambda, :potential_vmax, :vmax,
@@ -222,15 +269,21 @@ end
     )
 
     for field in (:growing_mask,)
-        @test host_array(getproperty(gpu.output.crop, field)) ==
-            host_array(getproperty(cpu.output.crop, field))
+        test_exact_equivalence(
+            getproperty(gpu.output.crop, field),
+            getproperty(cpu.output.crop, field);
+            label = "output.crop.$field",
+        )
     end
     for field in (
         :harvesting_mask, :harvesting_year, :harvest_date,
         :sowing_callback, :harvest_callback,
     )
-        @test host_array(getproperty(gpu.output.calendar, field)) ==
-            host_array(getproperty(cpu.output.calendar, field))
+        test_exact_equivalence(
+            getproperty(gpu.output.calendar, field),
+            getproperty(cpu.output.calendar, field);
+            label = "output.calendar.$field",
+        )
     end
 
     crop_state_fields = (

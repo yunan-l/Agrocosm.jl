@@ -54,16 +54,21 @@ end
     )
     reference = init_weather(cells, identity)
     kernel = init_weather(cells, identity)
-    Agrocosm.readclimate_reference!(climate, reference, 2)
-    readclimate!(climate, kernel, 2)
+    reference_co2 = Agrocosm.readclimate_reference!(climate, reference, 2)
+    kernel_co2 = readclimate!(climate, kernel, 2)
     for field in (:temp, :prec, :swr, :lwr, :wind, :annual_co2)
         @test getproperty(kernel, field) ≈ getproperty(reference, field)
     end
+    @test reference_co2 === reference.annual_co2
+    @test kernel_co2 === kernel.annual_co2
 
     daily_co2 = reshape(Float32.(range(390, 430; length = days * cells)), days, cells)
-    Agrocosm.readclimate_reference!(climate, reference, daily_co2, 3)
-    readclimate!(climate, kernel, daily_co2, 3)
+    daily_climate = merge(climate, (co2 = daily_co2,))
+    reference_co2 = Agrocosm.readclimate_reference!(daily_climate, reference, 3)
+    kernel_co2 = readclimate!(daily_climate, kernel, 3)
     for field in (:temp, :prec, :swr, :lwr, :wind, :daily_co2)
         @test getproperty(kernel, field) ≈ getproperty(reference, field)
     end
+    @test reference_co2 === reference.daily_co2
+    @test kernel_co2 === kernel.daily_co2
 end

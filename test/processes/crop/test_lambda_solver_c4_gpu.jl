@@ -13,7 +13,8 @@ CUDA.allowscalar(false)
     target_lambda = 0.2f0
     vmax = 2.0f0
     tstress = 1.0f0
-    co2_cpu = Float32[40.0, 40.0]
+    # Match the full simulation: one annual CO2 value shared by all cells.
+    co2_cpu = Float32[40.0]
     temp_cpu = Float32[25.0, 25.0]
     apar = 1.0f6
     daylength = 12.0f0
@@ -30,7 +31,7 @@ CUDA.allowscalar(false)
     photos.temperature_stress .= tstress
     crop.canopy.apar .= apar
     crop.canopy.fpar .= fpar
-    crop.water.canopy_conductance .= CuArray(Float32[target_conductance, 0.0])
+    crop.water.canopy_conductance .= target_conductance
     pet.daylength .= daylength
 
     solve_lambda_c4!(
@@ -39,5 +40,11 @@ CUDA.allowscalar(false)
 
     lambda_cpu = Array(photos.lambda)
     @test lambda_cpu[1] ≈ target_lambda atol = 2.0f-3
-    @test lambda_cpu[2] == 0.0f0
+    @test lambda_cpu[2] ≈ target_lambda atol = 2.0f-3
+
+    crop.water.canopy_conductance .= CuArray(Float32[target_conductance, 0.0])
+    solve_lambda_c4!(
+        cft3, photos, crop, pet, CuArray(temp_cpu), CuArray(co2_cpu),
+    )
+    @test Array(photos.lambda)[2] == 0.0f0
 end

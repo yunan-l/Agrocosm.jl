@@ -36,7 +36,7 @@ function daily_crop_C3!(start_day, end_day,
 
         day_of_year = day % 365 != 0 ? day % 365 : 365
 
-        readclimate!(climate, dailyWeather, day)
+        current_co2 = readclimate!(climate, dailyWeather, day)
 
         if carbon_balance !== nothing
             record_carbon_balance_start!(carbon_balance, diagnostic_day, crop, soil)
@@ -123,15 +123,15 @@ function daily_crop_C3!(start_day, end_day,
         temp_stress(pftparameters, pet, photos, dailyWeather.temp) # temperature stress function
 
         # C3 photosynthesis
-        photosynthesis_C3!(pftparameters, photos, crop.canopy.apar, pet.daylength, dailyWeather.temp, dailyWeather.annual_co2; comp_vmax = true)
+        photosynthesis_C3!(pftparameters, photos, crop.canopy.apar, pet.daylength, dailyWeather.temp, current_co2; comp_vmax = true)
 
         # LPJmL first uses lambda_opt photosynthesis to obtain potential
         # conductance, then constrains conductance by water supply.
-        transpiration!(photos.water_limited_assimilation, pftparameters, crop, pet, soil, dailyWeather.annual_co2)
+        transpiration!(photos.water_limited_assimilation, pftparameters, crop, pet, soil, current_co2)
 
         # Solve the water-limited lambda on the active backend (CPU or GPU),
         # then recompute photosynthesis with fixed vmax and actual lambda.
-        solve_lambda_c3!(pftparameters, photos, crop, pet, dailyWeather.temp, dailyWeather.annual_co2)
+        solve_lambda_c3!(pftparameters, photos, crop, pet, dailyWeather.temp, current_co2)
 
         if nitrogen_limit_vmax
             # LPJmL obtains N using the potential capacity, constrains Vmax
@@ -140,7 +140,7 @@ function daily_crop_C3!(start_day, end_day,
                            auto_fertilizer = auto_fertilizer)
             limit_vmax_by_nitrogen!(crop, pftparameters, dailyWeather.temp)
         end
-        photosynthesis_C3!(pftparameters, photos, crop.canopy.apar, pet.daylength, dailyWeather.temp, dailyWeather.annual_co2; comp_vmax = false)
+        photosynthesis_C3!(pftparameters, photos, crop.canopy.apar, pet.daylength, dailyWeather.temp, current_co2; comp_vmax = false)
 
         # crop respiration and carbon allocation
         crop_carbon!(

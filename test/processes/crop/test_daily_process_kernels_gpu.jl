@@ -29,6 +29,19 @@ CUDA.allowscalar(false)
     synchronize()
     @test Array(weather_gpu.temp) == weather_reference.temp
     @test Array(weather_gpu.wind) == weather_reference.wind
+
+    daily_co2 = reshape(Float32.(range(390, 430; length = days * cells)), days, cells)
+    daily_climate_cpu = merge(climate_cpu, (co2 = daily_co2,))
+    daily_climate_gpu = merge(climate_gpu, (co2 = CuArray(daily_co2),))
+    reference_co2 = Agrocosm.readclimate_reference!(
+        daily_climate_cpu, weather_reference, 2,
+    )
+    gpu_co2 = readclimate!(daily_climate_gpu, weather_gpu, 2)
+    synchronize()
+    @test reference_co2 === weather_reference.daily_co2
+    @test gpu_co2 === weather_gpu.daily_co2
+    @test Array(gpu_co2) == reference_co2
+
     climate_bytes = CUDA.@allocated begin
         readclimate!(climate_gpu, weather_gpu, 2)
         synchronize()

@@ -37,7 +37,7 @@ function daily_crop_C4!(day_start, day_end,
 
         day_of_year = day % 365 != 0 ? day % 365 : 365
 
-        readclimate!(climate, dailyWeather, day)
+        current_co2 = readclimate!(climate, dailyWeather, day)
 
         if carbon_balance !== nothing
             record_carbon_balance_start!(carbon_balance, diagnostic_day, crop, soil)
@@ -133,8 +133,8 @@ function daily_crop_C4!(day_start, day_end,
 
         # Potential conductance at LAMBDA_OPT, followed by the LPJmL
         # water-limited C4 lambda solve on the active CPU/GPU backend.
-        transpiration!(photos.water_limited_assimilation, pftparameters, crop, pet, soil, dailyWeather.annual_co2)
-        solve_lambda_c4!(pftparameters, photos, crop, pet, dailyWeather.temp, dailyWeather.annual_co2)
+        transpiration!(photos.water_limited_assimilation, pftparameters, crop, pet, soil, current_co2)
+        solve_lambda_c4!(pftparameters, photos, crop, pet, dailyWeather.temp, current_co2)
 
         if nitrogen_limit_vmax
             crop_nitrogen!(crop, pftparameters, soil, photos.potential_vmax, dailyWeather.temp;

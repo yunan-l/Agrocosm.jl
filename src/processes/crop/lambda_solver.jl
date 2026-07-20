@@ -266,13 +266,14 @@ end
 ) where {T <: AbstractFloat}
     cell = @index(Global)
     @unpack b, gmin, lpjmlparams, photoparams = kernel_params
+    co2_cell = co2[length(co2) == 1 ? 1 : cell]
 
     gpd = daylength[cell] * T(3600) *
           (conductance[cell] - gmin * fpar[cell])
 
     if gpd > T(1e-5) && tstress[cell] >= T(1e-2) &&
-       daylength[cell] > zero(T) && co2[cell] > zero(T)
-        fac = gpd / T(1.6) * co2[cell] * T(1e-5)
+       daylength[cell] > zero(T) && co2_cell > zero(T)
+        fac = gpd / T(1.6) * co2_cell * T(1e-5)
         xlow = T(0.02)
         xhigh = T(0.85)
         ylow = fac * (one(T) - xlow) -
@@ -325,6 +326,7 @@ end
 ) where {T <: AbstractFloat}
     cell = @index(Global)
     @unpack b, gmin, lpjmlparams, photoparams = kernel_params
+    co2_cell = co2[length(co2) == 1 ? 1 : cell]
 
     # LPJmL receives ppm and converts it to bar. Agrocosm stores partial
     # pressure in Pa, so the equivalent conversion is Pa * 1e-5.
@@ -332,13 +334,13 @@ end
           (conductance[cell] - gmin * fpar[cell])
 
     if gpd > T(1e-5) && tstress[cell] >= T(1e-2) &&
-       daylength[cell] > zero(T) && co2[cell] > zero(T)
-        fac = gpd / T(1.6) * co2[cell] * T(1e-5)
+       daylength[cell] > zero(T) && co2_cell > zero(T)
+        fac = gpd / T(1.6) * co2_cell * T(1e-5)
         xlow = T(0.02)
         xhigh = T(0.85)
         ylow = fac * (one(T) - xlow) -
                c3_adtmm_scalar_impl(
-                   xlow, vmax[cell], tstress[cell], b, co2[cell], temp[cell],
+                   xlow, vmax[cell], tstress[cell], b, co2_cell, temp[cell],
                    apar[cell], daylength[cell], lpjmlparams, photoparams,
                )
         xmin = (xlow + xhigh) * T(0.5)
@@ -348,7 +350,7 @@ end
             xmid = (xlow + xhigh) * T(0.5)
             ymid = fac * (one(T) - xmid) -
                    c3_adtmm_scalar_impl(
-                       xmid, vmax[cell], tstress[cell], b, co2[cell], temp[cell],
+                       xmid, vmax[cell], tstress[cell], b, co2_cell, temp[cell],
                        apar[cell], daylength[cell], lpjmlparams, photoparams,
                    )
             if abs(ymid) < ymin

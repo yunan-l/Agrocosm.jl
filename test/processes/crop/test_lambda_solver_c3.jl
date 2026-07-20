@@ -9,7 +9,8 @@ using Test
     target_lambda = 0.5f0
     vmax = 2.0f0
     tstress = 1.0f0
-    co2 = Float32[40.0, 40.0]
+    # Annual CO2 is a shared scalar buffer in the full simulation.
+    co2 = Float32[40.0]
     temp = Float32[20.0, 20.0]
     apar = 1.0f6
     daylength = 12.0f0
@@ -26,12 +27,16 @@ using Test
     photos.temperature_stress .= tstress
     crop.canopy.apar .= apar
     crop.canopy.fpar .= fpar
-    crop.water.canopy_conductance .= Float32[target_conductance, 0.0]
+    crop.water.canopy_conductance .= target_conductance
     pet.daylength .= daylength
 
     solve_lambda_c3!(cft1, photos, crop, pet, temp, co2)
 
     @test photos.lambda[1] ≈ target_lambda atol = 2.0f-3
+    @test photos.lambda[2] ≈ target_lambda atol = 2.0f-3
+
+    crop.water.canopy_conductance[2] = 0.0f0
+    solve_lambda_c3!(cft1, photos, crop, pet, temp, co2)
     @test photos.lambda[2] == 0.0f0
 end
 
