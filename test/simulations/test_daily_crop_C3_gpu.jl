@@ -136,7 +136,7 @@ function run_c3_e2e(device, host_climate)
         irrigation = false,
         manure = false,
         auto_fertilizer = false,
-        nitrogen_limit_vmax = false,
+        nitrogen_limit_vcmax = false,
         water_balance = water,
         nitrogen_balance = nitrogen,
         carbon_balance = carbon,
@@ -284,7 +284,7 @@ end
     log_first_crop_divergence(cpu, gpu)
 
     daily_float_fields = (
-        :gpp, :npp, :lambda, :potential_vmax, :vmax,
+        :gpp, :npp, :lambda, :potential_vcmax, :vcmax,
         :nitrogen_limitation, :respiration, :biomass, :lai,
         :storage_carbon, :fphu, :water_deficit,
     )

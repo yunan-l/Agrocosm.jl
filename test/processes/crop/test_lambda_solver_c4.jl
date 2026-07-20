@@ -2,7 +2,7 @@ using Agrocosm
 using Test
 
 @testset "LPJ-compatible C4 lambda solver" begin
-    vmax = 2.0f0
+    vcmax = 2.0f0
     tstress = 1.0f0
     b = cft3.b
     co2 = 40.0f0
@@ -12,7 +12,7 @@ using Test
     target_lambda = 0.2f0
 
     target_adtmm = Agrocosm.c4_adtmm_scalar(
-        target_lambda, vmax, tstress, b, temp, apar, daylength,
+        target_lambda, vcmax, tstress, b, temp, apar, daylength,
     )
     @test target_adtmm > 0.0f0
 
@@ -20,20 +20,20 @@ using Test
     photos = crop.auxiliary.photosynthesis
     photos.temperature_stress .= tstress
     photos.lambda .= target_lambda
-    photos.vmax .= vmax
+    photos.vcmax .= vcmax
     photosynthesis_C4!(
         cft3,
         crop,
         Float32[apar],
         Float32[daylength],
         Float32[temp];
-        comp_vmax = false,
+        comp_vcmax = false,
     )
     @test target_adtmm ≈ crop.fluxes.carbon.water_limited_assimilation[1] atol = 1.0f-6
 
     fac = target_adtmm / (1.0f0 - target_lambda)
     lambda, iterations, residual = solve_lambda_c4_lpj(
-        fac, vmax, tstress, b, temp, apar, daylength,
+        fac, vcmax, tstress, b, temp, apar, daylength,
     )
 
     @test 0.02f0 <= lambda <= 0.85f0
@@ -48,7 +48,7 @@ end
     pet = init_pet(2, identity)
 
     target_lambda = 0.2f0
-    vmax = 2.0f0
+    vcmax = 2.0f0
     tstress = 1.0f0
     # Annual CO2 is a shared scalar buffer in the full simulation.
     co2 = Float32[40.0]
@@ -58,13 +58,13 @@ end
     fpar = 0.8f0
 
     target_adtmm = Agrocosm.c4_adtmm_scalar(
-        target_lambda, vmax, tstress, cft3.b, temp[1], apar, daylength,
+        target_lambda, vcmax, tstress, cft3.b, temp[1], apar, daylength,
     )
     fac = target_adtmm / (1.0f0 - target_lambda)
     gpd = fac * 1.6f0 / (co2[1] * 1.0f-5)
     target_conductance = gpd / (daylength * 3600.0f0) + cft3.gmin * fpar
 
-    photos.vmax .= vmax
+    photos.vcmax .= vcmax
     photos.temperature_stress .= tstress
     crop.auxiliary.canopy.apar .= apar
     crop.auxiliary.canopy.fpar .= fpar
@@ -81,7 +81,7 @@ end
     @test photos.lambda[2] == 0.0f0
 
     photosynthesis_C4!(
-        cft3, crop, crop.auxiliary.canopy.apar, pet.daylength, temp; comp_vmax = false,
+        cft3, crop, crop.auxiliary.canopy.apar, pet.daylength, temp; comp_vcmax = false,
     )
     @test crop.fluxes.carbon.water_limited_assimilation[2] == 0.0f0
 end

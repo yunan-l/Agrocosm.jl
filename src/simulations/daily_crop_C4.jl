@@ -12,7 +12,7 @@ function daily_crop_C4!(day_start, day_end,
                         irrigation = false,
                         manure = false,
                         auto_fertilizer = true,
-                        nitrogen_limit_vmax = false,
+                        nitrogen_limit_vcmax = false,
                         water_balance = nothing,
                         nitrogen_balance = nothing,
                         carbon_balance = nothing,
@@ -159,7 +159,7 @@ function daily_crop_C4!(day_start, day_end,
 
         # C4 photosynthesis
         photosynthesis_C4!(pftparameters, crop, crop.auxiliary.canopy.apar, pet.daylength, dailyWeather.temp;
-                           comp_vmax = true, lpjmlparams = global_params, photoparams = photo_params)
+                           comp_vcmax = true, lpjmlparams = global_params, photoparams = photo_params)
 
         # Potential conductance at LAMBDA_OPT, followed by the LPJmL
         # water-limited C4 lambda solve on the active CPU/GPU backend.
@@ -168,14 +168,14 @@ function daily_crop_C4!(day_start, day_end,
         solve_lambda_c4!(pftparameters, crop, pet, dailyWeather.temp, current_co2;
                          lpjmlparams = global_params, photoparams = photo_params)
 
-        if nitrogen_limit_vmax
-            crop_nitrogen!(crop, pftparameters, soil, crop.auxiliary.photosynthesis.potential_vmax, dailyWeather.temp;
+        if nitrogen_limit_vcmax
+            crop_nitrogen!(crop, pftparameters, soil, crop.auxiliary.photosynthesis.potential_vcmax, dailyWeather.temp;
                            auto_fertilizer = auto_fertilizer, lpjmlparams = global_params)
-            limit_vmax_by_nitrogen!(crop, pftparameters, dailyWeather.temp;
+            limit_vcmax_by_nitrogen!(crop, pftparameters, dailyWeather.temp;
                                     lpjmlparams = global_params)
         end
         photosynthesis_C4!(pftparameters, crop, crop.auxiliary.canopy.apar, pet.daylength, dailyWeather.temp;
-                           comp_vmax = false, lpjmlparams = global_params, photoparams = photo_params)
+                           comp_vcmax = false, lpjmlparams = global_params, photoparams = photo_params)
 
         # crop respiration and carbon allocation
         crop_carbon!(
@@ -185,10 +185,10 @@ function daily_crop_C4!(day_start, day_end,
         )
 
         # crop nitrogen allocation
-        if nitrogen_limit_vmax
+        if nitrogen_limit_vcmax
             allocate_crop_nitrogen!(crop, pftparameters)
         else
-            crop_nitrogen!(crop, pftparameters, soil, crop.auxiliary.photosynthesis.vmax, dailyWeather.temp;
+            crop_nitrogen!(crop, pftparameters, soil, crop.auxiliary.photosynthesis.vcmax, dailyWeather.temp;
                            auto_fertilizer = auto_fertilizer,
                            lpjmlparams = global_params) # nitrogen cycle
         end

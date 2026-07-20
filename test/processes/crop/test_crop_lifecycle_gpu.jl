@@ -23,7 +23,7 @@ include("../../helpers/crop_lifecycle_fixture.jl")
 
     inactive_days = vcat(138:464, 503:730)
     for field in (
-        :gpp, :npp, :lambda, :potential_vmax, :vmax,
+        :gpp, :npp, :lambda, :potential_vcmax, :vcmax,
         :nitrogen_limitation, :respiration, :biomass, :lai,
         :storage_carbon, :fphu,
     )
@@ -63,7 +63,7 @@ include("../../helpers/crop_lifecycle_fixture.jl")
          (:nitrogen_demand_total, :nitrogen_demand_leaf, :nitrogen,
           :nitrogen_deficit, :water_deficit, :water)),
         (gpu.crop.auxiliary.photosynthesis,
-         (:potential_vmax, :vmax, :nitrogen_limitation, :lambda)),
+         (:potential_vcmax, :vcmax, :nitrogen_limitation, :lambda)),
     )
         for field in fields
             @test all(iszero, Array(getproperty(container, field)))

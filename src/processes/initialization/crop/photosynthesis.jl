@@ -1,7 +1,7 @@
 """Current-day crop photosynthetic capacities and limiting factors."""
 mutable struct CropPhotosynthesisAuxiliary{A}
-    potential_vmax::A
-    vmax::A
+    potential_vcmax::A
+    vcmax::A
     nitrogen_limitation::A
     lambda::A
     temperature_stress::A

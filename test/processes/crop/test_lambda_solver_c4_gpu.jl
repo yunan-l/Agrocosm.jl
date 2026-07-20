@@ -11,7 +11,7 @@ CUDA.allowscalar(false)
     pet = init_pet(2, CuArray)
 
     target_lambda = 0.2f0
-    vmax = 2.0f0
+    vcmax = 2.0f0
     tstress = 1.0f0
     # Match the full simulation: one annual CO2 value shared by all cells.
     co2_cpu = Float32[40.0]
@@ -21,13 +21,13 @@ CUDA.allowscalar(false)
     fpar = 0.8f0
 
     target_adtmm = Agrocosm.c4_adtmm_scalar(
-        target_lambda, vmax, tstress, cft3.b, temp_cpu[1], apar, daylength,
+        target_lambda, vcmax, tstress, cft3.b, temp_cpu[1], apar, daylength,
     )
     fac = target_adtmm / (1.0f0 - target_lambda)
     gpd = fac * 1.6f0 / (co2_cpu[1] * 1.0f-5)
     target_conductance = gpd / (daylength * 3600.0f0) + cft3.gmin * fpar
 
-    photos.vmax .= vmax
+    photos.vcmax .= vcmax
     photos.temperature_stress .= tstress
     crop.auxiliary.canopy.apar .= apar
     crop.auxiliary.canopy.fpar .= fpar

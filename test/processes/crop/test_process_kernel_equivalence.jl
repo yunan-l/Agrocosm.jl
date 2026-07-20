@@ -145,11 +145,11 @@ end
         kernel.auxiliary.photosynthesis.temperature_stress .= stress
         gross_destination = kernel.fluxes.carbon.gross_assimilation
         if pft === cft1
-            reference_function(pft, reference, apar, daylength, temperature, co2; comp_vmax = true)
-            kernel_function(pft, kernel, apar, daylength, temperature, co2; comp_vmax = true)
+            reference_function(pft, reference, apar, daylength, temperature, co2; comp_vcmax = true)
+            kernel_function(pft, kernel, apar, daylength, temperature, co2; comp_vcmax = true)
         else
-            reference_function(pft, reference, apar, daylength, temperature; comp_vmax = true)
-            kernel_function(pft, kernel, apar, daylength, temperature; comp_vmax = true)
+            reference_function(pft, reference, apar, daylength, temperature; comp_vcmax = true)
+            kernel_function(pft, kernel, apar, daylength, temperature; comp_vcmax = true)
         end
         @test kernel.fluxes.carbon.gross_assimilation === gross_destination
         compare_fields(
@@ -160,7 +160,7 @@ end
         )
         compare_fields(
             reference.auxiliary.photosynthesis, kernel.auxiliary.photosynthesis,
-            (:potential_vmax, :vmax, :nitrogen_limitation, :lambda);
+            (:potential_vcmax, :vcmax, :nitrogen_limitation, :lambda);
             rtol = 4.0f-6, atol = 3.0f-7,
         )
 
@@ -168,11 +168,11 @@ end
         reference.auxiliary.photosynthesis.lambda .= new_lambda
         kernel.auxiliary.photosynthesis.lambda .= new_lambda
         if pft === cft1
-            reference_function(pft, reference, apar, daylength, temperature, co2; comp_vmax = false)
-            kernel_function(pft, kernel, apar, daylength, temperature, co2; comp_vmax = false)
+            reference_function(pft, reference, apar, daylength, temperature, co2; comp_vcmax = false)
+            kernel_function(pft, kernel, apar, daylength, temperature, co2; comp_vcmax = false)
         else
-            reference_function(pft, reference, apar, daylength, temperature; comp_vmax = false)
-            kernel_function(pft, kernel, apar, daylength, temperature; comp_vmax = false)
+            reference_function(pft, reference, apar, daylength, temperature; comp_vcmax = false)
+            kernel_function(pft, kernel, apar, daylength, temperature; comp_vcmax = false)
         end
         compare_fields(
             reference.fluxes.carbon, kernel.fluxes.carbon,
@@ -180,6 +180,6 @@ end
              :leaf_respiration);
             rtol = 4.0f-6, atol = 3.0f-7,
         )
-        @test reference.auxiliary.photosynthesis.vmax ≈ kernel.auxiliary.photosynthesis.vmax
+        @test reference.auxiliary.photosynthesis.vcmax ≈ kernel.auxiliary.photosynthesis.vcmax
     end
 end

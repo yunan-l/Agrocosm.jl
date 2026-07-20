@@ -59,7 +59,7 @@ function run_c3_precision_smoke(::Type{T}, device = identity) where {T <: Abstra
         1, days, cft1, climate, climbuf, crop, pet, soil, managed_land,
         weather, output;
         auto_fertilizer = false,
-        nitrogen_limit_vmax = false,
+        nitrogen_limit_vcmax = false,
     )
     return (; crop, soil, output)
 end

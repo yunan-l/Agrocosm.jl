@@ -1,18 +1,18 @@
 """
-crop_nitrogen!(crop, PFT, soil, photos_vmax, temp; auto_fertilizer=true)
+crop_nitrogen!(crop, PFT, soil, photos_vcmax, temp; auto_fertilizer=true)
 
 Allocate acquired crop nitrogen among leaf, root, storage, and pool compartments.
 """
 function crop_nitrogen!(crop::Crop,
                         PFT::PftParameters,
                         soil::Soil,
-                        photos_vmax::AbstractArray{T},
+                        photos_vcmax::AbstractArray{T},
                         temp::AbstractArray{T};
                         auto_fertilizer::Bool = true,
                         lpjmlparams::LPJmLParams = lpjmlparams,
 ) where {T <: AbstractFloat}
 
-    ndemand_crop!(crop, PFT, photos_vmax, temp; lpjmlparams = lpjmlparams)
+    ndemand_crop!(crop, PFT, photos_vcmax, temp; lpjmlparams = lpjmlparams)
     nuptake_crop!(
         crop, PFT, soil;
         auto_fertilizer = auto_fertilizer,

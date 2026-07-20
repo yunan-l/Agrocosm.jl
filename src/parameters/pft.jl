@@ -101,7 +101,7 @@ _convert_precision(::Type{T}, value::NuptakeKinetics) where {T <: AbstractFloat}
     laimin::T
     hlimit::S
     pvd_max::S
-    b::T   #leaf respiration as fraction of vmax
+    b::T   #leaf respiration as fraction of vcmax
     albedo_leaf::T
     albedo_litter::T
     alphaa::T

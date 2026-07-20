@@ -3,8 +3,8 @@ mutable struct CropOutput{A, I, M}
     gpp::A
     npp::A
     lambda::A
-    potential_vmax::A
-    vmax::A
+    potential_vcmax::A
+    vcmax::A
     nitrogen_limitation::A
     respiration::A
     biomass::A
@@ -121,7 +121,7 @@ function prepare_output_block!(output::Output,
     first_annual_row = size(output.crop.yield, 1) + 1
 
     for field in (
-        :gpp, :npp, :lambda, :potential_vmax, :vmax,
+        :gpp, :npp, :lambda, :potential_vcmax, :vcmax,
         :nitrogen_limitation, :respiration, :biomass, :lai,
         :storage_carbon, :fphu, :water_deficit, :growing_mask,
     )

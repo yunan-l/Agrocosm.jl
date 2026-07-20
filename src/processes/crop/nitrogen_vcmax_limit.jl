@@ -1,22 +1,22 @@
 """
-    limit_vmax_by_nitrogen!(crop, PFT, temperature)
+    limit_vcmax_by_nitrogen!(crop, PFT, temperature)
 
 Apply LPJmL's crop leaf-nitrogen constraint to the potential Rubisco capacity.
 `crop.auxiliary.stress.nitrogen_demand_leaf` is the leaf-N stock remaining after uptake logic;
 structural leaf N is protected and only excess N supports Rubisco activity.
-The result is bounded to `[eps(T), potential_vmax]` for an active crop and the
+The result is bounded to `[eps(T), potential_vcmax]` for an active crop and the
 dimensionless retained fraction is stored in
 `crop.auxiliary.photosynthesis.nitrogen_limitation`.
 """
-function limit_vmax_by_nitrogen!(crop::Crop,
+function limit_vcmax_by_nitrogen!(crop::Crop,
                                  PFT::PftParameters,
                                  temperature::AbstractArray{T};
                                  lpjmlparams::LPJmLParams = lpjmlparams
 ) where {T <: AbstractFloat}
     launch_1D!(
-        nitrogen_vmax_limit_kernel!,
-        crop.auxiliary.photosynthesis.vmax,
-        crop.auxiliary.photosynthesis.potential_vmax,
+        nitrogen_vcmax_limit_kernel!,
+        crop.auxiliary.photosynthesis.vcmax,
+        crop.auxiliary.photosynthesis.potential_vcmax,
         crop.auxiliary.photosynthesis.nitrogen_limitation,
         crop.auxiliary.stress.nitrogen_demand_leaf,
         crop.state.carbon.leaf,
@@ -28,9 +28,9 @@ function limit_vmax_by_nitrogen!(crop::Crop,
     return nothing
 end
 
-@kernel inbounds = true function nitrogen_vmax_limit_kernel!(
-    vmax::AbstractArray{T},
-    potential_vmax::AbstractArray{T},
+@kernel inbounds = true function nitrogen_vcmax_limit_kernel!(
+    vcmax::AbstractArray{T},
+    potential_vcmax::AbstractArray{T},
     nitrogen_limitation::AbstractArray{T},
     available_leaf_nitrogen::AbstractArray{T},
     leaf_carbon::AbstractArray{T},
@@ -40,7 +40,7 @@ end
     lpjmlparams::LPJmLParams,
 ) where {T <: AbstractFloat, S <: Integer}
     cell = @index(Global)
-    potential = max(zero(T), potential_vmax[cell])
+    potential = max(zero(T), potential_vcmax[cell])
 
     if is_growing[cell] == one(S) && potential > zero(T)
         @unpack ncleaf = PFT
@@ -53,10 +53,10 @@ end
             exp(-T(k_temp) * (temperature[cell] - T(25))) /
             (T(p) * T(1e-3)) * (T(86400) * T(12) * T(1e-6))
         limited = min(potential, max(eps(T), nitrogen_capacity))
-        vmax[cell] = limited
+        vcmax[cell] = limited
         nitrogen_limitation[cell] = clamp(limited / potential, zero(T), one(T))
     else
-        vmax[cell] = potential
+        vcmax[cell] = potential
         nitrogen_limitation[cell] = potential > zero(T) ? one(T) : zero(T)
     end
 end

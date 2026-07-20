@@ -11,7 +11,7 @@ function daily_crop_C3!(start_day, end_day,
                         irrigation = false,
                         manure = false,
                         auto_fertilizer = true,
-                        nitrogen_limit_vmax = false,
+                        nitrogen_limit_vcmax = false,
                         water_balance = nothing,
                         nitrogen_balance = nothing,
                         carbon_balance = nothing,
@@ -167,7 +167,7 @@ function daily_crop_C3!(start_day, end_day,
 
         # C3 photosynthesis
         photosynthesis_C3!(pftparameters, crop, crop.auxiliary.canopy.apar, pet.daylength, dailyWeather.temp, current_co2;
-                           comp_vmax = true, lpjmlparams = global_params, photoparams = photo_params)
+                           comp_vcmax = true, lpjmlparams = global_params, photoparams = photo_params)
 
         # LPJmL first uses lambda_opt photosynthesis to obtain potential
         # conductance, then constrains conductance by water supply.
@@ -175,20 +175,20 @@ function daily_crop_C3!(start_day, end_day,
                        lpjmlparams = global_params)
 
         # Solve the water-limited lambda on the active backend (CPU or GPU),
-        # then recompute photosynthesis with fixed vmax and actual lambda.
+        # then recompute photosynthesis with fixed vcmax and actual lambda.
         solve_lambda_c3!(pftparameters, crop, pet, dailyWeather.temp, current_co2;
                          lpjmlparams = global_params, photoparams = photo_params)
 
-        if nitrogen_limit_vmax
-            # LPJmL obtains N using the potential capacity, constrains Vmax
+        if nitrogen_limit_vcmax
+            # LPJmL obtains N using the potential capacity, constrains Vcmax
             # only when leaf N remains insufficient, then recomputes carbon.
-            crop_nitrogen!(crop, pftparameters, soil, crop.auxiliary.photosynthesis.potential_vmax, dailyWeather.temp;
+            crop_nitrogen!(crop, pftparameters, soil, crop.auxiliary.photosynthesis.potential_vcmax, dailyWeather.temp;
                            auto_fertilizer = auto_fertilizer, lpjmlparams = global_params)
-            limit_vmax_by_nitrogen!(crop, pftparameters, dailyWeather.temp;
+            limit_vcmax_by_nitrogen!(crop, pftparameters, dailyWeather.temp;
                                     lpjmlparams = global_params)
         end
         photosynthesis_C3!(pftparameters, crop, crop.auxiliary.canopy.apar, pet.daylength, dailyWeather.temp, current_co2;
-                           comp_vmax = false, lpjmlparams = global_params, photoparams = photo_params)
+                           comp_vcmax = false, lpjmlparams = global_params, photoparams = photo_params)
 
         # crop respiration and carbon allocation
         crop_carbon!(
@@ -198,12 +198,12 @@ function daily_crop_C3!(start_day, end_day,
         )
 
         # crop nitrogen allocation
-        if nitrogen_limit_vmax
+        if nitrogen_limit_vcmax
             # Carbon growth changes organ proportions; redistribute the same
             # conserved plant N without performing a second uptake.
             allocate_crop_nitrogen!(crop, pftparameters)
         else
-            crop_nitrogen!(crop, pftparameters, soil, crop.auxiliary.photosynthesis.vmax, dailyWeather.temp;
+            crop_nitrogen!(crop, pftparameters, soil, crop.auxiliary.photosynthesis.vcmax, dailyWeather.temp;
                            auto_fertilizer = auto_fertilizer,
                            lpjmlparams = global_params) # nitrogen cycle
         end

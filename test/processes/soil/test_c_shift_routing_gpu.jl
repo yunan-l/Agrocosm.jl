@@ -31,7 +31,7 @@ CUDA.allowscalar(false)
 
     soil_carbon!(crop, soil)
     soil_nitrogen!(
-        crop.state.calendar, soil;
+        crop, soil;
         air_temperature = CUDA.fill(10.0f0, cells),
         wind_speed = CUDA.fill(1.5f0, cells),
     )

@@ -13,16 +13,16 @@ using Test
         Float32[12.0],
         Float32[20.0],
         Float32[40.0];
-        comp_vmax = true,
+        comp_vcmax = true,
     )
 
     @test photos.lambda == Float32[0.8]
-    @test all(isfinite, photos.vmax)
+    @test all(isfinite, photos.vcmax)
     @test all(isfinite, crop.fluxes.carbon.gross_assimilation)
     @test all(isfinite, crop.fluxes.carbon.leaf_respiration)
     @test all(isfinite, crop.fluxes.carbon.net_assimilation)
     @test all(isfinite, crop.fluxes.carbon.water_limited_assimilation)
-    @test all(photos.vmax .>= 0.0f0)
+    @test all(photos.vcmax .>= 0.0f0)
     @test all(crop.fluxes.carbon.gross_assimilation .>= 0.0f0)
     @test all(crop.fluxes.carbon.net_assimilation .>= 0.0f0)
 
@@ -34,9 +34,9 @@ using Test
         Float32[12.0],
         Float32[20.0],
         Float32[40.0];
-        comp_vmax = true,
+        comp_vcmax = true,
     )
-    @test all(iszero, photos.vmax)
+    @test all(iszero, photos.vcmax)
     @test all(iszero, crop.fluxes.carbon.gross_assimilation)
     @test all(iszero, crop.fluxes.carbon.leaf_respiration)
     @test all(iszero, crop.fluxes.carbon.net_assimilation)
@@ -44,7 +44,7 @@ using Test
 
     photos.temperature_stress .= 1.0f0
     photos.lambda .= 0.8f0
-    photos.vmax .= 1.0f0
+    photos.vcmax .= 1.0f0
     photosynthesis_C3!(
         cft1,
         crop,
@@ -52,7 +52,7 @@ using Test
         Float32[12.0],
         Float32[20.0],
         Float32[40.0];
-        comp_vmax = false,
+        comp_vcmax = false,
     )
     @test all(iszero, crop.fluxes.carbon.net_assimilation)
     @test all(iszero, crop.fluxes.carbon.water_limited_assimilation)
@@ -69,16 +69,16 @@ end
         Float32[10.0],
         Float32[12.0],
         Float32[25.0];
-        comp_vmax = true,
+        comp_vcmax = true,
     )
 
     @test photos.lambda == Float32[0.8]
-    @test all(isfinite, photos.vmax)
+    @test all(isfinite, photos.vcmax)
     @test all(isfinite, crop.fluxes.carbon.gross_assimilation)
     @test all(isfinite, crop.fluxes.carbon.leaf_respiration)
     @test all(isfinite, crop.fluxes.carbon.net_assimilation)
     @test all(isfinite, crop.fluxes.carbon.water_limited_assimilation)
-    @test all(photos.vmax .>= 0.0f0)
+    @test all(photos.vcmax .>= 0.0f0)
     @test all(crop.fluxes.carbon.gross_assimilation .>= 0.0f0)
     @test all(crop.fluxes.carbon.net_assimilation .>= 0.0f0)
 
@@ -89,9 +89,9 @@ end
         Float32[10.0],
         Float32[12.0],
         Float32[25.0];
-        comp_vmax = true,
+        comp_vcmax = true,
     )
-    @test all(iszero, photos.vmax)
+    @test all(iszero, photos.vcmax)
     @test all(iszero, crop.fluxes.carbon.gross_assimilation)
     @test all(iszero, crop.fluxes.carbon.leaf_respiration)
     @test all(iszero, crop.fluxes.carbon.net_assimilation)

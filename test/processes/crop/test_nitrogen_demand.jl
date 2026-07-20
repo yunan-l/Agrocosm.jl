@@ -8,12 +8,12 @@ using Test
     crop.state.carbon.root .= 3.0f0
     crop.state.carbon.pool .= 1.0f0
     crop.state.carbon.storage .= 4.0f0
-    vmax = Float32[10.0]
+    vcmax = Float32[10.0]
     temp = Float32[25.0]
 
-    ndemand_crop!(crop, cft1, vmax, temp)
+    ndemand_crop!(crop, cft1, vcmax, temp)
 
-    expected_leaf = lpjmlparams.p * 1.0f-3 * vmax[1] /
+    expected_leaf = lpjmlparams.p * 1.0f-3 * vcmax[1] /
                     (86400.0f0 * 12.0f0 * 1.0f-6) +
                     cft1.ncleaf.low * crop.state.carbon.leaf[1]
     expected_nc = clamp(

@@ -18,7 +18,7 @@ using Test
     include("processes/crop/test_nitrogen_allocation.jl")
     include("processes/crop/test_nitrogen_demand.jl")
     include("processes/crop/test_nitrogen_uptake.jl")
-    include("processes/crop/test_nitrogen_vmax_limit.jl")
+    include("processes/crop/test_nitrogen_vcmax_limit.jl")
     include("processes/soil/test_mineralization_immobilization.jl")
     include("processes/soil/test_nitrification.jl")
     include("processes/soil/test_denitrification.jl")

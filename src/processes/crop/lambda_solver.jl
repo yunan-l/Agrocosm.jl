@@ -1,5 +1,5 @@
 function c3_adtmm_scalar_impl(lambda::T,
-                              vmax::T,
+                              vcmax::T,
                               tstress::T,
                               b::T,
                               co2::T,
@@ -26,9 +26,9 @@ function c3_adtmm_scalar_impl(lambda::T,
     c2 = (internal_co2 - gammastar) / (internal_co2 + fac)
 
     je = c1 * apar * cmass * cq / daylength
-    jc = c2 * vmax / T(24)
+    jc = c2 * vcmax / T(24)
     agd = (je + jc - sqrt(max(zero(T), (je + jc)^2 - T(4) * theta * je * jc))) / (T(2) * theta) * daylength
-    rd = b * vmax
+    rd = b * vcmax
     adt = agd - daylength / T(24) * rd
 
     return adt <= zero(T) ? zero(T) :
@@ -36,7 +36,7 @@ function c3_adtmm_scalar_impl(lambda::T,
 end
 
 function c3_adtmm_scalar(lambda::T,
-                         vmax::T,
+                         vcmax::T,
                          tstress::T,
                          b::T,
                          co2::T,
@@ -46,13 +46,13 @@ function c3_adtmm_scalar(lambda::T,
                          lpjmlparams::LPJmLParams = lpjmlparams,
                          photoparams::PhotoParams = photoparams) where {T <: AbstractFloat}
     return c3_adtmm_scalar_impl(
-        lambda, vmax, tstress, b, co2, temp, apar, daylength,
+        lambda, vcmax, tstress, b, co2, temp, apar, daylength,
         lpjmlparams, photoparams,
     )
 end
 
 function c4_adtmm_scalar_impl(lambda::T,
-                              vmax::T,
+                              vcmax::T,
                               tstress::T,
                               b::T,
                               temp::T,
@@ -70,10 +70,10 @@ function c4_adtmm_scalar_impl(lambda::T,
     phipi = min(one(T), lambda / T(lambdamc4))
     c1 = tstress * phipi * T(alphac4)
     je = c1 * apar * T(cmass) * T(cq) / daylength
-    jc = vmax / T(24)
+    jc = vcmax / T(24)
     agd = (je + jc - sqrt(max(zero(T), (je + jc)^2 - T(4) * T(theta) * je * jc))) /
           (T(2) * T(theta)) * daylength
-    rd = b * vmax
+    rd = b * vcmax
     adt = agd - daylength / T(24) * rd
 
     return adt <= zero(T) ? zero(T) :
@@ -81,7 +81,7 @@ function c4_adtmm_scalar_impl(lambda::T,
 end
 
 function c4_adtmm_scalar(lambda::T,
-                         vmax::T,
+                         vcmax::T,
                          tstress::T,
                          b::T,
                          temp::T,
@@ -90,14 +90,14 @@ function c4_adtmm_scalar(lambda::T,
                          lpjmlparams::LPJmLParams = lpjmlparams,
                          photoparams::PhotoParams = photoparams) where {T <: AbstractFloat}
     return c4_adtmm_scalar_impl(
-        lambda, vmax, tstress, b, temp, apar, daylength,
+        lambda, vcmax, tstress, b, temp, apar, daylength,
         lpjmlparams, photoparams,
     )
 end
 
 
 """
-    solve_lambda_c3_lpj(fac, vmax, tstress, b, co2, temp, apar, daylength;
+    solve_lambda_c3_lpj(fac, vcmax, tstress, b, co2, temp, apar, daylength;
                         lower=0.02, upper=0.85, tolerance=0.001,
                         max_iterations=30)
 
@@ -109,7 +109,7 @@ water-limited conductance term constructed by the water-balance routine.
 Returns `(lambda, iterations, residual)`.
 """
 function solve_lambda_c3_lpj(fac::T,
-                             vmax::T,
+                             vcmax::T,
                              tstress::T,
                              b::T,
                              co2::T,
@@ -124,7 +124,7 @@ function solve_lambda_c3_lpj(fac::T,
                              photoparams::PhotoParams = photoparams) where {T <: AbstractFloat}
     objective(lambda) = fac * (one(T) - lambda) -
                         c3_adtmm_scalar_impl(
-                            lambda, vmax, tstress, b, co2, temp, apar, daylength,
+                            lambda, vcmax, tstress, b, co2, temp, apar, daylength,
                             lpjmlparams, photoparams,
                         )
 
@@ -141,13 +141,13 @@ function solve_lambda_c3_lpj(fac::T,
 end
 
 """
-    solve_lambda_c4_lpj(fac, vmax, tstress, b, temp, apar, daylength)
+    solve_lambda_c4_lpj(fac, vcmax, tstress, b, temp, apar, daylength)
 
 CPU reference for LPJmL's C4 water-stress lambda equation. Returns
 `(lambda, iterations, residual)`.
 """
 function solve_lambda_c4_lpj(fac::T,
-                             vmax::T,
+                             vcmax::T,
                              tstress::T,
                              b::T,
                              temp::T,
@@ -161,7 +161,7 @@ function solve_lambda_c4_lpj(fac::T,
                              photoparams::PhotoParams = photoparams) where {T <: AbstractFloat}
     objective(lambda) = fac * (one(T) - lambda) -
                         c4_adtmm_scalar_impl(
-                            lambda, vmax, tstress, b, temp, apar, daylength,
+                            lambda, vcmax, tstress, b, temp, apar, daylength,
                             lpjmlparams, photoparams,
                         )
 
@@ -202,7 +202,7 @@ function solve_lambda_c3!(PFT::PftParameters,
     launch_1D!(
         solve_lambda_c3_kernel!,
         crop.auxiliary.photosynthesis.lambda,
-        crop.auxiliary.photosynthesis.vmax,
+        crop.auxiliary.photosynthesis.vcmax,
         crop.auxiliary.photosynthesis.temperature_stress,
         crop.auxiliary.canopy.canopy_conductance,
         crop.auxiliary.canopy.fpar,
@@ -238,7 +238,7 @@ function solve_lambda_c4!(PFT::PftParameters,
     launch_1D!(
         solve_lambda_c4_kernel!,
         crop.auxiliary.photosynthesis.lambda,
-        crop.auxiliary.photosynthesis.vmax,
+        crop.auxiliary.photosynthesis.vcmax,
         crop.auxiliary.photosynthesis.temperature_stress,
         crop.auxiliary.canopy.canopy_conductance,
         crop.auxiliary.canopy.fpar,
@@ -252,7 +252,7 @@ end
 
 @kernel inbounds = true function solve_lambda_c4_kernel!(
     lambda::AbstractArray{T},
-    vmax::AbstractArray{T},
+    vcmax::AbstractArray{T},
     tstress::AbstractArray{T},
     conductance::AbstractArray{T},
     fpar::AbstractArray{T},
@@ -276,7 +276,7 @@ end
         xhigh = T(0.85)
         ylow = fac * (one(T) - xlow) -
                c4_adtmm_scalar_impl(
-                   xlow, vmax[cell], tstress[cell], b, temp[cell], apar[cell],
+                   xlow, vcmax[cell], tstress[cell], b, temp[cell], apar[cell],
                    daylength[cell], lpjmlparams, photoparams,
                )
         xmin = (xlow + xhigh) * T(0.5)
@@ -286,7 +286,7 @@ end
             xmid = (xlow + xhigh) * T(0.5)
             ymid = fac * (one(T) - xmid) -
                    c4_adtmm_scalar_impl(
-                       xmid, vmax[cell], tstress[cell], b, temp[cell], apar[cell],
+                       xmid, vcmax[cell], tstress[cell], b, temp[cell], apar[cell],
                        daylength[cell], lpjmlparams, photoparams,
                    )
             if abs(ymid) < ymin
@@ -312,7 +312,7 @@ end
 
 @kernel inbounds = true function solve_lambda_c3_kernel!(
     lambda::AbstractArray{T},
-    vmax::AbstractArray{T},
+    vcmax::AbstractArray{T},
     tstress::AbstractArray{T},
     conductance::AbstractArray{T},
     fpar::AbstractArray{T},
@@ -338,7 +338,7 @@ end
         xhigh = T(0.85)
         ylow = fac * (one(T) - xlow) -
                c3_adtmm_scalar_impl(
-                   xlow, vmax[cell], tstress[cell], b, co2_cell, temp[cell],
+                   xlow, vcmax[cell], tstress[cell], b, co2_cell, temp[cell],
                    apar[cell], daylength[cell], lpjmlparams, photoparams,
                )
         xmin = (xlow + xhigh) * T(0.5)
@@ -348,7 +348,7 @@ end
             xmid = (xlow + xhigh) * T(0.5)
             ymid = fac * (one(T) - xmid) -
                    c3_adtmm_scalar_impl(
-                       xmid, vmax[cell], tstress[cell], b, co2_cell, temp[cell],
+                       xmid, vcmax[cell], tstress[cell], b, co2_cell, temp[cell],
                        apar[cell], daylength[cell], lpjmlparams, photoparams,
                    )
             if abs(ymid) < ymin

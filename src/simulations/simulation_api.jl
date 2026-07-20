@@ -66,7 +66,7 @@ function initialize_simulation(
     irrigation::Bool = false,
     manure::Bool = false,
     auto_fertilizer::Bool = true,
-    nitrogen_limit_vmax::Bool = false,
+    nitrogen_limit_vcmax::Bool = false,
     mineral_nitrogen_initialization::Symbol = :lpjml_initsoil,
     c_shift_initialization::Symbol = :lpjml_initsoil,
 )
@@ -107,7 +107,7 @@ function initialize_simulation(
         irrigation = irrigation,
         manure = manure,
         auto_fertilizer = auto_fertilizer,
-        nitrogen_limit_vmax = nitrogen_limit_vmax,
+        nitrogen_limit_vcmax = nitrogen_limit_vcmax,
     )
     return CropSimulation(
         convert_precision(T, pft), state, balances, ModelParameters(T), config, 0,
@@ -185,7 +185,7 @@ function run_simulation!(
         irrigation = simulation.config.irrigation,
         manure = simulation.config.manure,
         auto_fertilizer = simulation.config.auto_fertilizer,
-        nitrogen_limit_vmax = simulation.config.nitrogen_limit_vmax,
+        nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
         water_balance = simulation.water_balance,
         nitrogen_balance = simulation.nitrogen_balance,
         carbon_balance = simulation.carbon_balance,
