@@ -19,6 +19,8 @@ using Test
     @test length(pet.daylength) == cell_size
     @test size(climbuf.temp) == (31, cell_size)
     @test eltype(crop.canopy.lai) == Float32
+    @test eltype(crop.phenology.is_growing) == Int32
+    @test all(iszero, crop.phenology.is_growing)
     @test all(iszero, crop.canopy.lai)
     @test all(iszero, crop.photosynthesis.gross_assimilation)
     @test crop.phenology isa CropPhenology

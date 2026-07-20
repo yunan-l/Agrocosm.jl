@@ -18,7 +18,8 @@ CUDA.allowscalar(false)
     nitrogen_balance = init_nitrogen_balance(3, cell_size, CuArray)
 
     @test crop.phenology.phu isa CuArray{Float32, 1}
-    @test crop.phenology.is_growing isa CuArray{Bool, 1}
+    @test crop.phenology.is_growing isa CuArray{Int32, 1}
+    @test all(Array(crop.phenology.is_growing) .== Int32(0))
     @test crop.canopy.lai isa CuArray{Float32, 1}
     @test crop.carbon.organs isa CuArray{Float32, 2}
     @test crop.nitrogen.total isa CuArray{Float32, 1}
