@@ -7,32 +7,43 @@ function crop_carbon!(photos::CropPhotosynthesis,
                       crop::Crop,
                       output::Output,
                       PFT::PftParameters,
-                      temp::AbstractArray{T}
+                      temp::AbstractArray{T};
+                      output_row::Union{Nothing, Integer} = nothing
 ) where {T <: AbstractFloat} # directly translated from LPJmL
 
     # compute crop respiration
-    respiration!(crop, PFT, temp, photos.gross_assimilation - photos.leaf_respiration)
+    respiration!(
+        crop, PFT, temp,
+        photos.gross_assimilation,
+        photos.leaf_respiration,
+    )
 
     # compute crop carbon allocation
     carbon_allocation!(PFT, crop, photos)
     # crop.carbon.organs = vcat(reshape(crop.carbon.root, (1, :)), reshape(crop.carbon.leaf, (1, :)), reshape(crop.carbon.storage, (1, :)), reshape(crop.carbon.pool, (1, :)))
 
-    output.crop.gpp = vcat(output.crop.gpp, reshape(photos.gross_assimilation, (1, :)))
-    output.crop.npp = vcat(output.crop.npp, reshape(crop.carbon.npp, (1, :)))
-    output.crop.lambda = vcat(output.crop.lambda, reshape(photos.lambda, (1, :)))
-    output.crop.potential_vmax = vcat(
-        output.crop.potential_vmax, reshape(photos.potential_vmax, (1, :)),
+    sources = (
+        gpp = photos.gross_assimilation,
+        npp = crop.carbon.npp,
+        lambda = photos.lambda,
+        potential_vmax = photos.potential_vmax,
+        vmax = photos.vmax,
+        nitrogen_limitation = photos.nitrogen_limitation,
+        respiration = crop.carbon.respiration,
+        lai = crop.canopy.lai,
+        fphu = crop.phenology.fphu,
+        biomass = crop.carbon.biomass,
     )
-    output.crop.vmax = vcat(output.crop.vmax, reshape(photos.vmax, (1, :)))
-    output.crop.nitrogen_limitation = vcat(
-        output.crop.nitrogen_limitation,
-        reshape(photos.nitrogen_limitation, (1, :)),
-    )
-    output.crop.respiration = vcat(
-        output.crop.respiration, reshape(crop.carbon.respiration, (1, :)),
-    )
-    output.crop.lai = vcat(output.crop.lai, reshape(crop.canopy.lai, (1, :)))
-    output.crop.fphu = vcat(output.crop.fphu, reshape(crop.phenology.fphu, (1, :)))
-    output.crop.biomass = vcat(output.crop.biomass, reshape(crop.carbon.biomass, (1, :)))
+    for (field, source) in pairs(sources)
+        if output_row === nothing
+            setproperty!(
+                output.crop,
+                field,
+                _append_output_row(getproperty(output.crop, field), source),
+            )
+        else
+            _write_output_row!(getproperty(output.crop, field), output_row, source)
+        end
+    end
 
 end

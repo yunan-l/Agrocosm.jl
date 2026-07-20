@@ -12,21 +12,8 @@ function transpiration!(photos_adtmm::AbstractArray{T},
                         lpjmlparams::LPJmLParams = lpjmlparams
 ) where {T <: AbstractFloat}
 
-    @unpack LAMBDA_OPT = lpjmlparams
-    @unpack gmin = PFT
-
-    # `co2` is already a partial pressure in Pa. Since 1 Pa = 1e-5 bar,
-    # this is LPJmL's ppm2bar(original_co2) without applying ppm conversion twice.
-    co2_bar = co2 .* T(1e-5)
-    conductance_denominator = co2_bar .* (one(T) - T(LAMBDA_OPT)) .* hour2sec(pet.daylength)
-    crop.water.canopy_conductance .= ifelse.(
-        (co2_bar .> zero(T)) .& (pet.daylength .> zero(T)),
-        T(1.6) .* photos_adtmm ./ conductance_denominator .+ T(gmin) .* crop.canopy.fpar,
-        zero(T),
-    )
-
-    # Root-zone weighted soil water availability per cell.
-    wr = sum(soil.water.relative_content .* crop.water.root_distribution, dims = 1)
+    # Root-zone weighted water availability is accumulated inside the cell
+    # kernel, avoiding a separate broadcast and reduction array every day.
     # supply = emax * wr .* (1 .- exp.(-0.04f0 * crop.carbon.root))
     # demand = ifelse.(crop.water.canopy_conductance .> 0, (1 .- crop.water.canopy_wet) .* pet.eeq * ALPHAM ./ (1 .+ (GM * ALPHAM) ./ crop.water.canopy_conductance), zero(T))
     # transp = ifelse.(wr .> 0, min.(supply, demand) ./ wr .* fpc, zero(T)) # here the crop.fpc = 1, so we just omit it in the kernel fucntion
@@ -35,6 +22,10 @@ function transpiration!(photos_adtmm::AbstractArray{T},
 
     launch_1D!(water_demand_supply_kernel!,
                crop.water.canopy_conductance,
+               photos_adtmm,
+               co2,
+               pet.daylength,
+               crop.canopy.fpar,
                crop.water.transpiration_layer,
                crop.water.demand_sum,
                crop.water.supply_sum,
@@ -47,7 +38,6 @@ function transpiration!(photos_adtmm::AbstractArray{T},
                crop.water.root_distribution,
                soil.water.relative_content,
                soil.water.holding_capacity_storage,
-               wr,
                PFT,
                kernel_params)
 
@@ -55,6 +45,10 @@ end
 
 @kernel inbounds = true function water_demand_supply_kernel!(
                                              crop_gp::AbstractArray{T},
+                                             photos_adtmm::AbstractArray{T},
+                                             co2::AbstractArray{T},
+                                             daylength::AbstractArray{T},
+                                             crop_fpar::AbstractArray{T},
                                              crop_trans_layer::AbstractArray{T},
                                              crop_w_demandsum::AbstractArray{T},
                                              crop_w_supplysum::AbstractArray{T},
@@ -67,7 +61,6 @@ end
                                              crop_rootdist::AbstractArray{T},
                                              soil_w::AbstractArray{M},
                                              soil_whcs::AbstractArray{M},
-                                             wr::AbstractArray{T},
                                              PFT::PftParameters,
                                              kernel_params
 ) where {T <: AbstractFloat, M <: AbstractFloat, S <: Integer}
@@ -76,11 +69,27 @@ end
 
     @unpack lpjmlparams, soil_layers = kernel_params
 
-    @unpack ALPHAM, GM = lpjmlparams
-    @unpack fpc, emax = PFT
+    @unpack ALPHAM, GM, LAMBDA_OPT = lpjmlparams
+    @unpack fpc, emax, gmin = PFT
+
+    co2_index = length(co2) == 1 ? 1 : cell
+    co2_bar = co2[co2_index] * T(1e-5)
+    if co2_bar > zero(T) && daylength[cell] > zero(T)
+        conductance_denominator = co2_bar * (one(T) - T(LAMBDA_OPT)) *
+            hour2sec(daylength[cell])
+        crop_gp[cell] = T(1.6) * photos_adtmm[cell] / conductance_denominator +
+            T(gmin) * crop_fpar[cell]
+    else
+        crop_gp[cell] = zero(T)
+    end
+
+    wr = zero(T)
+    for l in 1:soil_layers
+        wr += soil_w[l, cell] * crop_rootdist[l]
+    end
 
     if crop_isgrowing[cell] == 1
-        supply = emax * wr[cell] * (1 - exp(-0.04f0 * crop_rootc[cell]))
+        supply = emax * wr * (1 - exp(-0.04f0 * crop_rootc[cell]))
         if crop_gp[cell] > 0
             demand = (1 - crop_canopy_wet[cell]) * pet_eeq[cell] * ALPHAM / (1 + (GM * ALPHAM) / crop_gp[cell])
         else
@@ -101,7 +110,7 @@ end
         end
 
         if pet_eeq[cell] > 0.0 && crop_gp[cell] > 0.0
-            crop_wscal[cell] = (emax * wr[cell]) / (pet_eeq[cell] * ALPHAM / (one(T) + (GM * ALPHAM) / crop_gp[cell]))
+            crop_wscal[cell] = (emax * wr) / (pet_eeq[cell] * ALPHAM / (one(T) + (GM * ALPHAM) / crop_gp[cell]))
             if crop_wscal[cell] > 1.0
                 crop_wscal[cell] = one(T)
             end
@@ -110,8 +119,8 @@ end
         end
 
         # Potential transpiration constrained by demand/supply and canopy fraction.
-        if wr[cell] > 0
-            transp = min(supply, demand) / wr[cell] * fpc
+        if wr > 0
+            transp = min(supply, demand) / wr * fpc
         else
             transp = zero(T)
         end
@@ -139,8 +148,8 @@ end
             transp_cor = zero(T)
         end
 
-        if wr[cell] > 0
-            transp = transp_cor / wr[cell]
+        if wr > 0
+            transp = transp_cor / wr
         else
             transp = zero(T)
         end

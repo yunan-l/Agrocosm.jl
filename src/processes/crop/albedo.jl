@@ -4,18 +4,57 @@ albedo!(PFT, crop, pet)
 
 Update canopy albedo terms used by PET and radiation partitioning.
 """
-function albedo!(PFT::PftParameters,
-                 crop::Crop,
-                 pet::PetPar;
-                 soil_albedo = 0.3f0  # Albedo of bare soil (0-1). Should be soil and soil moisture dependent */
+function albedo_reference!(PFT::PftParameters,
+                           crop::Crop,
+                           pet::PetPar;
+                           soil_albedo = 0.3f0
 )
 
     @unpack fpc = PFT
 
     crop_albedo!(PFT, crop)
 
-    pet.albedo .= crop.canopy.albedo .+ (1 .- fpc * crop.phenology.is_growing) * soil_albedo
+    pet.albedo .= crop.canopy.albedo .+ (1 .- fpc .* crop.phenology.is_growing) .* soil_albedo
 
+end
+
+function albedo!(PFT::PftParameters,
+                 crop::Crop,
+                 pet::PetPar;
+                 soil_albedo = 0.3f0)
+    T = eltype(pet.albedo)
+    launch_1D!(
+        albedo_kernel!,
+        pet.albedo,
+        crop.canopy.albedo,
+        crop.canopy.phenology_fraction,
+        crop.phenology.is_growing,
+        T(PFT.albedo_leaf),
+        T(PFT.albedo_litter),
+        T(PFT.fpc),
+        T(soil_albedo),
+    )
+    return nothing
+end
+
+@kernel inbounds = true function albedo_kernel!(
+    pet_albedo::AbstractVector{T},
+    canopy_albedo::AbstractVector{T},
+    phenology_fraction::AbstractVector{T},
+    is_growing::AbstractVector{S},
+    leaf_albedo::T,
+    litter_albedo::T,
+    fpc::T,
+    soil_albedo::T,
+) where {T <: AbstractFloat, S <: Integer}
+    cell = @index(Global)
+    canopy = fpc * (
+        phenology_fraction[cell] * leaf_albedo +
+        (one(T) - phenology_fraction[cell]) * litter_albedo
+    )
+    canopy_albedo[cell] = canopy
+    pet_albedo[cell] = canopy +
+        (one(T) - fpc * is_growing[cell]) * soil_albedo
 end
 
 
@@ -24,12 +63,10 @@ function crop_albedo!(PFT::PftParameters,
 )
     @unpack albedo_leaf, albedo_litter, fpc = PFT
 
-    albedo_green_leaves = fpc * crop.canopy.phenology_fraction * albedo_leaf
-
-    # albedo of PFT without green foliage (litter background albedo)
-
-    albedo_brown_litter = fpc * (1 .- crop.canopy.phenology_fraction) * albedo_litter
-
-    crop.canopy.albedo .= albedo_green_leaves .+ albedo_brown_litter
+    # Fuse green-leaf and brown-litter terms into the preallocated canopy buffer.
+    crop.canopy.albedo .= fpc .* (
+        crop.canopy.phenology_fraction .* albedo_leaf .+
+        (1 .- crop.canopy.phenology_fraction) .* albedo_litter
+    )
 
 end

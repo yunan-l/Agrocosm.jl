@@ -1,0 +1,178 @@
+using Agrocosm
+using Test
+
+function compare_fields(reference, kernel, fields; rtol = 2.0f-6, atol = 2.0f-7)
+    for field in fields
+        @test getproperty(kernel, field) ≈ getproperty(reference, field) rtol = rtol atol = atol
+    end
+end
+
+
+@testset "Canopy radiation kernels match vector references" begin
+    cells = 8
+    for pft in (cft1, cft3)
+        reference = init_crop(cells, identity)
+        kernel = init_crop(cells, identity)
+        pet_reference = init_pet(cells, identity)
+        pet_kernel = init_pet(cells, identity)
+        lai = Float32.(range(0, 7; length = cells))
+        phenology_fraction = Float32.(range(0, 1; length = cells))
+        growing = Int32[0, 1, 1, 0, 1, 1, 0, 1]
+        par = Float32.(range(0, 25; length = cells))
+        for (crop, pet) in ((reference, pet_reference), (kernel, pet_kernel))
+            crop.canopy.lai .= lai
+            crop.canopy.phenology_fraction .= phenology_fraction
+            crop.phenology.is_growing .= growing
+            pet.par .= par
+        end
+        Agrocosm.albedo_reference!(pft, reference, pet_reference)
+        albedo!(pft, kernel, pet_kernel)
+        @test kernel.canopy.albedo ≈ reference.canopy.albedo rtol = 2.0f-6
+        @test pet_kernel.albedo ≈ pet_reference.albedo rtol = 2.0f-6
+
+        if pft === cft3
+            Agrocosm.apar_crop_maize_reference!(pft, reference, pet_reference)
+            apar_crop_maize!(pft, kernel, pet_kernel)
+        else
+            Agrocosm.apar_crop_reference!(pft, reference, pet_reference)
+            apar_crop!(pft, kernel, pet_kernel)
+        end
+        @test kernel.canopy.fpar ≈ reference.canopy.fpar rtol = 2.0f-6
+        @test kernel.canopy.apar ≈ reference.canopy.apar rtol = 2.0f-6
+    end
+end
+
+@testset "Cultivation kernel matches vector reference" begin
+    cells = 6
+    reference = init_crop(cells, identity)
+    kernel = init_crop(cells, identity)
+    reference_soil = init_soil(cells, soilparams.soildepth, identity)
+    kernel_soil = init_soil(cells, soilparams.soildepth, identity)
+    reference_land = init_managed_land(cells, identity)
+    kernel_land = init_managed_land(cells, identity)
+    sowing_dates = Int32[100, 99, 100, 101, 100, 200]
+    reference.calendar.sowing_date .= sowing_dates
+    kernel.calendar.sowing_date .= sowing_dates
+    reference.carbon.biomass .= 3.0f0
+    kernel.carbon.biomass .= 3.0f0
+    reference.nitrogen.total .= 0.2f0
+    kernel.nitrogen.total .= 0.2f0
+    Agrocosm.cultivate_reference!(
+        reference, reference.calendar, reference_land, reference_soil, 100;
+        apply_prescribed_fertilizer = false,
+    )
+    cultivate!(
+        kernel, kernel.calendar, kernel_land, kernel_soil, 100;
+        apply_prescribed_fertilizer = false,
+    )
+    for (container, fields) in (
+        (:phenology, (:harvesting, :is_growing)),
+        (:canopy, (:lai,)),
+        (:carbon, (:biomass, :root, :leaf, :storage, :pool)),
+        (:nitrogen, (:seed_input, :total)),
+        (:calendar, (:sowing_callback,)),
+    )
+        for field in fields
+            @test getproperty(getproperty(kernel, container), field) ≈
+                getproperty(getproperty(reference, container), field)
+        end
+    end
+end
+
+@testset "Respiration kernel matches vector reference" begin
+    cells = 8
+    reference = init_crop(cells, identity)
+    kernel = init_crop(cells, identity)
+    root = Float32.(range(1, 30; length = cells))
+    storage = Float32.(range(0, 20; length = cells))
+    pool = Float32.(range(2, 12; length = cells))
+    growing = Int32[1, 1, 0, 1, 0, 1, 1, 1]
+    temperature = Float32[-45, -20, 0, 10, 20, 30, 35, 40]
+    gross = Float32.(range(0, 18; length = cells))
+    leaf_respiration = Float32.(range(0, 2; length = cells))
+    for crop in (reference, kernel)
+        crop.carbon.root .= root
+        crop.carbon.storage .= storage
+        crop.carbon.pool .= pool
+        crop.phenology.is_growing .= growing
+    end
+    destination = kernel.carbon.respiration
+    Agrocosm.respiration_reference!(
+        reference, cft1, temperature, gross .- leaf_respiration,
+    )
+    respiration!(kernel, cft1, temperature, gross, leaf_respiration)
+    @test kernel.carbon.respiration === destination
+    @test kernel.carbon.temperature_response ≈ reference.carbon.temperature_response rtol = 1.0f-6
+    @test kernel.carbon.respiration ≈ reference.carbon.respiration rtol = 2.0f-6 atol = 2.0f-7
+end
+
+@testset "PET/PAR kernel matches vector reference" begin
+    cells = 8
+    reference = init_pet(cells, identity)
+    kernel = init_pet(cells, identity)
+    albedo = Float32.(range(0.1, 0.4; length = cells))
+    reference.albedo .= albedo
+    kernel.albedo .= albedo
+    latitude = Float32[-70, -45, -10, 0, 10, 45, 70, 80]
+    temperature = Float32[-20, -5, 0, 10, 20, 30, 35, 40]
+    longwave = Float32.(range(-120, 40; length = cells))
+    shortwave = Float32.(range(0, 350; length = cells))
+    daylength_destination = kernel.daylength
+    Agrocosm.petpar_reference!(
+        reference, 172, latitude, temperature, longwave, shortwave,
+    )
+    petpar!(kernel, 172, latitude, temperature, longwave, shortwave)
+    @test kernel.daylength === daylength_destination
+    compare_fields(reference, kernel, (:daylength, :par, :eeq); rtol = 3.0f-6)
+end
+
+@testset "C3/C4 kernels match vector references" begin
+    cells = 8
+    apar = Float32[0, 2, 5, 10, 15, 20, 25, 30]
+    daylength = Float32[6, 8, 10, 12, 14, 16, 18, 20]
+    temperature = Float32[-10, 0, 10, 20, 25, 30, 35, 40]
+    co2 = Float32[40]
+    stress = Float32[0, 0.005, 0.2, 0.5, 0.8, 1, 0.7, 0.3]
+    fields = (
+        :gross_assimilation, :net_assimilation, :water_limited_assimilation,
+        :leaf_respiration, :potential_vmax, :vmax,
+        :nitrogen_limitation, :lambda,
+    )
+
+    for (pft, reference_function, kernel_function) in (
+        (cft1, Agrocosm.photosynthesis_C3_reference!, photosynthesis_C3!),
+        (cft3, Agrocosm.photosynthesis_C4_reference!, photosynthesis_C4!),
+    )
+        reference = init_crop(cells, identity).photosynthesis
+        kernel = init_crop(cells, identity).photosynthesis
+        reference.temperature_stress .= stress
+        kernel.temperature_stress .= stress
+        gross_destination = kernel.gross_assimilation
+        if pft === cft1
+            reference_function(pft, reference, apar, daylength, temperature, co2; comp_vmax = true)
+            kernel_function(pft, kernel, apar, daylength, temperature, co2; comp_vmax = true)
+        else
+            reference_function(pft, reference, apar, daylength, temperature; comp_vmax = true)
+            kernel_function(pft, kernel, apar, daylength, temperature; comp_vmax = true)
+        end
+        @test kernel.gross_assimilation === gross_destination
+        compare_fields(reference, kernel, fields; rtol = 4.0f-6, atol = 3.0f-7)
+
+        new_lambda = Float32.(range(0.45, 0.85; length = cells))
+        reference.lambda .= new_lambda
+        kernel.lambda .= new_lambda
+        if pft === cft1
+            reference_function(pft, reference, apar, daylength, temperature, co2; comp_vmax = false)
+            kernel_function(pft, kernel, apar, daylength, temperature, co2; comp_vmax = false)
+        else
+            reference_function(pft, reference, apar, daylength, temperature; comp_vmax = false)
+            kernel_function(pft, kernel, apar, daylength, temperature; comp_vmax = false)
+        end
+        compare_fields(
+            reference, kernel,
+            (:gross_assimilation, :net_assimilation, :water_limited_assimilation,
+             :leaf_respiration, :vmax);
+            rtol = 4.0f-6, atol = 3.0f-7,
+        )
+    end
+end

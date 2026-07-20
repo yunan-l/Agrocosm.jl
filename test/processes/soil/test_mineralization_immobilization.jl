@@ -14,13 +14,11 @@ using Test
 
     mineral_before = sum(soil.nitrogen.ammonium .+ soil.nitrogen.nitrate)
     organic_before = sum(soil.nitrogen.fast .+ soil.nitrogen.slow)
-    decomposed_litter_carbon = vec(sum(soil.carbon.decomposed_litter; dims = 1))
-    decomposed_litter_nitrogen = vec(sum(soil.nitrogen.decomposed_litter; dims = 1))
-
-    Agrocosm.launch_1D!(
+    Agrocosm.launch_custom!(
         Agrocosm.mineralize_immobilize_kernel!,
-        decomposed_litter_carbon,
-        decomposed_litter_nitrogen,
+        soil.carbon.decomposed_litter,
+        1,
+        soil.nitrogen.decomposed_litter,
         soil.nitrogen.decomposed_fast,
         soil.nitrogen.decomposed_slow,
         soil.nitrogen.shift_fast,

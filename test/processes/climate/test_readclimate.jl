@@ -39,3 +39,31 @@ using Test
     @test hasproperty(loaded, :wind)
     @test loaded.wind == Float32[2; 4;;]
 end
+
+
+@testset "Climate read kernel matches vector reference" begin
+    cells = 5
+    days = 3
+    climate = (
+        temp = reshape(Float32.(1:(days * cells)), days, cells),
+        prec = reshape(Float32.(11:(10 + days * cells)), days, cells),
+        sw = reshape(Float32.(101:(100 + days * cells)), days, cells),
+        lw = reshape(Float32.(-20:(-21 + days * cells)), days, cells),
+        wind = reshape(Float32.(range(1, 6; length = days * cells)), days, cells),
+        co2 = Float32[400, 405],
+    )
+    reference = init_weather(cells, identity)
+    kernel = init_weather(cells, identity)
+    Agrocosm.readclimate_reference!(climate, reference, 2)
+    readclimate!(climate, kernel, 2)
+    for field in (:temp, :prec, :swr, :lwr, :wind, :annual_co2)
+        @test getproperty(kernel, field) ≈ getproperty(reference, field)
+    end
+
+    daily_co2 = reshape(Float32.(range(390, 430; length = days * cells)), days, cells)
+    Agrocosm.readclimate_reference!(climate, reference, daily_co2, 3)
+    readclimate!(climate, kernel, daily_co2, 3)
+    for field in (:temp, :prec, :swr, :lwr, :wind, :daily_co2)
+        @test getproperty(kernel, field) ≈ getproperty(reference, field)
+    end
+end

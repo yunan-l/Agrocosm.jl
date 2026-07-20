@@ -12,6 +12,7 @@ mutable struct CropWater{A, M}
     stress::A
     waterlogging_days::A
     waterlogging_stress::A
+    root_zone_water::A
 end
 
 function init_crop_water(cell_size::Int, device; soil_layers::Int = 5)
@@ -24,6 +25,7 @@ function init_crop_water(cell_size::Int, device; soil_layers::Int = 5)
         float_state(),
         device(zeros(Float32, soil_layers, cell_size)),
         device(zeros(Float32, soil_layers)),
+        float_state(),
         float_state(),
         float_state(),
         float_state(),

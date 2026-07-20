@@ -3,8 +3,8 @@ pedotransfer!(soil; lpjmlparams=lpjmlparams)
 
 Derive soil hydraulic properties from texture and depth parameterizations.
 """
-function pedotransfer!(soil::Soil;
-                       lpjmlparams::LPJmLParams = lpjmlparams
+function pedotransfer_reference!(soil::Soil;
+                                 lpjmlparams::LPJmLParams = lpjmlparams
 )
 
     @unpack MINERALDENS = lpjmlparams # mineral density in kg/m3
@@ -57,4 +57,89 @@ function pedotransfer!(soil::Soil;
     lambda = (log.(soil.water.field_capacity) - log.(soil.water.wilting_fraction)) / (log(1500) - log(33))
     soil.water.saturated_conductivity .= 1930 * (soil.water.saturation_fraction - soil.water.field_capacity) .^ (3 .- lambda)
 
+end
+
+"""Compute hydraulic properties in one backend-neutral layer/cell kernel."""
+function pedotransfer!(soil::Soil;
+                       lpjmlparams::LPJmLParams = lpjmlparams)
+    launch_2D!(
+        pedotransfer_kernel!,
+        soil.water.wilting_fraction,
+        soil.properties.sand_fraction,
+        soil.properties.clay_fraction,
+        soil.properties.layer_depth,
+        soil.carbon.fast,
+        soil.carbon.slow,
+        soil.water.wilting_storage,
+        soil.water.field_capacity,
+        soil.water.saturation_fraction,
+        soil.water.saturation_storage,
+        soil.water.beta,
+        soil.water.holding_capacity_fraction,
+        soil.water.holding_capacity_storage,
+        soil.water.saturated_conductivity,
+        eltype(soil.water.storage)(lpjmlparams.MINERALDENS),
+    )
+    partition_soil_water_ice!(soil)
+    return nothing
+end
+
+@kernel inbounds = true function pedotransfer_kernel!(
+    wilting_fraction::AbstractMatrix{T},
+    sand_fraction::AbstractMatrix{T},
+    clay_fraction::AbstractMatrix{T},
+    layer_depth::AbstractVector{T},
+    fast_carbon::AbstractMatrix{T},
+    slow_carbon::AbstractMatrix{T},
+    wilting_storage::AbstractMatrix{T},
+    field_capacity::AbstractMatrix{T},
+    saturation_fraction::AbstractMatrix{T},
+    saturation_storage::AbstractMatrix{T},
+    beta::AbstractMatrix{T},
+    holding_capacity_fraction::AbstractMatrix{T},
+    holding_capacity_storage::AbstractMatrix{T},
+    saturated_conductivity::AbstractMatrix{T},
+    mineral_density::T,
+) where {T <: AbstractFloat}
+    layer, cell = @index(Global, NTuple)
+
+    sand = sand_fraction[1, cell]
+    clay = clay_fraction[1, cell]
+    depth = layer_depth[layer]
+    previous_saturation = saturation_fraction[layer, cell]
+    organic_matter = min(
+        T(2) * ((fast_carbon[layer, cell] + slow_carbon[layer, cell]) /
+        ((one(T) - previous_saturation) * mineral_density * depth)) * T(100),
+        T(8),
+    )
+
+    wpwpt = -T(0.024) * sand + T(0.487) * clay + T(0.006) * organic_matter +
+        T(0.005) * sand * organic_matter - T(0.013) * clay * organic_matter +
+        T(0.068) * sand * clay + T(0.031)
+    wilting = wpwpt + (T(0.14) * wpwpt - T(0.02))
+
+    ws33t = T(0.278) * sand + T(0.034) * clay + T(0.022) * organic_matter -
+        T(0.018) * sand * organic_matter - T(0.027) * clay * organic_matter -
+        T(0.584) * sand * clay + T(0.078)
+    ws33 = ws33t + (T(0.636) * ws33t - T(0.107))
+
+    wfct = -T(0.251) * sand + T(0.195) * clay + T(0.011) * organic_matter +
+        T(0.006) * sand * organic_matter - T(0.027) * clay * organic_matter +
+        T(0.452) * sand * clay + T(0.299)
+    field = wfct + ((T(1.283) * wfct)^2 - T(0.374) * wfct - T(0.015))
+    saturation = field + ws33 - T(0.097) * sand + T(0.043)
+    field = saturation - field < T(0.05) ? saturation - T(0.05) : field
+
+    wilting_fraction[layer, cell] = wilting
+    wilting_storage[layer, cell] = wilting * depth
+    field_capacity[layer, cell] = field
+    saturation_fraction[layer, cell] = saturation
+    saturation_storage[layer, cell] = saturation * depth
+    beta[layer, cell] = -T(2.655) / log10(field / saturation)
+    holding = field - wilting
+    holding_capacity_fraction[layer, cell] = holding
+    holding_capacity_storage[layer, cell] = holding * depth
+    lambda = (log(field) - log(wilting)) / (log(T(1500)) - log(T(33)))
+    saturated_conductivity[layer, cell] =
+        T(1930) * (saturation - field)^(T(3) - lambda)
 end

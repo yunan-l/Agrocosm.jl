@@ -22,10 +22,12 @@ CUDA.allowscalar(false)
     @test all(Array(crop.phenology.is_growing) .== Int32(0))
     @test crop.canopy.lai isa CuArray{Float32, 1}
     @test crop.carbon.organs isa CuArray{Float32, 2}
+    @test crop.carbon.temperature_response isa CuArray{Float32, 1}
     @test crop.nitrogen.total isa CuArray{Float32, 1}
     @test crop.nitrogen.seed_input isa CuArray{Float32, 1}
     @test crop.nitrogen.harvest_export isa CuArray{Float32, 1}
     @test crop.water.transpiration_layer isa CuArray{Float32, 2}
+    @test crop.water.root_zone_water isa CuArray{Float32, 1}
     @test crop.calendar.sowing_date isa CuArray{Int32, 1}
     @test managed_land.latitude isa CuArray{Float32, 1}
     @test crop.photosynthesis.gross_assimilation isa CuArray{Float32, 1}
@@ -47,6 +49,8 @@ CUDA.allowscalar(false)
     @test soil.nitrogen.litter_to_slow isa CuArray{Float32, 2}
     @test soil.nitrogen.leaching isa CuArray{Float32, 1}
     @test soil.decomposition.response isa CuArray{Float32, 2}
+    @test soil.decomposition.layer_scratch_1 isa CuArray{Float32, 2}
+    @test soil.decomposition.surface_scratch_1 isa CuArray{Float32, 1}
     @test soil.management.tillage_fraction isa CuArray{Float32, 2}
     @test soil.surface_litter.water_storage isa CuArray{Float32, 1}
     @test soil.snow.pack isa CuArray{Float32, 1}
@@ -63,6 +67,12 @@ CUDA.allowscalar(false)
     @test size(crop.water.transpiration_layer) == (5, cell_size)
     @test size(nitrogen_balance.residual) == (3, cell_size)
     @test all(Array(crop.canopy.lai) .== 0.0f0)
+
+    rows = Agrocosm.prepare_output_block!(output, 3, 1)
+    @test rows == (first_daily_row = 1, first_annual_row = 1)
+    @test output.crop.npp isa CuArray{Float32, 2}
+    @test size(output.crop.npp) == (3, cell_size)
+    @test size(output.crop.yield) == (1, cell_size)
 
     u0 = (
         soil_NO3 = CUDA.fill(9000.0f0, 5, cell_size),

@@ -26,9 +26,14 @@ function daily_crop_C4!(day_start, day_end,
         throw(ArgumentError("water-balance diagnostics currently support rainfed simulations only"))
     end
 
+    annual_rows = count(day -> day % 365 == 0, day_start:day_end)
+    output_rows = prepare_output_block!(output, day_end - day_start + 1, annual_rows)
+    annual_output_offset = 0
+
     for day = day_start : day_end
 
         diagnostic_day = day - day_start + 1
+        output_row = output_rows.first_daily_row + diagnostic_day - 1
 
         day_of_year = day % 365 != 0 ? day % 365 : 365
 
@@ -84,7 +89,14 @@ function daily_crop_C4!(day_start, day_end,
         # compute phenology variables
         phenology_crop!(crop, climbuf.V_req, pftparameters, dailyWeather.temp, pet.daylength)
 
-        harvest_crop!(crop_cal, crop, soil, output, managed_land.residue_fraction, day_of_year) # crop harvesting
+        annual_output_row = day_of_year == 365 ?
+            output_rows.first_annual_row + annual_output_offset : nothing
+        harvest_crop!(
+            crop_cal, crop, soil, output, managed_land.residue_fraction, day_of_year;
+            output_row = output_row,
+            annual_output_row = annual_output_row,
+        ) # crop harvesting
+        annual_output_offset += day_of_year == 365
 
         if carbon_balance !== nothing
             record_carbon_balance_after_harvest!(
@@ -132,7 +144,10 @@ function daily_crop_C4!(day_start, day_end,
         photosynthesis_C4!(pftparameters, photos, crop.canopy.apar, pet.daylength, dailyWeather.temp; comp_vmax = false)
 
         # crop respiration and carbon allocation
-        crop_carbon!(photos, crop, output, pftparameters, dailyWeather.temp)
+        crop_carbon!(
+            photos, crop, output, pftparameters, dailyWeather.temp;
+            output_row = output_row,
+        )
 
         # crop nitrogen allocation
         if nitrogen_limit_vmax

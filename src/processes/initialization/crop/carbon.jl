@@ -10,6 +10,7 @@ mutable struct CropCarbon{A, M}
     yield::A
     npp::A
     respiration::A
+    temperature_response::A
 end
 
 function init_crop_carbon(cell_size::Int, device; carbon_pools::Int = 4)
@@ -24,6 +25,7 @@ function init_crop_carbon(cell_size::Int, device; carbon_pools::Int = 4)
         float_state(),
         device(initial_organs),
         device(zeros(Float32, carbon_pools, cell_size)),
+        float_state(),
         float_state(),
         float_state(),
         float_state(),

@@ -9,15 +9,13 @@ fluxes are stored layer-wise in `soil.nitrogen` for diagnostics.
 function nitrogen_transform!(soil::Soil;
                              air_temperature = nothing,
                              wind_speed = nothing,
-                             lpjmlparams::LPJmLParams = lpjmlparams)
+    lpjmlparams::LPJmLParams = lpjmlparams)
     soil_layers = size(soil.nitrogen.nitrate, 1)
-    decomposed_litter_carbon = vec(sum(soil.carbon.decomposed_litter; dims = 1))
-    decomposed_litter_nitrogen = vec(sum(soil.nitrogen.decomposed_litter; dims = 1))
-
-    launch_1D!(
+    launch_custom!(
         mineralize_immobilize_kernel!,
-        decomposed_litter_carbon,
-        decomposed_litter_nitrogen,
+        soil.carbon.decomposed_litter,
+        size(soil.carbon.decomposed_litter, 2),
+        soil.nitrogen.decomposed_litter,
         soil.nitrogen.decomposed_fast,
         soil.nitrogen.decomposed_slow,
         soil.nitrogen.shift_fast,
@@ -71,7 +69,7 @@ function nitrogen_transform!(soil::Soil;
     volatilization_temperature = air_temperature === nothing ?
         vec(@view(soil.thermal.temperature[1, :])) : air_temperature
     volatilization_wind = if wind_speed === nothing
-        fallback = similar(volatilization_temperature)
+        fallback = soil.decomposition.surface_scratch_1
         fill!(fallback, eltype(fallback)(lpjmlparams.volatil_wind))
         fallback
     else
@@ -91,8 +89,8 @@ function nitrogen_transform!(soil::Soil;
 end
 
 @kernel inbounds = true function mineralize_immobilize_kernel!(
-    decomposed_litter_carbon::AbstractArray{T},
-    decomposed_litter_nitrogen::AbstractArray{T},
+    decomposed_litter_carbon::AbstractMatrix{T},
+    decomposed_litter_nitrogen::AbstractMatrix{T},
     decomposed_fast_nitrogen::AbstractArray{M},
     decomposed_slow_nitrogen::AbstractArray{M},
     shift_fast::AbstractArray{M},
@@ -110,9 +108,11 @@ end
     @unpack lpjmlparams, soil_layers = kernel_params
     @unpack atmfrac, fastfrac, soil_cn_ratio, immobilization_k = lpjmlparams
 
-    carbon_nitrogen_deficit =
-        decomposed_litter_carbon[cell] / T(soil_cn_ratio) -
-        decomposed_litter_nitrogen[cell]
+    litter_carbon = decomposed_litter_carbon[1, cell] +
+        decomposed_litter_carbon[2, cell] + decomposed_litter_carbon[3, cell]
+    litter_nitrogen = decomposed_litter_nitrogen[1, cell] +
+        decomposed_litter_nitrogen[2, cell] + decomposed_litter_nitrogen[3, cell]
+    carbon_nitrogen_deficit = litter_carbon / T(soil_cn_ratio) - litter_nitrogen
 
     for layer in 1:soil_layers
         mineralization[layer, cell] = zero(M)
@@ -122,7 +122,7 @@ end
         # fast/slow split and atmospheric fraction explicitly to each flux.
         litter_mineralization = max(
             zero(M),
-            decomposed_litter_nitrogen[cell] * T(atmfrac) *
+            litter_nitrogen * T(atmfrac) *
             (T(fastfrac) * shift_fast[layer, cell] +
              (one(T) - T(fastfrac)) * shift_slow[layer, cell]),
         )

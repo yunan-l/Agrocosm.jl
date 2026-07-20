@@ -10,6 +10,7 @@ function lai_crop!(crop::Crop,
     launch_1D!(
         lai_crop_kernel!,
         crop.canopy.lai,
+        crop.canopy.phenology_fraction,
         crop.phenology.senescence,
         crop.phenology.senescence_previous,
         crop.water.stress,
@@ -24,6 +25,7 @@ end
 
 @kernel inbounds = true function lai_crop_kernel!(
                                   crop_lai::AbstractArray{T},
+                                  phenology_fraction::AbstractArray{T},
                                   crop_senescence::AbstractArray{B},
                                   crop_senescence0::AbstractArray{B},
                                   crop_wscal::AbstractArray{T},
@@ -60,6 +62,7 @@ end
         crop_lai[cell] = zero(T)
         crop_laimax_adjusted[cell] = zero(T)
     end
+    phenology_fraction[cell] = crop_lai[cell] / laimax
 end
 
 

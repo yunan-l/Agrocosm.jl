@@ -62,6 +62,41 @@ function surface_litter_interception!(soil::Soil)
     return nothing
 end
 
+"""Compute canopy throughfall and surface-litter interception in one cell kernel."""
+function surface_litter_interception!(soil::Soil,
+                                      precipitation::AbstractVector{T},
+                                      canopy_interception::AbstractVector{T}) where {T <: AbstractFloat}
+    launch_1D!(
+        surface_litter_throughfall_kernel!,
+        soil.water.infiltration,
+        precipitation,
+        canopy_interception,
+        soil.surface_litter.cover,
+        soil.surface_litter.water_capacity,
+        soil.surface_litter.water_storage,
+        soil.surface_litter.interception,
+    )
+    return nothing
+end
+
+@kernel inbounds = true function surface_litter_throughfall_kernel!(
+    throughfall::AbstractVector{T},
+    precipitation::AbstractVector{T},
+    canopy_interception::AbstractVector{T},
+    cover::AbstractVector{T},
+    water_capacity::AbstractVector{T},
+    water_storage::AbstractVector{T},
+    interception::AbstractVector{T},
+) where {T <: AbstractFloat}
+    cell = @index(Global)
+    incoming = precipitation[cell] - canopy_interception[cell]
+    available_capacity = max(water_capacity[cell] - water_storage[cell], zero(T))
+    captured = min(available_capacity, max(incoming, zero(T)) * cover[cell])
+    water_storage[cell] += captured
+    throughfall[cell] = incoming - captured
+    interception[cell] = captured
+end
+
 @kernel inbounds = true function surface_litter_interception_kernel!(
     throughfall::AbstractArray{T},
     cover::AbstractArray{T},

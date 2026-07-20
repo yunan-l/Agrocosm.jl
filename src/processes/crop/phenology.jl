@@ -10,11 +10,6 @@ function phenology_crop!(crop::Crop,
                          daylength::AbstractArray{T},
 ) where {T <: AbstractFloat}
 
-    @unpack laimax = PFT
-
-    # Keep yesterday's harvest flag for downstream transition logic.
-    crop.phenology.harvesting_previous .= crop.phenology.harvesting
-
     # 1D launch over cells; climbuf_V_req is used as launch reference and kernel arg #1.
     launch_1D!(
         phenology_kernel!,
@@ -27,6 +22,7 @@ function phenology_crop!(crop::Crop,
         crop.phenology.senescence,
         crop.phenology.senescence_previous,
         crop.phenology.harvesting,
+        crop.phenology.harvesting_previous,
         crop.phenology.growing_days,
         crop.phenology.is_growing,
         crop.phenology.winter_type,
@@ -36,9 +32,6 @@ function phenology_crop!(crop::Crop,
     )
 
     lai_crop!(crop, PFT)
-
-    # Normalize current LAI by potential max LAI to obtain phenological progress proxy.
-    crop.canopy.phenology_fraction .= crop.canopy.lai / laimax
 
 end
 
@@ -53,6 +46,7 @@ end
                                    crop_senescence::AbstractArray{B},
                                    crop_senescence0::AbstractArray{B},
                                    crop_harvesting::AbstractArray{B},
+                                   crop_harvesting_previous::AbstractArray{B},
                                    crop_growingdays::AbstractArray{S},
                                    crop_isgrowing::AbstractArray{S},
                                    crop_wtype::AbstractArray{B},
@@ -65,6 +59,7 @@ end
 
     @unpack basetemp, tv_eff, tv_opt, fphuc, flaimaxc, fphuk, flaimaxk, fphusen, flaimaxharvest, psens, pb, ps, hlimit, sla, shapesenescencenorm = PFT
 
+    crop_harvesting_previous[cell] = crop_harvesting[cell]
     crop_senescence0[cell] = crop_senescence[cell]
 
     if crop_isgrowing[cell] == 1

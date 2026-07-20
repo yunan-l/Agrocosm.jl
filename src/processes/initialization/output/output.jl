@@ -61,27 +61,29 @@ function init_output(cell_size::Int,
                      vegc_pools::Int = 4,
                      litc_layers::Int = 3,
                      soil_layers::Int = 5)
-    scalar_output() = device(zeros(Float32, 1, cell_size))
-    integer_output() = device(zeros(Int32, 1, cell_size))
+    # Output rows represent completed simulation steps only. Initial model
+    # state lives in `crop`/`soil`; it is not a synthetic day-zero output.
+    scalar_output() = device(zeros(Float32, 0, cell_size))
+    integer_output() = device(zeros(Int32, 0, cell_size))
 
     crop = CropOutput(
         scalar_output(), scalar_output(), scalar_output(), scalar_output(),
         scalar_output(), scalar_output(), scalar_output(), scalar_output(),
         scalar_output(), scalar_output(), scalar_output(),
-        device(zeros(Float32, 1, vegc_pools * cell_size)),
-        device(zeros(Float32, 1, vegc_pools * cell_size)),
+        device(zeros(Float32, 0, vegc_pools * cell_size)),
+        device(zeros(Float32, 0, vegc_pools * cell_size)),
         scalar_output(), scalar_output(), integer_output(),
     )
 
     soil = SoilOutput(
         scalar_output(),
-        device(zeros(Float32, 1, litc_layers * cell_size)),
-        device(zeros(Float32, 1, soil_layers * cell_size)),
-        device(zeros(Float32, 1, soil_layers * cell_size)),
-        device(zeros(Float32, 1, soil_layers * cell_size)),
-        device(zeros(Float32, 1, litc_layers * cell_size)),
-        device(zeros(Float32, 1, soil_layers * cell_size)),
-        device(zeros(Float32, 1, soil_layers * cell_size)),
+        device(zeros(Float32, 0, litc_layers * cell_size)),
+        device(zeros(Float32, 0, soil_layers * cell_size)),
+        device(zeros(Float32, 0, soil_layers * cell_size)),
+        device(zeros(Float32, 0, soil_layers * cell_size)),
+        device(zeros(Float32, 0, litc_layers * cell_size)),
+        device(zeros(Float32, 0, soil_layers * cell_size)),
+        device(zeros(Float32, 0, soil_layers * cell_size)),
         scalar_output(), scalar_output(),
     )
 
@@ -91,4 +93,68 @@ function init_output(cell_size::Int,
         integer_output(), integer_output(),
     )
     return Output(crop, soil, climate, calendar)
+end
+
+"""Grow a backend array once for a simulation block, preserving existing rows."""
+function _extend_output_rows(array::AbstractMatrix, additional_rows::Integer)
+    additional_rows <= 0 && return array
+    old_rows, columns = size(array)
+    extended = similar(array, old_rows + additional_rows, columns)
+    fill!(extended, zero(eltype(extended)))
+    @views extended[1:old_rows, :] .= array
+    return extended
+end
+
+"""
+    prepare_output_block!(output, daily_rows, annual_rows)
+
+Reserve all crop/calendar output rows once before a daily simulation block.
+The returned indices point to the first newly allocated daily and annual rows.
+"""
+function prepare_output_block!(output::Output,
+                               daily_rows::Integer,
+                               annual_rows::Integer)
+    first_daily_row = size(output.crop.gpp, 1) + 1
+    first_annual_row = size(output.crop.yield, 1) + 1
+
+    for field in (
+        :gpp, :npp, :lambda, :potential_vmax, :vmax,
+        :nitrogen_limitation, :respiration, :biomass, :lai,
+        :storage_carbon, :fphu, :water_deficit, :growing_mask,
+    )
+        setproperty!(
+            output.crop,
+            field,
+            _extend_output_rows(getproperty(output.crop, field), daily_rows),
+        )
+    end
+    for field in (:harvesting_mask, :sowing_callback, :harvest_callback)
+        setproperty!(
+            output.calendar,
+            field,
+            _extend_output_rows(getproperty(output.calendar, field), daily_rows),
+        )
+    end
+
+    output.crop.yield = _extend_output_rows(output.crop.yield, annual_rows)
+    output.calendar.harvest_date =
+        _extend_output_rows(output.calendar.harvest_date, annual_rows)
+    output.calendar.harvesting_year =
+        _extend_output_rows(output.calendar.harvesting_year, annual_rows)
+
+    return (; first_daily_row, first_annual_row)
+end
+
+@inline function _write_output_row!(destination::AbstractMatrix,
+                                    row::Integer,
+                                    source::AbstractVector)
+    @views destination[row:row, :] .= reshape(source, 1, :)
+    return nothing
+end
+
+function _append_output_row(array::AbstractMatrix, source::AbstractVector)
+    row = size(array, 1) + 1
+    extended = _extend_output_rows(array, 1)
+    _write_output_row!(extended, row, source)
+    return extended
 end

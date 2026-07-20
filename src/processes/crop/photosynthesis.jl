@@ -4,7 +4,7 @@ photosynthesis_C3!(PFT, photos, crop, pet, co2, temp)
 
 Compute C3 photosynthesis rates and related diagnostic variables.
 """
-function photosynthesis_C3!(PFT::PftParameters,
+function photosynthesis_C3_reference!(PFT::PftParameters,
                             photos::CropPhotosynthesis,
                             apar::AbstractArray{T},
                             pet_daylength::AbstractArray{T},
@@ -36,7 +36,7 @@ function photosynthesis_C3!(PFT::PftParameters,
         sigma = sqrt.(max.(zero(T), sigma))
         photos.lambda .= T(LAMBDA_OPT)
         vmax = (1.0f0 / b) * (c1 ./ c2) .* ((2.0f0 * theta - 1.0f0) .* s .- (2.0f0 * theta .* s .- c2) .* sigma) .* apar * cmass * cq
-        photos.vmax = ifelse.(inactive, zero(T), max.(zero(T), vmax))
+        photos.vmax .= ifelse.(inactive, zero(T), max.(zero(T), vmax))
         photos.potential_vmax .= photos.vmax
         photos.nitrogen_limitation .= ifelse.(photos.vmax .> zero(T), one(T), zero(T))
     end
@@ -66,7 +66,7 @@ function photosynthesis_C3!(PFT::PftParameters,
 
     # round-off; a positive floor can make GPP negative at low light.
     agd = (je .+ jc .- sqrt.(max.(zero(T), (je .+ jc) .* (je .+ jc) .- T(4.0) * theta .* je .* jc))) ./ (T(2.0) * theta) .* pet_daylength
-    photos.gross_assimilation = ifelse.(inactive, zero(T), max.(zero(T), agd))
+    photos.gross_assimilation .= ifelse.(inactive, zero(T), max.(zero(T), agd))
 
     #   Daily dark respiration, Rd, gC/m2/day
     #   Eqn 10, Haxeltine & Prentice 1996
@@ -80,8 +80,8 @@ function photosynthesis_C3!(PFT::PftParameters,
     adt = photos.gross_assimilation .- hour2day(pet_daylength) .* photos.leaf_respiration
 
     #   Convert adt from gC/m2/day to mm/m2/day using ideal gas equation
-    photos.net_assimilation = max.(zero(T), adt)
-    photos.water_limited_assimilation = ifelse.(
+    photos.net_assimilation .= max.(zero(T), adt)
+    photos.water_limited_assimilation .= ifelse.(
         adt .<= zero(T),
         zero(T),
         adt ./ cmass .* T(8.314) .* degCtoK(temp) ./ p .* T(1000.0),
@@ -95,7 +95,7 @@ photosynthesis_C4!(PFT, photos, crop, pet, co2, temp)
 
 Compute C4 photosynthesis rates and related diagnostic variables.
 """
-function photosynthesis_C4!(PFT::PftParameters,
+function photosynthesis_C4_reference!(PFT::PftParameters,
                             photos::CropPhotosynthesis,
                             apar::AbstractArray{T},
                             pet_daylength::AbstractArray{T},
@@ -125,7 +125,7 @@ function photosynthesis_C4!(PFT::PftParameters,
         # C4 assimilation is already saturated above lambdamc4.
         photos.lambda .= T(LAMBDA_OPT)
         vmax = (1.0f0 / b) * (c1 ./ c2) .* ((2.0f0 * theta - 1.0f0) .* s .- (2.0f0 * theta .* s .- c2) .* sigma) .* apar * cmass * cq
-        photos.vmax = ifelse.(inactive, zero(T), max.(zero(T), vmax))
+        photos.vmax .= ifelse.(inactive, zero(T), max.(zero(T), vmax))
         photos.potential_vmax .= photos.vmax
         photos.nitrogen_limitation .= ifelse.(photos.vmax .> zero(T), one(T), zero(T))
     end
@@ -150,7 +150,7 @@ function photosynthesis_C4!(PFT::PftParameters,
 
     # round-off; a positive floor can make GPP negative at low light.
     agd = (je .+ jc .- sqrt.(max.(zero(T), (je .+ jc) .* (je .+ jc) .- T(4.0) * theta .* je .* jc))) ./ (T(2.0) * theta) .* pet_daylength
-    photos.gross_assimilation = ifelse.(inactive, zero(T), max.(zero(T), agd))
+    photos.gross_assimilation .= ifelse.(inactive, zero(T), max.(zero(T), agd))
 
     #   Daily dark respiration, Rd, gC/m2/day
     #   Eqn 10, Haxeltine & Prentice 1996
@@ -162,11 +162,211 @@ function photosynthesis_C4!(PFT::PftParameters,
     adt = photos.gross_assimilation .- hour2day(pet_daylength) .* photos.leaf_respiration
 
     #   Convert adt from gC/m2/day to mm/m2/day using ideal gas equation
-    photos.net_assimilation = max.(zero(T), adt)
-    photos.water_limited_assimilation = ifelse.(
+    photos.net_assimilation .= max.(zero(T), adt)
+    photos.water_limited_assimilation .= ifelse.(
         adt .<= zero(T),
         zero(T),
         adt ./ cmass .* T(8.314) .* degCtoK(temp) ./ p .* T(1000.0),
     )
 
+end
+
+"""Cell-local C3 photosynthesis kernel with no intermediate device arrays."""
+function photosynthesis_C3!(PFT::PftParameters,
+                            photos::CropPhotosynthesis,
+                            apar::AbstractArray{T},
+                            pet_daylength::AbstractArray{T},
+                            temp::AbstractArray{T},
+                            co2::AbstractArray{T};
+                            lpjmlparams::LPJmLParams = lpjmlparams,
+                            photoparams::PhotoParams = photoparams,
+                            comp_vmax = false
+) where {T <: AbstractFloat}
+    launch_1D!(
+        photosynthesis_c3_kernel!,
+        photos.gross_assimilation,
+        photos.net_assimilation,
+        photos.water_limited_assimilation,
+        photos.leaf_respiration,
+        photos.potential_vmax,
+        photos.vmax,
+        photos.nitrogen_limitation,
+        photos.lambda,
+        photos.temperature_stress,
+        apar,
+        pet_daylength,
+        temp,
+        co2,
+        PFT,
+        lpjmlparams,
+        photoparams,
+        comp_vmax,
+    )
+    return nothing
+end
+
+@kernel inbounds = true function photosynthesis_c3_kernel!(
+    gross_assimilation::AbstractVector{T},
+    net_assimilation::AbstractVector{T},
+    water_limited_assimilation::AbstractVector{T},
+    leaf_respiration::AbstractVector{T},
+    potential_vmax::AbstractVector{T},
+    vmax::AbstractVector{T},
+    nitrogen_limitation::AbstractVector{T},
+    lambda::AbstractVector{T},
+    temperature_stress::AbstractVector{T},
+    apar::AbstractVector{T},
+    daylength::AbstractVector{T},
+    temperature::AbstractVector{T},
+    co2::AbstractVector{T},
+    PFT::PftParameters,
+    lpjmlparams::LPJmLParams,
+    photoparams::PhotoParams,
+    comp_vmax::Bool,
+) where {T <: AbstractFloat}
+    cell = @index(Global)
+    @unpack b = PFT
+    @unpack ko25, kc25, alphac3, theta, LAMBDA_OPT = lpjmlparams
+    @unpack q10ko, q10kc, po2, tau25, q10tau, cmass, cq, p, lambdamc3 = photoparams
+
+    stress = temperature_stress[cell]
+    inactive = stress < T(1e-2)
+    temperature_cell = temperature[cell]
+    co2_cell = co2[length(co2) == 1 ? 1 : cell]
+    ko = T(ko25) * T(q10ko)^((temperature_cell - T(25)) * T(0.1))
+    kc = T(kc25) * T(q10kc)^((temperature_cell - T(25)) * T(0.1))
+    fac = kc * (one(T) + T(po2) / ko)
+    tau = T(tau25) * T(q10tau)^((temperature_cell - T(25)) * T(0.1))
+    gammastar = T(po2) / (T(2) * tau)
+
+    if comp_vmax
+        internal_co2 = T(lambdamc3) * co2_cell
+        c1 = stress * T(alphac3) *
+            ((internal_co2 - gammastar) / (internal_co2 + T(2) * gammastar))
+        c2 = (internal_co2 - gammastar) / (internal_co2 + fac)
+        s = T(24) / daylength[cell] * T(b)
+        sigma = one(T) - (c2 - s) / (c2 - T(theta) * s)
+        sigma = sqrt(max(zero(T), sigma))
+        lambda[cell] = T(LAMBDA_OPT)
+        potential = (one(T) / T(b)) * (c1 / c2) *
+            ((T(2) * T(theta) - one(T)) * s -
+             (T(2) * T(theta) * s - c2) * sigma) *
+            apar[cell] * T(cmass) * T(cq)
+        vmax[cell] = inactive ? zero(T) : max(zero(T), potential)
+        potential_vmax[cell] = vmax[cell]
+        nitrogen_limitation[cell] = vmax[cell] > zero(T) ? one(T) : zero(T)
+    end
+
+    internal_co2 = lambda[cell] * co2_cell
+    c1 = stress * T(alphac3) *
+        ((internal_co2 - gammastar) / (internal_co2 + T(2) * gammastar))
+    c2 = (internal_co2 - gammastar) / (internal_co2 + fac)
+    je = c1 * apar[cell] * T(cmass) * T(cq) / (daylength[cell] + T(1e-5))
+    jc = c2 * hour2day(vmax[cell])
+    discriminant = max(
+        zero(T),
+        (je + jc) * (je + jc) - T(4) * T(theta) * je * jc,
+    )
+    agd = (je + jc - sqrt(discriminant)) / (T(2) * T(theta)) * daylength[cell]
+    gross = inactive ? zero(T) : max(zero(T), agd)
+    gross_assimilation[cell] = gross
+    leaf = inactive ? zero(T) : T(b) * vmax[cell]
+    leaf_respiration[cell] = leaf
+    adt = gross - hour2day(daylength[cell]) * leaf
+    net_assimilation[cell] = max(zero(T), adt)
+    water_limited_assimilation[cell] = adt <= zero(T) ? zero(T) :
+        adt / T(cmass) * T(8.314) * (temperature_cell + T(273.15)) /
+        T(p) * T(1000)
+end
+
+"""Cell-local C4 photosynthesis kernel with no intermediate device arrays."""
+function photosynthesis_C4!(PFT::PftParameters,
+                            photos::CropPhotosynthesis,
+                            apar::AbstractArray{T},
+                            pet_daylength::AbstractArray{T},
+                            temp::AbstractArray{T};
+                            lpjmlparams::LPJmLParams = lpjmlparams,
+                            photoparams::PhotoParams = photoparams,
+                            comp_vmax = false
+) where {T <: AbstractFloat}
+    launch_1D!(
+        photosynthesis_c4_kernel!,
+        photos.gross_assimilation,
+        photos.net_assimilation,
+        photos.water_limited_assimilation,
+        photos.leaf_respiration,
+        photos.potential_vmax,
+        photos.vmax,
+        photos.nitrogen_limitation,
+        photos.lambda,
+        photos.temperature_stress,
+        apar,
+        pet_daylength,
+        temp,
+        PFT,
+        lpjmlparams,
+        photoparams,
+        comp_vmax,
+    )
+    return nothing
+end
+
+@kernel inbounds = true function photosynthesis_c4_kernel!(
+    gross_assimilation::AbstractVector{T},
+    net_assimilation::AbstractVector{T},
+    water_limited_assimilation::AbstractVector{T},
+    leaf_respiration::AbstractVector{T},
+    potential_vmax::AbstractVector{T},
+    vmax::AbstractVector{T},
+    nitrogen_limitation::AbstractVector{T},
+    lambda::AbstractVector{T},
+    temperature_stress::AbstractVector{T},
+    apar::AbstractVector{T},
+    daylength::AbstractVector{T},
+    temperature::AbstractVector{T},
+    PFT::PftParameters,
+    lpjmlparams::LPJmLParams,
+    photoparams::PhotoParams,
+    comp_vmax::Bool,
+) where {T <: AbstractFloat}
+    cell = @index(Global)
+    @unpack b = PFT
+    @unpack alphac4, theta, LAMBDA_OPT = lpjmlparams
+    @unpack lambdamc4, cmass, cq, p = photoparams
+
+    stress = temperature_stress[cell]
+    inactive = stress < T(1e-2)
+    if comp_vmax
+        c1 = stress * T(alphac4)
+        s = T(24) / daylength[cell] * T(b)
+        sigma = one(T) - (one(T) - s) / (one(T) - T(theta) * s)
+        sigma = sqrt(max(zero(T), sigma))
+        lambda[cell] = T(LAMBDA_OPT)
+        potential = (one(T) / T(b)) * c1 *
+            ((T(2) * T(theta) - one(T)) * s -
+             (T(2) * T(theta) * s - one(T)) * sigma) *
+            apar[cell] * T(cmass) * T(cq)
+        vmax[cell] = inactive ? zero(T) : max(zero(T), potential)
+        potential_vmax[cell] = vmax[cell]
+        nitrogen_limitation[cell] = vmax[cell] > zero(T) ? one(T) : zero(T)
+    end
+
+    phipi = min(one(T), lambda[cell] / T(lambdamc4))
+    c1 = stress * phipi * T(alphac4)
+    je = c1 * apar[cell] * T(cmass) * T(cq) / (daylength[cell] + T(1e-5))
+    jc = hour2day(vmax[cell])
+    discriminant = max(
+        zero(T),
+        (je + jc) * (je + jc) - T(4) * T(theta) * je * jc,
+    )
+    agd = (je + jc - sqrt(discriminant)) / (T(2) * T(theta)) * daylength[cell]
+    gross = inactive ? zero(T) : max(zero(T), agd)
+    gross_assimilation[cell] = gross
+    leaf = inactive ? zero(T) : T(b) * vmax[cell]
+    leaf_respiration[cell] = leaf
+    adt = gross - hour2day(daylength[cell]) * leaf
+    net_assimilation[cell] = max(zero(T), adt)
+    water_limited_assimilation[cell] = adt <= zero(T) ? zero(T) :
+        adt / T(cmass) * T(8.314) * (temperature[cell] + T(273.15)) /
+        T(p) * T(1000)
 end

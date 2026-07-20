@@ -12,7 +12,9 @@ using Test
     output = @inferred init_output(cell_size, identity)
 
     @test size(crop.carbon.organs) == (4, cell_size)
+    @test length(crop.carbon.temperature_response) == cell_size
     @test size(crop.water.transpiration_layer) == (5, cell_size)
+    @test length(crop.water.root_zone_water) == cell_size
     @test length(crop.calendar.sowing_date) == cell_size
     @test length(managed_land.latitude) == cell_size
     @test length(crop.photosynthesis.gross_assimilation) == cell_size
@@ -41,6 +43,8 @@ using Test
     @test soil.nitrogen isa SoilNitrogen
     @test soil.decomposition isa SoilDecomposition
     @test size(soil.decomposition.litter_response) == (3, cell_size)
+    @test size(soil.decomposition.layer_scratch_1) == (5, cell_size)
+    @test length(soil.decomposition.surface_scratch_1) == cell_size
     @test soil.management isa SoilManagement
     @test soil.surface_litter isa SoilSurfaceLitter
     @test soil.snow isa SoilSnow
@@ -60,6 +64,13 @@ using Test
     @test output.soil isa SoilOutput
     @test output.climate isa ClimateOutput
     @test output.calendar isa CalendarOutput
+
+    rows = Agrocosm.prepare_output_block!(output, 3, 1)
+    @test rows == (first_daily_row = 1, first_annual_row = 1)
+    @test size(output.crop.npp) == (3, cell_size)
+    @test size(output.crop.yield) == (1, cell_size)
+    @test size(output.calendar.harvest_callback) == (3, cell_size)
+    @test size(output.calendar.harvest_date) == (1, cell_size)
 end
 
 @testset "LPJmL c_shift initialization strategies" begin

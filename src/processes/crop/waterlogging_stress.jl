@@ -18,6 +18,8 @@ function waterlogging_stress!(crop::Crop,
         waterlogging_stress_kernel!,
         crop.water.waterlogging_days,
         crop.water.waterlogging_stress,
+        photos_agd,
+        crop.water.deficit,
         crop.water.root_distribution,
         crop.phenology.is_growing,
         soil.water.saturation_storage,
@@ -28,14 +30,14 @@ function waterlogging_stress!(crop::Crop,
         kernel_params
     )
 
-    photos_agd .*= crop.water.waterlogging_stress
-    crop.water.deficit .*= crop.water.waterlogging_stress
 end
 
 
 @kernel inbounds = true function waterlogging_stress_kernel!(
                                        crop_waterlogging_days::AbstractArray{T},
                                        crop_waterlogging_stress::AbstractArray{T},
+                                       photos_agd::AbstractArray{T},
+                                       crop_deficit::AbstractArray{T},
                                        crop_rootdist::AbstractArray{T},
                                        crop_isgrowing::AbstractArray{S},
                                        soil_wsats::AbstractArray{M},
@@ -79,4 +81,6 @@ end
         crop_waterlogging_days[cell] = zero(T)
         crop_waterlogging_stress[cell] = one(T)
     end
+    photos_agd[cell] *= crop_waterlogging_stress[cell]
+    crop_deficit[cell] *= crop_waterlogging_stress[cell]
 end
