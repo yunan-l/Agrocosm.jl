@@ -11,7 +11,7 @@ using CUDA, Adapt
 
 # INPUT OUTPUT
 using DataFrames, NCDatasets, Random, Dates
-import JLD2: @load, @save
+import JLD2: @load, @save, load
 
 # PARAMETER HANDLING
 import Parameters: @with_kw, @unpack
@@ -76,6 +76,7 @@ export write_output_nc
 
 # DAILY CROP SIMULATIONS
 export daily_crop_C3!, daily_crop_C4!
+export CropSimulation, initialize_simulation, run_simulation!, simulation_summary
 
 
 # process-based crop model
@@ -174,5 +175,6 @@ include("utils/tools.jl")
 # Daily crop simulations
 include("simulations/daily_crop_C3.jl")
 include("simulations/daily_crop_C4.jl")
+include("simulations/simulation_api.jl")
 
 end

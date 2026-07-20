@@ -17,6 +17,8 @@ function daily_crop_C3!(start_day, end_day,
                         carbon_balance = nothing,
                         thermal_balance = nothing,
                         model_parameters::ModelParameters = ModelParameters(eltype(crop.canopy.lai)),
+                        simulation_day_offset::Integer = 0,
+                        diagnostic_offset::Integer = 0,
 )
 
     T = eltype(crop.canopy.lai)
@@ -35,18 +37,23 @@ function daily_crop_C3!(start_day, end_day,
         throw(ArgumentError("water-balance diagnostics currently support rainfed simulations only"))
     end
 
-    annual_rows = count(day -> day % 365 == 0, start_day:end_day)
+    annual_rows = count(
+        climate_day -> (climate_day + simulation_day_offset) % 365 == 0,
+        start_day:end_day,
+    )
     output_rows = prepare_output_block!(output, end_day - start_day + 1, annual_rows)
     annual_output_offset = 0
 
-    for day = start_day : end_day
+    for climate_day = start_day : end_day
 
-        diagnostic_day = day - start_day + 1
-        output_row = output_rows.first_daily_row + diagnostic_day - 1
+        day = climate_day + simulation_day_offset
+        block_day = climate_day - start_day + 1
+        diagnostic_day = diagnostic_offset + block_day
+        output_row = output_rows.first_daily_row + block_day - 1
 
         day_of_year = day % 365 != 0 ? day % 365 : 365
 
-        current_co2 = readclimate!(climate, dailyWeather, day)
+        current_co2 = readclimate!(climate, dailyWeather, climate_day)
 
         if carbon_balance !== nothing
             record_carbon_balance_start!(carbon_balance, diagnostic_day, crop, soil)
