@@ -88,6 +88,7 @@ function daily_crop_C3!(start_day, end_day,
             manure = manure,
             apply_prescribed_fertilizer = !auto_fertilizer,
             lpjmlparams = global_params,
+            laimax = pftparameters.laimax,
         )
 
         if carbon_balance !== nothing

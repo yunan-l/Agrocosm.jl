@@ -12,6 +12,9 @@ using Test
     include("processes/crop/test_lambda_solver_c4.jl")
     include("processes/crop/test_lambda_water_coupling.jl")
     include("processes/crop/test_fertilizer.jl")
+    include("processes/crop/test_crop_lifecycle.jl")
+    include("processes/crop/test_prescribed_phenology.jl")
+    include("processes/crop/test_harvest_balance.jl")
     include("processes/crop/test_nitrogen_allocation.jl")
     include("processes/crop/test_nitrogen_demand.jl")
     include("processes/crop/test_nitrogen_uptake.jl")
@@ -39,4 +42,5 @@ using Test
     include("diagnostics/test_thermal_balance.jl")
     include("simulations/test_daily_crop_C3_precision.jl")
     include("simulations/test_simulation_api.jl")
+    include("simulations/test_cross_year_continuity.jl")
 end

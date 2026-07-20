@@ -58,6 +58,18 @@ function climate_block(::Type{T}, days, temperature, precipitation) where {T <: 
     )
 end
 
+@testset "Annual CO₂ forcing length is validated before kernel launch" begin
+    initial, _ = simulation_api_fixture(Float32)
+    simulation = initialize_simulation(
+        cft1, initial;
+        indices = [1], T = Float32, days = 366, auto_fertilizer = false,
+    )
+    incomplete = climate_block(Float32, 366, 15, 1)
+    @test_throws DimensionMismatch run_simulation!(
+        simulation, incomplete; spinup = false,
+    )
+end
+
 @testset "High-level crop simulation API" begin
     initial, climate = simulation_api_fixture(Float32)
     simulation = initialize_simulation(

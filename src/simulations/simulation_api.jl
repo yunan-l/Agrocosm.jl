@@ -153,6 +153,20 @@ function run_simulation!(
     1 <= start_day <= local_end_day <= climate_days || throw(ArgumentError(
         "require 1 <= start_day <= end_day <= $climate_days climate rows",
     ))
+    if ndims(prepared_climate.co2) == 1
+        required_co2_years = div(local_end_day - 1, 365) + 1
+        length(prepared_climate.co2) >= required_co2_years || throw(DimensionMismatch(
+            "annual CO₂ forcing has $(length(prepared_climate.co2)) value(s), " *
+            "but climate rows through day $local_end_day require $required_co2_years",
+        ))
+    elseif ndims(prepared_climate.co2) == 2
+        size(prepared_climate.co2, 1) >= local_end_day || throw(DimensionMismatch(
+            "daily CO₂ forcing has $(size(prepared_climate.co2, 1)) row(s), " *
+            "but end_day is $local_end_day",
+        ))
+    else
+        throw(ArgumentError("climate.co2 must be an annual vector or daily matrix"))
+    end
     run_days = local_end_day - start_day + 1
     run_days <= remaining_days || throw(DimensionMismatch(
         "only $remaining_days of $(simulation.config.days) configured days remain, requested $run_days",
