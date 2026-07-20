@@ -20,8 +20,7 @@ function soil_nitrogen!(crop_cal::CropCalendar,
     soil.nitrogen.decomposed_litter = (1.0f0 .- exp.(-soil.nitrogen.litter_response .* soil.decomposition.litter_response)) .* soil.nitrogen.litter
     soil.nitrogen.litter = soil.nitrogen.litter  - soil.nitrogen.decomposed_litter
 
-    # using 'callback' to adjust litter carbon due to tillage, 'scallback' means the tillage of sowing day and 'hcallback' means the tillage of harvesting day
-    update_litn_tillage!(soil, crop_cal)
+    route_harvest_nitrogen_input!(soil, crop_cal)
 
     litter_to_fast = soil.nitrogen.shift_fast .* sum(soil.nitrogen.decomposed_litter, dims = 1)
     litter_to_slow = soil.nitrogen.shift_slow .* sum(soil.nitrogen.decomposed_litter, dims = 1)
@@ -40,21 +39,5 @@ function soil_nitrogen!(crop_cal::CropCalendar,
         wind_speed = wind_speed,
         lpjmlparams = lpjmlparams,
     )
-
-end
-
-
-"""
-update_litn_tillage!(soil, crop_cal)
-
-Apply tillage/harvest crop nitrogen to litter nitrogen pools.
-"""
-function update_litn_tillage!(soil::Soil,
-                              crop_cal::CropCalendar
-)
-
-    soil.nitrogen.litter = soil.nitrogen.litter .* (1 .- reshape(crop_cal.sowing_callback, (1, :))) .* (1 .- reshape(crop_cal.harvest_callback, (1, :))) +
-                soil.management.tillage_fraction * soil.nitrogen.litter .* reshape(crop_cal.sowing_callback, (1, :)) +
-                (soil.management.tillage_fraction * (soil.nitrogen.litter .+ max.(soil.nitrogen.input, 0.0f0))) .* reshape(crop_cal.harvest_callback, (1, :))
 
 end

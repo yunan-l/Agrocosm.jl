@@ -23,8 +23,9 @@ function soil_carbon!(crop_cal::CropCalendar,
     soil.carbon.decomposed_litter = (1.0f0 .- exp.(-soil.carbon.litter_response .* soil.decomposition.litter_response)) .* soil.carbon.litter
     soil.carbon.litter = soil.carbon.litter  - soil.carbon.decomposed_litter
 
-    # using 'callback' to adjust litter carbon due to tillage, 'scallback' means the tillage of sowing day and 'hcallback' means the tillage of harvesting day
-    update_litc_tillage!(soil, crop_cal)
+    # LPJmL harvest first creates agtop/bg litter, then the KILL -> setaside
+    # transition tills agtop into agsub on the same day.
+    route_harvest_carbon_input!(soil, crop_cal)
 
     # soil.carbon.decomposed_fast = (1.0f0 .- exp.(-soil.response_fastc .* response / 50)) .* soil.carbon.fast
     soil.carbon.decomposed_fast = (1.0f0 .- exp.(-k_soil10.fast .* soil.decomposition.response)) .* soil.carbon.fast
@@ -37,19 +38,3 @@ function soil_carbon!(crop_cal::CropCalendar,
     soil.carbon.heterotrophic_respiration = vec(sum(soil.carbon.decomposed_litter, dims = 1) * atmfrac .+ sum(soil.carbon.decomposed_fast, dims = 1) .+ sum(soil.carbon.decomposed_slow, dims = 1))
 
 end
-
-
-"""
-update_litc_tillage!(soil, crop_cal)
-
-Apply tillage/harvest crop carbon to litter carbon pools.
-"""
-function update_litc_tillage!(soil::Soil,
-                              crop_cal::CropCalendar
-)
-
-    soil.carbon.litter = soil.carbon.litter .* (1 .- reshape(crop_cal.sowing_callback, (1, :))) .* (1 .- reshape(crop_cal.harvest_callback, (1, :))) +
-                soil.management.tillage_fraction * soil.carbon.litter .* reshape(crop_cal.sowing_callback, (1, :)) +
-                (soil.management.tillage_fraction * (soil.carbon.litter .+ max.(soil.carbon.input, 0.0f0))) .* reshape(crop_cal.harvest_callback, (1, :))
-end
-

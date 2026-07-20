@@ -59,11 +59,12 @@ export waterlogging_stress!
 
 # SOIL
 export apply_percolation_enthalpy!, soil_temperature!
-export pedotransfer!, soil_carbon!, update_litc_tillage!, update_lit_winter_wheat!
+export pedotransfer!, soil_carbon!, update_lit_winter_wheat!
 export evaporation!, soil_infiltration!, soil_evapotranspiration!
-export soil_nitrogen!, nitrogen_transform!, update_litn_tillage!
+export soil_nitrogen!, nitrogen_transform!
 export soil_decomp_response!
 export update_surface_litter_properties!, surface_litter_interception!
+export litter_tillage!, litter_bioturbation!
 
 # UNITS
 export deg2rad, ppm2Pa, ppm2bar, hour2day, hour2sec, degCtoK
@@ -148,6 +149,7 @@ include("processes/soil/pedotransfer.jl")
 include("processes/soil/evaporation.jl")
 include("processes/soil/soil_temp.jl")
 include("processes/soil/surface_litter.jl")
+include("processes/soil/litter_routing.jl")
 include("processes/soil/nitrogen_transform.jl")
 include("processes/soil/infil_perc.jl")
 include("processes/soil/soil_water.jl")

@@ -68,6 +68,12 @@ using Test
 
     Agrocosm.record_nitrogen_balance_start!(balance, 4, crop, soil)
     harvest_crop!(crop.calendar, crop, soil, output, Float32[0.5], 100)
+    # Follow the production daily loop: harvest_crop! sets is_growing = 0,
+    # then crop_nitrogen! clears total and organ N through its inactive branch.
+    crop_nitrogen!(
+        crop, cft1, soil, zeros(Float32, 1), fill(20.0f0, 1);
+        auto_fertilizer = false,
+    )
     soil_nitrogen!(crop.calendar, soil)
     Agrocosm.record_nitrogen_balance_end!(balance, 4, crop, soil)
 

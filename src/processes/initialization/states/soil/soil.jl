@@ -25,7 +25,7 @@ function init_soil(cell_size::Int,
         init_soil_nitrogen(cell_size, device;
                            litter_layers = litc_layers, soil_layers = soil_layers),
         init_soil_decomposition(cell_size, device; soil_layers = soil_layers),
-        init_soil_management(device; litter_layers = litc_layers),
+        init_soil_management(cell_size, device; litter_layers = litc_layers),
         init_soil_surface_litter(cell_size, device),
         init_soil_snow(cell_size, device),
     )

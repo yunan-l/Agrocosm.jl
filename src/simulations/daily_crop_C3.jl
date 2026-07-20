@@ -67,6 +67,11 @@ function daily_crop_C3!(start_day, end_day,
             record_carbon_balance_after_cultivate!(carbon_balance, diagnostic_day, crop)
         end
 
+        # LPJmL tills existing litter at cultivation, then applies the daily
+        # agtop -> agsub bioturbation transfer before surface-litter physics.
+        litter_tillage!(soil, crop_cal)
+        litter_bioturbation!(soil)
+
         update_climbuf!(pftparameters, dailyWeather.temp, climbuf, day) # update climate buffer
         albedo!(pftparameters, crop, pet)  # compute albedo
         petpar!(pet, day_of_year, managed_land.latitude, dailyWeather.temp, dailyWeather.lwr, dailyWeather.swr) # compute crop potential evapotraspiration variables

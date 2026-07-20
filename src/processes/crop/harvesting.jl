@@ -22,21 +22,23 @@ function harvest_crop!(crop_cal::CropCalendar,
     # Update crop variables
     crop.carbon.yield .= ifelse.(((crop.phenology.harvesting_previous .== false) .& (crop.phenology.harvesting .== true)), crop.carbon.storage, crop.carbon.yield)
 
-    soil.carbon.input[1, :] .= ((crop.carbon.leaf .+ crop.carbon.pool) .* residue_frac) .* crop_cal.harvest_callback
-    soil.carbon.input[2, :] .= zero(T)
-    soil.carbon.input[3, :] .= crop.carbon.root .* crop_cal.harvest_callback
+    soil.carbon.input[SURFACE_LITTER, :] .= ((crop.carbon.leaf .+ crop.carbon.pool) .* residue_frac) .* crop_cal.harvest_callback
+    soil.carbon.input[INCORPORATED_LITTER, :] .= zero(T)
+    soil.carbon.input[ROOT_LITTER, :] .= crop.carbon.root .* crop_cal.harvest_callback
 
-    soil.nitrogen.input[1, :] .= ((crop.nitrogen.leaf .+ crop.nitrogen.pool) .* residue_frac) .* crop_cal.harvest_callback
-    soil.nitrogen.input[2, :] .= zero(T)
-    soil.nitrogen.input[3, :] .= crop.nitrogen.root .* crop_cal.harvest_callback
+    soil.nitrogen.input[SURFACE_LITTER, :] .= ((crop.nitrogen.leaf .+ crop.nitrogen.pool) .* residue_frac) .* crop_cal.harvest_callback
+    soil.nitrogen.input[INCORPORATED_LITTER, :] .= zero(T)
+    soil.nitrogen.input[ROOT_LITTER, :] .= crop.nitrogen.root .* crop_cal.harvest_callback
 
-    # Residues have been transferred to soil.nitrogen.input and harvested N is
-    # outside the model boundary, so plant N must leave the crop state today.
-    crop.nitrogen.total .*= one(T) .- crop_cal.harvest_callback
-    crop.nitrogen.leaf .*= one(T) .- crop_cal.harvest_callback
-    crop.nitrogen.root .*= one(T) .- crop_cal.harvest_callback
-    crop.nitrogen.storage .*= one(T) .- crop_cal.harvest_callback
-    crop.nitrogen.pool .*= one(T) .- crop_cal.harvest_callback
+    # Do not clear plant N here. harvest_crop! has already set is_growing = 0,
+    # so the later same-day crop_nitrogen! call clears total N in
+    # nuptake_crop! and all organ N pools in allocate_crop_nitrogen!. Keeping
+    # that operation in the kernels avoids five redundant GPU broadcasts.
+    # crop.nitrogen.total .*= one(T) .- crop_cal.harvest_callback
+    # crop.nitrogen.leaf .*= one(T) .- crop_cal.harvest_callback
+    # crop.nitrogen.root .*= one(T) .- crop_cal.harvest_callback
+    # crop.nitrogen.storage .*= one(T) .- crop_cal.harvest_callback
+    # crop.nitrogen.pool .*= one(T) .- crop_cal.harvest_callback
 
     # soil.carbon.input .= vcat(reshape((crop.carbon.leaf .+ crop.carbon.pool) .* residue_frac, (1, :)), device(zeros(Float32, (1, cell_size))), reshape(crop.carbon.root, (1, :))) .* reshape(crop_cal.harvest_callback, (1, :))
     # soil.nitrogen.input .= vcat(reshape((crop.nitrogen.leaf .+ crop.nitrogen.pool) .* residue_frac, (1, :)), device(zeros(Float32, (1, cell_size))), reshape(crop.nitrogen.root, (1, :))) .* reshape(crop_cal.harvest_callback, (1, :))
