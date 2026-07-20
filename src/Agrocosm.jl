@@ -62,7 +62,7 @@ export waterlogging_stress!
 export apply_percolation_enthalpy!, soil_temperature!
 export pedotransfer!, soil_carbon!, update_lit_winter_wheat!
 export evaporation!, soil_infiltration!, soil_evapotranspiration!
-export soil_nitrogen!, nitrogen_transform!
+export soil_nitrogen!, nitrogen_transform!, soil_cn_decomposition!, post_crop_nitrogen_losses!
 export soil_decomp_response!
 export update_surface_litter_properties!, surface_litter_interception!
 export litter_tillage!, litter_bioturbation!

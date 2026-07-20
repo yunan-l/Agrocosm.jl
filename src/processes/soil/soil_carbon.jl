@@ -62,10 +62,10 @@ function soil_carbon_reference!(crop_cal::CropCalendar,
 
 end
 
-function soil_carbon!(crop_cal::CropCalendar,
-                      soil::Soil;
-                      lpjmlparams::LPJmLParams = lpjmlparams,
-                      soil_decomp_params::SoilDecompParams = soil_decomp_params)
+"""Decompose existing litter and SOM carbon without routing new harvest residues."""
+function soil_carbon_decomposition!(soil::Soil;
+                                    lpjmlparams::LPJmLParams = lpjmlparams,
+                                    soil_decomp_params::SoilDecompParams = soil_decomp_params)
     soil_decomp_response!(
         soil; lpjmlparams = lpjmlparams, soil_decomp_params = soil_decomp_params,
     )
@@ -92,6 +92,23 @@ function soil_carbon!(crop_cal::CropCalendar,
         T(lpjmlparams.k_soil10.fast),
         T(lpjmlparams.k_soil10.slow),
         size(soil.carbon.fast, 1),
+    )
+    return nothing
+end
+
+"""
+    soil_carbon!(crop_cal, soil; ...)
+
+Compatibility entry point for the former combined operation: decompose the
+carbon pools, then route harvest-day residues without decomposing those new
+residues until the following day.
+"""
+function soil_carbon!(crop_cal::CropCalendar,
+                      soil::Soil;
+                      lpjmlparams::LPJmLParams = lpjmlparams,
+                      soil_decomp_params::SoilDecompParams = soil_decomp_params)
+    soil_carbon_decomposition!(
+        soil; lpjmlparams = lpjmlparams, soil_decomp_params = soil_decomp_params,
     )
     route_harvest_carbon_input!(soil, crop_cal)
     return nothing

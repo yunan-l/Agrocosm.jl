@@ -56,18 +56,19 @@ function soil_nitrogen_reference!(crop_cal::CropCalendar,
 
 end
 
-function soil_nitrogen!(crop_cal::CropCalendar,
-                        soil::Soil;
-                        air_temperature = nothing,
-                        wind_speed = nothing,
-                        lpjmlparams::LPJmLParams = lpjmlparams,
-                        soil_decomp_params::SoilDecompParams = soil_decomp_params)
+"""Decompose existing litter and SOM nitrogen without mineral transformations."""
+function soil_nitrogen_decomposition!(soil::Soil;
+                                      lpjmlparams::LPJmLParams = lpjmlparams,
+                                      soil_decomp_params::SoilDecompParams = soil_decomp_params,
+                                      litter_rate = soil.nitrogen.litter_response,
+                                      shift_fast = soil.nitrogen.shift_fast,
+                                      shift_slow = soil.nitrogen.shift_slow)
     T = eltype(soil.nitrogen.litter)
     launch_custom!(
         soil_nitrogen_decomposition_kernel!,
         soil.nitrogen.litter,
         size(soil.nitrogen.litter, 2),
-        soil.nitrogen.litter_response,
+        litter_rate,
         soil.decomposition.litter_response,
         soil.nitrogen.decomposed_litter,
         soil.nitrogen.fast,
@@ -75,8 +76,8 @@ function soil_nitrogen!(crop_cal::CropCalendar,
         soil.decomposition.response,
         soil.nitrogen.decomposed_fast,
         soil.nitrogen.decomposed_slow,
-        soil.nitrogen.shift_fast,
-        soil.nitrogen.shift_slow,
+        shift_fast,
+        shift_slow,
         soil.nitrogen.litter_to_fast,
         soil.nitrogen.litter_to_slow,
         T(lpjmlparams.atmfrac),
@@ -84,6 +85,60 @@ function soil_nitrogen!(crop_cal::CropCalendar,
         T(lpjmlparams.k_soil10.fast),
         T(lpjmlparams.k_soil10.slow),
         size(soil.nitrogen.fast, 1),
+    )
+    return nothing
+end
+
+"""
+    soil_cn_decomposition!(soil; ...)
+
+Execute LPJmL's coupled pre-crop soil stage: compute one shared environmental
+response, decompose C and N with identical pool-specific decay fractions,
+then mineralize/immobilize and nitrify mineral nitrogen.
+"""
+function soil_cn_decomposition!(soil::Soil;
+                                lpjmlparams::LPJmLParams = lpjmlparams,
+                                soil_decomp_params::SoilDecompParams = soil_decomp_params)
+    soil_carbon_decomposition!(
+        soil; lpjmlparams = lpjmlparams, soil_decomp_params = soil_decomp_params,
+    )
+    soil_nitrogen_decomposition!(
+        soil;
+        lpjmlparams = lpjmlparams,
+        soil_decomp_params = soil_decomp_params,
+        litter_rate = soil.carbon.litter_response,
+        shift_fast = soil.carbon.shift_fast,
+        shift_slow = soil.carbon.shift_slow,
+    )
+    mineralize_nitrify!(
+        soil;
+        lpjmlparams = lpjmlparams,
+        shift_fast = soil.carbon.shift_fast,
+        shift_slow = soil.carbon.shift_slow,
+    )
+    return nothing
+end
+
+"""Route new harvest-day carbon and nitrogen residues together."""
+function route_harvest_residues!(soil::Soil, crop_cal::CropCalendar)
+    route_harvest_carbon_input!(soil, crop_cal)
+    route_harvest_nitrogen_input!(soil, crop_cal)
+    return nothing
+end
+
+"""
+    soil_nitrogen!(crop_cal, soil; ...)
+
+Compatibility entry point for the former combined operation.
+"""
+function soil_nitrogen!(crop_cal::CropCalendar,
+                        soil::Soil;
+                        air_temperature = nothing,
+                        wind_speed = nothing,
+                        lpjmlparams::LPJmLParams = lpjmlparams,
+                        soil_decomp_params::SoilDecompParams = soil_decomp_params)
+    soil_nitrogen_decomposition!(
+        soil; lpjmlparams = lpjmlparams, soil_decomp_params = soil_decomp_params,
     )
     route_harvest_nitrogen_input!(soil, crop_cal)
     nitrogen_transform!(

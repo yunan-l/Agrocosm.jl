@@ -10,6 +10,28 @@ function nitrogen_transform!(soil::Soil;
                              air_temperature = nothing,
                              wind_speed = nothing,
     lpjmlparams::LPJmLParams = lpjmlparams)
+    mineralize_nitrify!(soil; lpjmlparams = lpjmlparams)
+    post_crop_nitrogen_losses!(
+        soil;
+        air_temperature = air_temperature,
+        wind_speed = wind_speed,
+        lpjmlparams = lpjmlparams,
+    )
+    return nothing
+end
+
+"""
+    mineralize_nitrify!(soil; lpjmlparams=lpjmlparams)
+
+Release SOM and litter nitrogen, satisfy litter immobilization demand, and
+nitrify the remaining ammonium. LPJmL performs this stage before the daily
+plant processes, so the newly mineralized nitrogen is available for same-day
+crop uptake.
+"""
+function mineralize_nitrify!(soil::Soil;
+                             lpjmlparams::LPJmLParams = lpjmlparams,
+                             shift_fast = soil.nitrogen.shift_fast,
+                             shift_slow = soil.nitrogen.shift_slow)
     soil_layers = size(soil.nitrogen.nitrate, 1)
     launch_custom!(
         mineralize_immobilize_kernel!,
@@ -18,8 +40,8 @@ function nitrogen_transform!(soil::Soil;
         soil.nitrogen.decomposed_litter,
         soil.nitrogen.decomposed_fast,
         soil.nitrogen.decomposed_slow,
-        soil.nitrogen.shift_fast,
-        soil.nitrogen.shift_slow,
+        shift_fast,
+        shift_slow,
         soil.nitrogen.ammonium,
         soil.nitrogen.nitrate,
         soil.nitrogen.fast,
@@ -46,6 +68,22 @@ function nitrogen_transform!(soil::Soil;
         soil.nitrogen.n2o_nitrification,
         (; lpjmlparams, soil_layers),
     )
+
+    return nothing
+end
+
+"""
+    post_crop_nitrogen_losses!(soil; air_temperature=nothing,
+                               wind_speed=nothing, lpjmlparams=lpjmlparams)
+
+Apply denitrification and ammonia volatilization after crop uptake, matching
+LPJmL's daily stand ordering.
+"""
+function post_crop_nitrogen_losses!(soil::Soil;
+                                    air_temperature = nothing,
+                                    wind_speed = nothing,
+                                    lpjmlparams::LPJmLParams = lpjmlparams)
+    soil_layers = size(soil.nitrogen.nitrate, 1)
 
     launch_1D!(
         denitrify_kernel!,

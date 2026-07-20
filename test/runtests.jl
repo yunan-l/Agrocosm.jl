@@ -29,6 +29,7 @@ using Test
     include("processes/soil/test_untracked_water_enthalpy.jl")
     include("processes/soil/test_soil_decomposition_response.jl")
     include("processes/soil/test_soil_decomposition_fluxes.jl")
+    include("processes/soil/test_soil_cn_decomposition.jl")
     include("processes/soil/test_soil_process_kernel_equivalence.jl")
     include("processes/soil/test_litter_routing.jl")
     include("processes/soil/test_c_shift_routing.jl")

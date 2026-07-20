@@ -111,6 +111,15 @@ function daily_crop_C3!(start_day, end_day,
             snowparams = snow_params,
         )
 
+        # LPJmL decomposes existing litter/SOM, mineralizes organic N, and
+        # nitrifies NH4 before the daily crop processes. Thus today's
+        # mineralization is available to today's crop uptake.
+        soil_cn_decomposition!(
+            soil;
+            lpjmlparams = global_params,
+            soil_decomp_params = decomp_params,
+        )
+
         # compute phenology variables
         phenology_crop!(crop, climbuf.V_req, pftparameters, dailyWeather.temp, pet.daylength)
 
@@ -121,6 +130,9 @@ function daily_crop_C3!(start_day, end_day,
             output_row = output_row,
             annual_output_row = annual_output_row,
         ) # crop harvesting
+        # New residues enter after today's decomposition and first become
+        # eligible for decomposition on the following day.
+        route_harvest_residues!(soil, crop_cal)
         annual_output_offset += day_of_year == 365
 
         if carbon_balance !== nothing
@@ -201,19 +213,18 @@ function daily_crop_C3!(start_day, end_day,
 
         evaporation!(pet.eeq, crop, soil; lpjmlparams = global_params)
 
-        # soil carbon cycle
-        soil_carbon!(crop_cal, soil;
-                     lpjmlparams = global_params, soil_decomp_params = decomp_params)
-
-        # soil nitrogen cycle
-        soil_nitrogen!(crop_cal, soil;
-                       air_temperature = dailyWeather.temp,
-                       wind_speed = dailyWeather.wind,
-                       lpjmlparams = global_params,
-                       soil_decomp_params = decomp_params)
-
         # Remove daily plant uptake and soil evaporation after demand/supply calculation.
         soil_evapotranspiration!(soil, crop; irrigation = irrigation)
+
+        # LPJmL applies denitrification and NH3 volatilization after the daily
+        # stand update, so both mineral-N uptake and evapotranspiration have
+        # already changed the substrate and moisture controls.
+        post_crop_nitrogen_losses!(
+            soil;
+            air_temperature = dailyWeather.temp,
+            wind_speed = dailyWeather.wind,
+            lpjmlparams = global_params,
+        )
 
         if water_balance !== nothing
             record_water_balance_end!(water_balance, diagnostic_day, soil, crop)

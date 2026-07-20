@@ -105,6 +105,14 @@ function daily_crop_C4!(day_start, day_end,
         soil_temperature!(soil, dailyWeather.temp, climbuf.atemp_mean;
                           thermalparams = thermal_params, snowparams = snow_params)
 
+        # Make same-day mineralization available to crop uptake, following
+        # LPJmL's pre-crop litter/SOM and nitrification stage.
+        soil_cn_decomposition!(
+            soil;
+            lpjmlparams = global_params,
+            soil_decomp_params = decomp_params,
+        )
+
         # compute phenology variables
         phenology_crop!(crop, climbuf.V_req, pftparameters, dailyWeather.temp, pet.daylength)
 
@@ -115,6 +123,7 @@ function daily_crop_C4!(day_start, day_end,
             output_row = output_row,
             annual_output_row = annual_output_row,
         ) # crop harvesting
+        route_harvest_residues!(soil, crop_cal)
         annual_output_offset += day_of_year == 365
 
         if carbon_balance !== nothing
@@ -189,19 +198,15 @@ function daily_crop_C4!(day_start, day_end,
 
         evaporation!(pet.eeq, crop, soil; lpjmlparams = global_params)
 
-        # soil carbon cycle
-        soil_carbon!(crop_cal, soil;
-                     lpjmlparams = global_params, soil_decomp_params = decomp_params)
-
-        # soil nitrogen cycle
-        soil_nitrogen!(crop_cal, soil;
-                       air_temperature = dailyWeather.temp,
-                       wind_speed = dailyWeather.wind,
-                       lpjmlparams = global_params,
-                       soil_decomp_params = decomp_params)
-
         # Remove daily plant uptake and soil evaporation after demand/supply calculation.
         soil_evapotranspiration!(soil, crop; irrigation = irrigation)
+
+        post_crop_nitrogen_losses!(
+            soil;
+            air_temperature = dailyWeather.temp,
+            wind_speed = dailyWeather.wind,
+            lpjmlparams = global_params,
+        )
 
         if water_balance !== nothing
             record_water_balance_end!(water_balance, diagnostic_day, soil, crop)
