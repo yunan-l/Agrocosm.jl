@@ -5,51 +5,51 @@ Plant functional type parameter bundle for one crop type.
 Contains phenology, photosynthesis, allocation, and nutrient traits.
 """
 struct Temp{T} # lower and upper coldest monthly mean temperature(deg C)
-    low::T
-    high::T
+    low::T  # Lower coldest-month temperature limit (°C).
+    high::T # Upper coldest-month temperature limit (°C).
 end
 
 struct TempCO2{T}  # lower and upper temperature limit for co2 (deg C)
-    low::T
-    high::T
+    low::T  # Lower temperature limit of CO₂ response (°C).
+    high::T # Upper temperature limit of CO₂ response (°C).
 end
 
 struct TempPhotos{T} # lower and upper limit of temperature optimum for photosynthesis(deg C)
-    low::T
-    high::T
+    low::T  # Lower optimum temperature for photosynthesis (°C).
+    high::T # Upper optimum temperature for photosynthesis (°C).
 end
 
 struct TvEff{T} # min & max tv: lower and upper temperature threshold under which vernalization is possible (deg C)
-    low::T
-    high::T
+    low::T  # Lower temperature allowing effective vernalization (°C).
+    high::T # Upper temperature allowing effective vernalization (°C).
 end
 
 struct TvOpt{T}  # min & max tv: lower and upper temperature threshold under which vernalization is optimal (deg C)
-    low::T
-    high::T
+    low::T  # Lower optimum vernalization temperature (°C).
+    high::T # Upper optimum vernalization temperature (°C).
 end
 
 struct BaseTemp{T} # min & max basetemp: base temperature
-    low::T
-    high::T
+    low::T  # Base temperature before flowering (°C).
+    high::T # Base temperature after flowering (°C).
 end
 
 struct nc_ratio{T} # N:C mass ratio
-    root::T
-    sto::T
-    pool::T
+    root::T # Root nitrogen-to-carbon mass ratio (gN gC⁻¹).
+    sto::T  # Storage-organ nitrogen-to-carbon mass ratio (gN gC⁻¹).
+    pool::T # Mobile-pool nitrogen-to-carbon mass ratio (gN gC⁻¹).
 end
 
 struct ratio{T} # relative C:N ratios
-    root::T
-    sto::T
-    pool::T
+    root::T # Root-to-leaf relative C:N ratio.
+    sto::T  # Storage-organ-to-leaf relative C:N ratio.
+    pool::T # Mobile-pool-to-leaf relative C:N ratio.
 end
 
 struct ncleaf{T} # relative C:N ratios
-    low::T
-    median::T
-    high::T
+    low::T    # Minimum leaf nitrogen-to-carbon mass ratio (gN gC⁻¹).
+    median::T # Reference leaf nitrogen-to-carbon mass ratio (gN gC⁻¹).
+    high::T   # Maximum leaf nitrogen-to-carbon mass ratio (gN gC⁻¹).
 end
 
 struct K_Litter10{T}
@@ -79,51 +79,51 @@ _convert_precision(::Type{T}, value::NuptakeKinetics) where {T <: AbstractFloat}
     NuptakeKinetics{T}(T(value.vmax), T(value.kmin), T(value.Km))
 
 @kwdef struct PftParameters{T <: AbstractFloat, S <: Integer}
-    name::S
-    plant_type::S
-    path::S
-    temp::Temp{T}
-    temp_co2::TempCO2{T}
-    temp_photos::TempPhotos{T}
-    tv_eff::TvEff{T}
-    tv_opt::TvOpt{T}
-    psens::T
-    pb::T
-    ps::T
-    basetemp::BaseTemp{T}
-    fphuc::T
-    flaimaxc::T
-    fphuk::T
-    flaimaxk::T
-    fphusen::T
-    flaimaxharvest::T
-    laimax::T
-    laimin::T
-    hlimit::S
-    pvd_max::S
-    b::T   #leaf respiration as fraction of vcmax
-    albedo_leaf::T
-    albedo_litter::T
-    alphaa::T
-    lightextcoeff::T #light extinction coeffcient in Lambert-Beer equation
-    longevity::T
-    sla::T #fscanpft_crop.c, 2e-4 * 10^(2.25 - 0.4 * log10(longevity * 12)) / 0.4763
-    respcoeff::T
-    shapesenescencenorm::T
-    fpc::T
-    nc_ratio::nc_ratio{T}
-    ratio::ratio{T}
-    ncleaf::ncleaf{T}
-    k_litter10::K_Litter10{T}
-    beta_root::T
-    intc::T # Interception storage parameter
-    emax::T
-    gmin::T # Minimum canopy conductance (mm s-1)
-    knstore::T
-    no3_uptake::NuptakeKinetics{T}
-    nh4_uptake::NuptakeKinetics{T}
-    hiopt::T
-    himin::T
+    name::S                 # Numeric crop/PFT identifier.
+    plant_type::S           # LPJmL plant-type category identifier.
+    path::S                 # Photosynthetic pathway: 1 = C3, 2 = C4.
+    temp::Temp{T}           # Bioclimatic cold-temperature limits (°C).
+    temp_co2::TempCO2{T}    # Temperature limits of CO₂ response (°C).
+    temp_photos::TempPhotos{T} # Optimum photosynthesis temperature interval (°C).
+    tv_eff::TvEff{T}        # Effective vernalization temperature interval (°C).
+    tv_opt::TvOpt{T}        # Optimum vernalization temperature interval (°C).
+    psens::T                # Photoperiod sensitivity coefficient.
+    pb::T                   # Lower/short-day photoperiod threshold (h).
+    ps::T                   # Upper/long-day photoperiod threshold (h).
+    basetemp::BaseTemp{T}   # Development base temperatures (°C).
+    fphuc::T                # Heat-unit fraction ending initial LAI phase.
+    flaimaxc::T             # LAI fraction at end of initial LAI phase.
+    fphuk::T                # Heat-unit fraction at LAI sigmoid inflection.
+    flaimaxk::T             # LAI fraction at sigmoid inflection.
+    fphusen::T              # Heat-unit fraction at onset of senescence.
+    flaimaxharvest::T       # Fraction of maximum LAI retained at harvest.
+    laimax::T               # Maximum potential leaf-area index (m² m⁻²).
+    laimin::T               # Minimum/reference LAI trait used by allocation (m² m⁻²).
+    hlimit::S               # Maximum crop-cycle duration (days).
+    pvd_max::S              # Maximum vernalizing-day requirement (days).
+    b::T                    # Leaf maintenance respiration as fraction of `vcmax`.
+    albedo_leaf::T          # Leaf shortwave albedo (0–1).
+    albedo_litter::T        # Surface-litter shortwave albedo (0–1).
+    alphaa::T               # Canopy allometry/allocation coefficient.
+    lightextcoeff::T        # Lambert–Beer canopy light-extinction coefficient.
+    longevity::T            # Characteristic leaf longevity (years).
+    sla::T                  # Specific leaf area (m² leaf gC⁻¹).
+    respcoeff::T            # Root/storage maintenance-respiration coefficient.
+    shapesenescencenorm::T   # Normalized senescence curve shape parameter.
+    fpc::T                   # Foliage projective cover scaling (0–1).
+    nc_ratio::nc_ratio{T}   # Organ nitrogen-to-carbon ratios.
+    ratio::ratio{T}         # Relative organ C:N ratios used in N partitioning.
+    ncleaf::ncleaf{T}       # Minimum/reference/maximum leaf N:C ratios.
+    k_litter10::K_Litter10{T} # Litter turnover rates at 10 °C.
+    beta_root::T            # Exponential root-depth distribution parameter.
+    intc::T                 # Canopy interception storage parameter.
+    emax::T                 # Maximum transpiration/conductance scaling parameter.
+    gmin::T                 # Minimum canopy conductance (mm s⁻¹).
+    knstore::T              # Fraction of N demand allocated to storage reserve.
+    no3_uptake::NuptakeKinetics{T} # Root NO₃ uptake kinetic parameters.
+    nh4_uptake::NuptakeKinetics{T} # Root NH₄ uptake kinetic parameters.
+    hiopt::T                # Optimal harvest index.
+    himin::T                # Minimum harvest index under stress.
 end
 
 """Return a PFT parameter set whose floating fields consistently use `T`."""

@@ -1,19 +1,17 @@
-"""Persistent crop-calendar state."""
-mutable struct CropCalendarState{I}
-    sowing_date::I
-    harvest_date::I
-    harvesting_year::I
+"""Static crop-calendar configuration."""
+mutable struct CropCalendarAuxiliary{I}
+    sowing_date::I # Prescribed day of year on which cultivation occurs (1–365).
 end
 
 """Discrete crop events that occur during the current day."""
 mutable struct CropEvents{I}
-    sowing::I
-    harvest::I
+    sowing::I # Current-day sowing/cultivation event flag (0/1).
+    harvest::I # Current-day harvest event flag (0/1).
 end
 
-function init_crop_calendar_state(cell_size::Int, device)
+function init_crop_calendar_auxiliary(cell_size::Int, device)
     int_state() = device(zeros(Int32, cell_size))
-    return CropCalendarState(ntuple(_ -> int_state(), 3)...)
+    return CropCalendarAuxiliary(int_state())
 end
 
 function init_crop_events(cell_size::Int, device)

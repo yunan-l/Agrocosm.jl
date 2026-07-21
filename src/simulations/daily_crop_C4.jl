@@ -149,9 +149,9 @@ function daily_crop_C4!(day_start, day_end,
         end
 
         if maize
-            apar_crop_maize!(pftparameters, crop, pet) # crop absorbed photosynthetic radiation
+            apar_crop_maize!(pftparameters, crop, pet, soil.snow.height) # crop absorbed photosynthetic radiation
         else
-            apar_crop!(pftparameters, crop, pet) # crop absorbed photosynthetic radiation
+            apar_crop!(pftparameters, crop, pet, soil.snow.height) # crop absorbed photosynthetic radiation
         end
 
         temp_stress(pftparameters, pet, crop, dailyWeather.temp;
@@ -179,7 +179,8 @@ function daily_crop_C4!(day_start, day_end,
 
         # crop respiration and carbon allocation
         crop_carbon!(
-            crop, output, pftparameters, dailyWeather.temp;
+            crop, output, pftparameters, dailyWeather.temp,
+            soil.thermal.temperature;
             output_row = output_row,
             lpjmlparams = global_params,
         )

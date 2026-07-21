@@ -1,9 +1,9 @@
 """Static or slowly varying soil physical and chemical properties."""
 mutable struct SoilProperties{A, M}
-    sand_fraction::M
-    clay_fraction::M
-    ph::A
-    layer_depth::A
+    sand_fraction::M # Soil sand mass fraction by layer (0–1).
+    clay_fraction::M # Soil clay mass fraction by layer (0–1).
+    ph::A            # Soil pH used by nitrogen transformations.
+    layer_depth::A   # Thickness of each model soil layer (mm).
 end
 
 init_soil_properties(cell_size::Int, soildepth, device) =

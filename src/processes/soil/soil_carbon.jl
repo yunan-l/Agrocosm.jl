@@ -40,7 +40,7 @@ function soil_carbon_reference!(crop::Crop,
         soil.carbon.decomposed_litter[1, :] .+
         soil.carbon.decomposed_litter[2, :] .+
         soil.carbon.decomposed_litter[3, :]
-    soil.carbon.litter_to_fast .= soil.carbon.shift_fast .*
+    soil.carbon.litter_to_fast .= soil.decomposition.shift_fast .*
         reshape(decomposed_litter, 1, :) .* fastfrac .* (1.0f0 - atmfrac)
     soil.carbon.fast .+= soil.carbon.litter_to_fast .- soil.carbon.decomposed_fast
 
@@ -49,7 +49,7 @@ function soil_carbon_reference!(crop::Crop,
         0.0f0,
         -expm1.(-k_soil10.slow .* soil.decomposition.response) .* soil.carbon.slow,
     )
-    soil.carbon.litter_to_slow .= soil.carbon.shift_slow .*
+    soil.carbon.litter_to_slow .= soil.decomposition.shift_slow .*
         reshape(decomposed_litter, 1, :) .* (1.0f0 - fastfrac) .* (1.0f0 - atmfrac)
     soil.carbon.slow .+= soil.carbon.litter_to_slow .- soil.carbon.decomposed_slow
 
@@ -82,8 +82,8 @@ function soil_carbon_decomposition!(soil::Soil;
         soil.decomposition.response,
         soil.carbon.decomposed_fast,
         soil.carbon.decomposed_slow,
-        soil.carbon.shift_fast,
-        soil.carbon.shift_slow,
+        soil.decomposition.shift_fast,
+        soil.decomposition.shift_slow,
         soil.carbon.litter_to_fast,
         soil.carbon.litter_to_slow,
         soil.carbon.heterotrophic_respiration,

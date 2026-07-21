@@ -4,11 +4,11 @@ const ROOT_LITTER = 3
 
 """Soil management operators and daily internal litter-routing diagnostics."""
 mutable struct SoilManagement{M, A}
-    tillage_fraction::M
-    tillage_carbon::A
-    tillage_nitrogen::A
-    bioturbation_carbon::A
-    bioturbation_nitrogen::A
+    tillage_fraction::M    # Routing matrix among litter classes during cultivation (fraction).
+    tillage_carbon::A      # Carbon redistributed by tillage today (gC m⁻² day⁻¹).
+    tillage_nitrogen::A    # Nitrogen redistributed by tillage today (gN m⁻² day⁻¹).
+    bioturbation_carbon::A # Carbon redistributed vertically by bioturbation today (gC m⁻² day⁻¹).
+    bioturbation_nitrogen::A # Nitrogen redistributed vertically by bioturbation today (gN m⁻² day⁻¹).
 end
 
 init_soil_management(cell_size::Int, device; kwargs...) =

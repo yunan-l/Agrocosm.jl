@@ -18,13 +18,10 @@ function run_soil_cn_gpu_fixture(device)
     soil.nitrogen.nitrate .= 0.6f0
     soil.carbon.litter_response .= 0.08f0
     soil.nitrogen.litter_response .= 0.08f0
-    soil.carbon.shift_fast .= 0.0f0
-    soil.carbon.shift_slow .= 0.0f0
-    soil.nitrogen.shift_fast .= 0.0f0
-    soil.nitrogen.shift_slow .= 0.0f0
+    soil.decomposition.shift_fast .= 0.0f0
+    soil.decomposition.shift_slow .= 0.0f0
     for shift in (
-        soil.carbon.shift_fast, soil.carbon.shift_slow,
-        soil.nitrogen.shift_fast, soil.nitrogen.shift_slow,
+        soil.decomposition.shift_fast, soil.decomposition.shift_slow,
     )
         @views shift[1, :] .= 1.0f0
     end

@@ -30,12 +30,13 @@ function transpiration!(photos_adtmm::AbstractArray{T},
                crop.state.water.demand_sum,
                crop.state.water.supply_sum,
                crop.auxiliary.stress.water_deficit,
-               crop.auxiliary.stress.water,
+               crop.state.water.sufficiency,
                crop.state.carbon.root,
                crop.auxiliary.canopy.canopy_wet,
                crop.state.phenology.is_growing,
                pet.eeq,
-               crop.auxiliary.stress.root_distribution,
+               crop.auxiliary.root.distribution,
+               crop.auxiliary.root.zone_available_water,
                soil.water.relative_content,
                soil.water.holding_capacity_storage,
                PFT,
@@ -59,6 +60,7 @@ end
                                              crop_isgrowing::AbstractArray{S},
                                              pet_eeq::AbstractArray{T},
                                              crop_rootdist::AbstractArray{T},
+                                             crop_rootzone_available_water::AbstractArray{T},
                                              soil_w::AbstractArray{M},
                                              soil_whcs::AbstractArray{M},
                                              PFT::PftParameters,
@@ -84,9 +86,14 @@ end
     end
 
     wr = zero(T)
+    rootzone_water = zero(T)
     for l in 1:soil_layers
         wr += soil_w[l, cell] * crop_rootdist[l]
+        if l <= 3
+            rootzone_water += soil_w[l, cell] * soil_whcs[l, cell] * crop_rootdist[l]
+        end
     end
+    crop_rootzone_available_water[cell] = rootzone_water
 
     if crop_isgrowing[cell] == 1
         supply = emax * wr * (1 - exp(-0.04f0 * crop_rootc[cell]))
@@ -178,6 +185,7 @@ end
         crop_w_demandsum[cell] = zero(T)
         crop_w_supplysum[cell] = zero(T)
         crop_wdf[cell] = zero(T)
-        crop_wscal[cell] = zero(T)
+        # Neutral stress for an absent stand; is_growing still gates all fluxes.
+        crop_wscal[cell] = one(T)
     end
 end

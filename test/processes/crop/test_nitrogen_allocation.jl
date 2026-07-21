@@ -73,5 +73,5 @@ end
     @test crop.state.nitrogen.total[1] ≈ crop.auxiliary.stress.nitrogen_demand_total[1] atol = 1.0f-6
     @test organ_n ≈ crop.state.nitrogen.total[1] atol = 1.0f-6
     @test crop.fluxes.nitrogen.auto_fertilizer[1] > 0.0f0
-    @test crop.auxiliary.stress.nitrogen[1] == 1.0f0
+    @test crop.state.nitrogen.sufficiency[1] == 1.0f0
 end

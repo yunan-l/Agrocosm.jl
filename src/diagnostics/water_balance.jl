@@ -10,30 +10,30 @@ flux. Surface-litter interception is an internal transfer; litter evaporation
 is an outgoing flux.
 """
 mutable struct WaterBalance{M <: AbstractArray{<:AbstractFloat}}
-    precipitation::M
-    rain_after_snow::M
-    soil_storage_before::M
-    soil_storage_after::M
-    soil_ice_storage_before::M
-    soil_ice_storage_after::M
-    snow_storage_before::M
-    snow_storage_after::M
-    litter_storage_before::M
-    litter_storage_after::M
-    snowmelt::M
-    snow_sublimation::M
-    snow_runoff::M
-    unaccounted_snow_flux::M
-    interception::M
-    litter_interception::M
-    litter_evaporation::M
-    transpiration::M
-    evaporation::M
-    surface_runoff::M
-    lateral_runoff::M
-    bottom_drainage::M
-    remaining_infiltration::M
-    residual::M
+    precipitation::M            # Atmospheric water input (mm day⁻¹).
+    rain_after_snow::M          # Liquid precipitation remaining after snow processing (mm day⁻¹).
+    soil_storage_before::M      # Liquid soil-water stock at start of day (mm).
+    soil_storage_after::M       # Liquid soil-water stock at end of day (mm).
+    soil_ice_storage_before::M  # Soil-ice stock at start of day (mm water equivalent).
+    soil_ice_storage_after::M   # Soil-ice stock at end of day (mm water equivalent).
+    snow_storage_before::M      # Snow stock at start of day (mm water equivalent).
+    snow_storage_after::M       # Snow stock at end of day (mm water equivalent).
+    litter_storage_before::M    # Surface-litter water stock at start of day (mm).
+    litter_storage_after::M     # Surface-litter water stock at end of day (mm).
+    snowmelt::M                 # Water released by snow melt (mm day⁻¹).
+    snow_sublimation::M         # Snow sublimation loss (mm day⁻¹).
+    snow_runoff::M              # Snow bypass/runoff loss (mm day⁻¹).
+    unaccounted_snow_flux::M    # Snow-subsystem water closure error (mm).
+    interception::M             # Rain intercepted and evaporated by crop canopy (mm day⁻¹).
+    litter_interception::M      # Rain transferred into surface-litter storage (mm day⁻¹).
+    litter_evaporation::M       # Evaporation from surface litter (mm day⁻¹).
+    transpiration::M            # Crop transpiration loss (mm day⁻¹).
+    evaporation::M              # Bare-soil evaporation loss (mm day⁻¹).
+    surface_runoff::M           # Surface runoff loss (mm day⁻¹).
+    lateral_runoff::M           # Layer-integrated lateral runoff loss (mm day⁻¹).
+    bottom_drainage::M          # Drainage loss from bottom layer (mm day⁻¹).
+    remaining_infiltration::M   # Unprocessed infiltration retained in the ledger (mm day⁻¹).
+    residual::M                 # Absolute daily water-budget closure error (mm).
 end
 
 """

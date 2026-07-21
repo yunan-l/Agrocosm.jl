@@ -4,7 +4,6 @@ using Test
 @testset "Fertilizer process has no implicit unlimited-N source" begin
     crop = init_crop(1, identity)
     managed_land = init_managed_land(1, identity)
-    crop_cal = crop.state.calendar
     soil = init_soil(1, soilparams.soildepth, identity)
     no3_before = copy(soil.nitrogen.nitrate)
     nh4_before = copy(soil.nitrogen.ammonium)
@@ -18,9 +17,8 @@ end
 @testset "Prescribed fertilizer is split and conserved" begin
     crop = init_crop(1, identity)
     managed_land = init_managed_land(1, identity)
-    crop_cal = crop.state.calendar
     soil = init_soil(1, soilparams.soildepth, identity)
-    crop.state.calendar.sowing_date .= 1
+    crop.auxiliary.calendar.sowing_date .= 1
     managed_land.fertilizer .= 10.0f0
     no3_before = sum(soil.nitrogen.nitrate)
     nh4_before = sum(soil.nitrogen.ammonium)
@@ -29,7 +27,8 @@ end
     @test crop.state.nitrogen.pending_fertilizer[1] ≈ 8.0f0
     @test crop.fluxes.nitrogen.prescribed_fertilizer_input[1] ≈ 2.0f0
 
-    crop.state.phenology.fphu .= 0.3f0
+    crop.auxiliary.phenology.phu .= 1.0f0
+    crop.state.phenology.husum .= 0.3f0
     fertilizer!(crop, managed_land, soil, 2)
     @test crop.fluxes.nitrogen.prescribed_fertilizer_input[1] ≈ 8.0f0
 
@@ -44,9 +43,8 @@ end
 @testset "Prescribed manure is split and conserved" begin
     crop = init_crop(1, identity)
     managed_land = init_managed_land(1, identity)
-    crop_cal = crop.state.calendar
     soil = init_soil(1, soilparams.soildepth, identity)
-    crop.state.calendar.sowing_date .= 1
+    crop.auxiliary.calendar.sowing_date .= 1
     managed_land.manure .= 10.0f0
     mineral_before = sum(soil.nitrogen.ammonium)
     organic_before = sum(soil.nitrogen.litter)
@@ -55,7 +53,8 @@ end
     @test crop.state.nitrogen.pending_manure[1] ≈ 8.0f0
     @test crop.fluxes.nitrogen.prescribed_manure_input[1] ≈ 2.0f0
 
-    crop.state.phenology.fphu .= 0.3f0
+    crop.auxiliary.phenology.phu .= 1.0f0
+    crop.state.phenology.husum .= 0.3f0
     fertilizer!(crop, managed_land, soil, 2; manure = true)
     @test crop.fluxes.nitrogen.prescribed_manure_input[1] ≈ 8.0f0
 
@@ -68,9 +67,8 @@ end
 @testset "Automatic-fertilizer mode disables prescribed inputs" begin
     crop = init_crop(1, identity)
     managed_land = init_managed_land(1, identity)
-    crop_cal = crop.state.calendar
     soil = init_soil(1, soilparams.soildepth, identity)
-    crop.state.calendar.sowing_date .= 1
+    crop.auxiliary.calendar.sowing_date .= 1
     managed_land.fertilizer .= 10.0f0
     no3_before = copy(soil.nitrogen.nitrate)
     nh4_before = copy(soil.nitrogen.ammonium)

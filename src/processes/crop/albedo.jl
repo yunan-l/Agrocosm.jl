@@ -27,8 +27,9 @@ function albedo!(PFT::PftParameters,
         albedo_kernel!,
         pet.albedo,
         crop.auxiliary.canopy.albedo,
-        crop.auxiliary.canopy.phenology_fraction,
+        crop.state.canopy.lai,
         crop.state.phenology.is_growing,
+        T(PFT.laimax),
         T(PFT.albedo_leaf),
         T(PFT.albedo_litter),
         T(PFT.fpc),
@@ -40,17 +41,19 @@ end
 @kernel inbounds = true function albedo_kernel!(
     pet_albedo::AbstractVector{T},
     canopy_albedo::AbstractVector{T},
-    phenology_fraction::AbstractVector{T},
+    lai::AbstractVector{T},
     is_growing::AbstractVector{S},
+    laimax::T,
     leaf_albedo::T,
     litter_albedo::T,
     fpc::T,
     soil_albedo::T,
 ) where {T <: AbstractFloat, S <: Integer}
     cell = @index(Global)
+    phenology_fraction = lai[cell] / laimax
     canopy = fpc * (
-        phenology_fraction[cell] * leaf_albedo +
-        (one(T) - phenology_fraction[cell]) * litter_albedo
+        phenology_fraction * leaf_albedo +
+        (one(T) - phenology_fraction) * litter_albedo
     )
     canopy_albedo[cell] = canopy
     pet_albedo[cell] = canopy +
@@ -64,9 +67,10 @@ function crop_albedo!(PFT::PftParameters,
     @unpack albedo_leaf, albedo_litter, fpc = PFT
 
     # Fuse green-leaf and brown-litter terms into the preallocated canopy buffer.
+    phenology_fraction = crop.state.canopy.lai ./ PFT.laimax
     crop.auxiliary.canopy.albedo .= fpc .* (
-        crop.auxiliary.canopy.phenology_fraction .* albedo_leaf .+
-        (1 .- crop.auxiliary.canopy.phenology_fraction) .* albedo_litter
+        phenology_fraction .* albedo_leaf .+
+        (1 .- phenology_fraction) .* albedo_litter
     )
 
 end

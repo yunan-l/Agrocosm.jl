@@ -13,8 +13,8 @@ using Test
 
     crop.state.phenology.is_growing .= 1
     crop.state.carbon.root .= 1000.0f0
-    crop.auxiliary.stress.root_distribution .= 0.0f0
-    crop.auxiliary.stress.root_distribution[1] = 1.0f0
+    crop.auxiliary.root.distribution .= 0.0f0
+    crop.auxiliary.root.distribution[1] = 1.0f0
     crop.auxiliary.canopy.fpar .= 0.8f0
     crop.auxiliary.canopy.canopy_wet .= 0.0f0
     pet.eeq .= 1.0f0

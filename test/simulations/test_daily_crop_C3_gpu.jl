@@ -334,7 +334,7 @@ end
         ("crop.state.nitrogen.pool", cpu.crop.state.nitrogen.pool, gpu.crop.state.nitrogen.pool),
         ("crop.state.nitrogen.storage", cpu.crop.state.nitrogen.storage, gpu.crop.state.nitrogen.storage),
         ("crop.state.canopy.lai", cpu.crop.state.canopy.lai, gpu.crop.state.canopy.lai),
-        ("crop.state.phenology.fphu", cpu.crop.state.phenology.fphu, gpu.crop.state.phenology.fphu),
+        ("crop.auxiliary.phenology.fphu", cpu.crop.auxiliary.phenology.fphu, gpu.crop.auxiliary.phenology.fphu),
     )
     for (label, cpu_values, gpu_values) in crop_state_fields
         test_float_equivalence(gpu_values, cpu_values; label = label)

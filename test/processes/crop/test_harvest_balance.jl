@@ -27,8 +27,7 @@ using Test
     nitrogen_before = crop.state.nitrogen.total[1]
     harvest_crop!(crop, soil, output, residue_fraction, 150)
 
-    carbon_export = crop.fluxes.carbon.yield[1] +
-        (crop.state.carbon.leaf[1] + crop.state.carbon.pool[1]) * (1 - residue_fraction[1])
+    carbon_export = crop.fluxes.carbon.harvest_export[1]
     nitrogen_export = crop.fluxes.nitrogen.harvest_export[1]
     carbon_residue = sum(soil.carbon.input)
     nitrogen_residue = sum(soil.nitrogen.input)
@@ -44,18 +43,5 @@ using Test
     Agrocosm.route_harvest_residues!(soil, crop)
     @test sum(soil.carbon.litter) == carbon_residue
     @test sum(soil.nitrogen.litter) == nitrogen_residue
-
-    # The production loop clears the harvested persistent crop object later on
-    # the same day through the inactive carbon and nitrogen kernel branches.
-    carbon_allocation!(cft1, crop)
-    crop_nitrogen!(
-        crop, cft1, soil, zeros(Float32, 1), Float32[15];
-        auto_fertilizer = false,
-    )
-    @test crop.state.carbon.biomass[1] == 0.0f0
-    @test crop.state.carbon.leaf[1] == 0.0f0
-    @test crop.state.carbon.root[1] == 0.0f0
-    @test crop.state.carbon.storage[1] == 0.0f0
-    @test crop.state.carbon.pool[1] == 0.0f0
-    @test crop.state.nitrogen.total[1] == 0.0f0
+    @test crop.state.phenology.is_growing[1] == 0
 end

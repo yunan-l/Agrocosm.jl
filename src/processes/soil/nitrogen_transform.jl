@@ -30,8 +30,8 @@ crop uptake.
 """
 function mineralize_nitrify!(soil::Soil;
                              lpjmlparams::LPJmLParams = lpjmlparams,
-                             shift_fast = soil.nitrogen.shift_fast,
-                             shift_slow = soil.nitrogen.shift_slow)
+                             shift_fast = soil.decomposition.shift_fast,
+                             shift_slow = soil.decomposition.shift_slow)
     soil_layers = size(soil.nitrogen.nitrate, 1)
     launch_custom!(
         mineralize_immobilize_kernel!,

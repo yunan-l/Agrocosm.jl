@@ -95,9 +95,9 @@ end
     soil.decomposition.litter_response .= 1.0f0
     soil.decomposition.response .= 0.2f0
     # `init_soil` allocates state only. In a simulation `init_states!` loads
-    # independently normalized fast and slow c_shift distributions.
-    soil.nitrogen.shift_fast[1, 1] = 1.0f0
-    soil.nitrogen.shift_slow[1, 1] = 1.0f0
+    # shared, normalized fast and slow c_shift distributions.
+    soil.decomposition.shift_fast[1, 1] = 1.0f0
+    soil.decomposition.shift_slow[1, 1] = 1.0f0
 
     Agrocosm.record_nitrogen_balance_start!(balance, 1, crop, soil)
     soil_nitrogen!(crop, soil)

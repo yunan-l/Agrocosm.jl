@@ -38,16 +38,15 @@ include("../../helpers/crop_lifecycle_fixture.jl")
     end
 
     for (container, fields) in (
-        (gpu.crop.state.phenology, (:vdsum, :husum, :fphu, :growing_days, :is_growing)),
-        (gpu.crop.state.canopy,
-         (:lai, :laimax_adjusted, :lai_npp_deficit)),
+        (gpu.crop.state.phenology, (:vdsum, :husum, :growing_days, :is_growing)),
+        (gpu.crop.auxiliary.phenology, (:fphu,)),
+        (gpu.crop.state.canopy, (:lai, :laimax_adjusted, :lai_npp_deficit)),
         (gpu.crop.auxiliary.canopy,
-         (:flaimax, :phenology_fraction, :fpar, :apar,
-          :canopy_conductance, :canopy_wet)),
+         (:actual_lai, :flaimax, :fpar, :apar, :canopy_conductance, :canopy_wet)),
         (gpu.crop.state.carbon,
          (:biomass, :leaf, :root, :pool, :storage)),
         (gpu.crop.fluxes.carbon,
-         (:yield, :npp, :respiration, :gross_assimilation, :net_assimilation,
+         (:yield, :harvest_export, :npp, :respiration, :gross_assimilation, :net_assimilation,
           :water_limited_assimilation, :leaf_respiration)),
         (gpu.crop.state.nitrogen,
          (:total, :leaf, :root, :pool, :storage, :pending_manure,
@@ -56,12 +55,12 @@ include("../../helpers/crop_lifecycle_fixture.jl")
          (:uptake, :auto_fertilizer, :seed_input, :prescribed_manure_input,
           :prescribed_fertilizer_input, :harvest_export)),
         (gpu.crop.state.water,
-         (:demand_sum, :supply_sum, :waterlogging_days)),
+         (:demand_sum, :supply_sum)),
         (gpu.crop.fluxes.water,
-         (:transpiration, :interception, :transpiration_layer)),
+         (:interception, :transpiration_layer)),
         (gpu.crop.auxiliary.stress,
-         (:nitrogen_demand_total, :nitrogen_demand_leaf, :nitrogen,
-          :nitrogen_deficit, :water_deficit, :water)),
+         (:nitrogen_demand_total, :nitrogen_demand_leaf,
+          :nitrogen_deficit, :water_deficit)),
         (gpu.crop.auxiliary.photosynthesis,
          (:potential_vcmax, :vcmax, :nitrogen_limitation, :lambda)),
     )
@@ -69,7 +68,9 @@ include("../../helpers/crop_lifecycle_fixture.jl")
             @test all(iszero, Array(getproperty(container, field)))
         end
     end
-    @test Array(gpu.crop.state.phenology.harvesting) == Bool[true]
-    @test Array(gpu.crop.state.phenology.harvesting_previous) == Bool[true]
-    @test Array(gpu.crop.auxiliary.stress.waterlogging) == Float32[1]
+    @test Array(gpu.crop.state.phenology.harvesting) == Bool[false]
+    @test Array(gpu.crop.state.phenology.harvesting_previous) == Bool[false]
+    @test Array(gpu.output.annual.yield) == Float32[0]
+    @test Array(gpu.crop.state.nitrogen.sufficiency) == Float32[1]
+    @test Array(gpu.crop.state.water.sufficiency) == Float32[1]
 end

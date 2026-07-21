@@ -21,14 +21,15 @@ import MuladdMacro: @muladd
 export LPJmLParams, PftParameters, PhotoParams, ModelParameters, PetPar, Output
 export DailyWeather, ClimBuf, CO2
 export Crop, CropState, CropFluxes, CropAuxiliary, CropWorkspace
-export CropPhenology, CropCanopyState, CropCarbonState, CropNitrogenState, CropWaterState
-export CropCalendarState, CropCanopyAuxiliary, CropPhotosynthesisAuxiliary
+export crop_restart_payload
+export CropPhenology, CropCarbonState, CropNitrogenState, CropWaterState
+export CropCalendarAuxiliary, CropCanopyState, CropCanopyAuxiliary, CropPhotosynthesisAuxiliary
 export CropCarbonFluxes, CropNitrogenFluxes, CropWaterFluxes, CropEvents
-export CropStressAuxiliary, ManagedLand
+export CropStressAuxiliary, CropRootAuxiliary, ManagedLand
 export SoilParams, SoilDecompParams, SoilThermalParams, SnowParams, Soil
 export SoilProperties, SoilWater, SoilThermal, SoilCarbon, SoilNitrogen
 export SoilDecomposition, SoilManagement, SoilSurfaceLitter, SoilSnow
-export CropOutput, SoilOutput, ClimateOutput, CalendarOutput
+export CropOutput, SoilOutput, ClimateOutput, CalendarOutput, AnnualOutputAccumulator
 
 # PARAMETERS (PFTs)
 export lpjmlparams, photoparams, soilparams, soil_decomp_params, soil_thermal_params, snowparams, cft1, cft2, cft3, cft4
@@ -51,7 +52,7 @@ export albedo!, petpar!, apar_crop!, apar_crop_maize!
 
 # CROP
 export photosynthesis_C3!, photosynthesis_C4!, carbon_allocation!, respiration!
-export phenology_crop!, lai_crop!, lai_deficit!, cultivate!, harvest_crop!, fertilizer!
+export phenology_crop!, lai_crop!, cultivate!, harvest_crop!, fertilizer!
 export transpiration!, interception!
 export crop_nitrogen!, ndemand_crop!, nuptake_crop!
 export limit_vcmax_by_nitrogen!
@@ -59,7 +60,6 @@ export root_distribution, temp_stress
 export lpj_bisect, solve_lambda_c3_lpj, solve_lambda_c4_lpj
 export solve_lambda_c3!, solve_lambda_c4!
 export crop_carbon!, crop_carbon_hybrid!, hybrid_photos_C3!, hybrid_photos_C4!
-export waterlogging_stress!
 
 # SOIL
 export apply_percolation_enthalpy!, soil_temperature!
@@ -146,7 +146,6 @@ include("processes/crop/nitrogen_uptake.jl")
 include("processes/crop/nitrogen_vcmax_limit.jl")
 include("processes/crop/fertilizer.jl")
 include("processes/crop/harvesting.jl")
-include("processes/crop/waterlogging_stress.jl")
 
 # Soil
 include("processes/soil/water_ice_pools.jl")

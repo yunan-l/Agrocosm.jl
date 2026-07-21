@@ -63,10 +63,8 @@ CUDA.allowscalar(false)
         soil.nitrogen.slow .= 25.0f0
         soil.carbon.litter_response .= Float32[0.0012, 0.0008, 0.0005]
         soil.nitrogen.litter_response .= Float32[0.0012, 0.0008, 0.0005]
-        soil.carbon.shift_fast .= 0.2f0
-        soil.carbon.shift_slow .= 0.2f0
-        soil.nitrogen.shift_fast .= 0.2f0
-        soil.nitrogen.shift_slow .= 0.2f0
+        soil.decomposition.shift_fast .= 0.2f0
+        soil.decomposition.shift_slow .= 0.2f0
         soil.nitrogen.ammonium .= 0.4f0
         soil.nitrogen.nitrate .= 0.8f0
         soil.properties.ph .= 6.5f0
@@ -92,10 +90,8 @@ CUDA.allowscalar(false)
     gpu.nitrogen.slow .= 25.0f0
     gpu.carbon.litter_response .= CuArray(Float32[0.0012, 0.0008, 0.0005])
     gpu.nitrogen.litter_response .= CuArray(Float32[0.0012, 0.0008, 0.0005])
-    gpu.carbon.shift_fast .= 0.2f0
-    gpu.carbon.shift_slow .= 0.2f0
-    gpu.nitrogen.shift_fast .= 0.2f0
-    gpu.nitrogen.shift_slow .= 0.2f0
+    gpu.decomposition.shift_fast .= 0.2f0
+    gpu.decomposition.shift_slow .= 0.2f0
     gpu.nitrogen.ammonium .= 0.4f0
     gpu.nitrogen.nitrate .= 0.8f0
     gpu.properties.ph .= 6.5f0

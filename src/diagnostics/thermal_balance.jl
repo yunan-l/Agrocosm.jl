@@ -1,22 +1,22 @@
 """Daily diagnostics for soil enthalpy, ice, and freeze-thaw state."""
 mutable struct ThermalBalance{M <: AbstractArray{<:AbstractFloat}}
-    surface_energy_flux::M
-    energy_residual::M
-    untracked_water_energy_flux::M
-    rain_energy_input::M
-    snowmelt_energy_input::M
-    lateral_runoff_energy_output::M
-    bottom_drainage_energy_output::M
-    percolation_energy_residual::M
-    column_energy::M
-    total_ice_storage::M
-    wilting_ice_storage::M
-    available_ice_storage::M
-    free_ice_storage::M
-    ice_pool_residual::M
-    maximum_frozen_fraction::M
-    minimum_temperature::M
-    maximum_temperature::M
+    surface_energy_flux::M            # Net energy entering soil surface (J m⁻² day⁻¹).
+    energy_residual::M                # Daily soil-column energy closure error (J m⁻²).
+    untracked_water_energy_flux::M    # Energy correction for externally changed water (J m⁻² day⁻¹).
+    rain_energy_input::M              # Sensible heat delivered by rainfall (J m⁻² day⁻¹).
+    snowmelt_energy_input::M          # Enthalpy delivered by snowmelt (J m⁻² day⁻¹).
+    lateral_runoff_energy_output::M   # Enthalpy removed by lateral runoff (J m⁻² day⁻¹).
+    bottom_drainage_energy_output::M  # Enthalpy removed by bottom drainage (J m⁻² day⁻¹).
+    percolation_energy_residual::M    # Numerical closure error of flow-energy routing (J m⁻²).
+    column_energy::M                  # Layer-integrated soil-column enthalpy (J m⁻²).
+    total_ice_storage::M              # Total soil ice (mm water equivalent).
+    wilting_ice_storage::M            # Ice within wilting-point water (mm water equivalent).
+    available_ice_storage::M          # Ice within plant-available water (mm water equivalent).
+    free_ice_storage::M               # Ice within gravitational water (mm water equivalent).
+    ice_pool_residual::M              # Difference between total and component ice pools (mm).
+    maximum_frozen_fraction::M        # Maximum frozen-water fraction among soil layers (0–1).
+    minimum_temperature::M            # Minimum soil-layer temperature (°C).
+    maximum_temperature::M            # Maximum soil-layer temperature (°C).
 end
 
 function init_thermal_balance(number_of_days::Integer,

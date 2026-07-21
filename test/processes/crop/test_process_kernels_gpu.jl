@@ -82,6 +82,7 @@ CUDA.allowscalar(false)
     growing = fill(Int32(1), cells)
     gross = Float32.(range(0, 18; length = cells))
     leaf = Float32.(range(0, 2; length = cells))
+    soil_temperature_cpu = reshape(Float32.(range(-10, 25; length = cells)), 1, :)
     for (field, values) in ((:root, root), (:storage, storage), (:pool, pool))
         getproperty(crop_reference.state.carbon, field) .= values
         getproperty(crop_gpu.state.carbon, field) .= CuArray(values)
@@ -89,12 +90,15 @@ CUDA.allowscalar(false)
     crop_reference.state.phenology.is_growing .= growing
     crop_gpu.state.phenology.is_growing .= CuArray(growing)
     Agrocosm.respiration_reference!(
-        crop_reference, cft1, temperature_cpu, gross .- leaf,
+        crop_reference, cft1, temperature_cpu, soil_temperature_cpu, gross .- leaf,
     )
     gross_gpu = CuArray(gross)
     leaf_gpu = CuArray(leaf)
+    soil_temperature_gpu = CuArray(soil_temperature_cpu)
     respiration_destination = crop_gpu.fluxes.carbon.respiration
-    respiration!(crop_gpu, cft1, temperature_gpu, gross_gpu, leaf_gpu)
+    respiration!(
+        crop_gpu, cft1, temperature_gpu, soil_temperature_gpu, gross_gpu, leaf_gpu,
+    )
     synchronize()
     @test crop_gpu.fluxes.carbon.respiration === respiration_destination
     @test Array(crop_gpu.fluxes.carbon.respiration) ≈
@@ -135,7 +139,9 @@ CUDA.allowscalar(false)
         synchronize()
     end
     steady_respiration_device_bytes = CUDA.@allocated begin
-        respiration!(crop_gpu, cft1, temperature_gpu, gross_gpu, leaf_gpu)
+        respiration!(
+            crop_gpu, cft1, temperature_gpu, soil_temperature_gpu, gross_gpu, leaf_gpu,
+        )
         synchronize()
     end
 
@@ -163,7 +169,8 @@ CUDA.allowscalar(false)
         temperature_gpu; comp_vcmax = true,
     )
     Agrocosm.respiration_reference!(
-        respiration_vector_gpu, cft1, temperature_gpu, gross_gpu .- leaf_gpu,
+        respiration_vector_gpu, cft1, temperature_gpu, soil_temperature_gpu,
+        gross_gpu .- leaf_gpu,
     )
     synchronize()
     vector_pet_device_bytes = CUDA.@allocated begin
@@ -188,7 +195,8 @@ CUDA.allowscalar(false)
     end
     vector_respiration_device_bytes = CUDA.@allocated begin
         Agrocosm.respiration_reference!(
-            respiration_vector_gpu, cft1, temperature_gpu, gross_gpu .- leaf_gpu,
+            respiration_vector_gpu, cft1, temperature_gpu, soil_temperature_gpu,
+            gross_gpu .- leaf_gpu,
         )
         synchronize()
     end
@@ -228,7 +236,10 @@ CUDA.allowscalar(false)
     end
     respiration_seconds = @elapsed begin
         for _ in 1:50
-            respiration!(crop_gpu, cft1, temperature_gpu, gross_gpu, leaf_gpu)
+            respiration!(
+                crop_gpu, cft1, temperature_gpu, soil_temperature_gpu,
+                gross_gpu, leaf_gpu,
+            )
         end
         synchronize()
     end

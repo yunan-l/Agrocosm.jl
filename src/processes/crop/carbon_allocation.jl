@@ -7,17 +7,18 @@ function carbon_allocation!(PFT::PftParameters,
                             crop::Crop
 )
     # 1D cell-wise allocation; crop.state.carbon.storage provides launch length and kernel arg #1.
-    kernel_params = (FROOTMAX = 0.4f0, FROOTMIN = 0.3f0)
+    T = eltype(crop.state.carbon.storage)
+    kernel_params = (FROOTMAX = T(0.4), FROOTMIN = T(0.3))
 
     launch_1D!(carbon_allocation_kernel!,
                crop.state.carbon.storage,
                crop.state.phenology.is_growing,
                crop.state.phenology.growing_days,
                crop.state.nitrogen.stress_sum,
-               crop.auxiliary.stress.nitrogen,
+               crop.state.nitrogen.sufficiency,
                crop.auxiliary.stress.nitrogen_deficit,
                crop.auxiliary.stress.water_deficit,
-               crop.state.phenology.fphu,
+               crop.auxiliary.phenology.fphu,
                crop.state.phenology.senescence,
                crop.state.carbon.biomass,
                crop.fluxes.carbon.respiration,
@@ -25,6 +26,7 @@ function carbon_allocation!(PFT::PftParameters,
                crop.fluxes.carbon.leaf_respiration,
                crop.fluxes.carbon.npp,
                crop.state.canopy.lai,
+               crop.auxiliary.canopy.actual_lai,
                crop.state.carbon.leaf,
                crop.state.carbon.root,
                crop.state.carbon.pool,
@@ -50,6 +52,7 @@ end
                                            photos_rd::AbstractArray{T},
                                            crop_npp::AbstractArray{T},
                                            crop_lai::AbstractArray{T},
+                                           crop_actual_lai::AbstractArray{T},
                                            crop_leafc::AbstractArray{T},
                                            crop_rootc::AbstractArray{T},
                                            crop_poolc::AbstractArray{T},
@@ -64,11 +67,13 @@ end
     @unpack FROOTMAX, FROOTMIN = kernel_params
 
     if crop_isgrowing[cell] == 1
-        # Undo LAI deficit correction from previous step before current-day allocation.
-        crop_lai[cell] = crop_lai[cell] - crop_lai_nppdeficit[cell]
-        # NPP = gross daytime photosynthesis - dark respiration - growth respiration bookkeeping.
+        # LPJmL preserves the potential phenological LAI and applies the NPP
+        # deficit only when actual LAI is consumed or reported.
+        actual_lai = max(zero(T), crop_lai[cell] - crop_lai_nppdeficit[cell])
+        # Complete crop carbon cost: leaf respiration plus maintenance/growth
+        # respiration, including root respiration.
         crop_npp[cell] = (photos_agd[cell] - photos_rd[cell] - crop_resp[cell])
-        if ((crop_biomass[cell] + crop_npp[cell]) <= T(0.0001)) || ((crop_lai[cell] <= zero(T)) && (!crop_senescence[cell]))
+        if ((crop_biomass[cell] + crop_npp[cell]) <= T(0.0001)) || ((actual_lai <= zero(T)) && (!crop_senescence[cell]))
             crop_poolc[cell] += crop_npp[cell]
             crop_biomass[cell] += crop_npp[cell]
         else
@@ -157,6 +162,9 @@ end
         crop_biomass[cell] = zero(T)
         crop_vscal_sum[cell] = zero(T)
         crop_ndf[cell] = zero(T)
+        crop_lai_nppdeficit[cell] = zero(T)
     end
+
+    crop_actual_lai[cell] = max(zero(T), crop_lai[cell] - crop_lai_nppdeficit[cell])
 
 end

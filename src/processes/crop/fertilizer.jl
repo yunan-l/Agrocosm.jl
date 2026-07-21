@@ -17,13 +17,14 @@ function fertilizer!(crop::Crop,
     launch_1D!(
         fertilizer_kernel!,
         crop.state.nitrogen.pending_fertilizer,
-        crop.state.calendar.sowing_date,
+        crop.auxiliary.calendar.sowing_date,
         ml.manure,
         ml.fertilizer,
         crop.state.nitrogen.pending_manure,
         crop.fluxes.nitrogen.prescribed_manure_input,
         crop.fluxes.nitrogen.prescribed_fertilizer_input,
-        crop.state.phenology.fphu,
+        crop.state.phenology.husum,
+        crop.auxiliary.phenology.phu,
         soil.nitrogen.nitrate,
         soil.nitrogen.ammonium,
         soil.carbon.litter,
@@ -43,7 +44,8 @@ end
                                     crop_nmanure::AbstractArray{T},
                                     crop_manure_input::AbstractArray{T},
                                     crop_fertilizer_input::AbstractArray{T},
-                                    crop_fphu::AbstractArray{T},
+                                    crop_husum::AbstractArray{T},
+                                    crop_phu::AbstractArray{T},
                                     soil_NO3::AbstractArray{M},
                                     soil_NH4::AbstractArray{M},
                                     soil_litter_carbon::AbstractArray{M},
@@ -61,6 +63,8 @@ end
     crop_fertilizer_input[cell] = zero(T)
 
     if enabled
+        fphu = crop_phu[cell] > zero(T) ?
+            min(one(T), crop_husum[cell] / crop_phu[cell]) : zero(T)
         if crop_cal_sdate[cell] == day
             fertilizer_input = ml_fertilizer[cell] * nfert_split_frac
             if manure
@@ -78,14 +82,14 @@ end
             crop_fertilizer_input[cell] += fertilizer_input
         end
 
-        if crop_fphu[cell] > T(0.25) && crop_nfertilizer[cell] > zero(T)
+        if fphu > T(0.25) && crop_nfertilizer[cell] > zero(T)
             crop_fertilizer_input[cell] += crop_nfertilizer[cell]
             soil_NO3[1, cell] += crop_nfertilizer[cell] * nfert_no3_frac
             soil_NH4[1, cell] += crop_nfertilizer[cell] * (1 - nfert_no3_frac)
             crop_nfertilizer[cell] = zero(T)
         end
 
-        if manure && crop_fphu[cell] > T(0.25) && crop_nmanure[cell] > zero(T)
+        if manure && fphu > T(0.25) && crop_nmanure[cell] > zero(T)
             manure_input = crop_nmanure[cell]
             crop_manure_input[cell] += manure_input
             soil_NH4[1, cell] += manure_input * nmanure_nh4_frac

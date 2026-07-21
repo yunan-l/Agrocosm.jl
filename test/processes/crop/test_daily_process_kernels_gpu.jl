@@ -51,16 +51,14 @@ CUDA.allowscalar(false)
     crop_gpu = init_crop(cells, CuArray)
     pet_reference = init_pet(cells, identity)
     pet_gpu = init_pet(cells, CuArray)
-    lai = Float32.(range(0, 7; length = cells))
     phenology = Float32.(range(0, 1; length = cells))
+    lai = cft1.laimax .* phenology
     growing = Int32.(mod.(1:cells, 2))
     par = Float32.(range(0, 25; length = cells))
     crop_reference.state.canopy.lai .= lai
-    crop_reference.auxiliary.canopy.phenology_fraction .= phenology
     crop_reference.state.phenology.is_growing .= growing
     pet_reference.par .= par
     crop_gpu.state.canopy.lai .= CuArray(lai)
-    crop_gpu.auxiliary.canopy.phenology_fraction .= CuArray(phenology)
     crop_gpu.state.phenology.is_growing .= CuArray(growing)
     pet_gpu.par .= CuArray(par)
     Agrocosm.albedo_reference!(cft1, crop_reference, pet_reference)
@@ -82,8 +80,8 @@ CUDA.allowscalar(false)
     soil_gpu = init_soil(cells, soilparams.soildepth, CuArray)
     sowing_dates = fill(Int32(101), cells)
     sowing_dates[1:2:end] .= Int32(100)
-    crop_reference.state.calendar.sowing_date .= sowing_dates
-    crop_gpu.state.calendar.sowing_date .= CuArray(sowing_dates)
+    crop_reference.auxiliary.calendar.sowing_date .= sowing_dates
+    crop_gpu.auxiliary.calendar.sowing_date .= CuArray(sowing_dates)
     Agrocosm.cultivate_reference!(
         crop_reference, land_reference, soil_reference, 100;
         apply_prescribed_fertilizer = false,
@@ -107,7 +105,7 @@ CUDA.allowscalar(false)
     pet_gpu.eeq .= 4.0f0
     crop_gpu.auxiliary.canopy.fpar .= 0.6f0
     crop_gpu.auxiliary.canopy.canopy_wet .= 0.1f0
-    crop_gpu.auxiliary.stress.root_distribution .= CuArray(Float32[0.35, 0.25, 0.18, 0.13, 0.09])
+    crop_gpu.auxiliary.root.distribution .= CuArray(Float32[0.35, 0.25, 0.18, 0.13, 0.09])
     soil_gpu.water.relative_content .= 0.55f0
     soil_gpu.water.holding_capacity_storage .= 100.0f0
     assimilation_gpu = CUDA.fill(8.0f0, cells)

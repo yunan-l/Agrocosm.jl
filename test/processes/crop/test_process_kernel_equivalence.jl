@@ -15,13 +15,12 @@ end
         kernel = init_crop(cells, identity)
         pet_reference = init_pet(cells, identity)
         pet_kernel = init_pet(cells, identity)
-        lai = Float32.(range(0, 7; length = cells))
         phenology_fraction = Float32.(range(0, 1; length = cells))
+        lai = Float32(pft.laimax) .* phenology_fraction
         growing = Int32[0, 1, 1, 0, 1, 1, 0, 1]
         par = Float32.(range(0, 25; length = cells))
         for (crop, pet) in ((reference, pet_reference), (kernel, pet_kernel))
             crop.state.canopy.lai .= lai
-            crop.auxiliary.canopy.phenology_fraction .= phenology_fraction
             crop.state.phenology.is_growing .= growing
             pet.par .= par
         end
@@ -51,8 +50,8 @@ end
     reference_land = init_managed_land(cells, identity)
     kernel_land = init_managed_land(cells, identity)
     sowing_dates = Int32[100, 99, 100, 101, 100, 200]
-    reference.state.calendar.sowing_date .= sowing_dates
-    kernel.state.calendar.sowing_date .= sowing_dates
+    reference.auxiliary.calendar.sowing_date .= sowing_dates
+    kernel.auxiliary.calendar.sowing_date .= sowing_dates
     reference.state.carbon.biomass .= 3.0f0
     kernel.state.carbon.biomass .= 3.0f0
     reference.state.nitrogen.total .= 0.2f0
@@ -88,6 +87,7 @@ end
     pool = Float32.(range(2, 12; length = cells))
     growing = Int32[1, 1, 0, 1, 0, 1, 1, 1]
     temperature = Float32[-45, -20, 0, 10, 20, 30, 35, 40]
+    soil_temperature = reshape(Float32[-20, -10, 0, 5, 10, 15, 20, 25], 1, :)
     gross = Float32.(range(0, 18; length = cells))
     leaf_respiration = Float32.(range(0, 2; length = cells))
     for crop in (reference, kernel)
@@ -98,11 +98,10 @@ end
     end
     destination = kernel.fluxes.carbon.respiration
     Agrocosm.respiration_reference!(
-        reference, cft1, temperature, gross .- leaf_respiration,
+        reference, cft1, temperature, soil_temperature, gross .- leaf_respiration,
     )
-    respiration!(kernel, cft1, temperature, gross, leaf_respiration)
+    respiration!(kernel, cft1, temperature, soil_temperature, gross, leaf_respiration)
     @test kernel.fluxes.carbon.respiration === destination
-    @test kernel.workspace.respiration_temperature_response ≈ reference.workspace.respiration_temperature_response rtol = 1.0f-6
     @test kernel.fluxes.carbon.respiration ≈ reference.fluxes.carbon.respiration rtol = 2.0f-6 atol = 2.0f-7
 end
 

@@ -10,32 +10,32 @@ again. Positive `residual` denotes nitrogen entering the tracked system
 without appearing in final storage or a recorded boundary loss.
 """
 mutable struct NitrogenBalance{M <: AbstractArray{<:AbstractFloat}}
-    plant_before::M
-    plant_after::M
-    mineral_before::M
-    mineral_after::M
-    organic_before::M
-    organic_after::M
-    total_before::M
-    total_after::M
-    root_uptake::M
-    seed_input::M
-    prescribed_fertilizer_input::M
-    prescribed_manure_input::M
-    automatic_fertilizer_input::M
-    harvest_export::M
-    mineralization::M
-    immobilization::M
-    nitrification::M
-    n2o_nitrification::M
-    denitrification::M
-    n2o_denitrification::M
-    n2_denitrification::M
-    volatilization::M
-    gaseous_loss::M
-    leaching_loss::M
-    residual::M
-    relative_residual::M
+    plant_before::M                # Plant N stock at start of day (gN m⁻²).
+    plant_after::M                 # Plant N stock at end of day (gN m⁻²).
+    mineral_before::M              # Soil NO₃ plus NH₄ stock at start of day (gN m⁻²).
+    mineral_after::M               # Soil NO₃ plus NH₄ stock at end of day (gN m⁻²).
+    organic_before::M              # Litter plus organic-soil N at start of day (gN m⁻²).
+    organic_after::M               # Litter plus organic-soil N at end of day (gN m⁻²).
+    total_before::M                # Tracked ecosystem N stock at start of day (gN m⁻²).
+    total_after::M                 # Tracked ecosystem N stock at end of day (gN m⁻²).
+    root_uptake::M                 # Soil mineral N transferred to crop roots (gN m⁻² day⁻¹).
+    seed_input::M                  # Seed nitrogen boundary input (gN m⁻² day⁻¹).
+    prescribed_fertilizer_input::M # Scheduled mineral-fertilizer input (gN m⁻² day⁻¹).
+    prescribed_manure_input::M     # Scheduled manure-N input (gN m⁻² day⁻¹).
+    automatic_fertilizer_input::M  # Demand-driven mineral-N input (gN m⁻² day⁻¹).
+    harvest_export::M              # Harvested nitrogen leaving the system (gN m⁻² day⁻¹).
+    mineralization::M              # Organic N mineralized today (gN m⁻² day⁻¹).
+    immobilization::M              # Mineral N immobilized today (gN m⁻² day⁻¹).
+    nitrification::M               # NH₄ consumed by nitrification (gN m⁻² day⁻¹).
+    n2o_nitrification::M           # N₂O-N loss from nitrification (gN m⁻² day⁻¹).
+    denitrification::M             # NO₃ consumed by denitrification (gN m⁻² day⁻¹).
+    n2o_denitrification::M         # N₂O-N loss from denitrification (gN m⁻² day⁻¹).
+    n2_denitrification::M          # N₂-N loss from denitrification (gN m⁻² day⁻¹).
+    volatilization::M              # NH₃-N volatilization loss (gN m⁻² day⁻¹).
+    gaseous_loss::M                # Sum of all recorded gaseous N losses (gN m⁻² day⁻¹).
+    leaching_loss::M               # Mineral-N leaching loss (gN m⁻² day⁻¹).
+    residual::M                    # Absolute daily nitrogen-budget closure error (gN m⁻²).
+    relative_residual::M           # Nitrogen residual normalized by daily budget magnitude.
 end
 
 function init_nitrogen_balance(number_of_days::Integer,

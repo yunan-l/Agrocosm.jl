@@ -1,14 +1,14 @@
 """Hydrological and thermal state of the above-ground litter layer."""
 mutable struct SoilSurfaceLitter{A}
-    dry_matter::A
-    depth::A
-    cover::A
-    water_capacity::A
-    water_storage::A
-    interception::A
-    evaporation::A
-    temperature::A
-    conductivity::A
+    dry_matter::A    # Above-ground litter dry-matter stock (g dry matter m⁻²).
+    depth::A         # Effective surface-litter layer thickness (m).
+    cover::A         # Fractional ground cover by above-ground litter (0–1).
+    water_capacity::A # Maximum litter water-holding capacity (mm).
+    water_storage::A # Liquid water stored in surface litter (mm).
+    interception::A  # Rainfall intercepted by litter today (mm day⁻¹).
+    evaporation::A   # Water evaporated from surface litter today (mm day⁻¹).
+    temperature::A   # Surface-litter temperature (°C).
+    conductivity::A  # Effective litter thermal conductivity (W m⁻¹ K⁻¹).
 end
 
 init_soil_surface_litter(cell_size::Int, device) =

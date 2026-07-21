@@ -12,15 +12,15 @@ using Test
     output = @inferred init_output(cell_size, identity)
 
     @test propertynames(crop) == (:state, :fluxes, :auxiliary, :events, :workspace)
-    @test propertynames(crop.state) == (:phenology, :canopy, :carbon, :nitrogen, :water, :calendar)
+    @test propertynames(crop.state) == (:phenology, :canopy, :carbon, :nitrogen, :water)
     @test propertynames(crop.fluxes) == (:carbon, :nitrogen, :water)
-    @test propertynames(crop.auxiliary) == (:canopy, :photosynthesis, :stress)
+    @test propertynames(crop.auxiliary) ==
+          (:phenology, :calendar, :root, :canopy, :photosynthesis, :stress)
     @test propertynames(crop.events) == (:sowing, :harvest)
     @test size(crop.state.carbon.leaf) == (cell_size,)
-    @test length(crop.workspace.respiration_temperature_response) == cell_size
+    @test isempty(fieldnames(typeof(crop.workspace)))
     @test size(crop.fluxes.water.transpiration_layer) == (5, cell_size)
-    @test length(crop.auxiliary.stress.root_zone_water) == cell_size
-    @test length(crop.state.calendar.sowing_date) == cell_size
+    @test length(crop.auxiliary.calendar.sowing_date) == cell_size
     @test length(managed_land.latitude) == cell_size
     @test length(crop.fluxes.carbon.gross_assimilation) == cell_size
     @test length(pet.daylength) == cell_size
@@ -32,10 +32,11 @@ using Test
     @test all(iszero, crop.fluxes.carbon.gross_assimilation)
     @test crop.state.phenology isa CropPhenology
     @test crop.state.canopy isa CropCanopyState
+    @test crop.auxiliary.root isa CropRootAuxiliary
     @test crop.state.carbon isa CropCarbonState
     @test crop.state.nitrogen isa CropNitrogenState
     @test crop.state.water isa CropWaterState
-    @test crop.state.calendar isa CropCalendarState
+    @test crop.auxiliary.calendar isa CropCalendarAuxiliary
     @test crop.auxiliary.photosynthesis isa CropPhotosynthesisAuxiliary
     @test soil.properties isa SoilProperties
     @test soil.water isa SoilWater
@@ -48,6 +49,10 @@ using Test
     @test soil.nitrogen isa SoilNitrogen
     @test soil.decomposition isa SoilDecomposition
     @test size(soil.decomposition.litter_response) == (3, cell_size)
+    @test size(soil.decomposition.shift_fast) == (5, cell_size)
+    @test size(soil.decomposition.shift_slow) == (5, cell_size)
+    @test !hasproperty(soil.carbon, :shift_fast)
+    @test !hasproperty(soil.nitrogen, :shift_fast)
     @test size(soil.decomposition.layer_scratch_1) == (5, cell_size)
     @test length(soil.decomposition.surface_scratch_1) == cell_size
     @test soil.management isa SoilManagement
@@ -69,6 +74,7 @@ using Test
     @test output.soil isa SoilOutput
     @test output.climate isa ClimateOutput
     @test output.calendar isa CalendarOutput
+    @test output.annual isa AnnualOutputAccumulator
 
     rows = Agrocosm.prepare_output_block!(output, 3, 1)
     @test rows == (first_daily_row = 1, first_annual_row = 1)
@@ -111,7 +117,7 @@ end
     @test eltype(carbon.residual) == Float64
     @test eltype(thermal.energy_residual) == Float64
     @test eltype(crop.state.phenology.is_growing) == Int32
-    @test eltype(crop.state.calendar.sowing_date) == Int32
+    @test eltype(crop.auxiliary.calendar.sowing_date) == Int32
 
     pft64 = convert_precision(Float64, cft1)
     parameters64 = ModelParameters(Float64)
@@ -174,20 +180,16 @@ end
 
     Agrocosm.initialize_soil_c_shift!(soil, model_state, :lpjml_initsoil)
     expected = Float32[0.55, 0.1125, 0.1125, 0.1125, 0.1125]
-    @test soil.carbon.shift_fast == repeat(expected, 1, cells)
-    @test soil.carbon.shift_slow == repeat(expected, 1, cells)
-    @test soil.nitrogen.shift_fast == soil.carbon.shift_fast
-    @test soil.nitrogen.shift_slow == soil.carbon.shift_slow
-    @test vec(sum(soil.carbon.shift_fast; dims = 1)) ≈ ones(Float32, cells)
+    @test soil.decomposition.shift_fast == repeat(expected, 1, cells)
+    @test soil.decomposition.shift_slow == repeat(expected, 1, cells)
+    @test vec(sum(soil.decomposition.shift_fast; dims = 1)) ≈ ones(Float32, cells)
 
     restart_fast = repeat(Float32[0.4, 0.25, 0.15, 0.1, 0.1], 1, cells)
     restart_slow = repeat(Float32[0.5, 0.2, 0.15, 0.1, 0.05], 1, cells)
     restart_state = (c_shift_fast = restart_fast, c_shift_slow = restart_slow)
     Agrocosm.initialize_soil_c_shift!(soil, restart_state, :restart)
-    @test soil.carbon.shift_fast == restart_fast
-    @test soil.carbon.shift_slow == restart_slow
-    @test soil.nitrogen.shift_fast == restart_fast
-    @test soil.nitrogen.shift_slow == restart_slow
+    @test soil.decomposition.shift_fast == restart_fast
+    @test soil.decomposition.shift_slow == restart_slow
 
     @test_throws ArgumentError Agrocosm.initialize_soil_c_shift!(
         soil, model_state, :restart,

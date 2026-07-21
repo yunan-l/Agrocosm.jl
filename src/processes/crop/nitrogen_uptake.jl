@@ -29,8 +29,8 @@ function nuptake_crop!(crop::Crop,
         crop.state.carbon.root,
         crop.auxiliary.stress.nitrogen_demand_leaf,
         crop.auxiliary.stress.nitrogen_demand_total,
-        crop.auxiliary.stress.nitrogen,
-        crop.auxiliary.stress.root_distribution,
+        crop.state.nitrogen.sufficiency,
+        crop.auxiliary.root.distribution,
         crop.state.phenology.is_growing,
         soil.water.relative_content,
         soil.water.saturation_fraction,
@@ -206,6 +206,8 @@ end
         crop_nitrogen[cell] = zero(T)
         crop_nuptake[cell] = zero(T)
         crop_nautofertilizer[cell] = zero(T)
-        crop_vscal[cell] = zero(T)
+        # A deleted LPJmL stand has no active limitation. Keep the reusable
+        # placeholder at the neutral multiplicative value.
+        crop_vscal[cell] = one(T)
     end
 end

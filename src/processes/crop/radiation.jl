@@ -140,30 +140,40 @@ Compute absorbed PAR and fPAR for non-maize crops.
 """
 function apar_crop_reference!(PFT::PftParameters,
                               crop::Crop,
-                              pet::PetPar
+                              pet::PetPar,
+                              snow_height = nothing,
 )
 
     @unpack name, lightextcoeff, albedo_leaf, alphaa  = PFT
 
-    # crop.auxiliary.canopy.fpar .= (1 .- exp.(-lightextcoeff * max.(0.0f0, crop.state.canopy.lai .- crop.state.canopy.lai_npp_deficit))) # if maize, crop.auxiliary.canopy.fpar = min.(1.0f0, max.(0.0f0, 0.2558f0 * max.(0.01f0, crop.state.canopy.lai .- crop.state.canopy.lai_npp_deficit) .- 0.0024f0))
-    crop.auxiliary.canopy.fpar .= 1 .- exp.(-lightextcoeff * max.(0.0f0, crop.state.canopy.lai))
+    actual_lai = max.(
+        zero(eltype(crop.state.canopy.lai)),
+        crop.state.canopy.lai .- crop.state.canopy.lai_npp_deficit,
+    )
+    crop.auxiliary.canopy.fpar .= 1 .- exp.(-lightextcoeff * actual_lai)
+    if snow_height !== nothing
+        crop.auxiliary.canopy.fpar .*= snow_height .<= zero(eltype(snow_height))
+    end
 
     crop.auxiliary.canopy.apar .= pet.par * (1 - albedo_leaf) * alphaa .* crop.auxiliary.canopy.fpar
 
 end
 
-function apar_crop!(PFT::PftParameters, crop::Crop, pet::PetPar)
+function apar_crop!(PFT::PftParameters, crop::Crop, pet::PetPar, snow_height = nothing)
     T = eltype(crop.auxiliary.canopy.apar)
     launch_1D!(
         apar_crop_kernel!,
         crop.auxiliary.canopy.apar,
         crop.auxiliary.canopy.fpar,
         crop.state.canopy.lai,
+        crop.state.canopy.lai_npp_deficit,
+        snow_height === nothing ? pet.eeq : snow_height,
         pet.par,
         T(PFT.lightextcoeff),
         T(PFT.albedo_leaf),
         T(PFT.alphaa),
         false,
+        snow_height !== nothing,
     )
     return nothing
 end
@@ -176,31 +186,41 @@ Compute absorbed PAR and maize-specific fPAR parameterization.
 """
 function apar_crop_maize_reference!(PFT::PftParameters,
                                     crop::Crop,
-                                    pet::PetPar
+                                    pet::PetPar,
+                                    snow_height = nothing,
 )
 
     @unpack name, lightextcoeff, albedo_leaf, alphaa  = PFT
 
-    # crop.auxiliary.canopy.fpar = min.(1.0f0, max.(0.0f0, 0.2558f0 * max.(0.01f0, crop.state.canopy.lai .- crop.state.canopy.lai_npp_deficit) .- 0.0024f0))
-    crop.auxiliary.canopy.fpar .= min.(1.0f0, max.(0.0f0, 0.2558f0 * max.(0.01f0, crop.state.canopy.lai) .- 0.0024f0))
+    actual_lai = max.(
+        zero(eltype(crop.state.canopy.lai)),
+        crop.state.canopy.lai .- crop.state.canopy.lai_npp_deficit,
+    )
+    crop.auxiliary.canopy.fpar .= min.(1.0f0, max.(0.0f0, 0.2558f0 * max.(0.01f0, actual_lai) .- 0.0024f0))
+    if snow_height !== nothing
+        crop.auxiliary.canopy.fpar .*= snow_height .<= zero(eltype(snow_height))
+    end
 
     crop.auxiliary.canopy.apar .= pet.par * (1 - albedo_leaf) * alphaa .* crop.auxiliary.canopy.fpar
 
 end
 
 
-function apar_crop_maize!(PFT::PftParameters, crop::Crop, pet::PetPar)
+function apar_crop_maize!(PFT::PftParameters, crop::Crop, pet::PetPar, snow_height = nothing)
     T = eltype(crop.auxiliary.canopy.apar)
     launch_1D!(
         apar_crop_kernel!,
         crop.auxiliary.canopy.apar,
         crop.auxiliary.canopy.fpar,
         crop.state.canopy.lai,
+        crop.state.canopy.lai_npp_deficit,
+        snow_height === nothing ? pet.eeq : snow_height,
         pet.par,
         T(PFT.lightextcoeff),
         T(PFT.albedo_leaf),
         T(PFT.alphaa),
         true,
+        snow_height !== nothing,
     )
     return nothing
 end
@@ -209,18 +229,24 @@ end
     apar::AbstractVector{T},
     fpar::AbstractVector{T},
     lai::AbstractVector{T},
+    lai_npp_deficit::AbstractVector{T},
+    snow_height::AbstractVector{T},
     par::AbstractVector{T},
     light_extinction::T,
     leaf_albedo::T,
     alpha_a::T,
     maize::Bool,
+    apply_snow_cover::Bool,
 ) where {T <: AbstractFloat}
     cell = @index(Global)
+    actual_lai = max(zero(T), lai[cell] - lai_npp_deficit[cell])
     absorbed_fraction = if maize
-        min(one(T), max(zero(T), T(0.2558) * max(T(0.01), lai[cell]) - T(0.0024)))
+        min(one(T), max(zero(T), T(0.2558) * max(T(0.01), actual_lai) - T(0.0024)))
     else
-        one(T) - exp(-light_extinction * max(zero(T), lai[cell]))
+        one(T) - exp(-light_extinction * actual_lai)
     end
+    snow_free = !apply_snow_cover || snow_height[cell] <= zero(T)
+    absorbed_fraction *= T(snow_free)
     fpar[cell] = absorbed_fraction
     apar[cell] = par[cell] * (one(T) - leaf_albedo) * alpha_a * absorbed_fraction
 end

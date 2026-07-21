@@ -15,7 +15,7 @@ CUDA.allowscalar(false)
     crop.state.carbon.root .= 100.0f0
     crop.auxiliary.stress.nitrogen_demand_leaf .= 0.4f0
     crop.auxiliary.stress.nitrogen_demand_total .= 1.0f0
-    crop.auxiliary.stress.root_distribution .= CuArray(Float32[0.5, 0.3, 0.2, 0.0, 0.0])
+    crop.auxiliary.root.distribution .= CuArray(Float32[0.5, 0.3, 0.2, 0.0, 0.0])
     soil.water.relative_content .= 1.0f0
     soil.water.saturation_fraction .= 0.4f0
     soil.thermal.temperature .= 15.0f0
@@ -52,5 +52,5 @@ end
     @test Array(crop.state.nitrogen.total)[1] ≈ 1.0f0 atol = 1.0f-6
     @test Array(crop.fluxes.nitrogen.uptake)[1] ≈ 0.9f0 atol = 1.0f-6
     @test Array(crop.fluxes.nitrogen.auto_fertilizer)[1] ≈ 0.9f0 atol = 1.0f-6
-    @test Array(crop.auxiliary.stress.nitrogen)[1] == 1.0f0
+    @test Array(crop.state.nitrogen.sufficiency)[1] == 1.0f0
 end

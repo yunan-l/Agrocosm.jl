@@ -10,16 +10,16 @@ using Test
     soil.water.storage .= Float32[40, 60, 100, 200, 200]
     soil.nitrogen.nitrate .= reshape(Float32[10, 20, 30, 40, 50], 5, 1)
     crop.fluxes.water.interception .= 0.0f0
-    crop.auxiliary.stress.root_distribution .= 0.0f0
-    crop.auxiliary.stress.root_distribution[1, 1] = 1.0f0
+    crop.auxiliary.root.distribution .= 0.0f0
+    crop.auxiliary.root.distribution[1] = 1.0f0
     pedotransfer!(soil)
 
     storage_before = sum(soil.water.storage)
     nitrate_before = sum(soil.nitrogen.nitrate)
-    water_availability_before = sum(soil.water.relative_content .* crop.auxiliary.stress.root_distribution)
+    water_availability_before = sum(soil.water.relative_content .* crop.auxiliary.root.distribution)
     soil_infiltration!(soil, crop, Float32[10.0])
     storage_after_infiltration = sum(soil.water.storage)
-    water_availability_after = sum(soil.water.relative_content .* crop.auxiliary.stress.root_distribution)
+    water_availability_after = sum(soil.water.relative_content .* crop.auxiliary.root.distribution)
 
     @test storage_after_infiltration > storage_before
     @test storage_after_infiltration + soil.water.surface_runoff[1] +
@@ -44,8 +44,8 @@ end
     dry_soil.water.storage .= Float32[25, 60, 100, 200, 200]
     dry_crop.state.phenology.is_growing .= 1
     dry_crop.state.carbon.root .= 50.0f0
-    dry_crop.auxiliary.stress.root_distribution .= 0.0f0
-    dry_crop.auxiliary.stress.root_distribution[1, 1] = 1.0f0
+    dry_crop.auxiliary.root.distribution .= 0.0f0
+    dry_crop.auxiliary.root.distribution[1] = 1.0f0
     dry_crop.auxiliary.canopy.canopy_wet .= 0.0f0
     dry_crop.fluxes.water.interception .= 0.0f0
     pet.eeq .= 5.0f0
@@ -61,7 +61,13 @@ end
     transpiration!(assimilation, cft1, dry_crop, pet, dry_soil, co2)
     transpiration!(assimilation, cft1, wet_crop, pet, wet_soil, co2)
 
+    expected_rootzone_water = sum(
+        wet_soil.water.relative_content[1:3, 1] .*
+        wet_soil.water.holding_capacity_storage[1:3, 1] .*
+        wet_crop.auxiliary.root.distribution[1:3],
+    )
     @test wet_crop.state.water.supply_sum[1] > dry_crop.state.water.supply_sum[1]
-    @test wet_crop.auxiliary.stress.water[1] > dry_crop.auxiliary.stress.water[1]
+    @test wet_crop.state.water.sufficiency[1] > dry_crop.state.water.sufficiency[1]
     @test sum(wet_crop.fluxes.water.transpiration_layer) > sum(dry_crop.fluxes.water.transpiration_layer)
+    @test wet_crop.auxiliary.root.zone_available_water[1] ≈ expected_rootzone_water atol = 1.0f-6
 end

@@ -12,10 +12,8 @@ CUDA.allowscalar(false)
     fast_shift = Float32[0.40, 0.25, 0.15, 0.10, 0.10]
     slow_shift = Float32[0.55, 0.20, 0.10, 0.10, 0.05]
 
-    soil.carbon.shift_fast .= CuArray(repeat(fast_shift, 1, cells))
-    soil.carbon.shift_slow .= CuArray(repeat(slow_shift, 1, cells))
-    soil.nitrogen.shift_fast .= soil.carbon.shift_fast
-    soil.nitrogen.shift_slow .= soil.carbon.shift_slow
+    soil.decomposition.shift_fast .= CuArray(repeat(fast_shift, 1, cells))
+    soil.decomposition.shift_slow .= CuArray(repeat(slow_shift, 1, cells))
     root_litter = Agrocosm.ROOT_LITTER
     soil.carbon.litter[root_litter:root_litter, :] .= 10.0f0
     soil.nitrogen.litter[root_litter:root_litter, :] .= 0.4f0

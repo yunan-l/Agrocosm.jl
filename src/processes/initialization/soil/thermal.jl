@@ -1,27 +1,27 @@
 """Layered soil temperature, enthalpy, phase state, and thermal properties."""
 mutable struct SoilThermal{A, B, M}
-    temperature::M
-    enthalpy::M
-    frozen_fraction::M
-    freeze_depth::M
-    heat_capacity_frozen::M
-    heat_capacity_unfrozen::M
-    latent_heat::M
-    conductivity_frozen::M
-    conductivity_unfrozen::M
-    water_reference::M
-    percolation_energy::M
-    surface_energy_flux::A
-    energy_residual::A
-    untracked_water_energy_flux::A
-    rain_energy_input::A
-    snowmelt_energy_input::A
-    lateral_runoff_energy_output::A
-    bottom_drainage_energy_output::A
-    percolation_energy_residual::A
-    initialized::B
-    diffusivity_0::A
-    diffusivity_15::A
+    temperature::M                   # Soil-layer temperature (°C).
+    enthalpy::M                      # Volumetric soil enthalpy relative to 0 °C (J m⁻³).
+    frozen_fraction::M               # Fraction of layer water that is frozen (0–1).
+    freeze_depth::M                  # Effective frozen depth within each soil layer (mm).
+    heat_capacity_frozen::M          # Frozen-layer volumetric heat capacity (J m⁻³ K⁻¹).
+    heat_capacity_unfrozen::M        # Unfrozen-layer volumetric heat capacity (J m⁻³ K⁻¹).
+    latent_heat::M                   # Latent heat stored/released by layer phase change (J m⁻³).
+    conductivity_frozen::M           # Frozen-layer thermal conductivity (W m⁻¹ K⁻¹).
+    conductivity_unfrozen::M         # Unfrozen-layer thermal conductivity (W m⁻¹ K⁻¹).
+    water_reference::M               # Water stock used as phase-change reference (mm).
+    percolation_energy::M            # Enthalpy carried by layer water flow (J m⁻² day⁻¹).
+    surface_energy_flux::A           # Net daily energy entering the soil surface (J m⁻² day⁻¹).
+    energy_residual::A               # Soil-column daily energy-balance residual (J m⁻²).
+    untracked_water_energy_flux::A   # Energy correction for externally changed water (J m⁻² day⁻¹).
+    rain_energy_input::A             # Sensible heat delivered by rainfall (J m⁻² day⁻¹).
+    snowmelt_energy_input::A         # Enthalpy delivered by snowmelt (J m⁻² day⁻¹).
+    lateral_runoff_energy_output::A  # Enthalpy removed by lateral runoff (J m⁻² day⁻¹).
+    bottom_drainage_energy_output::A # Enthalpy removed by bottom drainage (J m⁻² day⁻¹).
+    percolation_energy_residual::A   # Numerical closure residual of flow-energy routing (J m⁻²).
+    initialized::B                   # Thermal-profile initialization flag per grid cell.
+    diffusivity_0::A                 # Soil thermal diffusivity at zero water content (mm² s⁻¹).
+    diffusivity_15::A                # Soil thermal diffusivity at reference moisture 0.15 (mm² s⁻¹).
 end
 
 init_soil_thermal(cell_size::Int, device; kwargs...) =

@@ -15,6 +15,7 @@ function interception!(crop::Crop,
         crop.fluxes.water.interception,
         crop.auxiliary.canopy.canopy_wet,
         crop.state.canopy.lai,
+        crop.state.canopy.lai_npp_deficit,
         crop.state.phenology.is_growing,
         pet_eeq,
         rain,
@@ -28,6 +29,7 @@ end
                                       crop_intercep::AbstractArray{T},
                                       crop_canopy_wet::AbstractArray{T},
                                       crop_lai::AbstractArray{T},
+                                      crop_lai_nppdeficit::AbstractArray{T},
                                       crop_isgrowing::AbstractArray{S},
                                       pet_eeq::AbstractArray{T},
                                       rain::AbstractArray{T},
@@ -44,7 +46,8 @@ end
         if pet_eeq[cell] < 0.0001 || fpc == 0.0
             crop_canopy_wet[cell] = zero(T)
         else
-            int_store = intc * crop_lai[cell]
+            actual_lai = max(zero(T), crop_lai[cell] - crop_lai_nppdeficit[cell])
+            int_store = intc * actual_lai
             if int_store > 0.9999
                 int_store = T(0.9999)
             end
@@ -56,5 +59,6 @@ end
         crop_intercep[cell] = pet_eeq[cell] * PRIESTLEY_TAYLOR * crop_canopy_wet[cell] * fpc
     else
         crop_intercep[cell] = zero(T)
+        crop_canopy_wet[cell] = zero(T)
     end
 end

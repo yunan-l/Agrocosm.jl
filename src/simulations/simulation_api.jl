@@ -6,12 +6,12 @@ precision, backend, and run options while preserving direct access to state
 objects such as `simulation.crop`, `simulation.soil`, and `simulation.output`.
 """
 mutable struct CropSimulation{P, S, D, M, C}
-    pft::P
-    state::S
-    diagnostics::D
-    model_parameters::M
-    config::C
-    simulated_days::Int
+    pft::P              # Precision-converted crop functional-type parameters.
+    state::S            # Runtime forcing buffers, prognostic state, process memory, and output.
+    diagnostics::D      # Optional daily C/N/water/energy balance ledgers.
+    model_parameters::M # Precision-consistent global process parameter bundle.
+    config::C           # Backend, precision, domain-selection, and run-option metadata.
+    simulated_days::Int # Number of completed daily time steps in this simulation.
 end
 
 const _SIMULATION_STATE_PROPERTIES = (

@@ -159,7 +159,7 @@ function daily_crop_C3!(start_day, end_day,
             record_thermal_balance!(thermal_balance, diagnostic_day, soil)
         end
 
-        apar_crop!(pftparameters, crop, pet) # crop absorbed photosynthetic radiation
+        apar_crop!(pftparameters, crop, pet, soil.snow.height) # crop absorbed photosynthetic radiation
         temp_stress(
             pftparameters, pet, crop, dailyWeather.temp;
             photoparams = photo_params,
@@ -192,7 +192,8 @@ function daily_crop_C3!(start_day, end_day,
 
         # crop respiration and carbon allocation
         crop_carbon!(
-            crop, output, pftparameters, dailyWeather.temp;
+            crop, output, pftparameters, dailyWeather.temp,
+            soil.thermal.temperature;
             output_row = output_row,
             lpjmlparams = global_params,
         )

@@ -14,10 +14,10 @@ function phenology_crop!(crop::Crop,
     launch_1D!(
         phenology_kernel!,
         climbuf_V_req,
-        crop.state.phenology.phu,
+        crop.auxiliary.phenology.phu,
         crop.state.phenology.vdsum,
         crop.state.phenology.husum,
-        crop.state.phenology.fphu,
+        crop.auxiliary.phenology.fphu,
         crop.auxiliary.canopy.flaimax,
         crop.state.phenology.senescence,
         crop.state.phenology.senescence_previous,
@@ -25,7 +25,7 @@ function phenology_crop!(crop::Crop,
         crop.state.phenology.harvesting_previous,
         crop.state.phenology.growing_days,
         crop.state.phenology.is_growing,
-        crop.state.phenology.winter_type,
+        crop.auxiliary.phenology.winter_type,
         temp,
         daylength,
         PFT
@@ -99,7 +99,9 @@ end
             end
 
             #Response to photoperiodism (still inactive, yet. This means that PFT.psens == 1 for all crops)
-            if crop_fphu[cell] <= fphusen
+            previous_fphu = crop_phu[cell] > zero(T) ?
+                min(one(T), crop_husum[cell] / crop_phu[cell]) : zero(T)
+            if previous_fphu <= fphusen
                 prf = (one(T) - psens) * min(one(T), max(zero(T), (daylength[cell] - pb) / (ps - pb))) + psens
             else
                 prf = one(T)
@@ -126,6 +128,11 @@ end
             crop_harvesting[cell] = true
         end
 
+        # `fphu` is a diagnostic cache: its process value is fully determined
+        # by the prognostic heat sum and fixed PHU requirement.
+        crop_fphu[cell] = crop_phu[cell] > zero(T) ?
+            min(one(T), crop_husum[cell] / crop_phu[cell]) : zero(T)
+
         if(crop_growingdays[cell] == hlimit)
             crop_harvesting[cell] = true
         end
@@ -134,6 +141,8 @@ end
         crop_husum[cell] = zero(T)
         crop_fphu[cell] = zero(T)
         crop_senescence[cell] = false
+        crop_harvesting[cell] = false
+        crop_harvesting_previous[cell] = false
         crop_growingdays[cell] = 0
         crop_flaimax[cell] = zero(T)
     end

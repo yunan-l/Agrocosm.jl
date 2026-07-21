@@ -7,10 +7,8 @@ using Test
     fast_shift = Float32[0.40, 0.25, 0.15, 0.10, 0.10]
     slow_shift = Float32[0.55, 0.20, 0.10, 0.10, 0.05]
 
-    soil.carbon.shift_fast[:, 1] .= fast_shift
-    soil.carbon.shift_slow[:, 1] .= slow_shift
-    soil.nitrogen.shift_fast[:, 1] .= fast_shift
-    soil.nitrogen.shift_slow[:, 1] .= slow_shift
+    soil.decomposition.shift_fast[:, 1] .= fast_shift
+    soil.decomposition.shift_slow[:, 1] .= slow_shift
     soil.carbon.litter[Agrocosm.ROOT_LITTER, 1] = 10.0f0
     soil.nitrogen.litter[Agrocosm.ROOT_LITTER, 1] = 0.4f0
     soil.carbon.litter_response .= 0.0f0
@@ -25,8 +23,8 @@ using Test
     soil.nitrogen.ammonium .= 0.2f0
     soil.nitrogen.nitrate .= 0.1f0
 
-    @test sum(soil.carbon.shift_fast; dims = 1)[1] ≈ 1.0f0
-    @test sum(soil.carbon.shift_slow; dims = 1)[1] ≈ 1.0f0
+    @test sum(soil.decomposition.shift_fast; dims = 1)[1] ≈ 1.0f0
+    @test sum(soil.decomposition.shift_slow; dims = 1)[1] ≈ 1.0f0
 
     soil_carbon!(crop, soil)
     soil_nitrogen!(crop, soil; air_temperature = Float32[10], wind_speed = Float32[1.5])

@@ -14,7 +14,7 @@ function cultivate_reference!(crop::Crop,
 )
 
     T = eltype(crop.state.canopy.lai)
-    sowing = crop.state.calendar.sowing_date .== day
+    sowing = crop.auxiliary.calendar.sowing_date .== day
     seed_flaimax = T(0.000083)
     seed_lai = seed_flaimax * T(laimax)
     crop.state.phenology.harvesting .= ifelse.(sowing, false, crop.state.phenology.harvesting)
@@ -24,10 +24,13 @@ function cultivate_reference!(crop::Crop,
     # LPJmL allocates a fresh Pftcrop at every cultivation. Agrocosm keeps a
     # persistent struct for GPU execution, so sowing must explicitly reproduce
     # the seasonal part of new_crop() without clearing soil or annual outputs.
-    for field in (:vdsum, :husum, :fphu)
+    for field in (:vdsum, :husum)
         values = getproperty(crop.state.phenology, field)
         values .= ifelse.(sowing, zero(T), values)
     end
+    crop.auxiliary.phenology.fphu .= ifelse.(
+        sowing, zero(T), crop.auxiliary.phenology.fphu,
+    )
     crop.state.phenology.senescence .= ifelse.(sowing, false, crop.state.phenology.senescence)
     crop.state.phenology.senescence_previous .= ifelse.(sowing, false, crop.state.phenology.senescence_previous)
     crop.state.phenology.harvesting_previous .= ifelse.(sowing, false, crop.state.phenology.harvesting_previous)
@@ -37,7 +40,6 @@ function cultivate_reference!(crop::Crop,
     crop.auxiliary.canopy.flaimax .= ifelse.(sowing, seed_flaimax, crop.auxiliary.canopy.flaimax)
     crop.state.canopy.laimax_adjusted .= ifelse.(sowing, one(T), crop.state.canopy.laimax_adjusted)
     crop.state.canopy.lai_npp_deficit .= ifelse.(sowing, zero(T), crop.state.canopy.lai_npp_deficit)
-    crop.auxiliary.canopy.phenology_fraction .= ifelse.(sowing, seed_flaimax, crop.auxiliary.canopy.phenology_fraction)
     crop.state.carbon.biomass .= ifelse.(sowing, T(20), crop.state.carbon.biomass)
     crop.state.carbon.root .= ifelse.(sowing, T(8), crop.state.carbon.root)
     crop.state.carbon.leaf .= ifelse.(sowing, T(0.0113804), crop.state.carbon.leaf)
@@ -54,17 +56,16 @@ function cultivate_reference!(crop::Crop,
     crop.auxiliary.stress.nitrogen_deficit .= ifelse.(
         sowing, zero(T), crop.auxiliary.stress.nitrogen_deficit,
     )
-    crop.auxiliary.stress.nitrogen .= ifelse.(sowing, one(T), crop.auxiliary.stress.nitrogen)
+    crop.state.nitrogen.sufficiency .= ifelse.(sowing, one(T), crop.state.nitrogen.sufficiency)
 
-    for field in (:demand_sum, :supply_sum, :waterlogging_days)
+    for field in (:demand_sum, :supply_sum)
         values = getproperty(crop.state.water, field)
         values .= ifelse.(sowing, zero(T), values)
     end
     crop.auxiliary.stress.water_deficit .= ifelse.(
         sowing, zero(T), crop.auxiliary.stress.water_deficit,
     )
-    crop.auxiliary.stress.water .= ifelse.(sowing, one(T), crop.auxiliary.stress.water)
-    crop.auxiliary.stress.waterlogging .= ifelse.(sowing, one(T), crop.auxiliary.stress.waterlogging)
+    crop.state.water.sufficiency .= ifelse.(sowing, one(T), crop.state.water.sufficiency)
 
     # Daily fluxes and diagnostics (NPP, respiration, uptake, demand, current
     # management input, and harvest export) are intentionally not reset here:
@@ -92,14 +93,14 @@ function cultivate!(crop::Crop,
     T = eltype(crop.state.canopy.lai)
     launch_1D!(
         cultivate_kernel!,
-        crop.state.calendar.sowing_date,
+        crop.auxiliary.calendar.sowing_date,
         crop.events.sowing,
         crop.state.phenology.harvesting,
         crop.state.phenology.harvesting_previous,
         crop.state.phenology.is_growing,
         crop.state.phenology.vdsum,
         crop.state.phenology.husum,
-        crop.state.phenology.fphu,
+        crop.auxiliary.phenology.fphu,
         crop.state.phenology.senescence,
         crop.state.phenology.senescence_previous,
         crop.state.phenology.growing_days,
@@ -107,7 +108,6 @@ function cultivate!(crop::Crop,
         crop.auxiliary.canopy.flaimax,
         crop.state.canopy.laimax_adjusted,
         crop.state.canopy.lai_npp_deficit,
-        crop.auxiliary.canopy.phenology_fraction,
         crop.state.carbon.biomass,
         crop.state.carbon.root,
         crop.state.carbon.leaf,
@@ -122,14 +122,12 @@ function cultivate!(crop::Crop,
         crop.state.nitrogen.pending_manure,
         crop.state.nitrogen.pending_fertilizer,
         crop.state.nitrogen.stress_sum,
-        crop.auxiliary.stress.nitrogen,
+        crop.state.nitrogen.sufficiency,
         crop.auxiliary.stress.nitrogen_deficit,
         crop.auxiliary.stress.water_deficit,
         crop.state.water.demand_sum,
         crop.state.water.supply_sum,
-        crop.auxiliary.stress.water,
-        crop.state.water.waterlogging_days,
-        crop.auxiliary.stress.waterlogging,
+        crop.state.water.sufficiency,
         T(0.000083),
         T(0.000083) * T(laimax),
         day,
@@ -159,7 +157,6 @@ end
     flaimax::AbstractVector{T},
     laimax_adjusted::AbstractVector{T},
     lai_npp_deficit::AbstractVector{T},
-    phenology_fraction::AbstractVector{T},
     biomass::AbstractVector{T},
     root::AbstractVector{T},
     leaf::AbstractVector{T},
@@ -180,8 +177,6 @@ end
     water_demand_sum::AbstractVector{T},
     water_supply_sum::AbstractVector{T},
     water_stress::AbstractVector{T},
-    waterlogging_days::AbstractVector{T},
-    waterlogging_stress::AbstractVector{T},
     seed_flaimax::T,
     seed_lai::T,
     day::Integer,
@@ -203,7 +198,6 @@ end
         flaimax[cell] = seed_flaimax
         laimax_adjusted[cell] = one(T)
         lai_npp_deficit[cell] = zero(T)
-        phenology_fraction[cell] = seed_flaimax
         biomass[cell] = T(20)
         root[cell] = T(8)
         leaf[cell] = T(0.0113804)
@@ -224,8 +218,6 @@ end
         water_demand_sum[cell] = zero(T)
         water_supply_sum[cell] = zero(T)
         water_stress[cell] = one(T)
-        waterlogging_days[cell] = zero(T)
-        waterlogging_stress[cell] = one(T)
     else
         seed_input[cell] = zero(T)
     end

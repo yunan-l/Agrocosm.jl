@@ -13,7 +13,7 @@ function nitrogen_uptake_fixture(device = identity)
     crop.state.nitrogen.root .= 0.0f0
     crop.auxiliary.stress.nitrogen_demand_leaf .= 0.4f0
     crop.auxiliary.stress.nitrogen_demand_total .= 1.0f0
-    crop.auxiliary.stress.root_distribution .= device(Float32[0.5, 0.3, 0.2, 0.0, 0.0])
+    crop.auxiliary.root.distribution .= device(Float32[0.5, 0.3, 0.2, 0.0, 0.0])
 
     soil.water.relative_content .= 1.0f0
     soil.water.saturation_fraction .= 0.4f0
@@ -57,7 +57,7 @@ end
     @test crop.fluxes.nitrogen.uptake[1] ≈ plant_gain atol = 1.0f-6
     @test plant_gain ≈ soil_loss + crop.fluxes.nitrogen.auto_fertilizer[1] atol = 1.0f-6
     @test crop.fluxes.nitrogen.auto_fertilizer[1] >= 0.0f0
-    @test crop.auxiliary.stress.nitrogen[1] == 1.0f0
+    @test crop.state.nitrogen.sufficiency[1] == 1.0f0
 end
 
 @testset "Nitrogen uptake respects remaining plant demand" begin

@@ -17,18 +17,17 @@ CUDA.allowscalar(false)
     output = init_output(cell_size, CuArray)
     nitrogen_balance = init_nitrogen_balance(3, cell_size, CuArray)
 
-    @test crop.state.phenology.phu isa CuArray{Float32, 1}
+    @test crop.auxiliary.phenology.phu isa CuArray{Float32, 1}
     @test crop.state.phenology.is_growing isa CuArray{Int32, 1}
     @test all(Array(crop.state.phenology.is_growing) .== Int32(0))
     @test crop.state.canopy.lai isa CuArray{Float32, 1}
     @test crop.state.carbon.leaf isa CuArray{Float32, 1}
-    @test crop.workspace.respiration_temperature_response isa CuArray{Float32, 1}
+    @test isempty(fieldnames(typeof(crop.workspace)))
     @test crop.state.nitrogen.total isa CuArray{Float32, 1}
     @test crop.fluxes.nitrogen.seed_input isa CuArray{Float32, 1}
     @test crop.fluxes.nitrogen.harvest_export isa CuArray{Float32, 1}
     @test crop.fluxes.water.transpiration_layer isa CuArray{Float32, 2}
-    @test crop.auxiliary.stress.root_zone_water isa CuArray{Float32, 1}
-    @test crop.state.calendar.sowing_date isa CuArray{Int32, 1}
+    @test crop.auxiliary.calendar.sowing_date isa CuArray{Int32, 1}
     @test managed_land.latitude isa CuArray{Float32, 1}
     @test crop.fluxes.carbon.gross_assimilation isa CuArray{Float32, 1}
     @test soil.properties.sand_fraction isa CuArray{Float32, 2}
@@ -49,6 +48,10 @@ CUDA.allowscalar(false)
     @test soil.nitrogen.litter_to_slow isa CuArray{Float32, 2}
     @test soil.nitrogen.leaching isa CuArray{Float32, 1}
     @test soil.decomposition.response isa CuArray{Float32, 2}
+    @test soil.decomposition.shift_fast isa CuArray{Float32, 2}
+    @test soil.decomposition.shift_slow isa CuArray{Float32, 2}
+    @test !hasproperty(soil.carbon, :shift_fast)
+    @test !hasproperty(soil.nitrogen, :shift_fast)
     @test soil.decomposition.layer_scratch_1 isa CuArray{Float32, 2}
     @test soil.decomposition.surface_scratch_1 isa CuArray{Float32, 1}
     @test soil.management.tillage_fraction isa CuArray{Float32, 2}
@@ -61,6 +64,8 @@ CUDA.allowscalar(false)
     @test output.soil.water_storage isa CuArray{Float32, 2}
     @test output.climate.temperature isa CuArray{Float32, 2}
     @test output.calendar.harvest_date isa CuArray{Int32, 2}
+    @test output.annual.yield isa CuArray{Float32, 1}
+    @test output.annual.harvest_date isa CuArray{Int32, 1}
     @test nitrogen_balance.residual isa CuArray{Float32, 2}
 
     @test size(crop.state.carbon.leaf) == (cell_size,)
@@ -85,8 +90,6 @@ CUDA.allowscalar(false)
 
     Agrocosm.initialize_soil_c_shift!(soil, (u0 = nothing,), :lpjml_initsoil)
     expected_shift = Float32[0.55, 0.1125, 0.1125, 0.1125, 0.1125]
-    @test Array(soil.carbon.shift_fast) == repeat(expected_shift, 1, cell_size)
-    @test Array(soil.carbon.shift_slow) == repeat(expected_shift, 1, cell_size)
-    @test Array(soil.nitrogen.shift_fast) == Array(soil.carbon.shift_fast)
-    @test Array(soil.nitrogen.shift_slow) == Array(soil.carbon.shift_slow)
+    @test Array(soil.decomposition.shift_fast) == repeat(expected_shift, 1, cell_size)
+    @test Array(soil.decomposition.shift_slow) == repeat(expected_shift, 1, cell_size)
 end

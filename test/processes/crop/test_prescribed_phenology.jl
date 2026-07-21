@@ -6,15 +6,17 @@ using Test
     soil = init_soil(1, soilparams.soildepth, identity)
     output = init_output(1, identity)
     managed_land = init_managed_land(1, identity)
-    crop.state.calendar.sowing_date .= Int32(100)
-    crop.state.phenology.phu .= 543.0f0
+    crop.auxiliary.calendar.sowing_date .= Int32(100)
+    crop.auxiliary.phenology.phu .= 543.0f0
     temperature = Float32[15]
     daylength = Float32[12]
     vernalization_requirement = Float32[0]
     senescence_days = Int[]
     harvest_days = Int[]
 
-    for day in 100:137
+    # Include the first fallow day so existing inactive branches clear the
+    # reusable GPU state without a separate retirement kernel.
+    for day in 100:138
         cultivate!(
         crop, managed_land, soil, day;
             apply_prescribed_fertilizer = false,
@@ -32,9 +34,9 @@ using Test
     # Senescence starts on the first daily increment crossing fphusen. Thirty-
     # seven increments reach PHU; LPJmL harvests from the prior husum on day 38.
     @test first(senescence_days) == 100 + senescence_increment - 1
-    @test crop.state.phenology.fphu[1] == 1.0f0
+    @test crop.auxiliary.phenology.fphu[1] == 0.0f0
     @test harvest_days == [137]
-    @test crop.state.calendar.harvest_date[1] == 137
-    @test crop.state.phenology.growing_days[1] == 38
+    @test output.annual.harvest_date[1] == 137
+    @test crop.state.phenology.growing_days[1] == 0
     @test crop.state.phenology.is_growing[1] == 0
 end

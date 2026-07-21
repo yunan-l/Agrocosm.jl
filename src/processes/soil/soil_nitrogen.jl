@@ -28,9 +28,9 @@ function soil_nitrogen_reference!(crop::Crop,
         soil.nitrogen.decomposed_litter[1, :] .+
         soil.nitrogen.decomposed_litter[2, :] .+
         soil.nitrogen.decomposed_litter[3, :]
-    soil.nitrogen.litter_to_fast .= soil.nitrogen.shift_fast .*
+    soil.nitrogen.litter_to_fast .= soil.decomposition.shift_fast .*
         reshape(decomposed_litter, 1, :) .* fastfrac .* (1.0f0 - atmfrac)
-    soil.nitrogen.litter_to_slow .= soil.nitrogen.shift_slow .*
+    soil.nitrogen.litter_to_slow .= soil.decomposition.shift_slow .*
         reshape(decomposed_litter, 1, :) .* (1.0f0 - fastfrac) .* (1.0f0 - atmfrac)
 
     # soil.nitrogen.decomposed_fast = (1.0f0 .- exp.(-soil.response_fastn .* response / 50)) .* soil.nitrogen.fast
@@ -61,8 +61,8 @@ function soil_nitrogen_decomposition!(soil::Soil;
                                       lpjmlparams::LPJmLParams = lpjmlparams,
                                       soil_decomp_params::SoilDecompParams = soil_decomp_params,
                                       litter_rate = soil.nitrogen.litter_response,
-                                      shift_fast = soil.nitrogen.shift_fast,
-                                      shift_slow = soil.nitrogen.shift_slow)
+                                      shift_fast = soil.decomposition.shift_fast,
+                                      shift_slow = soil.decomposition.shift_slow)
     T = eltype(soil.nitrogen.litter)
     launch_custom!(
         soil_nitrogen_decomposition_kernel!,
@@ -107,14 +107,14 @@ function soil_cn_decomposition!(soil::Soil;
         lpjmlparams = lpjmlparams,
         soil_decomp_params = soil_decomp_params,
         litter_rate = soil.carbon.litter_response,
-        shift_fast = soil.carbon.shift_fast,
-        shift_slow = soil.carbon.shift_slow,
+        shift_fast = soil.decomposition.shift_fast,
+        shift_slow = soil.decomposition.shift_slow,
     )
     mineralize_nitrify!(
         soil;
         lpjmlparams = lpjmlparams,
-        shift_fast = soil.carbon.shift_fast,
-        shift_slow = soil.carbon.shift_slow,
+        shift_fast = soil.decomposition.shift_fast,
+        shift_slow = soil.decomposition.shift_slow,
     )
     return nothing
 end

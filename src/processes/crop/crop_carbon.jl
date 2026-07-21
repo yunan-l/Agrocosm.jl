@@ -6,14 +6,15 @@ Run the daily crop carbon process chain: respiration, allocation, and phenology 
 function crop_carbon!(crop::Crop,
                       output::Output,
                       PFT::PftParameters,
-                      temp::AbstractArray{T};
+                      air_temperature::AbstractVector{T},
+                      soil_temperature::AbstractMatrix{T};
                       output_row::Union{Nothing, Integer} = nothing,
                       lpjmlparams::LPJmLParams = lpjmlparams,
 ) where {T <: AbstractFloat} # directly translated from LPJmL
 
     # compute crop respiration
     respiration!(
-        crop, PFT, temp,
+        crop, PFT, air_temperature, soil_temperature,
         crop.fluxes.carbon.gross_assimilation,
         crop.fluxes.carbon.leaf_respiration;
         lpjmlparams = lpjmlparams,
@@ -30,8 +31,8 @@ function crop_carbon!(crop::Crop,
         vcmax = crop.auxiliary.photosynthesis.vcmax,
         nitrogen_limitation = crop.auxiliary.photosynthesis.nitrogen_limitation,
         respiration = crop.fluxes.carbon.respiration,
-        lai = crop.state.canopy.lai,
-        fphu = crop.state.phenology.fphu,
+        lai = crop.auxiliary.canopy.actual_lai,
+        fphu = crop.auxiliary.phenology.fphu,
         biomass = crop.state.carbon.biomass,
     )
     for (field, source) in pairs(sources)

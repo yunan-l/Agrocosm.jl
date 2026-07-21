@@ -39,7 +39,7 @@ From the following day until sowing, active crop C/N stocks, phenology sums,
 LAI, photosynthetic fluxes, and seasonal water/N accumulators are zero. Static
 configuration (`phu`, root distribution and seed-organ templates) remains
 allocated. Bare-soil albedo, root-zone soil water, temperature response and the
-neutral waterlogging multiplier are environmental diagnostics/workspace rather
+environmental response factors are diagnostics/workspace rather
 than living-crop stocks and therefore need not be zero.
 
 ## Input safety

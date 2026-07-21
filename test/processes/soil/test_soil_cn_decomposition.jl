@@ -15,14 +15,10 @@ function initialize_soil_cn_case(litter_cn::T; mineral_n::T = T(2)) where {T <: 
 
     soil.carbon.litter_response .= T(0.08)
     soil.nitrogen.litter_response .= T(0.08)
-    soil.carbon.shift_fast .= zero(T)
-    soil.carbon.shift_slow .= zero(T)
-    soil.nitrogen.shift_fast .= zero(T)
-    soil.nitrogen.shift_slow .= zero(T)
-    soil.carbon.shift_fast[1, 1] = one(T)
-    soil.carbon.shift_slow[1, 1] = one(T)
-    soil.nitrogen.shift_fast[1, 1] = one(T)
-    soil.nitrogen.shift_slow[1, 1] = one(T)
+    soil.decomposition.shift_fast .= zero(T)
+    soil.decomposition.shift_slow .= zero(T)
+    soil.decomposition.shift_fast[1, 1] = one(T)
+    soil.decomposition.shift_slow[1, 1] = one(T)
 
     soil.thermal.temperature .= T(10)
     soil.surface_litter.temperature .= T(10)
@@ -50,13 +46,10 @@ mineral_nitrogen(soil) = sum(soil.nitrogen.ammonium) + sum(soil.nitrogen.nitrate
         carbon_before = sum(soil.carbon.litter) + sum(soil.carbon.fast) + sum(soil.carbon.slow)
         nitrogen_before = organic_nitrogen(soil) + mineral_nitrogen(soil)
 
-        # The coupled path must use LPJmL's single litter decay rate and
-        # c_shift source even if a duplicated legacy N field is inconsistent.
+        # The coupled path uses one shared c_shift configuration for C and N.
         soil.nitrogen.litter_response .= 0.5f0
-        soil.nitrogen.shift_fast .= 0.0f0
-        soil.nitrogen.shift_slow .= 0.0f0
-        soil.nitrogen.shift_fast[2, 1] = 1.0f0
-        soil.nitrogen.shift_slow[2, 1] = 1.0f0
+        @test !hasproperty(soil.carbon, :shift_fast)
+        @test !hasproperty(soil.nitrogen, :shift_fast)
 
         soil_cn_decomposition!(soil)
 

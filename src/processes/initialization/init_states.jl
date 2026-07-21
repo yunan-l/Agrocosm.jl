@@ -95,16 +95,16 @@ function init_states!(PFT::PftParameters,
     climbuf = init_climbuf(T, cell_size, device)
     crop = init_crop(T, cell_size, device)
     managed_land = init_managed_land(T, cell_size, device)
-    crop.state.phenology.phu = to_float(phu)
+    crop.auxiliary.phenology.phu = to_float(phu)
     rootdist = root_distribution(T(beta_root))
-    # idx = crop.state.phenology.phu .< 0
-    # crop.state.phenology.winter_type[idx] .= true
-    # crop.state.phenology.phu[idx] .= -crop.state.phenology.phu[idx]
-    crop.state.phenology.winter_type .= ifelse.(crop.state.phenology.phu .< 0, true, crop.state.phenology.winter_type)
-    crop.state.phenology.phu .= ifelse.(crop.state.phenology.phu .< 0, -crop.state.phenology.phu, crop.state.phenology.phu)
-    crop.auxiliary.stress.root_distribution .= device(rootdist)
+    # idx = crop.auxiliary.phenology.phu .< 0
+    # crop.auxiliary.phenology.winter_type[idx] .= true
+    # crop.auxiliary.phenology.phu[idx] .= -crop.auxiliary.phenology.phu[idx]
+    crop.auxiliary.phenology.winter_type .= ifelse.(crop.auxiliary.phenology.phu .< 0, true, crop.auxiliary.phenology.winter_type)
+    crop.auxiliary.phenology.phu .= ifelse.(crop.auxiliary.phenology.phu .< 0, -crop.auxiliary.phenology.phu, crop.auxiliary.phenology.phu)
+    crop.auxiliary.root.distribution .= device(rootdist)
 
-    crop.state.calendar.sowing_date = to_integer(sdate)
+    crop.auxiliary.calendar.sowing_date = to_integer(sdate)
     managed_land.manure = to_float(manure)
     managed_land.fertilizer = to_float(fertilizer)
     managed_land.residue_fraction = to_float(residuefrac)
@@ -164,33 +164,29 @@ function initialize_soil_c_shift!(soil::Soil,
                                   model_state::NamedTuple,
                                   strategy::Symbol)
     if strategy === :lpjml_initsoil
-        layers = size(soil.carbon.shift_fast, 1)
+        layers = size(soil.decomposition.shift_fast, 1)
         layers > 1 || throw(ArgumentError("LPJmL c_shift initialization requires at least two soil layers"))
-        T = eltype(soil.carbon.shift_fast)
+        T = eltype(soil.decomposition.shift_fast)
         lower_layer_fraction = T(0.45) / T(layers - 1)
 
-        fill!(soil.carbon.shift_fast, lower_layer_fraction)
-        fill!(soil.carbon.shift_slow, lower_layer_fraction)
-        soil.carbon.shift_fast[1:1, :] .= T(0.55)
-        soil.carbon.shift_slow[1:1, :] .= T(0.55)
+        fill!(soil.decomposition.shift_fast, lower_layer_fraction)
+        fill!(soil.decomposition.shift_slow, lower_layer_fraction)
+        soil.decomposition.shift_fast[1:1, :] .= T(0.55)
+        soil.decomposition.shift_slow[1:1, :] .= T(0.55)
     elseif strategy === :restart
         hasproperty(model_state, :c_shift_fast) ||
             throw(ArgumentError("c_shift_initialization=:restart requires ModelState.c_shift_fast"))
         hasproperty(model_state, :c_shift_slow) ||
             throw(ArgumentError("c_shift_initialization=:restart requires ModelState.c_shift_slow"))
-        size(model_state.c_shift_fast) == size(soil.carbon.shift_fast) ||
+        size(model_state.c_shift_fast) == size(soil.decomposition.shift_fast) ||
             throw(DimensionMismatch("c_shift_fast must match the soil layer-by-cell shape"))
-        size(model_state.c_shift_slow) == size(soil.carbon.shift_slow) ||
+        size(model_state.c_shift_slow) == size(soil.decomposition.shift_slow) ||
             throw(DimensionMismatch("c_shift_slow must match the soil layer-by-cell shape"))
-        soil.carbon.shift_fast .= model_state.c_shift_fast
-        soil.carbon.shift_slow .= model_state.c_shift_slow
+        soil.decomposition.shift_fast .= model_state.c_shift_fast
+        soil.decomposition.shift_slow .= model_state.c_shift_slow
     else
         throw(ArgumentError("unknown c_shift initialization strategy: $strategy"))
     end
 
-    # Carbon and nitrogen use the same fixed routing distribution. Keep it
-    # separate from fastfrac and atmfrac, which belong to the daily fluxes.
-    soil.nitrogen.shift_fast .= soil.carbon.shift_fast
-    soil.nitrogen.shift_slow .= soil.carbon.shift_slow
     return nothing
 end

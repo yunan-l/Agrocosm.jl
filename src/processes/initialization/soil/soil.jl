@@ -1,14 +1,14 @@
 """Process-grouped soil state with CPU/GPU-compatible array leaves."""
 mutable struct Soil{P, W, T, C, N, D, G, L, S}
-    properties::P
-    water::W
-    thermal::T
-    carbon::C
-    nitrogen::N
-    decomposition::D
-    management::G
-    surface_litter::L
-    snow::S
+    properties::P     # Static soil texture, pH, and layer geometry.
+    water::W          # Layer water/ice stocks, hydraulic properties, and daily water fluxes.
+    thermal::T        # Layer temperature, enthalpy, phase state, and energy fluxes.
+    carbon::C         # Litter and soil organic-carbon pools and decomposition fluxes.
+    nitrogen::N       # Mineral/organic nitrogen pools and transformation fluxes.
+    decomposition::D  # Environmental responses, fixed C/N routing configuration, and workspace.
+    management::G     # Tillage and bioturbation routing/diagnostics.
+    surface_litter::L # Above-ground litter hydrological and thermal state.
+    snow::S           # Snow water stock and current-day snow fluxes.
 end
 
 init_soil(cell_size::Int, soildepth::AbstractArray{T}, device; kwargs...) where {T <: AbstractFloat} =

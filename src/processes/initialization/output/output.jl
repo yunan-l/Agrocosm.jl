@@ -1,59 +1,66 @@
 """Time-series outputs for crop processes."""
 mutable struct CropOutput{A, I, M}
-    gpp::A
-    npp::A
-    lambda::A
-    potential_vcmax::A
-    vcmax::A
-    nitrogen_limitation::A
-    respiration::A
-    biomass::A
-    lai::A
-    storage_carbon::A
-    yield::A
-    vegetation_carbon::M
-    vegetation_nitrogen::M
-    fphu::A
-    water_deficit::A
-    growing_mask::I
+    gpp::A                 # Daily gross primary production (gC m⁻² day⁻¹).
+    npp::A                 # Daily net primary production after all plant respiration (gC m⁻² day⁻¹).
+    lambda::A              # Optimal intercellular-to-ambient CO₂ ratio used by photosynthesis (0–1).
+    potential_vcmax::A     # Water- and N-unlimited maximum carboxylation capacity (gC m⁻² day⁻¹).
+    vcmax::A               # Realized maximum carboxylation capacity after limitations (gC m⁻² day⁻¹).
+    nitrogen_limitation::A # Realized-to-potential `vcmax` ratio (0–1).
+    respiration::A         # Total plant maintenance plus growth respiration (gC m⁻² day⁻¹).
+    biomass::A             # Total live crop carbon stock (gC m⁻²).
+    lai::A                 # Actual nonnegative leaf-area index (m² leaf m⁻² ground).
+    storage_carbon::A      # Carbon in the harvestable storage organ (gC m⁻²).
+    yield::A               # Annual harvested storage-organ carbon (gC m⁻² yr⁻¹).
+    vegetation_carbon::M   # Daily leaf/root/pool/storage carbon stocks (gC m⁻²).
+    vegetation_nitrogen::M # Daily leaf/root/pool/storage nitrogen contents (gN m⁻²).
+    fphu::A                # Fraction of potential heat units accumulated (0–1+).
+    water_deficit::A       # Daily crop water-deficit factor (0–1).
+    growing_mask::I        # Integer mask: one while a crop stand is active, otherwise zero.
 end
 
 """Time-series outputs for soil stocks and fluxes."""
 mutable struct SoilOutput{A, M}
-    ecosystem_respiration::A
-    litter_carbon::M
-    fast_carbon::M
-    slow_carbon::M
-    water_storage::M
-    litter_nitrogen::M
-    fast_nitrogen::M
-    slow_nitrogen::M
-    heterotrophic_respiration::A
-    evapotranspiration::A
+    ecosystem_respiration::A   # Plant plus heterotrophic respiration (gC m⁻² day⁻¹).
+    litter_carbon::M           # Carbon stocks in surface/incorporated/root litter (gC m⁻²).
+    fast_carbon::M             # Fast soil-organic-carbon stock by layer (gC m⁻²).
+    slow_carbon::M             # Slow soil-organic-carbon stock by layer (gC m⁻²).
+    water_storage::M           # Liquid soil-water storage by layer (mm).
+    litter_nitrogen::M         # Nitrogen stocks in the three litter classes (gN m⁻²).
+    fast_nitrogen::M           # Fast soil-organic-nitrogen stock by layer (gN m⁻²).
+    slow_nitrogen::M           # Slow soil-organic-nitrogen stock by layer (gN m⁻²).
+    heterotrophic_respiration::A # Litter and soil respiration (gC m⁻² day⁻¹).
+    evapotranspiration::A      # Soil evaporation plus crop transpiration (mm day⁻¹).
 end
 
 """Time-series outputs for climate forcing and potential evaporation."""
 mutable struct ClimateOutput{A}
-    equilibrium_evapotranspiration::A
-    precipitation::A
-    temperature::A
+    equilibrium_evapotranspiration::A # Priestley–Taylor equilibrium evaporation demand (mm day⁻¹).
+    precipitation::A                 # Daily precipitation forcing (mm day⁻¹).
+    temperature::A                   # Daily near-surface air temperature forcing (°C).
 end
 
 """Time-series crop calendar diagnostics."""
 mutable struct CalendarOutput{I}
-    harvesting_mask::I
-    harvesting_year::I
-    harvest_date::I
-    sowing_event::I
-    harvest_event::I
+    harvesting_mask::I # Daily mask indicating the harvest window/condition.
+    harvesting_year::I # Simulation year associated with each annual harvest record.
+    harvest_date::I    # Day of year of the recorded annual harvest.
+    sowing_event::I    # Daily one-day sowing event indicator (0/1).
+    harvest_event::I   # Daily one-day harvest event indicator (0/1).
+end
+
+"""In-progress annual crop outputs retained until the calendar-year boundary."""
+mutable struct AnnualOutputAccumulator{A, I}
+    yield::A        # Harvested storage carbon accumulated in the current output year (gC m⁻²).
+    harvest_date::I # Latest harvest day in the current output year (1–365; 0 if absent).
 end
 
 """Process-grouped model output container."""
-mutable struct Output{C, S, F, K}
-    crop::C
-    soil::S
-    climate::F
-    calendar::K
+mutable struct Output{C, S, F, K, A}
+    crop::C     # Crop daily and annual output time series.
+    soil::S     # Soil stock and flux output time series.
+    climate::F  # Selected climate-forcing output time series.
+    calendar::K # Sowing and harvest calendar output time series.
+    annual::A   # In-progress annual output records required before year-end emission.
 end
 
 init_output(cell_size::Int, device; kwargs...) =
@@ -95,7 +102,10 @@ function init_output(::Type{T},
         integer_output(), integer_output(), integer_output(),
         integer_output(), integer_output(),
     )
-    return Output(crop, soil, climate, calendar)
+    annual = AnnualOutputAccumulator(
+        device(zeros(T, cell_size)), device(zeros(Int32, cell_size)),
+    )
+    return Output(crop, soil, climate, calendar, annual)
 end
 
 """Grow a backend array once for a simulation block, preserving existing rows."""

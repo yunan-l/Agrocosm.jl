@@ -10,23 +10,23 @@ export and heterotrophic respiration are boundary outputs. Residue transfer
 is recorded for inspection but is internal to the tracked system.
 """
 mutable struct CarbonBalance{M <: AbstractArray{<:AbstractFloat}}
-    plant_before::M
-    plant_after::M
-    soil_before::M
-    soil_after::M
-    total_before::M
-    total_after::M
-    net_primary_production::M
-    seed_input::M
-    manure_input::M
-    residue_transfer::M
-    harvest_export::M
-    heterotrophic_respiration::M
-    litter_respiration::M
-    fast_pool_respiration::M
-    slow_pool_respiration::M
-    residual::M
-    relative_residual::M
+    plant_before::M              # Plant C stock at start of day (gC m⁻²).
+    plant_after::M               # Plant C stock at end of day (gC m⁻²).
+    soil_before::M               # Litter plus soil C stock at start of day (gC m⁻²).
+    soil_after::M                # Litter plus soil C stock at end of day (gC m⁻²).
+    total_before::M              # Tracked ecosystem C stock at start of day (gC m⁻²).
+    total_after::M               # Tracked ecosystem C stock at end of day (gC m⁻²).
+    net_primary_production::M    # Plant NPP boundary input (gC m⁻² day⁻¹).
+    seed_input::M                # Seed-carbon boundary input (gC m⁻² day⁻¹).
+    manure_input::M              # Manure-carbon boundary input (gC m⁻² day⁻¹).
+    residue_transfer::M          # Internal crop-to-litter transfer (gC m⁻² day⁻¹).
+    harvest_export::M            # Harvested carbon leaving the system (gC m⁻² day⁻¹).
+    heterotrophic_respiration::M # Total microbial respiration loss (gC m⁻² day⁻¹).
+    litter_respiration::M        # Respiration attributed to litter decomposition (gC m⁻² day⁻¹).
+    fast_pool_respiration::M     # Respiration attributed to fast SOC (gC m⁻² day⁻¹).
+    slow_pool_respiration::M     # Respiration attributed to slow SOC (gC m⁻² day⁻¹).
+    residual::M                  # Absolute daily carbon-budget closure error (gC m⁻²).
+    relative_residual::M         # Carbon residual normalized by daily budget magnitude.
 end
 
 function init_carbon_balance(number_of_days::Integer,
@@ -91,9 +91,7 @@ function record_carbon_balance_after_harvest!(balance::CarbonBalance,
         balance.residue_transfer[day_index, :] .=
             vec(sum(soil.carbon.input; dims = 1))
         balance.harvest_export[day_index, :] .=
-            (crop.state.carbon.storage .+
-             (crop.state.carbon.leaf .+ crop.state.carbon.pool) .* (one(eltype(residue_fraction)) .- residue_fraction)) .*
-            event
+            crop.fluxes.carbon.harvest_export
     end
     return nothing
 end

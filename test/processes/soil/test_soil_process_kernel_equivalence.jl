@@ -110,10 +110,8 @@ function decomposition_fixture(cells = 5)
     soil.carbon.litter_response .= Float32[0.0012, 0.0008, 0.0005]
     soil.nitrogen.litter_response .= Float32[0.0012, 0.0008, 0.0005]
     vertical = Float32[0.35, 0.25, 0.18, 0.13, 0.09]
-    soil.carbon.shift_fast .= reshape(vertical, :, 1)
-    soil.carbon.shift_slow .= reshape(vertical, :, 1)
-    soil.nitrogen.shift_fast .= reshape(vertical, :, 1)
-    soil.nitrogen.shift_slow .= reshape(vertical, :, 1)
+    soil.decomposition.shift_fast .= reshape(vertical, :, 1)
+    soil.decomposition.shift_slow .= reshape(vertical, :, 1)
     soil.nitrogen.ammonium .= 0.4f0
     soil.nitrogen.nitrate .= 0.8f0
     soil.properties.ph .= Float32.(range(5.5, 7.5; length = cells))
