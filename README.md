@@ -51,12 +51,12 @@ Agrocosm currently focuses on daily, gridded simulations of a single crop.
   <tbody>
     <tr>
       <td rowspan="2" align="center" valign="middle"><strong>Crop</strong></td>
-      <td>Carbon and phenology</td>
-      <td>C3/C4 photosynthesis, canopy growth, phenology, carbon allocation, and respiration.</td>
+      <td>Carbon and Nitrogen</td>
+      <td>C3/C4 photosynthesis, carbon allocation, and respiration; nitrogen allocation and uptake.</td>
     </tr>
     <tr>
-      <td>Nitrogen and management</td>
-      <td>Crop N allocation and uptake; cultivation, fertilizer, harvest, and residue transfer.</td>
+      <td>Phenology and management</td>
+      <td>Canopy growth, phenology; cultivation, fertilizer, harvest, and residue transfer.</td>
     </tr>
     <tr>
       <td rowspan="2" align="center" valign="middle"><strong>Soil</strong></td>
