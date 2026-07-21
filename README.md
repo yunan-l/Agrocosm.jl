@@ -2,7 +2,7 @@
 
 [![Build Status](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/CI.yml?query=branch%3Amain)
 
-**A process-based crop modelling framework for differentiable, GPU-accelerated agricultural simulation in Julia.**
+**🧑‍🌾 💧 ☀️ 🌾 🚀 Fast and flexible Julia framework for agricultural ecosystem modelling across scales.**
 
 Agrocosm.jl is a framework for building a new generation of
 process-based crop models. Technically it is a crop-soil model with water, carbon, nitrogen, and energy processes with a numerical design that can run on both CPUs and GPUs. It is easy to use and easy to extend. It is written in Julia to make physically based
@@ -132,17 +132,6 @@ For a GPU simulation, construct inputs on the GPU or set `device = CuArray`
 when calling `initialize_simulation`. The same process code is designed to run
 over a batch of independent grid cells; `indices = [1]` selects one input grid
 cell, while a longer index vector selects a larger batch.
-
-
-## Design principles
-
-### Scientific continuity, not blind replication
-
-LPJmL provides the principal scientific baseline for the current crop-process
-audit. We compare process logic, conservation behaviour, and numerical guards
-where this is informative. However, exact reproduction of every LPJmL internal
-variable is not the objective. Agrocosm favours documented, testable process
-behaviour and makes intentional simplifications explicit.
 
 
 ## Testing
