@@ -19,6 +19,7 @@ CUDA.allowscalar(false)
     slow = reshape(Float32.(range(200, 900; length = 5 * cells)), 5, cells)
     saturation = fill(0.45f0, 5, cells)
     storage = fill(80.0f0, 5, cells)
+    density_factor = reshape(Float32.(range(0.7, 1.0; length = cells)), 1, :)
     for soil in (reference,)
         soil.properties.sand_fraction .= sand
         soil.properties.clay_fraction .= clay
@@ -26,6 +27,7 @@ CUDA.allowscalar(false)
         soil.carbon.slow .= slow
         soil.water.saturation_fraction .= saturation
         soil.water.storage .= storage
+        soil.management.tillage_density_factor .= density_factor
     end
     gpu.properties.sand_fraction .= CuArray(sand)
     gpu.properties.clay_fraction .= CuArray(clay)
@@ -33,6 +35,15 @@ CUDA.allowscalar(false)
     gpu.carbon.slow .= CuArray(slow)
     gpu.water.saturation_fraction .= CuArray(saturation)
     gpu.water.storage .= CuArray(storage)
+    gpu.management.tillage_density_factor .= CuArray(density_factor)
+
+    crop_reference.events.sowing .= Int32.(isodd.(1:cells))
+    crop_gpu.events.sowing .= CuArray(Int32.(isodd.(1:cells)))
+    Agrocosm.tillage_hydraulics_reference!(reference, crop_reference)
+    tillage_hydraulics!(gpu, crop_gpu)
+    synchronize()
+    @test Array(gpu.management.tillage_density_factor) ≈
+        reference.management.tillage_density_factor
 
     Agrocosm.pedotransfer_reference!(reference)
     pedotransfer!(gpu)

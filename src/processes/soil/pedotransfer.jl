@@ -14,7 +14,7 @@ function pedotransfer_reference!(soil::Soil;
     # idx = om_layer .> 8
     # om_layer[idx] .= T(8.0)
     # om_layer .= ifelse.(om_layer .> 8, 8.0, om_layer)
-    om_layer .= min.(om_layer, 8.0f0)
+    om_layer .= clamp.(om_layer, 0.0f0, 8.0f0)
 
     wpwpt = -0.024f0 * soil.properties.sand_fraction + 0.487f0 * soil.properties.clay_fraction .+ 0.006f0 * om_layer + 0.005f0 * (soil.properties.sand_fraction .* om_layer) - 0.013f0 * (soil.properties.clay_fraction .* om_layer) .+ 0.068f0 * (soil.properties.sand_fraction .* soil.properties.clay_fraction) .+ 0.031f0
     soil.water.wilting_fraction .= wpwpt + (0.14 * wpwpt .- 0.02)
@@ -25,20 +25,22 @@ function pedotransfer_reference!(soil::Soil;
     wfct = -0.251f0 * soil.properties.sand_fraction + 0.195f0 * soil.properties.clay_fraction .+ 0.011f0 * om_layer + 0.006f0 * (soil.properties.sand_fraction .* om_layer) - 0.027f0 * (soil.properties.clay_fraction .* om_layer) .+ 0.452f0 * (soil.properties.sand_fraction .* soil.properties.clay_fraction) .+ 0.299f0
     soil.water.field_capacity .= (wfct + (((1.283f0 * wfct) .^ 2) - 0.374f0 * wfct .- 0.015f0))
 
-    soil.water.saturation_fraction .= soil.water.field_capacity + ws33 .- 0.097f0 * soil.properties.sand_fraction .+ 0.043f0
-    soil.water.saturation_storage .= soil.water.saturation_fraction .* soil.properties.layer_depth
+    base_saturation = soil.water.field_capacity + ws33 .-
+        0.097f0 * soil.properties.sand_fraction .+ 0.043f0
+    soil.water.saturation_fraction .= base_saturation
 
-    # here, we ignore the effects of tillage to soil water content at saturation.
-    # if(l < NTILLLAYER)
-    # {
-    #     soil->wsat[l] = 1 - (1-w_sat)*soil->df_tillage[l];
-    #     soil->wfc[l] = w_fc - 0.2 * (w_sat - soil->wsat[l]);
-    # }
-    # else
-    # {
-    #     soil->wsat[l] = w_sat;
-    #     soil->wfc[l] = w_fc;
-    # }
+    # LPJmL tills only the upper soil layer. Lower bulk density increases its
+    # pore volume and slightly shifts field capacity until rainfall settles it.
+    @views begin
+        density_factor = soil.management.tillage_density_factor[1, :]
+        tilled_saturation = one(eltype(base_saturation)) .-
+            (one(eltype(base_saturation)) .- base_saturation[1, :]) .* density_factor
+        soil.water.saturation_fraction[1, :] .= tilled_saturation
+        soil.water.field_capacity[1, :] .-= 0.2f0 .* (
+            base_saturation[1, :] .- tilled_saturation
+        )
+    end
+    soil.water.saturation_storage .= soil.water.saturation_fraction .* soil.properties.layer_depth
 
     # idx = (soil.water.saturation_fraction - soil.water.field_capacity) .< 0.05
     # soil.water.field_capacity[idx] .= soil.water.saturation_fraction[idx] .- 0.05
@@ -78,6 +80,7 @@ function pedotransfer!(soil::Soil;
         soil.water.holding_capacity_fraction,
         soil.water.holding_capacity_storage,
         soil.water.saturated_conductivity,
+        soil.management.tillage_density_factor,
         eltype(soil.water.storage)(lpjmlparams.MINERALDENS),
     )
     partition_soil_water_ice!(soil)
@@ -99,6 +102,7 @@ end
     holding_capacity_fraction::AbstractMatrix{T},
     holding_capacity_storage::AbstractMatrix{T},
     saturated_conductivity::AbstractMatrix{T},
+    tillage_density_factor::AbstractMatrix{T},
     mineral_density::T,
 ) where {T <: AbstractFloat}
     layer, cell = @index(Global, NTuple)
@@ -107,9 +111,10 @@ end
     clay = clay_fraction[1, cell]
     depth = layer_depth[layer]
     previous_saturation = saturation_fraction[layer, cell]
-    organic_matter = min(
+    organic_matter = clamp(
         T(2) * ((fast_carbon[layer, cell] + slow_carbon[layer, cell]) /
         ((one(T) - previous_saturation) * mineral_density * depth)) * T(100),
+        zero(T),
         T(8),
     )
 
@@ -127,7 +132,14 @@ end
         T(0.006) * sand * organic_matter - T(0.027) * clay * organic_matter +
         T(0.452) * sand * clay + T(0.299)
     field = wfct + ((T(1.283) * wfct)^2 - T(0.374) * wfct - T(0.015))
-    saturation = field + ws33 - T(0.097) * sand + T(0.043)
+    base_saturation = field + ws33 - T(0.097) * sand + T(0.043)
+    if layer == 1
+        saturation = one(T) -
+            (one(T) - base_saturation) * tillage_density_factor[1, cell]
+        field -= T(0.2) * (base_saturation - saturation)
+    else
+        saturation = base_saturation
+    end
     field = saturation - field < T(0.05) ? saturation - T(0.05) : field
 
     wilting_fraction[layer, cell] = wilting

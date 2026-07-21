@@ -68,7 +68,7 @@ export evaporation!, soil_infiltration!, soil_evapotranspiration!
 export soil_nitrogen!, nitrogen_transform!, soil_cn_decomposition!, post_crop_nitrogen_losses!
 export soil_decomp_response!
 export update_surface_litter_properties!, surface_litter_interception!
-export litter_tillage!, litter_bioturbation!
+export litter_tillage!, tillage_hydraulics!, litter_bioturbation!
 
 # UNITS
 export deg2rad, ppm2Pa, ppm2bar, hour2day, hour2sec, degCtoK
@@ -149,6 +149,7 @@ include("processes/crop/harvesting.jl")
 
 # Soil
 include("processes/soil/water_ice_pools.jl")
+include("processes/soil/tillage.jl")
 include("processes/soil/pedotransfer.jl")
 include("processes/soil/evaporation.jl")
 include("processes/soil/soil_temp.jl")

@@ -353,6 +353,9 @@ end
         ("soil.nitrogen.slow", cpu.soil.nitrogen.slow, gpu.soil.nitrogen.slow),
         ("soil.nitrogen.nitrate", cpu.soil.nitrogen.nitrate, gpu.soil.nitrogen.nitrate),
         ("soil.nitrogen.ammonium", cpu.soil.nitrogen.ammonium, gpu.soil.nitrogen.ammonium),
+        ("soil.management.tillage_density_factor",
+         cpu.soil.management.tillage_density_factor,
+         gpu.soil.management.tillage_density_factor),
     )
     for (label, cpu_values, gpu_values) in soil_state_fields
         test_float_equivalence(gpu_values, cpu_values; label = label)

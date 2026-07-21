@@ -168,6 +168,8 @@ function infil_perc!(soil::Soil,
                soil.nitrogen.nitrate,
                soil.nitrogen.leaching,
                soil.properties.layer_depth,
+               soil.properties.sand_fraction,
+               soil.management.tillage_density_factor,
                soil.thermal.temperature,
                soil.thermal.percolation_energy,
                soil.thermal.rain_energy_input,
@@ -206,6 +208,8 @@ end
                                     soil_NO3::AbstractArray{M},
                                     soil_n_leaching::AbstractArray{T},
                                     soil_layer_depth::AbstractArray{T},
+                                    soil_sand_fraction::AbstractMatrix{T},
+                                    tillage_density_factor::AbstractMatrix{T},
                                     soil_temperature::AbstractArray{M},
                                     soil_perc_energy::AbstractArray{M},
                                     rain_energy_input::AbstractArray{T},
@@ -435,5 +439,20 @@ end
                              soil_w_outflux[l, cell] -
                              soil_lrunoff[l, cell]
     end
+
+    # Rainfall progressively settles the tilled topsoil back toward its
+    # untilled bulk density. LPJmL applies this after the day's infiltration,
+    # so the updated factor affects hydraulic properties on the next day.
+    top_infiltration = soil_w_influx[1, cell]
+    sand_percent = soil_sand_fraction[1, cell] * T(100)
+    top_depth_m = max(soil_layer_depth[1] * T(0.001), eps(T))
+    settling_index = T(0.2) * top_infiltration * (
+        one(T) + T(2) * sand_percent /
+        (sand_percent + exp(T(8.597) - T(0.075) * sand_percent))
+    ) / top_depth_m^T(0.6)
+    settling_fraction = settling_index /
+        (settling_index + exp(T(3.92) - T(0.0226) * settling_index))
+    tillage_density_factor[1, cell] += settling_fraction *
+        (one(T) - tillage_density_factor[1, cell])
 
 end

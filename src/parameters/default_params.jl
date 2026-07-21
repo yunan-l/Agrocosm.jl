@@ -25,6 +25,7 @@ water, nitrogen, and management process coefficients.
     e0::T = 308.56 # Lloyd–Taylor activation parameter for decomposition (K).
     temp_response::T = 56.02 # Lloyd–Taylor reference-temperature offset (K).
     residue_frac::T = 0.95 # fraction of residues to be submerged by tillage
+    mixing_efficiency::T = 0.9 # Fraction of the full tillage bulk-density change applied per event.
     # LPJmL parameter `bioturbate = 0.5` is an annual transfer fraction.
     # fscanparam.c converts it to the daily fraction used by the process loop.
     bioturbate::T = 1 - (1 - T(0.5))^(T(1) / T(365)) # Daily surface-to-soil litter mixing fraction.

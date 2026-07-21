@@ -11,6 +11,8 @@ using Test
         end
 
         @test position("update_climbuf!") < position("cultivate!")
+        @test position("litter_tillage!") < position("tillage_hydraulics!") <
+              position("pedotransfer!")
         @test position("albedo!") < position("petpar!") < position("snow!")
         @test position("pedotransfer!") <
               position("update_surface_litter_properties!") <

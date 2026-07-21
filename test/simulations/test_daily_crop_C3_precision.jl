@@ -73,6 +73,7 @@ end
     @test all(isfinite, result32.output.crop.npp)
     @test all(isfinite, result64.output.crop.npp)
     @test all(isfinite, result64.soil.thermal.temperature)
+    @test eltype(result64.soil.management.tillage_density_factor) == Float64
     # This compares two numerical precisions, not CPU/GPU execution at one
     # precision. Lambda bisection and nonlinear photosynthesis can amplify
     # rounding differences over successive days, so require the same physical

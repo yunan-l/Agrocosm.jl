@@ -54,10 +54,11 @@ end
         (chunked.soil.nitrogen.slow, continuous.soil.nitrogen.slow),
         (chunked.soil.nitrogen.nitrate, continuous.soil.nitrogen.nitrate),
         (chunked.soil.nitrogen.ammonium, continuous.soil.nitrogen.ammonium),
+        (chunked.soil.management.tillage_density_factor,
+         continuous.soil.management.tillage_density_factor),
     )
         @test chunked_state ≈ continuous_state
     end
     @test event_days(chunked.output.calendar.sowing_event) == [100, 465]
     @test event_days(chunked.output.calendar.harvest_event) == [137, 502]
 end
-

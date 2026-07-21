@@ -164,6 +164,7 @@ each field rather than inferred from the owning struct.
 | `soil.nitrogen.litter` | Organic N in three litter classes | gN m⁻² |
 | `soil.nitrogen.fast` | Fast organic-soil N by layer | gN m⁻² |
 | `soil.nitrogen.slow` | Slow organic-soil N by layer | gN m⁻² |
+| `soil.management.tillage_density_factor` | Tilled-topsoil bulk density relative to settled soil | 0–1 |
 | `soil.surface_litter.dry_matter` | Surface litter dry matter | gDM m⁻² |
 | `soil.surface_litter.depth` | Effective litter thickness | m |
 | `soil.surface_litter.cover` | Fractional litter cover | 0–1 |
@@ -191,7 +192,7 @@ each field rather than inferred from the owning struct.
 |---|---|---|
 | `soil.properties` | `sand_fraction`, `clay_fraction`, `ph`, `layer_depth` | Static forcing/configuration |
 | `soil.water` | `relative_content`, `free_water` | Daily hydraulic diagnostics |
-| `soil.water` | `wilting_fraction`, `wilting_storage`, `field_capacity`, `saturation_fraction`, `saturation_storage`, `beta`, `holding_capacity_fraction`, `holding_capacity_storage`, `saturated_conductivity` | Static/derived hydraulic properties |
+| `soil.water` | `wilting_fraction`, `wilting_storage`, `field_capacity`, `saturation_fraction`, `saturation_storage`, `beta`, `holding_capacity_fraction`, `holding_capacity_storage`, `saturated_conductivity` | Daily derived hydraulic properties; top layer responds to tillage density |
 | `soil.thermal` | `heat_capacity_frozen`, `heat_capacity_unfrozen`, `latent_heat`, `conductivity_frozen`, `conductivity_unfrozen` | Daily thermal properties |
 | `soil.thermal` | `diffusivity_0`, `diffusivity_15` | Static soil-type parameters |
 | `soil.carbon` | `litter_response` | Daily environmental response |

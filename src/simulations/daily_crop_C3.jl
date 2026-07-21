@@ -84,9 +84,10 @@ function daily_crop_C3!(start_day, end_day,
             record_carbon_balance_after_cultivate!(carbon_balance, diagnostic_day, crop)
         end
 
-        # LPJmL tills existing litter at cultivation, then applies the daily
-        # agtop -> agsub bioturbation transfer before surface-litter physics.
+        # LPJmL tills existing litter and loosens the topsoil at cultivation,
+        # then applies daily agtop -> agsub bioturbation.
         litter_tillage!(soil, crop)
+        tillage_hydraulics!(soil, crop; lpjmlparams = global_params)
         litter_bioturbation!(soil; lpjmlparams = global_params)
 
         # Preserve LPJmL's albedo/PET-before-snow ordering: radiation uses the

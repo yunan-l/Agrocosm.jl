@@ -56,6 +56,8 @@ using Test
     @test size(soil.decomposition.layer_scratch_1) == (5, cell_size)
     @test length(soil.decomposition.surface_scratch_1) == cell_size
     @test soil.management isa SoilManagement
+    @test size(soil.management.tillage_density_factor) == (1, cell_size)
+    @test all(isone, soil.management.tillage_density_factor)
     @test soil.surface_litter isa SoilSurfaceLitter
     @test soil.snow isa SoilSnow
     @test size(soil.water.storage) == (5, cell_size)
@@ -107,6 +109,7 @@ end
     @test eltype(soil.thermal.enthalpy) == Float64
     @test eltype(soil.carbon.fast) == Float64
     @test eltype(soil.nitrogen.nitrate) == Float64
+    @test eltype(soil.management.tillage_density_factor) == Float64
     @test eltype(weather.temp) == Float64
     @test eltype(weather.annual_co2) == Float64
     @test eltype(pet.eeq) == Float64

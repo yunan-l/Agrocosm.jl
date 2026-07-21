@@ -55,6 +55,8 @@ CUDA.allowscalar(false)
     @test soil.decomposition.layer_scratch_1 isa CuArray{Float32, 2}
     @test soil.decomposition.surface_scratch_1 isa CuArray{Float32, 1}
     @test soil.management.tillage_fraction isa CuArray{Float32, 2}
+    @test soil.management.tillage_density_factor isa CuArray{Float32, 2}
+    @test all(Array(soil.management.tillage_density_factor) .== 1.0f0)
     @test soil.surface_litter.water_storage isa CuArray{Float32, 1}
     @test soil.snow.pack isa CuArray{Float32, 1}
     @test weather.temp isa CuArray{Float32, 1}

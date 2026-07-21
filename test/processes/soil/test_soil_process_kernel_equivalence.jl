@@ -13,6 +13,7 @@ using Test
     saturation = reshape(Float32.(range(0.35, 0.55; length = 5 * cells)), 5, cells)
     storage = reshape(Float32.(range(20, 420; length = 5 * cells)), 5, cells)
     ice = reshape(Float32.(range(0, 40; length = 5 * cells)), 5, cells)
+    density_factor = reshape(Float32.(range(0.7, 1.0; length = cells)), 1, :)
     for soil in (reference, kernel)
         soil.properties.sand_fraction .= sand
         soil.properties.clay_fraction .= clay
@@ -21,6 +22,7 @@ using Test
         soil.water.saturation_fraction .= saturation
         soil.water.storage .= storage
         soil.water.ice_storage .= ice
+        soil.management.tillage_density_factor .= density_factor
     end
 
     Agrocosm.pedotransfer_reference!(reference)
@@ -58,6 +60,10 @@ end
     reference = deepcopy(base)
     kernel = deepcopy(base)
     crop.events.sowing .= Int32[1, 0, 1, 0, 0]
+    Agrocosm.tillage_hydraulics_reference!(reference, crop)
+    tillage_hydraulics!(kernel, crop)
+    @test kernel.management.tillage_density_factor ≈
+        reference.management.tillage_density_factor
     Agrocosm.litter_tillage_reference!(reference, crop)
     litter_tillage!(kernel, crop)
     @test kernel.carbon.litter ≈ reference.carbon.litter

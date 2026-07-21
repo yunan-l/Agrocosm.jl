@@ -30,6 +30,7 @@ using Test
     include("processes/soil/test_denitrification.jl")
     include("processes/soil/test_volatilization.jl")
     include("processes/soil/test_soil_water.jl")
+    include("processes/soil/test_tillage_hydraulics.jl")
     include("processes/soil/test_surface_litter_water.jl")
     include("processes/soil/test_soil_temperature.jl")
     include("processes/soil/test_soil_freeze_thaw.jl")
