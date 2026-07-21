@@ -68,7 +68,7 @@ Agrocosm currently focuses on daily, gridded simulations of a single crop.
       <td>Litter routing; coupled soil C--N decomposition; mineralization, immobilization, nitrification, denitrification, volatilization, and leaching.</td>
     </tr>
     <tr>
-      <td align="center" valign="middle"><strong>Numerics and verification</strong></td>
+      <td align="center" valign="middle"><strong>Numerics</strong></td>
       <td>Backend and precision</td>
       <td>CPU/GPU kernels via <a href="https://github.com/JuliaGPU/KernelAbstractions.jl">KernelAbstractions.jl</a>, <code>Float32</code>/<code>Float64</code> support.</td>
     </tr>
