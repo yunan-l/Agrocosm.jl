@@ -15,28 +15,43 @@ validation.
 - Crop N allocation, demand, uptake, prescribed fertilizer/manure, and soil
   mineral-N supply.
 - Five-layer soil water, snow, temperature, freeze--thaw, phase-change energy,
-  and percolation enthalpy.
+  and percolation enthalpy, using the current Phase-1 approximations.
 - Non-methane soil C--N decomposition, mineralization, immobilization,
   nitrification, denitrification, volatilization, leaching, and fixed `c_shift`
   routing.
+- LPJmL-informed full surface albedo and tillage--topsoil hydraulic coupling.
+- Audited C3/C4 daily ordering for climate history, cultivation, albedo/PET,
+  snow, soil preparation, C--N decomposition, crop processes, water removal,
+  denitrification, and NH3 volatilization.
+- Daily crop water-deficit output using LPJmL's `0--100%` definition.
 - CPU/GPU process kernels, `Float32`/`Float64` support, mass/energy balance
-  diagnostics, and a high-level simulation API.
+  diagnostics, a high-level simulation API, and a 20-year rainfed-wheat
+  notebook with numerically closed water, C, N, and energy ledgers.
 
 ### Current closing work
 
-1. Confirm the minimal checkpoint boundary and the shared post-spin-up
-   `c_shift` configuration on CPU and GPU.
-2. Maintain a short end-to-end rainfed-wheat reference simulation as a
-   regression baseline for the single-crop model.
-3. Audit every daily process and its ordering against the relevant LPJmL source
-   path; record intentional differences rather than pursuing impractical
-   one-to-one output matching.
-4. Improve public examples, input documentation, and benchmark reporting.
+1. Rerun the rainfed-wheat notebook after the water-deficit output fix and add
+   CUDA regression coverage for that output trajectory.
+2. Complete the public checkpoint save/restore path and verify uninterrupted
+   versus resumed simulations on CPU and CUDA.
+3. Repeat the NH3 comparison with identical daily wind forcing in Agrocosm and
+   LPJmL. The equation and units are already audited; constant fallback wind is
+   the remaining input-parity gap.
+4. Keep a short end-to-end rainfed-wheat regression baseline and improve public
+   input/output documentation and benchmark reporting.
 
 ## Phase 2 — modular process alternatives and multi-crop architecture
 
 The second phase turns the current process implementation into a framework for
 scientific comparison and model development.
+
+### Spin-up, restart, and output completion
+
+1. Implement soil/ecosystem spin-up for consistent initial C, N, water, and
+   thermal states, including the post-spin-up `c_shift` routing configuration.
+2. Validate restart continuity across the spin-up-to-transient boundary.
+3. Complete the soil and climate time-series output chains and define stable
+   output metadata without duplicating daily process calculations.
 
 ### Interchangeable process modules
 
@@ -76,8 +91,6 @@ must be explicit in simulation configuration and output metadata.
 
 ## Phase 4 — equilibrium, validation, and Earth-system coupling
 
-- Implement soil/crop spin-up and restart workflows for consistent equilibrium
-  initial conditions.
 - Establish multi-site and global validation protocols.
 - Support high-resolution regional and large-domain GPU simulations.
 - Couple Agrocosm, where useful, to broader land and Earth-system frameworks
@@ -87,4 +100,6 @@ must be explicit in simulation configuration and output metadata.
 
 Methane/wetland pathways and waterlogging stress are not part of the current
 annual-crop core. They should be considered only when a rice/wetland or
-water-saturated crop use case requires them.
+water-saturated crop use case requires them. More detailed frozen-soil
+infiltration and heat-transport coupling is also deferred beyond Phase 1 and
+should not block the rainfed annual-crop pathway.

@@ -152,8 +152,7 @@ When the roadmap is complete, Agrocosm should support:
 - Gradient-based calibration of cultivar and physiological parameters
 - Assimilation of remotely sensed LAI, GPP, evapotranspiration, and biomass
 - Combining Agrocosm with data-driven models to surpport hybrid modelling
-- Sensitivity analyses for climate change and crop management
-- An open software ecosystem that agricultural modellers can work together.
+- Sensitivity analysis of climate change and crop management strategies
 
 ## Contributing
 
