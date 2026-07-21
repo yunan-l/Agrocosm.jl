@@ -51,7 +51,7 @@ Agrocosm currently focuses on daily, gridded simulations of a single crop.
   <tbody>
     <tr>
       <td rowspan="2" align="center" valign="middle"><strong>Crop</strong></td>
-      <td>Carbon and Nitrogen</td>
+      <td>Carbon and nitrogen</td>
       <td>C3/C4 photosynthesis, carbon allocation, and respiration; nitrogen allocation and uptake.</td>
     </tr>
     <tr>
