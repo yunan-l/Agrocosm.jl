@@ -14,7 +14,7 @@ mutable struct CropOutput{A, I, M}
     vegetation_carbon::M   # Daily leaf/root/pool/storage carbon stocks (gC m⁻²).
     vegetation_nitrogen::M # Daily leaf/root/pool/storage nitrogen contents (gN m⁻²).
     fphu::A                # Fraction of potential heat units accumulated (0–1+).
-    water_deficit::A       # Daily crop water-deficit factor (0–1).
+    water_deficit::A       # Daily crop water-deficit factor (0–100%).
     growing_mask::I        # Integer mask: one while a crop stand is active, otherwise zero.
 end
 

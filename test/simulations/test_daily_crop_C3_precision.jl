@@ -72,6 +72,13 @@ end
     @test eltype(result64.output.crop.npp) == Float64
     @test all(isfinite, result32.output.crop.npp)
     @test all(isfinite, result64.output.crop.npp)
+    @test all(0.0f0 .<= result32.output.crop.water_deficit .<= 100.0f0)
+    @test all(0.0 .<= result64.output.crop.water_deficit .<= 100.0)
+    @test minimum(result32.output.crop.water_deficit) < 100.0f0
+    @test result32.output.crop.water_deficit[end, :] ==
+        result32.crop.auxiliary.stress.water_deficit
+    @test result64.output.crop.water_deficit[end, :] ==
+        result64.crop.auxiliary.stress.water_deficit
     @test all(isfinite, result64.soil.thermal.temperature)
     @test eltype(result64.soil.management.tillage_density_factor) == Float64
     # This compares two numerical precisions, not CPU/GPU execution at one

@@ -33,6 +33,7 @@ function crop_carbon!(crop::Crop,
         respiration = crop.fluxes.carbon.respiration,
         lai = crop.auxiliary.canopy.actual_lai,
         fphu = crop.auxiliary.phenology.fphu,
+        water_deficit = crop.auxiliary.stress.water_deficit,
         biomass = crop.state.carbon.biomass,
     )
     for (field, source) in pairs(sources)
