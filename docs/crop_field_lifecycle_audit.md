@@ -28,9 +28,9 @@ The audit found the following earlier classification errors:
 
 1. `lai`, `laimax_adjusted`, and `lai_npp_deficit` are
    `state.canopy`: next-day interception, radiation, or LAI growth reads them
-   before they can be recomputed. `phenology_fraction = lai / laimax` is a
-   scalar local workspace inside the albedo kernel. The LPJmL-compatible nonnegative
-   `actual_lai = max(0, lai - lai_npp_deficit)` remains a daily auxiliary.
+   before they can be recomputed. The LPJmL-compatible nonnegative
+   `actual_lai = max(0, lai - lai_npp_deficit)` is reconstructed inside canopy
+   radiation kernels and remains a daily auxiliary.
 2. N and water sufficiency are now `state.nitrogen.sufficiency` and
    `state.water.sufficiency`, because the next day's LAI update consumes them.
    Daily demands and deficit factors remain `auxiliary.stress`.
@@ -149,8 +149,8 @@ deferred by design.
   owner processes overwrite daily fields without a global reset;
 - `test_checkpoint_minimal_state.jl` and its GPU counterpart: verifies that
   only process-changing fields enter `crop.state`, `fphu` is reconstructed
-  from `husum / phu`, albedo derives its local canopy fraction from `lai`, and
-  annual harvest records remain output bookkeeping;
+  from `husum / phu`, surface albedo is reconstructed from prognostic LAI plus
+  current soil/snow state, and annual harvest records remain output bookkeeping;
 - `test_crop_lifecycle.jl`: two complete crop seasons, event uniqueness,
   fallow outputs and post-harvest state;
 - `test_harvest_balance.jl`: conservative C/N export and residue routing;

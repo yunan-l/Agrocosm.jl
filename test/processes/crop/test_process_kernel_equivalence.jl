@@ -13,19 +13,32 @@ end
     for pft in (cft1, cft3)
         reference = init_crop(cells, identity)
         kernel = init_crop(cells, identity)
+        soil_reference = init_soil(cells, soilparams.soildepth, identity)
+        soil_kernel = init_soil(cells, soilparams.soildepth, identity)
         pet_reference = init_pet(cells, identity)
         pet_kernel = init_pet(cells, identity)
         phenology_fraction = Float32.(range(0, 1; length = cells))
         lai = Float32(pft.laimax) .* phenology_fraction
         growing = Int32[0, 1, 1, 0, 1, 1, 0, 1]
         par = Float32.(range(0, 25; length = cells))
+        litter_carbon = Float32.(range(0, 250; length = cells))
+        snow_height = Float32[0, 0, 0.1, 0.2, 0, 0.05, 0, 0.1]
+        snow_fraction = Float32[0, 0, 0.4, 0.8, 0, 0.2, 0, 1]
         for (crop, pet) in ((reference, pet_reference), (kernel, pet_kernel))
             crop.state.canopy.lai .= lai
             crop.state.phenology.is_growing .= growing
             pet.par .= par
         end
-        Agrocosm.albedo_reference!(pft, reference, pet_reference)
-        albedo!(pft, kernel, pet_kernel)
+        for soil in (soil_reference, soil_kernel)
+            soil.carbon.litter[1, :] .= litter_carbon
+            soil.snow.height .= snow_height
+            soil.snow.fraction .= snow_fraction
+        end
+        maize = pft === cft3
+        Agrocosm.albedo_reference!(
+            pft, reference, soil_reference, pet_reference; maize = maize,
+        )
+        albedo!(pft, kernel, soil_kernel, pet_kernel; maize = maize)
         @test kernel.auxiliary.canopy.albedo ≈ reference.auxiliary.canopy.albedo rtol = 2.0f-6
         @test pet_kernel.albedo ≈ pet_reference.albedo rtol = 2.0f-6
 

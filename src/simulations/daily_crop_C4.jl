@@ -65,12 +65,9 @@ function daily_crop_C4!(day_start, day_end,
             record_water_balance_start!(water_balance, diagnostic_day, soil, dailyWeather.prec)
         end
 
-        # snow
-        snow!(soil, dailyWeather; snowparams = snow_params, lpjmlparams = global_params)
-
-        if water_balance !== nothing
-            record_water_balance_after_snow!(water_balance, diagnostic_day, dailyWeather.prec)
-        end
+        # Keep today's climate in history before sowing decisions, following
+        # LPJmL's daily cell order and the dependency needed by dynamic sowing.
+        update_climbuf!(pftparameters, dailyWeather.temp, climbuf, day)
 
         # initial crop variables in sowing day and fertilizer
         cultivate!(
@@ -93,12 +90,20 @@ function daily_crop_C4!(day_start, day_end,
         litter_tillage!(soil, crop)
         litter_bioturbation!(soil; lpjmlparams = global_params)
 
-        update_climbuf!(pftparameters, dailyWeather.temp, climbuf, day) # update climate buffer
-        albedo!(pftparameters, crop, pet)  # compute albedo
+        # Preserve LPJmL's albedo/PET-before-snow ordering: radiation uses the
+        # snow state present at the start of the day.
+        albedo!(pftparameters, crop, soil, pet; maize = maize)  # compute albedo
         petpar!(pet, day_of_year, managed_land.latitude, dailyWeather.temp, dailyWeather.lwr, dailyWeather.swr) # compute crop potential evapotraspiration variables
-        update_surface_litter_properties!(soil; thermalparams = thermal_params)
+
+        snow!(soil, dailyWeather; snowparams = snow_params, lpjmlparams = global_params)
+
+        if water_balance !== nothing
+            record_water_balance_after_snow!(water_balance, diagnostic_day, dailyWeather.prec)
+        end
+
         # Thermal properties require current pore volume before phase partitioning.
         pedotransfer!(soil; lpjmlparams = global_params)
+        update_surface_litter_properties!(soil; thermalparams = thermal_params)
         soil_temperature!(soil, dailyWeather.temp, climbuf.atemp_mean;
                           thermalparams = thermal_params, snowparams = snow_params)
 

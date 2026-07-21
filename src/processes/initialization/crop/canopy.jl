@@ -9,7 +9,7 @@ end
 mutable struct CropCanopyAuxiliary{A}
     actual_lai::A           # Carbon-supported LAI after NPP-deficit correction (m² m⁻²).
     flaimax::A              # Fraction of maximum LAI reached by current-day phenology (0–1).
-    albedo::A               # Effective crop-canopy albedo (fraction, 0–1).
+    albedo::A               # Effective crop-covered surface albedo (fraction, 0–1).
     fpar::A                 # Fraction of incident PAR absorbed by the crop canopy (0–1).
     apar::A                 # Absorbed photosynthetically active radiation (J m⁻² day⁻¹).
     canopy_conductance::A   # Bulk canopy conductance used by transpiration (mm s⁻¹).

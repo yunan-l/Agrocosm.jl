@@ -105,7 +105,7 @@ consistent with the organ-carbon pools and is checked as a derived total.
 | `crop.auxiliary.calendar.sowing_date` | Prescribed sowing day of year | Configuration/process memory |
 | `crop.auxiliary.canopy.actual_lai` | Nonnegative carbon-supported LAI | Daily derived diagnostic |
 | `crop.auxiliary.canopy.flaimax` | Current-day fraction of maximum LAI from phenology | Daily derived diagnostic |
-| `crop.auxiliary.canopy.albedo` | Effective canopy albedo | Daily derived diagnostic |
+| `crop.auxiliary.canopy.albedo` | Effective crop-covered surface albedo, including canopy, litter, soil, and snow | Daily derived diagnostic |
 | `crop.auxiliary.canopy.fpar` | Fraction of PAR absorbed | Daily derived diagnostic |
 | `crop.auxiliary.canopy.apar` | Absorbed PAR (J m⁻² day⁻¹) | Daily derived diagnostic |
 | `crop.auxiliary.canopy.canopy_conductance` | Bulk canopy conductance (mm s⁻¹) | Daily derived diagnostic |

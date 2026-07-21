@@ -92,4 +92,14 @@ CUDA.allowscalar(false)
     expected_shift = Float32[0.55, 0.1125, 0.1125, 0.1125, 0.1125]
     @test Array(soil.decomposition.shift_fast) == repeat(expected_shift, 1, cell_size)
     @test Array(soil.decomposition.shift_slow) == repeat(expected_shift, 1, cell_size)
+
+    restart_fast = CuArray(repeat(Float32[0.4, 0.25, 0.15, 0.1, 0.1], 1, cell_size))
+    restart_slow = CuArray(repeat(Float32[0.5, 0.2, 0.15, 0.1, 0.05], 1, cell_size))
+    Agrocosm.initialize_soil_c_shift!(
+        soil,
+        (c_shift_fast = restart_fast, c_shift_slow = restart_slow),
+        :restart,
+    )
+    @test Array(soil.decomposition.shift_fast) == Array(restart_fast)
+    @test Array(soil.decomposition.shift_slow) == Array(restart_slow)
 end

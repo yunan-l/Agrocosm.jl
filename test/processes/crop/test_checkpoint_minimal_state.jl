@@ -13,7 +13,11 @@ using Test
     @test :fphu ∉ propertynames(crop.state.phenology)
     @test :phenology_fraction ∉ propertynames(crop.state.canopy)
     @test :calendar ∉ propertynames(crop.state)
+    @test propertynames(restart) == (:state, :process_memory)
     @test restart.state === crop.state
+    @test restart.process_memory.phenology.phu === crop.auxiliary.phenology.phu
+    @test restart.process_memory.calendar.sowing_date === crop.auxiliary.calendar.sowing_date
+    @test :workspace ∉ propertynames(restart)
 
     # The fertilizer split must derive fphu from prognostic husum and PHU,
     # rather than use a stale diagnostic cache.
@@ -25,13 +29,16 @@ using Test
     @test crop.fluxes.nitrogen.prescribed_fertilizer_input[1] == 10.0f0
     @test crop.state.nitrogen.pending_fertilizer[1] == 0.0f0
 
-    # Albedo receives the previous-day canopy state and reconstructs the
-    # scalar phenology fraction locally as lai / laimax.
+    # Albedo reconstructs the complete crop-covered surface from current LAI,
+    # litter carbon, bare soil, and the start-of-day snow state.
     crop.state.canopy.lai .= 0.4f0 * cft1.laimax
     crop.state.phenology.is_growing .= 1
-    albedo!(cft1, crop, pet)
-    expected_canopy = cft1.fpc * (0.4f0 * cft1.albedo_leaf + 0.6f0 * cft1.albedo_litter)
+    albedo!(cft1, crop, soil, pet)
+    green_fraction = 1.0f0 - exp(-cft1.lightextcoeff * crop.state.canopy.lai[1])
+    expected_canopy = green_fraction * cft1.albedo_leaf +
+        (1.0f0 - green_fraction) * 0.3f0
     @test crop.auxiliary.canopy.albedo[1] ≈ expected_canopy
+    @test pet.albedo[1] ≈ expected_canopy
 
     # Annual harvest records are output bookkeeping: harvesting changes no
     # prognostic calendar state, but retains report data until day 365.

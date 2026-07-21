@@ -49,6 +49,8 @@ CUDA.allowscalar(false)
 
     crop_reference = init_crop(cells, identity)
     crop_gpu = init_crop(cells, CuArray)
+    soil_reference = init_soil(cells, soilparams.soildepth, identity)
+    soil_gpu = init_soil(cells, soilparams.soildepth, CuArray)
     pet_reference = init_pet(cells, identity)
     pet_gpu = init_pet(cells, CuArray)
     phenology = Float32.(range(0, 1; length = cells))
@@ -61,23 +63,30 @@ CUDA.allowscalar(false)
     crop_gpu.state.canopy.lai .= CuArray(lai)
     crop_gpu.state.phenology.is_growing .= CuArray(growing)
     pet_gpu.par .= CuArray(par)
-    Agrocosm.albedo_reference!(cft1, crop_reference, pet_reference)
+    litter_carbon = Float32.(range(0, 250; length = cells))
+    snow_height = ifelse.(mod.(1:cells, 4) .== 0, 0.1f0, 0.0f0)
+    snow_fraction = ifelse.(snow_height .> 0, 0.7f0, 0.0f0)
+    soil_reference.carbon.litter[1, :] .= litter_carbon
+    soil_reference.snow.height .= snow_height
+    soil_reference.snow.fraction .= snow_fraction
+    soil_gpu.carbon.litter[1, :] .= CuArray(litter_carbon)
+    soil_gpu.snow.height .= CuArray(snow_height)
+    soil_gpu.snow.fraction .= CuArray(snow_fraction)
+    Agrocosm.albedo_reference!(cft1, crop_reference, soil_reference, pet_reference)
     Agrocosm.apar_crop_reference!(cft1, crop_reference, pet_reference)
-    albedo!(cft1, crop_gpu, pet_gpu)
+    albedo!(cft1, crop_gpu, soil_gpu, pet_gpu)
     apar_crop!(cft1, crop_gpu, pet_gpu)
     synchronize()
     @test Array(pet_gpu.albedo) ≈ pet_reference.albedo rtol = 3.0f-6
     @test Array(crop_gpu.auxiliary.canopy.apar) ≈ crop_reference.auxiliary.canopy.apar rtol = 3.0f-6
     canopy_bytes = CUDA.@allocated begin
-        albedo!(cft1, crop_gpu, pet_gpu)
+        albedo!(cft1, crop_gpu, soil_gpu, pet_gpu)
         apar_crop!(cft1, crop_gpu, pet_gpu)
         synchronize()
     end
 
     land_reference = init_managed_land(cells, identity)
     land_gpu = init_managed_land(cells, CuArray)
-    soil_reference = init_soil(cells, soilparams.soildepth, identity)
-    soil_gpu = init_soil(cells, soilparams.soildepth, CuArray)
     sowing_dates = fill(Int32(101), cells)
     sowing_dates[1:2:end] .= Int32(100)
     crop_reference.auxiliary.calendar.sowing_date .= sowing_dates

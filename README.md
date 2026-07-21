@@ -144,6 +144,8 @@ julia --project=. test/processes/soil/test_soil_process_kernels_gpu.jl
 
 ## Long-term goals
 
+The detailed development plan is maintained in the [project roadmap](docs/roadmap.md).
+
 When the roadmap is complete, Agrocosm should support:
 
 - Large-domain, high-resolution crop simulation on both CPUs and GPUs
