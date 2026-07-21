@@ -117,8 +117,6 @@ simulation = initialize_simulation(
 )
 
 run_simulation!(simulation, climate)
-
-summary = simulation_summary(simulation)
 ```
 The 10-year GPP and NPP simulations see below:
 <p align="left">
