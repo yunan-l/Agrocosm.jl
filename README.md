@@ -85,8 +85,6 @@ The following are planned, but not yet part of the current model:
 - **Long-term:** end-to-end differentiable process pathways, global validation,
   and hybrid process--machine-learning applications.
 
-Methane and waterlogging stress are intentionally outside the current scope.
-
 ## Installation
 
 Agrocosm is not yet registered in the Julia General registry. Clone the source
