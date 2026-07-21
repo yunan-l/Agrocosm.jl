@@ -104,7 +104,6 @@ For a quick start, we provide a running demo in the examples/ directory, includi
 
 ```julia
 using Agrocosm
-
 # `initial_data` contains soil initial states.
 # `climate` contains daily temperature, precipitation, radiation, windspeed, and CO₂.
 simulation = initialize_simulation(
@@ -115,7 +114,6 @@ simulation = initialize_simulation(
     days = 10*365,
     auto_fertilizer = false,
 )
-
 run_simulation!(simulation, climate)
 ```
 The 10-year GPP and NPP simulations see below:
