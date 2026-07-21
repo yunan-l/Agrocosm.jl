@@ -102,6 +102,8 @@ A NVIDIA GPU and a working [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) instal
 
 ## Quick start
 
+For a quick start, we provide a running demo in the examples/ directory, including 20-year forcing data (2000-2019) covering 10 grid cells for rainfed wheat.
+
 ```julia
 using Agrocosm
 
@@ -119,8 +121,12 @@ simulation = initialize_simulation(
 run_simulation!(simulation, climate)
 
 summary = simulation_summary(simulation)
-npp = simulation.output.crop.npp
 ```
+The 20-year GPP and NPP simulations see below:
+<p align="left">
+  <img src="examples/crop_gpp_npp.png" width="1000">
+</p>
+
 
 For a GPU simulation, construct inputs on the GPU or set `device = CuArray`
 when calling `initialize_simulation`. The same process code is designed to run
