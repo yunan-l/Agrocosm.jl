@@ -377,6 +377,10 @@ end
     test_balance_equivalence(
         gpu.thermal, cpu.thermal;
         group = "thermal", rtol = 2.0f-3, atol = 1.0f-1,
+        # This boundary term is a layer-wise difference of O(1e8) Float32
+        # enthalpy states. Allow a few joules for CPU/GPU rounding while
+        # retaining the relative trajectory check.
+        field_atol = (untracked_water_energy_flux = 8.0f0,),
         # Residuals are conservation tests, not trajectory state: validate each
         # backend against its own physical ledger below.
         skip_fields = (:energy_residual, :percolation_energy_residual),
