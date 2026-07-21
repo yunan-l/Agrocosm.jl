@@ -182,10 +182,11 @@ end
     dz3 = layer_depth_mm[3] * T(0.001)
     dz4 = layer_depth_mm[4] * T(0.001)
     dz5 = layer_depth_mm[5] * T(0.001)
-    stored_column_energy = initialized[cell] ?
-        enthalpy[1, cell] * dz1 + enthalpy[2, cell] * dz2 +
-        enthalpy[3, cell] * dz3 + enthalpy[4, cell] * dz4 +
-        enthalpy[5, cell] * dz5 : zero(T)
+    previous_e1 = enthalpy[1, cell]
+    previous_e2 = enthalpy[2, cell]
+    previous_e3 = enthalpy[3, cell]
+    previous_e4 = enthalpy[4, cell]
+    previous_e5 = enthalpy[5, cell]
 
     total1 = max(liquid_water[1, cell] + ice_water[1, cell], zero(T))
     total2 = max(liquid_water[2, cell] + ice_water[2, cell], zero(T))
@@ -234,8 +235,13 @@ end
     # represented by perc_energy (primarily yesterday's evaporation and
     # transpiration) are assigned the enthalpy of water in the same layer, so
     # the mass change itself does not create a temperature jump.
+    # Sum layer-wise changes instead of subtracting two O(1e8) column totals.
+    # The expressions are algebraically equivalent, but this avoids losing the
+    # small boundary flux to Float32 cancellation differently on CPU and GPU.
     untracked_water_energy_flux[cell] = initialized[cell] ?
-        rebased_column_energy - stored_column_energy : zero(T)
+        (e1 - previous_e1) * dz1 + (e2 - previous_e2) * dz2 +
+        (e3 - previous_e3) * dz3 + (e4 - previous_e4) * dz4 +
+        (e5 - previous_e5) * dz5 : zero(T)
 
     heat_capacity_frozen[1, cell] = cf1; heat_capacity_frozen[2, cell] = cf2
     heat_capacity_frozen[3, cell] = cf3; heat_capacity_frozen[4, cell] = cf4
