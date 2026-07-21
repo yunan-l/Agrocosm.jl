@@ -79,11 +79,9 @@ Agrocosm currently focuses on daily, gridded simulations of a single crop.
 
 The following are planned, but not yet part of the current model:
 
-- **Near-term:** ecosystem spin-up, a complete nitrogen--photosynthesis
-  feedback, and broader management processes.
+- **Near-term:** ecosystem spin-up and broader management processes.
 - **Next model generation:** multi-crop stands, rotations, and dynamic sowing.
-- **Long-term:** end-to-end differentiable process pathways, global validation,
-  and hybrid process--machine-learning applications.
+- **Long-term:** end-to-end differentiable process pathways, global validation, and hybrid process--machine-learning applications.
 
 ## Installation
 
