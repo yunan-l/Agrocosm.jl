@@ -103,21 +103,27 @@ A NVIDIA GPU and a working [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) instal
 
 ## Quick start
 
-For a quick start, we provide a running demo in the examples/ directory, including 10-year forcing data (2000-2019) covering 10 grid cells for rainfed wheat.
+The repository includes initial conditions and ten years of daily forcing in
+`examples/`. From the repository root:
 
 ```julia
 using Agrocosm
-# `initial_data` contains soil initial states.
-# `climate` contains daily temperature, precipitation, radiation, windspeed, and CO₂.
+using JLD2
+
+initial_data = load("examples/initial_wheat.jld2", "initial_data")
+climate = load("examples/climate_2000_2009.jld2", "climate")
+
 simulation = initialize_simulation(
     cft1, initial_data;
     indices = [1],
-    device = identity,       # use CuArray for a CUDA backend
-    T = Float32,             # Float64 is also supported
-    days = 10*365,
+    device = identity,
+    T = Float32,
+    days = size(climate.temp, 1),
     auto_fertilizer = false,
 )
+
 run_simulation!(simulation, climate)
+summary = simulation_summary(simulation)
 ```
 
 Save at any completed daily boundary and resume into a newly initialized
