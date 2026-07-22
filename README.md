@@ -126,7 +126,17 @@ run_simulation!(simulation, climate)
 summary = simulation_summary(simulation)
 ```
 
-Save at any completed daily boundary and resume into a newly initialized
+The ten-year GPP and NPP simulations see below:
+<p align="left">
+  <img src="examples/crop_gpp_npp.png" width="1000">
+</p>
+
+For a GPU simulation, construct inputs on the GPU or set `device = CuArray`
+when calling `initialize_simulation`. The same process code is designed to run
+over a batch of independent grid cells; `indices = [1]` selects one input grid
+cell, while a longer index vector selects a larger batch.
+
+<!-- Save at any completed daily boundary and resume into a newly initialized
 simulation with the same precision, dimensions, and run options:
 
 ```julia
@@ -138,22 +148,7 @@ resumed = initialize_simulation(
 )
 restore_checkpoint!(resumed, "wheat_checkpoint.jld2")
 run_simulation!(resumed, remaining_climate; spinup = false)
-```
-
-Checkpoint arrays are stored on the host, so `resumed` may use `CuArray` even
-when the checkpoint was written by a CPU simulation.
-
-The 10-year GPP and NPP simulations see below:
-<p align="left">
-  <img src="examples/crop_gpp_npp.png" width="1000">
-</p>
-
-
-For a GPU simulation, construct inputs on the GPU or set `device = CuArray`
-when calling `initialize_simulation`. The same process code is designed to run
-over a batch of independent grid cells; `indices = [1]` selects one input grid
-cell, while a longer index vector selects a larger batch.
-
+``` -->
 
 ## Testing
 
