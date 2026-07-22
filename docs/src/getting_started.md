@@ -39,16 +39,19 @@ simulation = initialize_simulation(
     device = identity,
     T = Float32,
     days = size(climate.temp, 1),
-    auto_fertilizer = false,
+    fertilizer = :yes,
 )
 
 run_simulation!(simulation, climate)
 summary = simulation_summary(simulation)
 ```
 
-`cft1` is the current wheat parameter set. Use `cft3` for the available C4
-pathway. Parameter sets are research defaults, not universal cultivar
-calibrations.
+`fertilizer` accepts `:no`, `:yes`, or `:auto`: no mineral fertilizer,
+prescribed fertilizer input, or demand-driven automatic mineral N. Manure is
+controlled independently with `manure = true`.
+
+`cft1` through `cft12` follow the LPJmL crop and management-band order.
+Parameter sets are research defaults, not universal cultivar calibrations.
 
 ## Inspect results
 

@@ -12,7 +12,7 @@ Restore into a newly initialized, compatible simulation:
 resumed = initialize_simulation(
     cft1, initial_data;
     indices = [1], T = Float32, days = total_days,
-    auto_fertilizer = false,
+    fertilizer = :yes,
 )
 restore_checkpoint!(resumed, "checkpoint.jld2")
 run_simulation!(resumed, remaining_climate; spinup = false)

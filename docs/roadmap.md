@@ -92,6 +92,9 @@ scientific comparison and model development.
 2. Validate restart continuity across the spin-up-to-transient boundary.
 3. Complete the soil and climate time-series output chains and define stable
    output metadata without duplicating daily process calculations.
+4. Build the independent `AgrocosmData.jl` input layer following the dedicated
+   [data roadmap](agrocosm_data_roadmap.md): canonical `cellid` indexing,
+   land-use/PFT masks, HWSD C/N preprocessing, and time-blocked global forcing.
 
 ### Interchangeable process modules
 
@@ -135,11 +138,3 @@ must be explicit in simulation configuration and output metadata.
 - Support high-resolution regional and large-domain GPU simulations.
 - Couple Agrocosm, where useful, to broader land and Earth-system frameworks
   while retaining an independent crop-model API.
-
-## Deliberately deferred scope
-
-Methane/wetland pathways and waterlogging stress are not part of the current
-annual-crop core. They should be considered only when a rice/wetland or
-water-saturated crop use case requires them. More detailed frozen-soil
-infiltration and heat-transport coupling is also deferred beyond Phase 1 and
-should not block the rainfed annual-crop pathway.

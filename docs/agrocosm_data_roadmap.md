@@ -1,0 +1,216 @@
+# AgrocosmData.jl roadmap
+
+`AgrocosmData.jl` will provide the reproducible data layer for site, regional,
+and global Agrocosm simulations. It will convert heterogeneous source files
+into backend-neutral, cell-indexed arrays while keeping scientific processes,
+spin-up dynamics, and device execution in `Agrocosm.jl`.
+
+## Design decisions
+
+- `grid.nc` is the only canonical spatial reference. Every record is keyed by
+  its `cellid`; array order and source dimension names are never assumed.
+- Global crop runs use a fixed, crop-specific allocation mask derived from
+  `landuse`: the union of cells containing the selected PFT over the requested
+  years. Annual land-use values separately control whether the crop is active.
+- All allocated crop cells run together on one CPU or GPU when memory permits.
+  Climate forcing is streamed in time blocks. Spatial batches are an explicit
+  out-of-memory fallback, not the default execution model.
+- The model and all management readers share LPJmL's 12-crop CFT order. Each
+  dataset declares its own rainfed and irrigated band positions; total band
+  count is never treated as the crop registry. `countries` is not an input.
+- HWSD 2.x supplies layer-resolved SOC and total-N targets. Bulk density and
+  coarse-fragment data are used only to convert concentrations to stocks.
+  Existing `soilcode` lookup tables continue to supply Phase-2 hydraulic and
+  thermal properties.
+- The data package performs no GPU computation and no ecosystem spin-up. It
+  returns CPU arrays plus metadata; `Agrocosm.jl` owns device transfer,
+  hydraulic initialization, C/N pool partitioning, and state evolution.
+
+## Milestone 1 — package and data contracts
+
+Create `AgrocosmData.jl` as a sibling Julia package with its own tests and a
+small checked-in fixture dataset.
+
+Deliverables:
+
+- `DatasetCatalog` for configured server/local paths without hard-coded paths;
+- versioned schemas for grid, static soil, management, climate, and restart
+  data;
+- backend-neutral batch objects compatible with the existing
+  `InitialDataLoader` and `ClimateDataLoader` boundaries;
+- source version, units, calendar, missing-value policy, and preprocessing
+  provenance in every generated dataset.
+
+Acceptance:
+
+- the package loads without CUDA;
+- the ten-cell example can be reconstructed through the new contracts without
+  changing model results;
+- dimension permutations and invalid/missing metadata fail with clear errors.
+
+## Milestone 2 — canonical grid and crop masks
+
+Build a reusable compact index from the `720 × 280` grid:
+
+```text
+compact_index ↔ cellid ↔ (longitude_index, latitude_index) ↔ (lon, lat)
+```
+
+Deliverables:
+
+- exact coordinate validation for already aligned 0.5-degree inputs;
+- conversion between gridded fields and compact `cell` arrays;
+- `allocation_mask(landuse, pft, years)`, using the temporal union;
+- `crop_active(time, pft, cell)` and crop fraction for annual process control
+  and output aggregation;
+- the 12-crop PFT registry plus explicit rainfed/irrigated band maps for every
+  management file.
+
+Acceptance:
+
+- compact-to-grid round trips preserve every value and `cellid`;
+- masks exclude missing grid cells and include every cell with positive
+  land-use fraction in at least one selected year;
+- changing NetCDF dimension names or order does not change the result.
+
+## Milestone 3 — current soil and management inputs
+
+Move the existing NetCDF reading and lookup work out of the model package.
+
+Deliverables:
+
+- readers for `soilcode`, soil pH, land use, sowing state, PHU, fertilizer,
+  manure, and residue fraction;
+- model configuration for globally enabling or disabling tillage, with no
+  `with_tillage` dataset dependency;
+- fertilizer input required only for `fertilizer = :yes`; `:no` and `:auto`
+  do not read it, while manure remains independently configured;
+- the existing soil-code-to-property lookup represented as a versioned
+  Agrocosm dataset rather than executable LPJmL input;
+- unit and range checks before arrays reach model initialization;
+- crop-specific reads that select one PFT without materializing every PFT.
+
+Acceptance:
+
+- the ten-cell baseline exactly matches the current loader;
+- all static inputs align to the canonical `cellid` sequence;
+- no `countries` file is opened or required.
+
+## Milestone 4 — HWSD C/N preprocessing
+
+Implement a one-time offline HWSD 2.x conversion pipeline.
+
+Deliverables:
+
+- area-conservative aggregation from HWSD resolution to the Agrocosm
+  0.5-degree grid;
+- vertical overlap mapping from the seven HWSD layers to the Agrocosm layers
+  `0–0.2`, `0.2–0.5`, `0.5–1`, `1–2`, and `2–3 m`;
+- layer SOC and total-N stocks in `gC m⁻²` and `gN m⁻²`;
+- an explicit, versioned rule and uncertainty flag for the unsupported
+  `2–3 m` interval;
+- global conservation summaries, missing-data maps, and point comparisons for
+  validation.
+
+The output contains total SOC/N targets, not `fast`/`slow` pools or litter.
+Those are generated by Agrocosm spin-up.
+
+Acceptance:
+
+- horizontal and vertical aggregation closes against the source stocks within
+  documented numerical tolerance;
+- source versions and every conversion are recoverable from metadata;
+- rerunning preprocessing produces byte-stable metadata and numerically
+  identical arrays.
+
+## Milestone 5 — global climate streaming
+
+Replace eager whole-file reads with time-blocked access over the fixed active
+cell set.
+
+Status: the first streaming reader is implemented for daily temperature,
+precipitation, net longwave, and downward shortwave, with annual global CO₂
+matched to each block. Prefetching and production-scale benchmarks remain.
+
+Deliverables:
+
+- climate readers for temperature, precipitation, shortwave, longwave, wind,
+  and CO2 with calendar and unit normalization;
+- configurable monthly, annual, or multi-year time blocks;
+- optional canonical `time × cell` caches where benchmarks show that direct
+  source reads are too slow;
+- reusable host buffers and a prefetch interface suitable for overlapping CPU
+  I/O with GPU execution.
+
+Acceptance:
+
+- concatenated blocks are numerically identical to an eager read;
+- state and climate-buffer continuity are unchanged across block boundaries;
+- memory use is bounded by active model state plus one or two forcing blocks,
+  not total simulation duration.
+
+## Milestone 6 — global runner and restart workflow
+
+Integrate the data package with the Agrocosm simulation API.
+
+Default execution:
+
+```text
+grid + PFT + years
+  → fixed landuse allocation mask
+  → all active cells on one backend
+  → streamed climate blocks
+  → cellid-keyed output/checkpoint
+```
+
+Deliverables:
+
+- memory estimation and automatic selection between whole-mask execution and
+  spatial fallback batches;
+- year-specific `crop_active` control while soil state continues in fallow
+  years;
+- output reconstruction to `720 × 280` using `cellid`;
+- per-shard checkpoints and deterministic merge for fallback batching;
+- reproducibility metadata containing PFT, years, masks, source versions, and
+  model/data schema versions.
+
+Acceptance:
+
+- whole-mask and spatially batched executions are equal after reassembly;
+- CPU and GPU runs use the same compact cell ordering;
+- restart across a climate-block boundary matches an uninterrupted run;
+- a one-year global crop smoke test completes with bounded memory and closed
+  model balance diagnostics.
+
+## Milestone 7 — spin-up handoff and production hardening
+
+Connect HWSD targets and streamed forcing to the Agrocosm spin-up workflow
+without moving scientific state evolution into the data package.
+
+Deliverables:
+
+- loading and writing native Agrocosm spin-up checkpoints;
+- HWSD SOC/N targets, field-capacity water initialization, and convergence
+  diagnostics exposed through a stable handoff contract;
+- removal of the runtime requirement for `initialLPJmL.u0` after equivalence
+  and restart tests pass;
+- server deployment documentation, data catalog examples, and performance
+  benchmarks for representative PFT masks.
+
+Acceptance:
+
+- `swc`, `litc`, `fastc`, `slowc`, `litn`, `fastn`, and `slown` can all be
+  supplied from a native Agrocosm checkpoint;
+- expanding to new grid cells requires only source-data preprocessing and
+  Agrocosm spin-up, never an LPJmL run;
+- the legacy ten-cell input remains available solely as a regression fixture.
+
+## Deferred work
+
+- simultaneous CPU/GPU work-queue scheduling;
+- multi-GPU and distributed-memory execution;
+- alternative soil hydraulic datasets replacing the current soil-code lookup;
+- dynamic compaction that changes allocated cells during a simulation.
+
+These should follow the single-backend global runner because they do not alter
+the canonical data or cell-index contracts.

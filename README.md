@@ -119,7 +119,7 @@ simulation = initialize_simulation(
     device = identity,
     T = Float32,
     days = size(climate.temp, 1),
-    auto_fertilizer = false,
+    fertilizer = :yes,
 )
 
 run_simulation!(simulation, climate)
@@ -144,11 +144,12 @@ save_checkpoint("wheat_checkpoint.jld2", simulation)
 resumed = initialize_simulation(
     cft1, initial_data;
     indices = [1], device = identity, T = Float32,
-    days = 10*365, auto_fertilizer = false,
+    days = 10*365, fertilizer = :yes,
 )
 restore_checkpoint!(resumed, "wheat_checkpoint.jld2")
 run_simulation!(resumed, remaining_climate; spinup = false)
-``` -->
+```
+-->
 
 ## Testing
 
