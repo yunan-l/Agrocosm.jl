@@ -33,8 +33,11 @@ export SoilDecomposition, SoilManagement, SoilSurfaceLitter, SoilSnow
 export CropOutput, SoilOutput, ClimateOutput, CalendarOutput, AnnualOutputAccumulator
 
 # PARAMETERS (PFTs)
-export lpjmlparams, photoparams, soilparams, soil_decomp_params, soil_thermal_params, snowparams, cft1, cft2, cft3, cft4
+export lpjmlparams, photoparams, soilparams, soil_decomp_params, soil_thermal_params, snowparams
+export cft1, cft2, cft3, cft4, cft5, cft6, cft7, cft8, cft9, cft10, cft11, cft12
+export CROP_PFT_NAMES, CROP_PFTS, crop_pft
 export convert_precision
+export FERTILIZER_MODES, fertilizer_mode
 
 # INITIALIZATION
 export init_states!, init_climbuf, init_crop, init_pet, init_soil, init_output
