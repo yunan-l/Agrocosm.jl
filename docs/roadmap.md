@@ -64,10 +64,7 @@ lifecycle is now the Phase-2 architecture baseline:
   in the three-day regression (`1032/1032` assertions), and the complete CPU
   suite passes (`2533/2533`).
 
-The legacy multi-argument C3/C4 drivers, `crop_process_view`,
-`soil_process_view`, and `lifecycle_state` branches have been removed. The
-post-removal CPU suite passes (`1686/1686`). Next, define a one-day transition
-suitable for AD and select active parameters.
+Next, define a one-day transition suitable for AD and select active parameters.
 
 ## Phase 2 — modular process alternatives and multi-crop architecture
 
