@@ -6,18 +6,33 @@ capacity from the first litter-carbon pool. Water exceeding a reduced capacity
 is returned to the first soil layer to conserve total water.
 """
 function update_surface_litter_properties!(
-    soil::Soil;
+    soil;
     thermalparams::SoilThermalParams = soil_thermal_params,
 )
     launch_1D!(
         update_surface_litter_properties_kernel!,
-        soil.surface_litter.dry_matter,
-        soil.carbon.litter,
-        soil.surface_litter.depth,
-        soil.surface_litter.cover,
-        soil.surface_litter.water_capacity,
-        soil.surface_litter.water_storage,
-        soil.water.storage,
+        soil_surface_litter_prognostic(soil).dry_matter,
+        soil_carbon_prognostic(soil).litter,
+        soil_surface_litter_prognostic(soil).depth,
+        soil_surface_litter_prognostic(soil).cover,
+        soil_surface_litter_auxiliary(soil).water_capacity,
+        soil_surface_litter_prognostic(soil).water_storage,
+        soil_water_prognostic(soil).storage,
+        thermalparams,
+    )
+    return nothing
+end
+
+function update_surface_litter_properties!(
+    state::ModelState;
+    thermalparams::SoilThermalParams = soil_thermal_params,
+)
+    litter_state = state.prognostic.soil.surface_litter
+    launch_1D!(
+        update_surface_litter_properties_kernel!, litter_state.dry_matter,
+        state.prognostic.soil.carbon.litter, litter_state.depth,
+        litter_state.cover, state.auxiliary.soil.surface_litter.water_capacity,
+        litter_state.water_storage, state.prognostic.soil.water.storage,
         thermalparams,
     )
     return nothing
@@ -50,31 +65,45 @@ end
 end
 
 """Fill the surface-litter water store from canopy throughfall."""
-function surface_litter_interception!(soil::Soil)
+function surface_litter_interception!(soil)
     launch_1D!(
         surface_litter_interception_kernel!,
-        soil.water.infiltration,
-        soil.surface_litter.cover,
-        soil.surface_litter.water_capacity,
-        soil.surface_litter.water_storage,
-        soil.surface_litter.interception,
+        soil_water_fluxes(soil).infiltration,
+        soil_surface_litter_prognostic(soil).cover,
+        soil_surface_litter_auxiliary(soil).water_capacity,
+        soil_surface_litter_prognostic(soil).water_storage,
+        soil_surface_litter_fluxes(soil).interception,
     )
     return nothing
 end
 
 """Compute canopy throughfall and surface-litter interception in one cell kernel."""
-function surface_litter_interception!(soil::Soil,
+function surface_litter_interception!(soil,
                                       precipitation::AbstractVector{T},
                                       canopy_interception::AbstractVector{T}) where {T <: AbstractFloat}
     launch_1D!(
         surface_litter_throughfall_kernel!,
-        soil.water.infiltration,
+        soil_water_fluxes(soil).infiltration,
         precipitation,
         canopy_interception,
-        soil.surface_litter.cover,
-        soil.surface_litter.water_capacity,
-        soil.surface_litter.water_storage,
-        soil.surface_litter.interception,
+        soil_surface_litter_prognostic(soil).cover,
+        soil_surface_litter_auxiliary(soil).water_capacity,
+        soil_surface_litter_prognostic(soil).water_storage,
+        soil_surface_litter_fluxes(soil).interception,
+    )
+    return nothing
+end
+
+function surface_litter_interception!(state::ModelState,
+                                      precipitation::AbstractVector{T},
+                                      canopy_interception::AbstractVector{T}) where {T <: AbstractFloat}
+    water_fluxes = state.fluxes.soil.water
+    litter_state = state.prognostic.soil.surface_litter
+    launch_1D!(
+        surface_litter_throughfall_kernel!, water_fluxes.infiltration,
+        precipitation, canopy_interception, litter_state.cover,
+        state.auxiliary.soil.surface_litter.water_capacity,
+        litter_state.water_storage, state.fluxes.soil.surface_litter.interception,
     )
     return nothing
 end

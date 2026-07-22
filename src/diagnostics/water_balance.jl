@@ -59,15 +59,15 @@ end
 
 function record_water_balance_start!(water_balance::WaterBalance,
                                      day_index::Integer,
-                                     soil::Soil,
+                                     soil,
                                      precipitation)
     @views water_balance.precipitation[day_index, :] .= precipitation
-    @views water_balance.soil_storage_before[day_index, :] .= vec(sum(soil.water.storage; dims = 1))
+    @views water_balance.soil_storage_before[day_index, :] .= vec(sum(soil_water_prognostic(soil).storage; dims = 1))
     @views water_balance.soil_ice_storage_before[day_index, :] .=
-        vec(sum(soil.water.ice_storage; dims = 1))
-    @views water_balance.snow_storage_before[day_index, :] .= soil.snow.pack
+        vec(sum(soil_water_prognostic(soil).ice_storage; dims = 1))
+    @views water_balance.snow_storage_before[day_index, :] .= soil_snow_prognostic(soil).pack
     @views water_balance.litter_storage_before[day_index, :] .=
-        soil.surface_litter.water_storage
+        soil_surface_litter_prognostic(soil).water_storage
     return nothing
 end
 
@@ -80,29 +80,29 @@ end
 
 function record_water_balance_end!(water_balance::WaterBalance,
                                    day_index::Integer,
-                                   soil::Soil,
-                                   crop::Crop)
+                                   soil,
+                                   crop)
     @views begin
-        water_balance.soil_storage_after[day_index, :] .= vec(sum(soil.water.storage; dims = 1))
+        water_balance.soil_storage_after[day_index, :] .= vec(sum(soil_water_prognostic(soil).storage; dims = 1))
         water_balance.soil_ice_storage_after[day_index, :] .=
-            vec(sum(soil.water.ice_storage; dims = 1))
-        water_balance.snow_storage_after[day_index, :] .= soil.snow.pack
+            vec(sum(soil_water_prognostic(soil).ice_storage; dims = 1))
+        water_balance.snow_storage_after[day_index, :] .= soil_snow_prognostic(soil).pack
         water_balance.litter_storage_after[day_index, :] .=
-            soil.surface_litter.water_storage
-        water_balance.snowmelt[day_index, :] .= soil.snow.melt
-        water_balance.snow_sublimation[day_index, :] .= soil.snow.sublimation
-        water_balance.snow_runoff[day_index, :] .= soil.snow.runoff
-        water_balance.interception[day_index, :] .= crop.fluxes.water.interception
+            soil_surface_litter_prognostic(soil).water_storage
+        water_balance.snowmelt[day_index, :] .= soil_snow_fluxes(soil).melt
+        water_balance.snow_sublimation[day_index, :] .= soil_snow_fluxes(soil).sublimation
+        water_balance.snow_runoff[day_index, :] .= soil_snow_fluxes(soil).runoff
+        water_balance.interception[day_index, :] .= crop_fluxes(crop).water.interception
         water_balance.litter_interception[day_index, :] .=
-            soil.surface_litter.interception
+            soil_surface_litter_fluxes(soil).interception
         water_balance.litter_evaporation[day_index, :] .=
-            soil.surface_litter.evaporation
-        water_balance.transpiration[day_index, :] .= vec(sum(crop.fluxes.water.transpiration_layer; dims = 1))
-        water_balance.evaporation[day_index, :] .= vec(sum(soil.water.evaporation; dims = 1))
-        water_balance.surface_runoff[day_index, :] .= soil.water.surface_runoff
-        water_balance.lateral_runoff[day_index, :] .= vec(sum(soil.water.lateral_runoff; dims = 1))
-        water_balance.bottom_drainage[day_index, :] .= soil.water.bottom_drainage
-        water_balance.remaining_infiltration[day_index, :] .= soil.water.infiltration
+            soil_surface_litter_fluxes(soil).evaporation
+        water_balance.transpiration[day_index, :] .= vec(sum(crop_fluxes(crop).water.transpiration_layer; dims = 1))
+        water_balance.evaporation[day_index, :] .= vec(sum(soil_water_fluxes(soil).evaporation; dims = 1))
+        water_balance.surface_runoff[day_index, :] .= soil_water_fluxes(soil).surface_runoff
+        water_balance.lateral_runoff[day_index, :] .= vec(sum(soil_water_fluxes(soil).lateral_runoff; dims = 1))
+        water_balance.bottom_drainage[day_index, :] .= soil_water_fluxes(soil).bottom_drainage
+        water_balance.remaining_infiltration[day_index, :] .= soil_water_fluxes(soil).infiltration
 
         water_balance.unaccounted_snow_flux[day_index, :] .=
             water_balance.snow_storage_before[day_index, :] .+

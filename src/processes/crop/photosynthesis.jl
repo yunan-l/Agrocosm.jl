@@ -5,7 +5,7 @@ photosynthesis_C3!(PFT, photos, crop, pet, co2, temp)
 Compute C3 photosynthesis rates and related diagnostic variables.
 """
 function photosynthesis_C3_reference!(PFT::PftParameters,
-                            crop::Crop,
+                            crop,
                             apar::AbstractArray{T},
                             pet_daylength::AbstractArray{T},
                             temp::AbstractArray{T},
@@ -18,7 +18,7 @@ function photosynthesis_C3_reference!(PFT::PftParameters,
     @unpack b = PFT
     @unpack ko25, kc25, alphac3, theta, LAMBDA_OPT = lpjmlparams
     @unpack q10ko, q10kc, po2, tau25, q10tau, cmass, cq, p, lambdamc3 = photoparams
-    inactive = crop.auxiliary.photosynthesis.temperature_stress .< T(1e-2)
+    inactive = crop_photosynthesis_auxiliary(crop).temperature_stress .< T(1e-2)
 
     ko = ko25 * q10ko .^ ((temp .- T(25.0)) * T(0.1))
     kc = kc25 * q10kc .^ ((temp .- T(25.0)) * T(0.1))
@@ -28,23 +28,23 @@ function photosynthesis_C3_reference!(PFT::PftParameters,
 
     if comp_vcmax
         p_i= lambdamc3 * co2
-        c1 = crop.auxiliary.photosynthesis.temperature_stress * alphac3 .* ((p_i .- gammastar) ./ (p_i .+ T(2.0) * gammastar))
+        c1 = crop_photosynthesis_auxiliary(crop).temperature_stress * alphac3 .* ((p_i .- gammastar) ./ (p_i .+ T(2.0) * gammastar))
         # Calculation of C2C3, Eqn 6, Haxeltine & Prentice 1996
         c2 = (p_i .- gammastar) ./ (p_i .+ fac)
         s = (24 ./ pet_daylength) * b
         sigma = 1.0f0 .- (c2 .- s) ./ (c2 .- theta * s)
         sigma = sqrt.(max.(zero(T), sigma))
-        crop.auxiliary.photosynthesis.lambda .= T(LAMBDA_OPT)
+        crop_photosynthesis_auxiliary(crop).lambda .= T(LAMBDA_OPT)
         vcmax = (1.0f0 / b) * (c1 ./ c2) .* ((2.0f0 * theta - 1.0f0) .* s .- (2.0f0 * theta .* s .- c2) .* sigma) .* apar * cmass * cq
-        crop.auxiliary.photosynthesis.vcmax .= ifelse.(inactive, zero(T), max.(zero(T), vcmax))
-        crop.auxiliary.photosynthesis.potential_vcmax .= crop.auxiliary.photosynthesis.vcmax
-        crop.auxiliary.photosynthesis.nitrogen_limitation .= ifelse.(crop.auxiliary.photosynthesis.vcmax .> zero(T), one(T), zero(T))
+        crop_photosynthesis_auxiliary(crop).vcmax .= ifelse.(inactive, zero(T), max.(zero(T), vcmax))
+        crop_photosynthesis_auxiliary(crop).potential_vcmax .= crop_photosynthesis_auxiliary(crop).vcmax
+        crop_photosynthesis_auxiliary(crop).nitrogen_limitation .= ifelse.(crop_photosynthesis_auxiliary(crop).vcmax .> zero(T), one(T), zero(T))
     end
 
     # calculation of C1C3, C2C3 with actual p_i (leaf internal partial pressure of CO2)
-    p_i = crop.auxiliary.photosynthesis.lambda .* co2
+    p_i = crop_photosynthesis_auxiliary(crop).lambda .* co2
 
-    c1 = crop.auxiliary.photosynthesis.temperature_stress * alphac3 .* ((p_i .- gammastar) ./ (p_i .+ T(2.0) * gammastar))
+    c1 = crop_photosynthesis_auxiliary(crop).temperature_stress * alphac3 .* ((p_i .- gammastar) ./ (p_i .+ T(2.0) * gammastar))
 
     c2 = (p_i .- gammastar) ./ (p_i .+ fac)
 
@@ -59,14 +59,14 @@ function photosynthesis_C3_reference!(PFT::PftParameters,
     #   Calculation of rubisco-activity-limited photosynthesis rate JC, molC/m2/h
     #   Eqn 5, Haxeltine & Prentice 1996
 
-    jc = c2 .* hour2day(crop.auxiliary.photosynthesis.vcmax)
+    jc = c2 .* hour2day(crop_photosynthesis_auxiliary(crop).vcmax)
 
     #   Calculation of daily gross photosynthesis, Agd, gC/m2/day
     #   Eqn 2, Haxeltine & Prentice 1996
 
     # round-off; a positive floor can make GPP negative at low light.
     agd = (je .+ jc .- sqrt.(max.(zero(T), (je .+ jc) .* (je .+ jc) .- T(4.0) * theta .* je .* jc))) ./ (T(2.0) * theta) .* pet_daylength
-    crop.fluxes.carbon.gross_assimilation .= ifelse.(inactive, zero(T), max.(zero(T), agd))
+    crop_fluxes(crop).carbon.gross_assimilation .= ifelse.(inactive, zero(T), max.(zero(T), agd))
 
     #   Daily dark respiration, Rd, gC/m2/day
     #   Eqn 10, Haxeltine & Prentice 1996
@@ -76,12 +76,12 @@ function photosynthesis_C3_reference!(PFT::PftParameters,
 
     #   Daily dark respiration, Rd, gC/m2/day
     #   Eqn 10, Haxeltine & Prentice 1996
-    crop.fluxes.carbon.leaf_respiration .= ifelse.(inactive, zero(T), b .* crop.auxiliary.photosynthesis.vcmax)
-    adt = crop.fluxes.carbon.gross_assimilation .- hour2day(pet_daylength) .* crop.fluxes.carbon.leaf_respiration
+    crop_fluxes(crop).carbon.leaf_respiration .= ifelse.(inactive, zero(T), b .* crop_photosynthesis_auxiliary(crop).vcmax)
+    adt = crop_fluxes(crop).carbon.gross_assimilation .- hour2day(pet_daylength) .* crop_fluxes(crop).carbon.leaf_respiration
 
     #   Convert adt from gC/m2/day to mm/m2/day using ideal gas equation
-    crop.fluxes.carbon.net_assimilation .= max.(zero(T), adt)
-    crop.fluxes.carbon.water_limited_assimilation .= ifelse.(
+    crop_fluxes(crop).carbon.net_assimilation .= max.(zero(T), adt)
+    crop_fluxes(crop).carbon.water_limited_assimilation .= ifelse.(
         adt .<= zero(T),
         zero(T),
         adt ./ cmass .* T(8.314) .* degCtoK(temp) ./ p .* T(1000.0),
@@ -96,7 +96,7 @@ photosynthesis_C4!(PFT, photos, crop, pet, co2, temp)
 Compute C4 photosynthesis rates and related diagnostic variables.
 """
 function photosynthesis_C4_reference!(PFT::PftParameters,
-                            crop::Crop,
+                            crop,
                             apar::AbstractArray{T},
                             pet_daylength::AbstractArray{T},
                             temp::AbstractArray{T};
@@ -108,14 +108,14 @@ function photosynthesis_C4_reference!(PFT::PftParameters,
     @unpack b = PFT
     @unpack alphac4, theta, LAMBDA_OPT = lpjmlparams
     @unpack lambdamc4, cmass, cq, p = photoparams
-    inactive = crop.auxiliary.photosynthesis.temperature_stress .< T(1e-2)
+    inactive = crop_photosynthesis_auxiliary(crop).temperature_stress .< T(1e-2)
 
     #   Parameter accounting for effect of reduced intercellular CO2
     #   concentration on photosynthesis, Phipi.
     #   Eqn 14,16, Haxeltine & Prentice 1996
     #   Fig 1b, Collatz et al 1992
     if comp_vcmax
-        c1 = crop.auxiliary.photosynthesis.temperature_stress * alphac4
+        c1 = crop_photosynthesis_auxiliary(crop).temperature_stress * alphac4
         c2 = 1.0f0
         s = (24 ./ pet_daylength) * b
         sigma = 1.0f0 .- (c2 .- s) ./ (c2 .- theta * s)
@@ -123,15 +123,15 @@ function photosynthesis_C4_reference!(PFT::PftParameters,
         sigma = sqrt.(max.(zero(T), sigma))
         # LPJmL computes potential conductance at the common LAMBDA_OPT.
         # C4 assimilation is already saturated above lambdamc4.
-        crop.auxiliary.photosynthesis.lambda .= T(LAMBDA_OPT)
+        crop_photosynthesis_auxiliary(crop).lambda .= T(LAMBDA_OPT)
         vcmax = (1.0f0 / b) * (c1 ./ c2) .* ((2.0f0 * theta - 1.0f0) .* s .- (2.0f0 * theta .* s .- c2) .* sigma) .* apar * cmass * cq
-        crop.auxiliary.photosynthesis.vcmax .= ifelse.(inactive, zero(T), max.(zero(T), vcmax))
-        crop.auxiliary.photosynthesis.potential_vcmax .= crop.auxiliary.photosynthesis.vcmax
-        crop.auxiliary.photosynthesis.nitrogen_limitation .= ifelse.(crop.auxiliary.photosynthesis.vcmax .> zero(T), one(T), zero(T))
+        crop_photosynthesis_auxiliary(crop).vcmax .= ifelse.(inactive, zero(T), max.(zero(T), vcmax))
+        crop_photosynthesis_auxiliary(crop).potential_vcmax .= crop_photosynthesis_auxiliary(crop).vcmax
+        crop_photosynthesis_auxiliary(crop).nitrogen_limitation .= ifelse.(crop_photosynthesis_auxiliary(crop).vcmax .> zero(T), one(T), zero(T))
     end
 
-    phipi = min.(one(T), crop.auxiliary.photosynthesis.lambda/lambdamc4)
-    c1 = crop.auxiliary.photosynthesis.temperature_stress .* phipi * alphac4
+    phipi = min.(one(T), crop_photosynthesis_auxiliary(crop).lambda/lambdamc4)
+    c1 = crop_photosynthesis_auxiliary(crop).temperature_stress .* phipi * alphac4
     # c2 = device(ones(T, size(c1)))
 
     #   je is PAR-limited photosynthesis rate molC/m2/h, Eqn 3
@@ -142,15 +142,15 @@ function photosynthesis_C4_reference!(PFT::PftParameters,
 
     je = c1 .* apar * cmass * cq ./ (pet_daylength .+ 1f-5)
 
-    # jc = c2 .* hour2day(crop.auxiliary.photosynthesis.vcmax)
-    jc = hour2day(crop.auxiliary.photosynthesis.vcmax)
+    # jc = c2 .* hour2day(crop_photosynthesis_auxiliary(crop).vcmax)
+    jc = hour2day(crop_photosynthesis_auxiliary(crop).vcmax)
 
     #   Calculation of daily gross photosynthesis, Agd, gC/m2/day
     #   Eqn 2, Haxeltine & Prentice 1996
 
     # round-off; a positive floor can make GPP negative at low light.
     agd = (je .+ jc .- sqrt.(max.(zero(T), (je .+ jc) .* (je .+ jc) .- T(4.0) * theta .* je .* jc))) ./ (T(2.0) * theta) .* pet_daylength
-    crop.fluxes.carbon.gross_assimilation .= ifelse.(inactive, zero(T), max.(zero(T), agd))
+    crop_fluxes(crop).carbon.gross_assimilation .= ifelse.(inactive, zero(T), max.(zero(T), agd))
 
     #   Daily dark respiration, Rd, gC/m2/day
     #   Eqn 10, Haxeltine & Prentice 1996
@@ -158,12 +158,12 @@ function photosynthesis_C4_reference!(PFT::PftParameters,
     #   Total daytime net photosynthesis, Adt, gC/m2/day
     #   Eqn 19, Haxeltine & Prentice 1996
 
-    crop.fluxes.carbon.leaf_respiration .= ifelse.(inactive, zero(T), b .* crop.auxiliary.photosynthesis.vcmax)
-    adt = crop.fluxes.carbon.gross_assimilation .- hour2day(pet_daylength) .* crop.fluxes.carbon.leaf_respiration
+    crop_fluxes(crop).carbon.leaf_respiration .= ifelse.(inactive, zero(T), b .* crop_photosynthesis_auxiliary(crop).vcmax)
+    adt = crop_fluxes(crop).carbon.gross_assimilation .- hour2day(pet_daylength) .* crop_fluxes(crop).carbon.leaf_respiration
 
     #   Convert adt from gC/m2/day to mm/m2/day using ideal gas equation
-    crop.fluxes.carbon.net_assimilation .= max.(zero(T), adt)
-    crop.fluxes.carbon.water_limited_assimilation .= ifelse.(
+    crop_fluxes(crop).carbon.net_assimilation .= max.(zero(T), adt)
+    crop_fluxes(crop).carbon.water_limited_assimilation .= ifelse.(
         adt .<= zero(T),
         zero(T),
         adt ./ cmass .* T(8.314) .* degCtoK(temp) ./ p .* T(1000.0),
@@ -173,7 +173,7 @@ end
 
 """Cell-local C3 photosynthesis kernel with no intermediate device arrays."""
 function photosynthesis_C3!(PFT::PftParameters,
-                            crop::Crop,
+                            crop,
                             apar::AbstractArray{T},
                             pet_daylength::AbstractArray{T},
                             temp::AbstractArray{T},
@@ -184,15 +184,15 @@ function photosynthesis_C3!(PFT::PftParameters,
 ) where {T <: AbstractFloat}
     launch_1D!(
         photosynthesis_c3_kernel!,
-        crop.fluxes.carbon.gross_assimilation,
-        crop.fluxes.carbon.net_assimilation,
-        crop.fluxes.carbon.water_limited_assimilation,
-        crop.fluxes.carbon.leaf_respiration,
-        crop.auxiliary.photosynthesis.potential_vcmax,
-        crop.auxiliary.photosynthesis.vcmax,
-        crop.auxiliary.photosynthesis.nitrogen_limitation,
-        crop.auxiliary.photosynthesis.lambda,
-        crop.auxiliary.photosynthesis.temperature_stress,
+        crop_fluxes(crop).carbon.gross_assimilation,
+        crop_fluxes(crop).carbon.net_assimilation,
+        crop_fluxes(crop).carbon.water_limited_assimilation,
+        crop_fluxes(crop).carbon.leaf_respiration,
+        crop_photosynthesis_auxiliary(crop).potential_vcmax,
+        crop_photosynthesis_auxiliary(crop).vcmax,
+        crop_photosynthesis_auxiliary(crop).nitrogen_limitation,
+        crop_photosynthesis_auxiliary(crop).lambda,
+        crop_photosynthesis_auxiliary(crop).temperature_stress,
         apar,
         pet_daylength,
         temp,
@@ -281,7 +281,7 @@ end
 
 """Cell-local C4 photosynthesis kernel with no intermediate device arrays."""
 function photosynthesis_C4!(PFT::PftParameters,
-                            crop::Crop,
+                            crop,
                             apar::AbstractArray{T},
                             pet_daylength::AbstractArray{T},
                             temp::AbstractArray{T};
@@ -291,15 +291,15 @@ function photosynthesis_C4!(PFT::PftParameters,
 ) where {T <: AbstractFloat}
     launch_1D!(
         photosynthesis_c4_kernel!,
-        crop.fluxes.carbon.gross_assimilation,
-        crop.fluxes.carbon.net_assimilation,
-        crop.fluxes.carbon.water_limited_assimilation,
-        crop.fluxes.carbon.leaf_respiration,
-        crop.auxiliary.photosynthesis.potential_vcmax,
-        crop.auxiliary.photosynthesis.vcmax,
-        crop.auxiliary.photosynthesis.nitrogen_limitation,
-        crop.auxiliary.photosynthesis.lambda,
-        crop.auxiliary.photosynthesis.temperature_stress,
+        crop_fluxes(crop).carbon.gross_assimilation,
+        crop_fluxes(crop).carbon.net_assimilation,
+        crop_fluxes(crop).carbon.water_limited_assimilation,
+        crop_fluxes(crop).carbon.leaf_respiration,
+        crop_photosynthesis_auxiliary(crop).potential_vcmax,
+        crop_photosynthesis_auxiliary(crop).vcmax,
+        crop_photosynthesis_auxiliary(crop).nitrogen_limitation,
+        crop_photosynthesis_auxiliary(crop).lambda,
+        crop_photosynthesis_auxiliary(crop).temperature_stress,
         apar,
         pet_daylength,
         temp,

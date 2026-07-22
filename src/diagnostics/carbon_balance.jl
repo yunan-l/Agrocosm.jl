@@ -42,20 +42,20 @@ function init_carbon_balance(number_of_days::Integer,
     )
 end
 
-function crop_carbon_stock(crop::Crop)
-    return crop.state.carbon.leaf .+ crop.state.carbon.root .+
-           crop.state.carbon.pool .+ crop.state.carbon.storage
+function crop_carbon_stock(crop)
+    return crop_prognostic(crop).carbon.leaf .+ crop_prognostic(crop).carbon.root .+
+           crop_prognostic(crop).carbon.pool .+ crop_prognostic(crop).carbon.storage
 end
 
-function soil_carbon_stock(soil::Soil)
-    return vec(sum(soil.carbon.litter; dims = 1)) .+
-           vec(sum(soil.carbon.fast .+ soil.carbon.slow; dims = 1))
+function soil_carbon_stock(soil)
+    return vec(sum(soil_carbon_prognostic(soil).litter; dims = 1)) .+
+           vec(sum(soil_carbon_prognostic(soil).fast .+ soil_carbon_prognostic(soil).slow; dims = 1))
 end
 
 function record_carbon_balance_start!(balance::CarbonBalance,
                                       day_index::Integer,
-                                      crop::Crop,
-                                      soil::Soil)
+                                      crop,
+                                      soil)
     @views begin
         balance.plant_before[day_index, :] .= crop_carbon_stock(crop)
         balance.soil_before[day_index, :] .= soil_carbon_stock(soil)
@@ -68,38 +68,38 @@ end
 
 function record_carbon_balance_after_cultivate!(balance::CarbonBalance,
                                                 day_index::Integer,
-                                                crop::Crop;
+                                                crop;
                                                 lpjmlparams::LPJmLParams = lpjmlparams)
     @views begin
         balance.seed_input[day_index, :] .=
             max.(crop_carbon_stock(crop) .-
                  balance.plant_before[day_index, :], zero(eltype(balance.seed_input))) .*
-            crop.events.sowing
+            crop_events(crop).sowing
         balance.manure_input[day_index, :] .=
-            crop.fluxes.nitrogen.prescribed_manure_input .* lpjmlparams.manure_cn
+            crop_fluxes(crop).nitrogen.prescribed_manure_input .* lpjmlparams.manure_cn
     end
     return nothing
 end
 
 function record_carbon_balance_after_harvest!(balance::CarbonBalance,
                                               day_index::Integer,
-                                              crop::Crop,
-                                              soil::Soil,
+                                              crop,
+                                              soil,
                                               residue_fraction)
-    event = crop.events.harvest
+    event = crop_events(crop).harvest
     @views begin
         balance.residue_transfer[day_index, :] .=
-            vec(sum(soil.carbon.input; dims = 1))
+            vec(sum(soil_carbon_fluxes(soil).input; dims = 1))
         balance.harvest_export[day_index, :] .=
-            crop.fluxes.carbon.harvest_export
+            crop_fluxes(crop).carbon.harvest_export
     end
     return nothing
 end
 
 function record_carbon_balance_end!(balance::CarbonBalance,
                                     day_index::Integer,
-                                    crop::Crop,
-                                    soil::Soil;
+                                    crop,
+                                    soil;
                                     lpjmlparams::LPJmLParams = lpjmlparams)
     @views begin
         balance.plant_after[day_index, :] .= crop_carbon_stock(crop)
@@ -107,15 +107,15 @@ function record_carbon_balance_end!(balance::CarbonBalance,
         balance.total_after[day_index, :] .=
             balance.plant_after[day_index, :] .+
             balance.soil_after[day_index, :]
-        balance.net_primary_production[day_index, :] .= crop.fluxes.carbon.npp
+        balance.net_primary_production[day_index, :] .= crop_fluxes(crop).carbon.npp
         balance.heterotrophic_respiration[day_index, :] .=
-            soil.carbon.heterotrophic_respiration
+            soil_carbon_fluxes(soil).heterotrophic_respiration
         balance.litter_respiration[day_index, :] .=
-            vec(sum(soil.carbon.decomposed_litter; dims = 1)) .* lpjmlparams.atmfrac
+            vec(sum(soil_carbon_fluxes(soil).decomposed_litter; dims = 1)) .* lpjmlparams.atmfrac
         balance.fast_pool_respiration[day_index, :] .=
-            vec(sum(soil.carbon.decomposed_fast; dims = 1))
+            vec(sum(soil_carbon_fluxes(soil).decomposed_fast; dims = 1))
         balance.slow_pool_respiration[day_index, :] .=
-            vec(sum(soil.carbon.decomposed_slow; dims = 1))
+            vec(sum(soil_carbon_fluxes(soil).decomposed_slow; dims = 1))
 
         balance.residual[day_index, :] .=
             balance.total_before[day_index, :] .+

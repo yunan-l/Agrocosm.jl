@@ -42,19 +42,33 @@ matching `freezefrac2soil()`.
 end
 
 """Rebuild LPJmL liquid and ice reservoirs from conserved layer totals."""
-function partition_soil_water_ice!(soil::Soil)
+function partition_soil_water_ice!(soil)
     launch_custom!(
         partition_soil_water_ice_kernel!,
-        soil.water.storage,
-        size(soil.water.storage, 2),
-        soil.water.ice_storage,
-        soil.water.wilting_ice_fraction,
-        soil.water.available_ice_storage,
-        soil.water.free_ice_storage,
-        soil.water.relative_content,
-        soil.water.free_water,
-        soil.water.wilting_storage,
-        soil.water.holding_capacity_storage,
+        soil_water_prognostic(soil).storage,
+        size(soil_water_prognostic(soil).storage, 2),
+        soil_water_prognostic(soil).ice_storage,
+        soil_water_prognostic(soil).wilting_ice_fraction,
+        soil_water_prognostic(soil).available_ice_storage,
+        soil_water_prognostic(soil).free_ice_storage,
+        soil_water_auxiliary(soil).relative_content,
+        soil_water_auxiliary(soil).free_water,
+        soil_water_auxiliary(soil).wilting_storage,
+        soil_water_auxiliary(soil).holding_capacity_storage,
+    )
+    return nothing
+end
+
+function partition_soil_water_ice!(state::ModelState)
+    water_state = state.prognostic.soil.water
+    water_auxiliary = state.auxiliary.soil.water
+    launch_custom!(
+        partition_soil_water_ice_kernel!, water_state.storage,
+        size(water_state.storage, 2), water_state.ice_storage,
+        water_state.wilting_ice_fraction, water_state.available_ice_storage,
+        water_state.free_ice_storage, water_auxiliary.relative_content,
+        water_auxiliary.free_water, water_auxiliary.wilting_storage,
+        water_auxiliary.holding_capacity_storage,
     )
     return nothing
 end

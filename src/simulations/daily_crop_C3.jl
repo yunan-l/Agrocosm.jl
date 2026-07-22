@@ -1,13 +1,6 @@
-# Purely process-based modelling
-"""
-daily_crop_C3!(...)
-
-Execute daily forward simulation for C3 crop configuration.
-"""
+"""Execute daily C3 processes over the canonical lifecycle state."""
 function daily_crop_C3!(start_day, end_day,
-                        pftparameters,
-                        climate, climbuf, crop, pet, soil, managed_land,
-                        dailyWeather, output;
+                        processes::ProcessModules, climate, state::ModelState;
                         irrigation = false,
                         manure = false,
                         auto_fertilizer = true,
@@ -16,12 +9,21 @@ function daily_crop_C3!(start_day, end_day,
                         nitrogen_balance = nothing,
                         carbon_balance = nothing,
                         thermal_balance = nothing,
-                        model_parameters::ModelParameters = ModelParameters(eltype(crop.state.canopy.lai)),
                         simulation_day_offset::Integer = 0,
                         diagnostic_offset::Integer = 0,
 )
 
-    T = eltype(crop.state.canopy.lai)
+    pftparameters = processes.crop
+    model_parameters = processes.global_parameters
+    climbuf = state.prognostic.climate
+    crop = state
+    pet = state.auxiliary.pet
+    soil = state
+    managed_land = state.inputs.management
+    dailyWeather = state.inputs.weather
+    output = state.output
+
+    T = eltype(crop_prognostic(crop).canopy.lai)
     pftparameters = convert_precision(T, pftparameters)
     model_parameters = convert_precision(T, model_parameters)
     global_params = model_parameters.lpjml
@@ -95,11 +97,7 @@ function daily_crop_C3!(start_day, end_day,
         albedo!(pftparameters, crop, soil, pet)  # compute albedo
         petpar!(pet, day_of_year, managed_land.latitude, dailyWeather.temp, dailyWeather.lwr, dailyWeather.swr) # compute crop potential evapotraspiration variables
 
-        snow!(
-            soil, dailyWeather;
-            snowparams = snow_params,
-            lpjmlparams = global_params,
-        )
+        snow!(soil, dailyWeather; snowparams = snow_params, lpjmlparams = global_params)
 
         if water_balance !== nothing
             record_water_balance_after_snow!(water_balance, diagnostic_day, dailyWeather.prec)
@@ -156,7 +154,7 @@ function daily_crop_C3!(start_day, end_day,
             crop,
             dailyWeather.prec;
             irrigation = irrigation,
-            snowmelt = soil.snow.melt,
+            snowmelt = soil_snow_fluxes(soil).melt,
             air_temperature = dailyWeather.temp,
             lpjmlparams = global_params,
             thermalparams = thermal_params,
@@ -165,19 +163,19 @@ function daily_crop_C3!(start_day, end_day,
             record_thermal_balance!(thermal_balance, diagnostic_day, soil)
         end
 
-        apar_crop!(pftparameters, crop, pet, soil.snow.height) # crop absorbed photosynthetic radiation
+        apar_crop!(pftparameters, crop, pet, soil_snow_prognostic(soil).height) # crop absorbed photosynthetic radiation
         temp_stress(
             pftparameters, pet, crop, dailyWeather.temp;
             photoparams = photo_params,
         ) # temperature stress function
 
         # C3 photosynthesis
-        photosynthesis_C3!(pftparameters, crop, crop.auxiliary.canopy.apar, pet.daylength, dailyWeather.temp, current_co2;
+        photosynthesis_C3!(pftparameters, crop, crop_canopy_auxiliary(crop).apar, pet.daylength, dailyWeather.temp, current_co2;
                            comp_vcmax = true, lpjmlparams = global_params, photoparams = photo_params)
 
         # LPJmL first uses lambda_opt photosynthesis to obtain potential
         # conductance, then constrains conductance by water supply.
-        transpiration!(crop.fluxes.carbon.water_limited_assimilation, pftparameters, crop, pet, soil, current_co2;
+        transpiration!(crop_fluxes(crop).carbon.water_limited_assimilation, pftparameters, crop, pet, soil, current_co2;
                        lpjmlparams = global_params)
 
         # Solve the water-limited lambda on the active backend (CPU or GPU),
@@ -188,18 +186,18 @@ function daily_crop_C3!(start_day, end_day,
         if nitrogen_limit_vcmax
             # LPJmL obtains N using the potential capacity, constrains Vcmax
             # only when leaf N remains insufficient, then recomputes carbon.
-            crop_nitrogen!(crop, pftparameters, soil, crop.auxiliary.photosynthesis.potential_vcmax, dailyWeather.temp;
+            crop_nitrogen!(crop, pftparameters, soil, crop_photosynthesis_auxiliary(crop).potential_vcmax, dailyWeather.temp;
                            auto_fertilizer = auto_fertilizer, lpjmlparams = global_params)
             limit_vcmax_by_nitrogen!(crop, pftparameters, dailyWeather.temp;
                                     lpjmlparams = global_params)
         end
-        photosynthesis_C3!(pftparameters, crop, crop.auxiliary.canopy.apar, pet.daylength, dailyWeather.temp, current_co2;
+        photosynthesis_C3!(pftparameters, crop, crop_canopy_auxiliary(crop).apar, pet.daylength, dailyWeather.temp, current_co2;
                            comp_vcmax = false, lpjmlparams = global_params, photoparams = photo_params)
 
         # crop respiration and carbon allocation
         crop_carbon!(
             crop, output, pftparameters, dailyWeather.temp,
-            soil.thermal.temperature;
+            soil_thermal_prognostic(soil).temperature;
             output_row = output_row,
             lpjmlparams = global_params,
         )
@@ -210,7 +208,7 @@ function daily_crop_C3!(start_day, end_day,
             # conserved plant N without performing a second uptake.
             allocate_crop_nitrogen!(crop, pftparameters)
         else
-            crop_nitrogen!(crop, pftparameters, soil, crop.auxiliary.photosynthesis.vcmax, dailyWeather.temp;
+            crop_nitrogen!(crop, pftparameters, soil, crop_photosynthesis_auxiliary(crop).vcmax, dailyWeather.temp;
                            auto_fertilizer = auto_fertilizer,
                            lpjmlparams = global_params) # nitrogen cycle
         end

@@ -55,16 +55,16 @@ end
 
 function record_nitrogen_balance_start!(balance::NitrogenBalance,
                                         day_index::Integer,
-                                        crop::Crop,
-                                        soil::Soil)
+                                        crop,
+                                        soil)
     @views begin
-        balance.plant_before[day_index, :] .= crop.state.nitrogen.total
+        balance.plant_before[day_index, :] .= crop_prognostic(crop).nitrogen.total
         balance.mineral_before[day_index, :] .= vec(sum(
-            soil.nitrogen.nitrate .+ soil.nitrogen.ammonium; dims = 1,
+            soil_nitrogen_prognostic(soil).nitrate .+ soil_nitrogen_prognostic(soil).ammonium; dims = 1,
         ))
         balance.organic_before[day_index, :] .= vec(sum(
-            soil.nitrogen.litter; dims = 1,
-        )) .+ vec(sum(soil.nitrogen.fast .+ soil.nitrogen.slow; dims = 1))
+            soil_nitrogen_prognostic(soil).litter; dims = 1,
+        )) .+ vec(sum(soil_nitrogen_prognostic(soil).fast .+ soil_nitrogen_prognostic(soil).slow; dims = 1))
         balance.total_before[day_index, :] .=
             balance.plant_before[day_index, :] .+
             balance.mineral_before[day_index, :] .+
@@ -75,52 +75,52 @@ end
 
 function record_nitrogen_balance_end!(balance::NitrogenBalance,
                                       day_index::Integer,
-                                      crop::Crop,
-                                      soil::Soil)
+                                      crop,
+                                      soil)
     @views begin
-        balance.plant_after[day_index, :] .= crop.state.nitrogen.total
+        balance.plant_after[day_index, :] .= crop_prognostic(crop).nitrogen.total
         balance.mineral_after[day_index, :] .= vec(sum(
-            soil.nitrogen.nitrate .+ soil.nitrogen.ammonium; dims = 1,
+            soil_nitrogen_prognostic(soil).nitrate .+ soil_nitrogen_prognostic(soil).ammonium; dims = 1,
         ))
         balance.organic_after[day_index, :] .= vec(sum(
-            soil.nitrogen.litter; dims = 1,
-        )) .+ vec(sum(soil.nitrogen.fast .+ soil.nitrogen.slow; dims = 1))
+            soil_nitrogen_prognostic(soil).litter; dims = 1,
+        )) .+ vec(sum(soil_nitrogen_prognostic(soil).fast .+ soil_nitrogen_prognostic(soil).slow; dims = 1))
         balance.total_after[day_index, :] .=
             balance.plant_after[day_index, :] .+
             balance.mineral_after[day_index, :] .+
             balance.organic_after[day_index, :]
 
         balance.root_uptake[day_index, :] .=
-            crop.fluxes.nitrogen.uptake .- crop.fluxes.nitrogen.auto_fertilizer
-        balance.seed_input[day_index, :] .= crop.fluxes.nitrogen.seed_input
+            crop_fluxes(crop).nitrogen.uptake .- crop_fluxes(crop).nitrogen.auto_fertilizer
+        balance.seed_input[day_index, :] .= crop_fluxes(crop).nitrogen.seed_input
         balance.prescribed_fertilizer_input[day_index, :] .=
-            crop.fluxes.nitrogen.prescribed_fertilizer_input
+            crop_fluxes(crop).nitrogen.prescribed_fertilizer_input
         balance.prescribed_manure_input[day_index, :] .=
-            crop.fluxes.nitrogen.prescribed_manure_input
+            crop_fluxes(crop).nitrogen.prescribed_manure_input
         balance.automatic_fertilizer_input[day_index, :] .=
-            crop.fluxes.nitrogen.auto_fertilizer
-        balance.harvest_export[day_index, :] .= crop.fluxes.nitrogen.harvest_export
+            crop_fluxes(crop).nitrogen.auto_fertilizer
+        balance.harvest_export[day_index, :] .= crop_fluxes(crop).nitrogen.harvest_export
         balance.mineralization[day_index, :] .=
-            vec(sum(soil.nitrogen.mineralization; dims = 1))
+            vec(sum(soil_nitrogen_fluxes(soil).mineralization; dims = 1))
         balance.immobilization[day_index, :] .=
-            vec(sum(soil.nitrogen.immobilization; dims = 1))
+            vec(sum(soil_nitrogen_fluxes(soil).immobilization; dims = 1))
         balance.nitrification[day_index, :] .=
-            vec(sum(soil.nitrogen.nitrification; dims = 1))
+            vec(sum(soil_nitrogen_fluxes(soil).nitrification; dims = 1))
         balance.n2o_nitrification[day_index, :] .=
-            vec(sum(soil.nitrogen.n2o_nitrification; dims = 1))
+            vec(sum(soil_nitrogen_fluxes(soil).n2o_nitrification; dims = 1))
         balance.denitrification[day_index, :] .=
-            vec(sum(soil.nitrogen.denitrification; dims = 1))
+            vec(sum(soil_nitrogen_fluxes(soil).denitrification; dims = 1))
         balance.n2o_denitrification[day_index, :] .=
-            vec(sum(soil.nitrogen.n2o_denitrification; dims = 1))
+            vec(sum(soil_nitrogen_fluxes(soil).n2o_denitrification; dims = 1))
         balance.n2_denitrification[day_index, :] .=
-            vec(sum(soil.nitrogen.n2_denitrification; dims = 1))
-        balance.volatilization[day_index, :] .= soil.nitrogen.volatilization
+            vec(sum(soil_nitrogen_fluxes(soil).n2_denitrification; dims = 1))
+        balance.volatilization[day_index, :] .= soil_nitrogen_fluxes(soil).volatilization
         balance.gaseous_loss[day_index, :] .=
             balance.n2o_nitrification[day_index, :] .+
             balance.n2o_denitrification[day_index, :] .+
             balance.n2_denitrification[day_index, :] .+
             balance.volatilization[day_index, :]
-        balance.leaching_loss[day_index, :] .= soil.nitrogen.leaching
+        balance.leaching_loss[day_index, :] .= soil_nitrogen_fluxes(soil).leaching
 
         balance.residual[day_index, :] .=
             balance.total_before[day_index, :] .+

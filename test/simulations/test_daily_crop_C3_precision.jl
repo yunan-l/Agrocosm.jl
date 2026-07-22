@@ -55,9 +55,10 @@ function run_c3_precision_smoke(::Type{T}, device = identity) where {T <: Abstra
         co2 = backend(T[400]),
     )
 
+    state = model_state(climbuf, crop, pet, soil, managed_land, weather, output)
+    processes = ProcessModules(convert_precision(T, cft1), ModelParameters(T))
     daily_crop_C3!(
-        1, days, cft1, climate, climbuf, crop, pet, soil, managed_land,
-        weather, output;
+        1, days, processes, climate, state;
         auto_fertilizer = false,
         nitrogen_limit_vcmax = false,
     )

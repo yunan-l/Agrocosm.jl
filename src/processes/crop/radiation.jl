@@ -139,7 +139,7 @@ apar_crop!(PFT, crop, pet)
 Compute absorbed PAR and fPAR for non-maize crops.
 """
 function apar_crop_reference!(PFT::PftParameters,
-                              crop::Crop,
+                              crop,
                               pet::PetPar,
                               snow_height = nothing,
 )
@@ -147,26 +147,26 @@ function apar_crop_reference!(PFT::PftParameters,
     @unpack name, lightextcoeff, albedo_leaf, alphaa  = PFT
 
     actual_lai = max.(
-        zero(eltype(crop.state.canopy.lai)),
-        crop.state.canopy.lai .- crop.state.canopy.lai_npp_deficit,
+        zero(eltype(crop_prognostic(crop).canopy.lai)),
+        crop_prognostic(crop).canopy.lai .- crop_prognostic(crop).canopy.lai_npp_deficit,
     )
-    crop.auxiliary.canopy.fpar .= 1 .- exp.(-lightextcoeff * actual_lai)
+    crop_canopy_auxiliary(crop).fpar .= 1 .- exp.(-lightextcoeff * actual_lai)
     if snow_height !== nothing
-        crop.auxiliary.canopy.fpar .*= snow_height .<= zero(eltype(snow_height))
+        crop_canopy_auxiliary(crop).fpar .*= snow_height .<= zero(eltype(snow_height))
     end
 
-    crop.auxiliary.canopy.apar .= pet.par * (1 - albedo_leaf) * alphaa .* crop.auxiliary.canopy.fpar
+    crop_canopy_auxiliary(crop).apar .= pet.par * (1 - albedo_leaf) * alphaa .* crop_canopy_auxiliary(crop).fpar
 
 end
 
-function apar_crop!(PFT::PftParameters, crop::Crop, pet::PetPar, snow_height = nothing)
-    T = eltype(crop.auxiliary.canopy.apar)
+function apar_crop!(PFT::PftParameters, crop, pet::PetPar, snow_height = nothing)
+    T = eltype(crop_canopy_auxiliary(crop).apar)
     launch_1D!(
         apar_crop_kernel!,
-        crop.auxiliary.canopy.apar,
-        crop.auxiliary.canopy.fpar,
-        crop.state.canopy.lai,
-        crop.state.canopy.lai_npp_deficit,
+        crop_canopy_auxiliary(crop).apar,
+        crop_canopy_auxiliary(crop).fpar,
+        crop_prognostic(crop).canopy.lai,
+        crop_prognostic(crop).canopy.lai_npp_deficit,
         snow_height === nothing ? pet.eeq : snow_height,
         pet.par,
         T(PFT.lightextcoeff),
@@ -185,7 +185,7 @@ apar_crop_maize!(PFT, crop, pet)
 Compute absorbed PAR and maize-specific fPAR parameterization.
 """
 function apar_crop_maize_reference!(PFT::PftParameters,
-                                    crop::Crop,
+                                    crop,
                                     pet::PetPar,
                                     snow_height = nothing,
 )
@@ -193,27 +193,27 @@ function apar_crop_maize_reference!(PFT::PftParameters,
     @unpack name, lightextcoeff, albedo_leaf, alphaa  = PFT
 
     actual_lai = max.(
-        zero(eltype(crop.state.canopy.lai)),
-        crop.state.canopy.lai .- crop.state.canopy.lai_npp_deficit,
+        zero(eltype(crop_prognostic(crop).canopy.lai)),
+        crop_prognostic(crop).canopy.lai .- crop_prognostic(crop).canopy.lai_npp_deficit,
     )
-    crop.auxiliary.canopy.fpar .= min.(1.0f0, max.(0.0f0, 0.2558f0 * max.(0.01f0, actual_lai) .- 0.0024f0))
+    crop_canopy_auxiliary(crop).fpar .= min.(1.0f0, max.(0.0f0, 0.2558f0 * max.(0.01f0, actual_lai) .- 0.0024f0))
     if snow_height !== nothing
-        crop.auxiliary.canopy.fpar .*= snow_height .<= zero(eltype(snow_height))
+        crop_canopy_auxiliary(crop).fpar .*= snow_height .<= zero(eltype(snow_height))
     end
 
-    crop.auxiliary.canopy.apar .= pet.par * (1 - albedo_leaf) * alphaa .* crop.auxiliary.canopy.fpar
+    crop_canopy_auxiliary(crop).apar .= pet.par * (1 - albedo_leaf) * alphaa .* crop_canopy_auxiliary(crop).fpar
 
 end
 
 
-function apar_crop_maize!(PFT::PftParameters, crop::Crop, pet::PetPar, snow_height = nothing)
-    T = eltype(crop.auxiliary.canopy.apar)
+function apar_crop_maize!(PFT::PftParameters, crop, pet::PetPar, snow_height = nothing)
+    T = eltype(crop_canopy_auxiliary(crop).apar)
     launch_1D!(
         apar_crop_kernel!,
-        crop.auxiliary.canopy.apar,
-        crop.auxiliary.canopy.fpar,
-        crop.state.canopy.lai,
-        crop.state.canopy.lai_npp_deficit,
+        crop_canopy_auxiliary(crop).apar,
+        crop_canopy_auxiliary(crop).fpar,
+        crop_prognostic(crop).canopy.lai,
+        crop_prognostic(crop).canopy.lai_npp_deficit,
         snow_height === nothing ? pet.eeq : snow_height,
         pet.par,
         T(PFT.lightextcoeff),

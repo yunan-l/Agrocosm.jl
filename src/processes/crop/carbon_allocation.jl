@@ -4,33 +4,33 @@ carbon_allocation!(PFT, crop, photos)
 Partition crop biomass among leaf/root/storage/pool carbon compartments.
 """
 function carbon_allocation!(PFT::PftParameters,
-                            crop::Crop
+                            crop
 )
-    # 1D cell-wise allocation; crop.state.carbon.storage provides launch length and kernel arg #1.
-    T = eltype(crop.state.carbon.storage)
+    # 1D cell-wise allocation; crop_prognostic(crop).carbon.storage provides launch length and kernel arg #1.
+    T = eltype(crop_prognostic(crop).carbon.storage)
     kernel_params = (FROOTMAX = T(0.4), FROOTMIN = T(0.3))
 
     launch_1D!(carbon_allocation_kernel!,
-               crop.state.carbon.storage,
-               crop.state.phenology.is_growing,
-               crop.state.phenology.growing_days,
-               crop.state.nitrogen.stress_sum,
-               crop.state.nitrogen.sufficiency,
-               crop.auxiliary.stress.nitrogen_deficit,
-               crop.auxiliary.stress.water_deficit,
-               crop.auxiliary.phenology.fphu,
-               crop.state.phenology.senescence,
-               crop.state.carbon.biomass,
-               crop.fluxes.carbon.respiration,
-               crop.fluxes.carbon.gross_assimilation,
-               crop.fluxes.carbon.leaf_respiration,
-               crop.fluxes.carbon.npp,
-               crop.state.canopy.lai,
-               crop.auxiliary.canopy.actual_lai,
-               crop.state.carbon.leaf,
-               crop.state.carbon.root,
-               crop.state.carbon.pool,
-               crop.state.canopy.lai_npp_deficit,
+               crop_prognostic(crop).carbon.storage,
+               crop_prognostic(crop).phenology.is_growing,
+               crop_prognostic(crop).phenology.growing_days,
+               crop_prognostic(crop).nitrogen.stress_sum,
+               crop_prognostic(crop).nitrogen.sufficiency,
+               crop_stress_auxiliary(crop).nitrogen_deficit,
+               crop_stress_auxiliary(crop).water_deficit,
+               crop_phenology_auxiliary(crop).fphu,
+               crop_prognostic(crop).phenology.senescence,
+               crop_prognostic(crop).carbon.biomass,
+               crop_fluxes(crop).carbon.respiration,
+               crop_fluxes(crop).carbon.gross_assimilation,
+               crop_fluxes(crop).carbon.leaf_respiration,
+               crop_fluxes(crop).carbon.npp,
+               crop_prognostic(crop).canopy.lai,
+               crop_canopy_auxiliary(crop).actual_lai,
+               crop_prognostic(crop).carbon.leaf,
+               crop_prognostic(crop).carbon.root,
+               crop_prognostic(crop).carbon.pool,
+               crop_prognostic(crop).canopy.lai_npp_deficit,
                PFT,
                kernel_params)
 

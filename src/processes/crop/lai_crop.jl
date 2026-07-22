@@ -3,20 +3,20 @@ lai_crop!(crop, PFT)
 
 Update leaf-area index from phenology and carbon state.
 """
-function lai_crop!(crop::Crop,
+function lai_crop!(crop,
                    PFT::PftParameters
 )
 
     launch_1D!(
         lai_crop_kernel!,
-        crop.state.canopy.lai,
-        crop.state.phenology.senescence,
-        crop.state.phenology.senescence_previous,
-        crop.state.water.sufficiency,
-        crop.state.nitrogen.sufficiency,
-        crop.auxiliary.canopy.flaimax,
-        crop.state.canopy.laimax_adjusted,
-        crop.state.phenology.is_growing,
+        crop_prognostic(crop).canopy.lai,
+        crop_prognostic(crop).phenology.senescence,
+        crop_prognostic(crop).phenology.senescence_previous,
+        crop_prognostic(crop).water.sufficiency,
+        crop_prognostic(crop).nitrogen.sufficiency,
+        crop_canopy_auxiliary(crop).flaimax,
+        crop_prognostic(crop).canopy.laimax_adjusted,
+        crop_prognostic(crop).phenology.is_growing,
         PFT,
     )
 

@@ -150,11 +150,17 @@ each field rather than inferred from the owning struct.
 | `soil.water.wilting_ice_fraction` | Frozen fraction of wilting-point water | 0–1 |
 | `soil.water.available_ice_storage` | Ice in plant-available water | mm |
 | `soil.water.free_ice_storage` | Ice in gravitational water | mm |
+| `soil.water.saturation_fraction` | Previous hydraulic pore fraction used by the next pedotransfer update | 0–1 |
 | `soil.thermal.temperature` | Layer temperature | °C |
 | `soil.thermal.enthalpy` | Volumetric layer enthalpy relative to 0 °C | J m⁻³ |
 | `soil.thermal.frozen_fraction` | Fraction of layer water frozen | 0–1 |
 | `soil.thermal.freeze_depth` | Effective frozen depth in layer | mm |
 | `soil.thermal.water_reference` | Phase-change reference water stock | mm |
+| `soil.thermal.heat_capacity_frozen` | Previous solver-step frozen heat capacity | J m⁻³ K⁻¹ |
+| `soil.thermal.heat_capacity_unfrozen` | Previous solver-step unfrozen heat capacity | J m⁻³ K⁻¹ |
+| `soil.thermal.latent_heat` | Previous solver-step volumetric latent heat | J m⁻³ |
+| `soil.thermal.conductivity_frozen` | Previous solver-step frozen conductivity | W m⁻¹ K⁻¹ |
+| `soil.thermal.conductivity_unfrozen` | Previous solver-step unfrozen conductivity | W m⁻¹ K⁻¹ |
 | `soil.thermal.initialized` | Thermal-profile initialization mode | Bool |
 | `soil.carbon.litter` | C in surface/incorporated/root litter | gC m⁻² |
 | `soil.carbon.fast` | Fast SOC by layer | gC m⁻² |
@@ -170,7 +176,10 @@ each field rather than inferred from the owning struct.
 | `soil.surface_litter.cover` | Fractional litter cover | 0–1 |
 | `soil.surface_litter.water_storage` | Water retained by litter | mm |
 | `soil.surface_litter.temperature` | Litter temperature | °C |
+| `soil.surface_litter.conductivity` | Previous solver-step litter conductivity | W m⁻¹ K⁻¹ |
 | `soil.snow.pack` | Snow water-equivalent stock | mm |
+| `soil.snow.height` | Snow height retained for the next day's pre-snow albedo step | m |
+| `soil.snow.fraction` | Snow cover retained for the next day's pre-snow albedo step | 0–1 |
 
 ### Soil daily fluxes
 
@@ -192,8 +201,7 @@ each field rather than inferred from the owning struct.
 |---|---|---|
 | `soil.properties` | `sand_fraction`, `clay_fraction`, `ph`, `layer_depth` | Static forcing/configuration |
 | `soil.water` | `relative_content`, `free_water` | Daily hydraulic diagnostics |
-| `soil.water` | `wilting_fraction`, `wilting_storage`, `field_capacity`, `saturation_fraction`, `saturation_storage`, `beta`, `holding_capacity_fraction`, `holding_capacity_storage`, `saturated_conductivity` | Daily derived hydraulic properties; top layer responds to tillage density |
-| `soil.thermal` | `heat_capacity_frozen`, `heat_capacity_unfrozen`, `latent_heat`, `conductivity_frozen`, `conductivity_unfrozen` | Daily thermal properties |
+| `soil.water` | `wilting_fraction`, `wilting_storage`, `field_capacity`, `saturation_storage`, `beta`, `holding_capacity_fraction`, `holding_capacity_storage`, `saturated_conductivity` | Daily derived hydraulic properties; top layer responds to tillage density |
 | `soil.thermal` | `diffusivity_0`, `diffusivity_15` | Static soil-type parameters |
 | `soil.carbon` | `litter_response` | Daily environmental response |
 | `soil.nitrogen` | `litter_response` | Daily environmental response |
@@ -202,7 +210,6 @@ each field rather than inferred from the owning struct.
 | `soil.decomposition` | `layer_scratch_1`, `layer_scratch_2`, `surface_scratch_1`, `surface_scratch_2` | Workspace; excluded from restart/output |
 | `soil.management.tillage_fraction` | Litter-class routing matrix | Static management coefficient |
 | `soil.surface_litter` | `water_capacity`, `conductivity` | Daily derived physical properties |
-| `soil.snow` | `height`, `fraction` | Derived snow-surface diagnostics |
 
 ## Climate and management forcing
 
@@ -299,8 +306,10 @@ declarations contain the units and detailed LPJmL-style field comments.
 precision. `SoilParams` is the soil-type lookup table. These values are
 configuration, never prognostic state.
 
-`CropSimulation` stores `pft`, the runtime `state` container, optional
-`diagnostics`, `model_parameters`, run `config`, and `simulated_days`. Its
-runtime `state` named tuple contains crop/soil state together with forcing
-buffers and output for API convenience; that API grouping must not be confused
-with the scientific lifecycle classification in this document.
+`CropSimulation` stores array-free `ProcessModules`, the canonical `ModelState`,
+optional diagnostics, run configuration, and `simulated_days`. `ModelState`
+uniformly partitions both crop and soil variables into `prognostic`, `fluxes`,
+`auxiliary`, `inputs`, `events`, `workspace`, and `output`. Process wrappers
+receive `ModelState` and use lifecycle selectors to pass concrete array leaves
+to backend kernels. `CropSimulation` no longer exposes reconstructed `Crop` or
+`Soil` views.

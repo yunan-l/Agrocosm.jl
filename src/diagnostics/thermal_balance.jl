@@ -33,52 +33,52 @@ end
 
 function record_thermal_balance!(thermal_balance::ThermalBalance,
                                  day_index::Integer,
-                                 soil::Soil)
+                                 soil)
     @views begin
         thermal_balance.surface_energy_flux[day_index, :] .=
-            soil.thermal.surface_energy_flux
+            soil_thermal_fluxes(soil).surface_energy_flux
         thermal_balance.energy_residual[day_index, :] .=
-            soil.thermal.energy_residual
+            soil_thermal_fluxes(soil).energy_residual
         thermal_balance.untracked_water_energy_flux[day_index, :] .=
-            soil.thermal.untracked_water_energy_flux
+            soil_thermal_fluxes(soil).untracked_water_energy_flux
         thermal_balance.rain_energy_input[day_index, :] .=
-            soil.thermal.rain_energy_input
+            soil_thermal_fluxes(soil).rain_energy_input
         thermal_balance.snowmelt_energy_input[day_index, :] .=
-            soil.thermal.snowmelt_energy_input
+            soil_thermal_fluxes(soil).snowmelt_energy_input
         thermal_balance.lateral_runoff_energy_output[day_index, :] .=
-            soil.thermal.lateral_runoff_energy_output
+            soil_thermal_fluxes(soil).lateral_runoff_energy_output
         thermal_balance.bottom_drainage_energy_output[day_index, :] .=
-            soil.thermal.bottom_drainage_energy_output
+            soil_thermal_fluxes(soil).bottom_drainage_energy_output
         thermal_balance.percolation_energy_residual[day_index, :] .=
-            soil.thermal.percolation_energy_residual
+            soil_thermal_fluxes(soil).percolation_energy_residual
         thermal_balance.column_energy[day_index, :] .= vec(sum(
-            soil.thermal.enthalpy .* reshape(
-                soil.properties.layer_depth .* eltype(soil.properties.layer_depth)(0.001),
+            soil_thermal_prognostic(soil).enthalpy .* reshape(
+                soil_properties(soil).layer_depth .* eltype(soil_properties(soil).layer_depth)(0.001),
                 :, 1,
             ); dims = 1,
         ))
         thermal_balance.total_ice_storage[day_index, :] .=
-            vec(sum(soil.water.ice_storage; dims = 1))
+            vec(sum(soil_water_prognostic(soil).ice_storage; dims = 1))
         thermal_balance.wilting_ice_storage[day_index, :] .= vec(sum(
-            soil.water.wilting_ice_fraction .* soil.water.wilting_storage;
+            soil_water_prognostic(soil).wilting_ice_fraction .* soil_water_auxiliary(soil).wilting_storage;
             dims = 1,
         ))
         thermal_balance.available_ice_storage[day_index, :] .=
-            vec(sum(soil.water.available_ice_storage; dims = 1))
+            vec(sum(soil_water_prognostic(soil).available_ice_storage; dims = 1))
         thermal_balance.free_ice_storage[day_index, :] .=
-            vec(sum(soil.water.free_ice_storage; dims = 1))
+            vec(sum(soil_water_prognostic(soil).free_ice_storage; dims = 1))
         component_ice =
-            soil.water.wilting_ice_fraction .* soil.water.wilting_storage .+
-            soil.water.available_ice_storage .+
-            soil.water.free_ice_storage
+            soil_water_prognostic(soil).wilting_ice_fraction .* soil_water_auxiliary(soil).wilting_storage .+
+            soil_water_prognostic(soil).available_ice_storage .+
+            soil_water_prognostic(soil).free_ice_storage
         thermal_balance.ice_pool_residual[day_index, :] .=
-            vec(maximum(abs.(soil.water.ice_storage .- component_ice); dims = 1))
+            vec(maximum(abs.(soil_water_prognostic(soil).ice_storage .- component_ice); dims = 1))
         thermal_balance.maximum_frozen_fraction[day_index, :] .=
-            vec(maximum(soil.thermal.frozen_fraction; dims = 1))
+            vec(maximum(soil_thermal_prognostic(soil).frozen_fraction; dims = 1))
         thermal_balance.minimum_temperature[day_index, :] .=
-            vec(minimum(soil.thermal.temperature; dims = 1))
+            vec(minimum(soil_thermal_prognostic(soil).temperature; dims = 1))
         thermal_balance.maximum_temperature[day_index, :] .=
-            vec(maximum(soil.thermal.temperature; dims = 1))
+            vec(maximum(soil_thermal_prognostic(soil).temperature; dims = 1))
     end
     return nothing
 end

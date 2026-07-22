@@ -1,0 +1,7 @@
+[deps]
+Agrocosm = "03150e84-a77a-4da1-94e0-c2afe2ed6c45"
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+
+[compat]
+Documenter = "1"
+julia = "1.10"

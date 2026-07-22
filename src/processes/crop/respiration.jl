@@ -1,9 +1,9 @@
 """
 respiration!(crop, PFT, temp, assim; lpjmlparams=lpjmlparams)
 
-Compute maintenance and growth respiration and update `crop.fluxes.carbon.respiration`.
+Compute maintenance and growth respiration and update `crop_fluxes(crop).carbon.respiration`.
 """
-function respiration_reference!(crop::Crop,
+function respiration_reference!(crop,
                                 PFT::PftParameters,
                                 air_temperature::AbstractVector{T},
                                 soil_temperature::AbstractMatrix{T},
@@ -29,27 +29,27 @@ function respiration_reference!(crop::Crop,
         zero(T),
     )
     # unlimited nitrogen
-    roresp = crop.state.carbon.root * respcoeff * k * nc_ratio.root .* gtemp_soil
-    soresp = crop.state.carbon.storage * respcoeff * k * nc_ratio.sto .* gtemp_air
-    presp = crop.state.carbon.pool * respcoeff * k * nc_ratio.pool .* gtemp_air
+    roresp = crop_prognostic(crop).carbon.root * respcoeff * k * nc_ratio.root .* gtemp_soil
+    soresp = crop_prognostic(crop).carbon.storage * respcoeff * k * nc_ratio.sto .* gtemp_air
+    presp = crop_prognostic(crop).carbon.pool * respcoeff * k * nc_ratio.pool .* gtemp_air
     gresp = max.(zero(T), (assim .- roresp .- soresp .- presp) * r_growth)
 
     # # differentiation based
     # # gate = max.(temp .+ T(40.0), T(0.0)) ./ (max.(temp .+ T(40.0), T(1e-5)))
     # gate = sigmoid.(T(10.0) * (temp .+ T(40.0)))
     # gtemp_air = gate .* exp.(e0 * (one(T) / (temp_response + T(10.0)) .- one(T) ./ (temp .+ temp_response)))
-    # rosoresp = crop.state.carbon.root * respcoeff * k .* (crop.state.nitrogen.root ./ (crop.state.carbon.root .+ T(1e-5))) .* gtemp_air .+ crop.state.carbon.storage * respcoeff * k .* (crop.state.nitrogen.storage ./ (crop.state.carbon.storage .+ T(1e-5))) .* gtemp_air
-    # presp = crop.state.carbon.pool * respcoeff * k .* (crop.state.nitrogen.pool ./ (crop.state.carbon.pool .+ T(1e-5))) .* gtemp_air
+    # rosoresp = crop_prognostic(crop).carbon.root * respcoeff * k .* (crop_prognostic(crop).nitrogen.root ./ (crop_prognostic(crop).carbon.root .+ T(1e-5))) .* gtemp_air .+ crop_prognostic(crop).carbon.storage * respcoeff * k .* (crop_prognostic(crop).nitrogen.storage ./ (crop_prognostic(crop).carbon.storage .+ T(1e-5))) .* gtemp_air
+    # presp = crop_prognostic(crop).carbon.pool * respcoeff * k .* (crop_prognostic(crop).nitrogen.pool ./ (crop_prognostic(crop).carbon.pool .+ T(1e-5))) .* gtemp_air
     # gresp = (assim .- rosoresp .- presp) * r_growth
     # gresp = ifelse.(gresp .< zero(T), zero(T), gresp)
 
-    crop.fluxes.carbon.respiration .=
-        (roresp .+ soresp .+ presp .+ gresp) .* crop.state.phenology.is_growing
+    crop_fluxes(crop).carbon.respiration .=
+        (roresp .+ soresp .+ presp .+ gresp) .* crop_prognostic(crop).phenology.is_growing
 end
 
 # Compatibility/reference entry for callers that already provide net
 # assimilation. The daily model uses the allocation-free five-argument path.
-function respiration!(crop::Crop,
+function respiration!(crop,
                       PFT::PftParameters,
                       temp::AbstractArray{T},
                       assim::AbstractArray{T};
@@ -60,7 +60,7 @@ function respiration!(crop::Crop,
 end
 
 """Allocation-free daily respiration using one cell-local CPU/GPU kernel."""
-function respiration!(crop::Crop,
+function respiration!(crop,
                       PFT::PftParameters,
                       air_temperature::AbstractVector{T},
                       soil_temperature::AbstractMatrix{T},
@@ -70,11 +70,11 @@ function respiration!(crop::Crop,
 ) where {T <: AbstractFloat}
     launch_1D!(
         respiration_kernel!,
-        crop.fluxes.carbon.respiration,
-        crop.state.carbon.root,
-        crop.state.carbon.storage,
-        crop.state.carbon.pool,
-        crop.state.phenology.is_growing,
+        crop_fluxes(crop).carbon.respiration,
+        crop_prognostic(crop).carbon.root,
+        crop_prognostic(crop).carbon.storage,
+        crop_prognostic(crop).carbon.pool,
+        crop_prognostic(crop).phenology.is_growing,
         air_temperature,
         soil_temperature,
         gross_assimilation,
@@ -87,7 +87,7 @@ end
 
 # Backward-compatible entry for callers without an explicit soil-temperature
 # profile. Daily simulations use the method above.
-function respiration!(crop::Crop,
+function respiration!(crop,
                       PFT::PftParameters,
                       air_temperature::AbstractVector{T},
                       gross_assimilation::AbstractArray{T},

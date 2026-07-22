@@ -2,28 +2,39 @@
     CropSimulation
 
 High-level simulation container. It groups model state, diagnostics, numerical
-precision, backend, and run options while preserving direct access to state
-objects such as `simulation.crop`, `simulation.soil`, and `simulation.output`.
+precision, backend, and run options. Numerical variables are accessed through
+the lifecycle groups in `simulation.state`.
 """
-mutable struct CropSimulation{P, S, D, M, C}
-    pft::P              # Precision-converted crop functional-type parameters.
-    state::S            # Runtime forcing buffers, prognostic state, process memory, and output.
+mutable struct CropSimulation{P, S, D, C}
+    processes::P        # Process choices and immutable parameters; contains no runtime arrays.
+    state::S            # Numerical arrays grouped uniformly by lifecycle.
     diagnostics::D      # Optional daily C/N/water/energy balance ledgers.
-    model_parameters::M # Precision-consistent global process parameter bundle.
     config::C           # Backend, precision, domain-selection, and run-option metadata.
     simulated_days::Int # Number of completed daily time steps in this simulation.
 end
 
 const _SIMULATION_STATE_PROPERTIES = (
-    :climbuf, :crop, :pet, :soil, :managed_land, :daily_weather, :output,
+    :climbuf, :pet, :managed_land, :daily_weather, :output,
 )
 const _SIMULATION_DIAGNOSTIC_PROPERTIES = (
     :water_balance, :nitrogen_balance, :carbon_balance, :thermal_balance,
 )
 
 function Base.getproperty(simulation::CropSimulation, name::Symbol)
-    if name in _SIMULATION_STATE_PROPERTIES
-        return getproperty(getfield(simulation, :state), name)
+    if name === :pft
+        return getfield(simulation, :processes).crop
+    elseif name === :model_parameters
+        return getfield(simulation, :processes).global_parameters
+    elseif name === :climbuf
+        return getfield(simulation, :state).prognostic.climate
+    elseif name === :pet
+        return getfield(simulation, :state).auxiliary.pet
+    elseif name === :managed_land
+        return getfield(simulation, :state).inputs.management
+    elseif name === :daily_weather
+        return getfield(simulation, :state).inputs.weather
+    elseif name === :output
+        return getfield(simulation, :state).output
     elseif name in _SIMULATION_DIAGNOSTIC_PROPERTIES
         return getproperty(getfield(simulation, :diagnostics), name)
     end
@@ -32,10 +43,10 @@ end
 
 function Base.propertynames(::CropSimulation, private::Bool = false)
     public = (
-        :pft, :model_parameters, :config, :simulated_days,
-        _SIMULATION_STATE_PROPERTIES..., _SIMULATION_DIAGNOSTIC_PROPERTIES...,
+        :processes, :pft, :model_parameters, :config, :simulated_days,
+        :state, _SIMULATION_STATE_PROPERTIES..., _SIMULATION_DIAGNOSTIC_PROPERTIES...,
     )
-    return private ? (public..., :state, :diagnostics) : public
+    return private ? (public..., :diagnostics) : public
 end
 
 function _prepare_initial_data(data::NamedTuple, indices, device, T)
@@ -79,15 +90,8 @@ function initialize_simulation(
         mineral_nitrogen_initialization = mineral_nitrogen_initialization,
         c_shift_initialization = c_shift_initialization,
     )
-    state = (
-        climbuf = states[1],
-        crop = states[2],
-        pet = states[3],
-        soil = states[4],
-        managed_land = states[5],
-        daily_weather = states[6],
-        output = states[7],
-    )
+    climbuf, crop, pet, soil, managed_land, daily_weather, output = states
+    state = model_state(climbuf, crop, pet, soil, managed_land, daily_weather, output)
     balances = diagnostics ? (
         water_balance = init_water_balance(days, cells, device; T = T),
         nitrogen_balance = init_nitrogen_balance(days, cells, device; T = T),
@@ -109,8 +113,9 @@ function initialize_simulation(
         auto_fertilizer = auto_fertilizer,
         nitrogen_limit_vcmax = nitrogen_limit_vcmax,
     )
+    processes = ProcessModules(convert_precision(T, pft), ModelParameters(T))
     return CropSimulation(
-        convert_precision(T, pft), state, balances, ModelParameters(T), config, 0,
+        processes, state, balances, config, 0,
     )
 end
 
@@ -190,22 +195,19 @@ function run_simulation!(
         nitrogen_balance = simulation.nitrogen_balance,
         carbon_balance = simulation.carbon_balance,
         thermal_balance = simulation.thermal_balance,
-        model_parameters = simulation.model_parameters,
         simulation_day_offset = simulation.simulated_days,
         diagnostic_offset = simulation.simulated_days,
     )
     if simulation.pft.path == 1
         daily_crop_C3!(
-            start_day, local_end_day, simulation.pft, prepared_climate,
-            simulation.climbuf, simulation.crop, simulation.pet, simulation.soil,
-            simulation.managed_land, simulation.daily_weather, simulation.output;
+            start_day, local_end_day, simulation.processes, prepared_climate,
+            simulation.state;
             common...,
         )
     elseif simulation.pft.path == 2
         daily_crop_C4!(
-            start_day, local_end_day, simulation.pft, prepared_climate,
-            simulation.climbuf, simulation.crop, simulation.pet, simulation.soil,
-            simulation.managed_land, simulation.daily_weather, simulation.output;
+            start_day, local_end_day, simulation.processes, prepared_climate,
+            simulation.state;
             common...,
         )
     else
@@ -249,6 +251,164 @@ function run_simulation!(
             spinup_years = spinup_years,
         )
     end
+    return simulation
+end
+
+const _CHECKPOINT_FORMAT_VERSION = 2
+
+_checkpoint_snapshot(values::AbstractArray) = Array(values)
+_checkpoint_snapshot(values::NamedTuple) = map(_checkpoint_snapshot, values)
+_checkpoint_snapshot(::Nothing) = nothing
+function _checkpoint_snapshot(value)
+    names = fieldnames(typeof(value))
+    return NamedTuple{names}(map(
+        name -> _checkpoint_snapshot(getfield(value, name)), names,
+    ))
+end
+
+function _checkpoint_fields(value, names::Tuple)
+    return NamedTuple{names}(map(
+        name -> _checkpoint_snapshot(getproperty(value, name)), names,
+    ))
+end
+
+function _restore_checkpoint_fields!(target, snapshot)
+    for name in keys(snapshot)
+        destination = getproperty(target, name)
+        source = getproperty(snapshot, name)
+        if destination isa AbstractArray
+            size(destination) == size(source) || throw(DimensionMismatch(
+                "checkpoint field $name has size $(size(source)); " *
+                "target has size $(size(destination))",
+            ))
+            copyto!(destination, source)
+        else
+            _restore_checkpoint_fields!(destination, source)
+        end
+    end
+    return nothing
+end
+
+function _restore_checkpoint_output!(target, snapshot, device)
+    for name in keys(snapshot)
+        destination = getproperty(target, name)
+        source = getproperty(snapshot, name)
+        if destination isa AbstractArray
+            setproperty!(target, name, device(copy(source)))
+        else
+            _restore_checkpoint_output!(destination, source, device)
+        end
+    end
+    return nothing
+end
+
+function _simulation_checkpoint(simulation::CropSimulation)
+    cells = length(simulation.managed_land.latitude)
+    return (
+        format_version = _CHECKPOINT_FORMAT_VERSION,
+        metadata = (
+            precision = string(simulation.config.T),
+            cells = cells,
+            configured_days = simulation.config.days,
+            photosynthetic_pathway = simulation.pft.path,
+            irrigation = simulation.config.irrigation,
+            manure = simulation.config.manure,
+            auto_fertilizer = simulation.config.auto_fertilizer,
+            nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
+        ),
+        simulated_days = simulation.simulated_days,
+        pft = simulation.pft,
+        model_parameters = simulation.model_parameters,
+        state = (
+            prognostic = _checkpoint_snapshot(simulation.state.prognostic),
+            inputs = (
+                crop = _checkpoint_snapshot(simulation.state.inputs.crop),
+                soil = _checkpoint_snapshot(simulation.state.inputs.soil),
+                management = _checkpoint_snapshot(simulation.state.inputs.management),
+            ),
+            output = _checkpoint_snapshot(simulation.state.output),
+        ),
+        diagnostics = _checkpoint_snapshot(simulation.diagnostics),
+    )
+end
+
+"""
+    save_checkpoint(path, simulation)
+
+Write a backend-independent checkpoint at a completed daily boundary. Arrays
+are stored on the host so the checkpoint can be restored into either a CPU or
+CUDA simulation with the same precision, dimensions, and run configuration.
+"""
+function save_checkpoint(path::AbstractString, simulation::CropSimulation)
+    checkpoint = _simulation_checkpoint(simulation)
+    jldsave(path; checkpoint = checkpoint)
+    return path
+end
+
+function _validate_checkpoint_target(simulation::CropSimulation, checkpoint)
+    checkpoint.format_version == _CHECKPOINT_FORMAT_VERSION || throw(ArgumentError(
+        "unsupported checkpoint format version $(checkpoint.format_version)",
+    ))
+    simulation.simulated_days == 0 || throw(ArgumentError(
+        "restore_checkpoint! requires a newly initialized simulation",
+    ))
+    metadata = checkpoint.metadata
+    checks = (
+        ("precision", metadata.precision, string(simulation.config.T)),
+        ("cell count", metadata.cells, length(simulation.managed_land.latitude)),
+        ("configured days", metadata.configured_days, simulation.config.days),
+        ("photosynthetic pathway", metadata.photosynthetic_pathway, simulation.pft.path),
+        ("irrigation", metadata.irrigation, simulation.config.irrigation),
+        ("manure", metadata.manure, simulation.config.manure),
+        ("auto fertilizer", metadata.auto_fertilizer, simulation.config.auto_fertilizer),
+        ("nitrogen Vcmax limitation", metadata.nitrogen_limit_vcmax,
+         simulation.config.nitrogen_limit_vcmax),
+    )
+    for (label, saved, target) in checks
+        saved == target || throw(ArgumentError(
+            "checkpoint $label is $saved; target simulation uses $target",
+        ))
+    end
+    0 <= checkpoint.simulated_days <= simulation.config.days || throw(ArgumentError(
+        "checkpoint simulated_days is outside the configured simulation range",
+    ))
+    return nothing
+end
+
+"""
+    restore_checkpoint!(simulation, path)
+
+Restore a checkpoint into a newly initialized, configuration-compatible
+simulation. Runtime arrays are copied to the target simulation's active backend.
+"""
+function restore_checkpoint!(simulation::CropSimulation, path::AbstractString)
+    checkpoint = load(path, "checkpoint")
+    _validate_checkpoint_target(simulation, checkpoint)
+
+    simulation.processes = ProcessModules(checkpoint.pft, checkpoint.model_parameters)
+    _restore_checkpoint_fields!(
+        simulation.state.prognostic, checkpoint.state.prognostic,
+    )
+    _restore_checkpoint_fields!(simulation.state.inputs.crop, checkpoint.state.inputs.crop)
+    _restore_checkpoint_fields!(simulation.state.inputs.soil, checkpoint.state.inputs.soil)
+    _restore_checkpoint_fields!(
+        simulation.state.inputs.management, checkpoint.state.inputs.management,
+    )
+    _restore_checkpoint_output!(
+        simulation.state.output, checkpoint.state.output, simulation.config.device,
+    )
+    for name in _SIMULATION_DIAGNOSTIC_PROPERTIES
+        target = getproperty(simulation.diagnostics, name)
+        saved = getproperty(checkpoint.diagnostics, name)
+        if target === nothing || saved === nothing
+            target === saved || throw(ArgumentError(
+                "checkpoint diagnostics setting does not match target simulation",
+            ))
+        else
+            _restore_checkpoint_fields!(target, saved)
+        end
+    end
+    simulation.simulated_days = checkpoint.simulated_days
     return simulation
 end
 

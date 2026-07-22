@@ -6,7 +6,7 @@ Apply the LPJmL-style daily mineralization/immobilization, nitrification,
 denitrification, and NH₃-volatilization sequence. Internal and boundary
 fluxes are stored layer-wise in `soil.nitrogen` for diagnostics.
 """
-function nitrogen_transform!(soil::Soil;
+function nitrogen_transform!(soil;
                              air_temperature = nothing,
                              wind_speed = nothing,
     lpjmlparams::LPJmLParams = lpjmlparams)
@@ -28,44 +28,44 @@ nitrify the remaining ammonium. LPJmL performs this stage before the daily
 plant processes, so the newly mineralized nitrogen is available for same-day
 crop uptake.
 """
-function mineralize_nitrify!(soil::Soil;
+function mineralize_nitrify!(soil;
                              lpjmlparams::LPJmLParams = lpjmlparams,
-                             shift_fast = soil.decomposition.shift_fast,
-                             shift_slow = soil.decomposition.shift_slow)
-    soil_layers = size(soil.nitrogen.nitrate, 1)
+                             shift_fast = soil_decomposition_input(soil).shift_fast,
+                             shift_slow = soil_decomposition_input(soil).shift_slow)
+    soil_layers = size(soil_nitrogen_prognostic(soil).nitrate, 1)
     launch_custom!(
         mineralize_immobilize_kernel!,
-        soil.carbon.decomposed_litter,
-        size(soil.carbon.decomposed_litter, 2),
-        soil.nitrogen.decomposed_litter,
-        soil.nitrogen.decomposed_fast,
-        soil.nitrogen.decomposed_slow,
+        soil_carbon_fluxes(soil).decomposed_litter,
+        size(soil_carbon_fluxes(soil).decomposed_litter, 2),
+        soil_nitrogen_fluxes(soil).decomposed_litter,
+        soil_nitrogen_fluxes(soil).decomposed_fast,
+        soil_nitrogen_fluxes(soil).decomposed_slow,
         shift_fast,
         shift_slow,
-        soil.nitrogen.ammonium,
-        soil.nitrogen.nitrate,
-        soil.nitrogen.fast,
-        soil.nitrogen.slow,
-        soil.properties.layer_depth,
-        soil.nitrogen.mineralization,
-        soil.nitrogen.immobilization,
+        soil_nitrogen_prognostic(soil).ammonium,
+        soil_nitrogen_prognostic(soil).nitrate,
+        soil_nitrogen_prognostic(soil).fast,
+        soil_nitrogen_prognostic(soil).slow,
+        soil_properties(soil).layer_depth,
+        soil_nitrogen_fluxes(soil).mineralization,
+        soil_nitrogen_fluxes(soil).immobilization,
         (; lpjmlparams, soil_layers),
     )
 
     launch_1D!(
         nitrify_kernel!,
-        soil.properties.ph,
-        soil.nitrogen.ammonium,
-        soil.nitrogen.nitrate,
-        soil.water.relative_content,
-        soil.water.holding_capacity_storage,
-        soil.water.wilting_storage,
-        soil.water.wilting_ice_fraction,
-        soil.water.free_water,
-        soil.water.saturation_storage,
-        soil.thermal.temperature,
-        soil.nitrogen.nitrification,
-        soil.nitrogen.n2o_nitrification,
+        soil_properties(soil).ph,
+        soil_nitrogen_prognostic(soil).ammonium,
+        soil_nitrogen_prognostic(soil).nitrate,
+        soil_water_auxiliary(soil).relative_content,
+        soil_water_auxiliary(soil).holding_capacity_storage,
+        soil_water_auxiliary(soil).wilting_storage,
+        soil_water_prognostic(soil).wilting_ice_fraction,
+        soil_water_auxiliary(soil).free_water,
+        soil_water_auxiliary(soil).saturation_storage,
+        soil_thermal_prognostic(soil).temperature,
+        soil_nitrogen_fluxes(soil).nitrification,
+        soil_nitrogen_fluxes(soil).n2o_nitrification,
         (; lpjmlparams, soil_layers),
     )
 
@@ -79,35 +79,35 @@ end
 Apply denitrification and ammonia volatilization after crop uptake, matching
 LPJmL's daily stand ordering.
 """
-function post_crop_nitrogen_losses!(soil::Soil;
+function post_crop_nitrogen_losses!(soil;
                                     air_temperature = nothing,
                                     wind_speed = nothing,
                                     lpjmlparams::LPJmLParams = lpjmlparams)
-    soil_layers = size(soil.nitrogen.nitrate, 1)
+    soil_layers = size(soil_nitrogen_prognostic(soil).nitrate, 1)
 
     launch_1D!(
         denitrify_kernel!,
-        soil.properties.ph,
-        soil.carbon.fast,
-        soil.carbon.slow,
-        soil.water.relative_content,
-        soil.water.holding_capacity_storage,
-        soil.water.wilting_storage,
-        soil.water.wilting_ice_fraction,
-        soil.water.free_water,
-        soil.water.saturation_storage,
-        soil.thermal.temperature,
-        soil.nitrogen.nitrate,
-        soil.nitrogen.denitrification,
-        soil.nitrogen.n2o_denitrification,
-        soil.nitrogen.n2_denitrification,
+        soil_properties(soil).ph,
+        soil_carbon_prognostic(soil).fast,
+        soil_carbon_prognostic(soil).slow,
+        soil_water_auxiliary(soil).relative_content,
+        soil_water_auxiliary(soil).holding_capacity_storage,
+        soil_water_auxiliary(soil).wilting_storage,
+        soil_water_prognostic(soil).wilting_ice_fraction,
+        soil_water_auxiliary(soil).free_water,
+        soil_water_auxiliary(soil).saturation_storage,
+        soil_thermal_prognostic(soil).temperature,
+        soil_nitrogen_prognostic(soil).nitrate,
+        soil_nitrogen_fluxes(soil).denitrification,
+        soil_nitrogen_fluxes(soil).n2o_denitrification,
+        soil_nitrogen_fluxes(soil).n2_denitrification,
         (; lpjmlparams, soil_layers),
     )
 
     volatilization_temperature = air_temperature === nothing ?
-        vec(@view(soil.thermal.temperature[1, :])) : air_temperature
+        vec(@view(soil_thermal_prognostic(soil).temperature[1, :])) : air_temperature
     volatilization_wind = if wind_speed === nothing
-        fallback = soil.decomposition.surface_scratch_1
+        fallback = soil_decomposition_workspace(soil).surface_scratch_1
         fill!(fallback, eltype(fallback)(lpjmlparams.volatil_wind))
         fallback
     else
@@ -115,12 +115,12 @@ function post_crop_nitrogen_losses!(soil::Soil;
     end
     launch_1D!(
         volatilization_kernel!,
-        soil.properties.ph,
-        soil.nitrogen.ammonium,
+        soil_properties(soil).ph,
+        soil_nitrogen_prognostic(soil).ammonium,
         volatilization_temperature,
         volatilization_wind,
-        soil.properties.layer_depth,
-        soil.nitrogen.volatilization,
+        soil_properties(soil).layer_depth,
+        soil_nitrogen_fluxes(soil).volatilization,
         lpjmlparams,
     )
     return nothing

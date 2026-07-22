@@ -130,9 +130,10 @@ function run_c3_e2e(device, host_climate)
     carbon = init_carbon_balance(C3_E2E_DAYS, C3_E2E_CELLS, device)
     thermal = init_thermal_balance(C3_E2E_DAYS, C3_E2E_CELLS, device)
 
+    state = model_state(climbuf, crop, pet, soil, managed_land, weather, output)
+    processes = ProcessModules(cft1, ModelParameters(Float32))
     daily_crop_C3!(
-        1, C3_E2E_DAYS,
-        cft1, climate, climbuf, crop, pet, soil, managed_land, weather, output;
+        1, C3_E2E_DAYS, processes, climate, state;
         irrigation = false,
         manure = false,
         auto_fertilizer = false,

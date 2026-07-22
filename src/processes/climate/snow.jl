@@ -4,7 +4,7 @@ snow!(soil, dailyWeather)
 Update snowpack, snow height, and snow cover fraction from daily temperature
 and precipitation forcing.
 """
-function snow!(soil::Soil,
+function snow!(soil,
                dailyWeather::DailyWeather;
                snowparams::SnowParams = snowparams,
                lpjmlparams::LPJmLParams = lpjmlparams
@@ -16,15 +16,30 @@ function snow!(soil::Soil,
         snow_kernel!,
         dailyWeather.temp,
         dailyWeather.prec,
-        soil.snow.pack,
-        soil.snow.melt,
-        soil.snow.sublimation,
-        soil.snow.runoff,
-        soil.snow.height,
-        soil.snow.fraction,
+        soil_snow_prognostic(soil).pack,
+        soil_snow_fluxes(soil).melt,
+        soil_snow_fluxes(soil).sublimation,
+        soil_snow_fluxes(soil).runoff,
+        soil_snow_prognostic(soil).height,
+        soil_snow_prognostic(soil).fraction,
         kernel_params
     )
 
+end
+
+function snow!(state::ModelState;
+               snowparams::SnowParams = snowparams,
+               lpjmlparams::LPJmLParams = lpjmlparams)
+    weather = state.inputs.weather
+    snow_state = state.prognostic.soil.snow
+    snow_fluxes = state.fluxes.soil.snow
+    launch_1D!(
+        snow_kernel!, weather.temp, weather.prec,
+        snow_state.pack, snow_fluxes.melt, snow_fluxes.sublimation,
+        snow_fluxes.runoff, snow_state.height, snow_state.fraction,
+        (; snowparams, lpjmlparams),
+    )
+    return nothing
 end
 
 

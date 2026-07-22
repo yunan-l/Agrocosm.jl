@@ -3,9 +3,9 @@ cultivate!(crop, managed_land, soil, day)
 
 Handle sowing-day state transitions and activate crop growth state.
 """
-function cultivate_reference!(crop::Crop,
+function cultivate_reference!(crop,
                               ml::ManagedLand,
-                              soil::Soil,
+                              soil,
                               day::Int;
                               lpjmlparams::LPJmLParams = lpjmlparams,
                               manure = false,
@@ -13,59 +13,59 @@ function cultivate_reference!(crop::Crop,
                               laimax = cft1.laimax,
 )
 
-    T = eltype(crop.state.canopy.lai)
-    sowing = crop.auxiliary.calendar.sowing_date .== day
+    T = eltype(crop_prognostic(crop).canopy.lai)
+    sowing = crop_calendar_input(crop).sowing_date .== day
     seed_flaimax = T(0.000083)
     seed_lai = seed_flaimax * T(laimax)
-    crop.state.phenology.harvesting .= ifelse.(sowing, false, crop.state.phenology.harvesting)
-    crop.events.sowing .= ifelse.(sowing, 1, 0)
-    crop.state.phenology.is_growing .= ifelse.(sowing, 1, crop.state.phenology.is_growing)
+    crop_prognostic(crop).phenology.harvesting .= ifelse.(sowing, false, crop_prognostic(crop).phenology.harvesting)
+    crop_events(crop).sowing .= ifelse.(sowing, 1, 0)
+    crop_prognostic(crop).phenology.is_growing .= ifelse.(sowing, 1, crop_prognostic(crop).phenology.is_growing)
 
     # LPJmL allocates a fresh Pftcrop at every cultivation. Agrocosm keeps a
     # persistent struct for GPU execution, so sowing must explicitly reproduce
     # the seasonal part of new_crop() without clearing soil or annual outputs.
     for field in (:vdsum, :husum)
-        values = getproperty(crop.state.phenology, field)
+        values = getproperty(crop_prognostic(crop).phenology, field)
         values .= ifelse.(sowing, zero(T), values)
     end
-    crop.auxiliary.phenology.fphu .= ifelse.(
-        sowing, zero(T), crop.auxiliary.phenology.fphu,
+    crop_phenology_auxiliary(crop).fphu .= ifelse.(
+        sowing, zero(T), crop_phenology_auxiliary(crop).fphu,
     )
-    crop.state.phenology.senescence .= ifelse.(sowing, false, crop.state.phenology.senescence)
-    crop.state.phenology.senescence_previous .= ifelse.(sowing, false, crop.state.phenology.senescence_previous)
-    crop.state.phenology.harvesting_previous .= ifelse.(sowing, false, crop.state.phenology.harvesting_previous)
-    crop.state.phenology.growing_days .= ifelse.(sowing, 0, crop.state.phenology.growing_days)
+    crop_prognostic(crop).phenology.senescence .= ifelse.(sowing, false, crop_prognostic(crop).phenology.senescence)
+    crop_prognostic(crop).phenology.senescence_previous .= ifelse.(sowing, false, crop_prognostic(crop).phenology.senescence_previous)
+    crop_prognostic(crop).phenology.harvesting_previous .= ifelse.(sowing, false, crop_prognostic(crop).phenology.harvesting_previous)
+    crop_prognostic(crop).phenology.growing_days .= ifelse.(sowing, 0, crop_prognostic(crop).phenology.growing_days)
 
-    crop.state.canopy.lai .= ifelse.(sowing, seed_lai, crop.state.canopy.lai)
-    crop.auxiliary.canopy.flaimax .= ifelse.(sowing, seed_flaimax, crop.auxiliary.canopy.flaimax)
-    crop.state.canopy.laimax_adjusted .= ifelse.(sowing, one(T), crop.state.canopy.laimax_adjusted)
-    crop.state.canopy.lai_npp_deficit .= ifelse.(sowing, zero(T), crop.state.canopy.lai_npp_deficit)
-    crop.state.carbon.biomass .= ifelse.(sowing, T(20), crop.state.carbon.biomass)
-    crop.state.carbon.root .= ifelse.(sowing, T(8), crop.state.carbon.root)
-    crop.state.carbon.leaf .= ifelse.(sowing, T(0.0113804), crop.state.carbon.leaf)
-    crop.state.carbon.storage .= ifelse.(sowing, zero(T), crop.state.carbon.storage)
-    crop.state.carbon.pool .= ifelse.(sowing, T(11.9886196), crop.state.carbon.pool)
+    crop_prognostic(crop).canopy.lai .= ifelse.(sowing, seed_lai, crop_prognostic(crop).canopy.lai)
+    crop_canopy_auxiliary(crop).flaimax .= ifelse.(sowing, seed_flaimax, crop_canopy_auxiliary(crop).flaimax)
+    crop_prognostic(crop).canopy.laimax_adjusted .= ifelse.(sowing, one(T), crop_prognostic(crop).canopy.laimax_adjusted)
+    crop_prognostic(crop).canopy.lai_npp_deficit .= ifelse.(sowing, zero(T), crop_prognostic(crop).canopy.lai_npp_deficit)
+    crop_prognostic(crop).carbon.biomass .= ifelse.(sowing, T(20), crop_prognostic(crop).carbon.biomass)
+    crop_prognostic(crop).carbon.root .= ifelse.(sowing, T(8), crop_prognostic(crop).carbon.root)
+    crop_prognostic(crop).carbon.leaf .= ifelse.(sowing, T(0.0113804), crop_prognostic(crop).carbon.leaf)
+    crop_prognostic(crop).carbon.storage .= ifelse.(sowing, zero(T), crop_prognostic(crop).carbon.storage)
+    crop_prognostic(crop).carbon.pool .= ifelse.(sowing, T(11.9886196), crop_prognostic(crop).carbon.pool)
     init_nitrogen = T(0.7) # C:N ratio of seed = 29
-    crop.fluxes.nitrogen.seed_input .= ifelse.(sowing, init_nitrogen, zero(T))
-    crop.state.nitrogen.total .= ifelse.(sowing, init_nitrogen, crop.state.nitrogen.total)
+    crop_fluxes(crop).nitrogen.seed_input .= ifelse.(sowing, init_nitrogen, zero(T))
+    crop_prognostic(crop).nitrogen.total .= ifelse.(sowing, init_nitrogen, crop_prognostic(crop).nitrogen.total)
     for field in (:leaf, :root, :pool, :storage, :pending_manure,
                   :pending_fertilizer, :stress_sum)
-        values = getproperty(crop.state.nitrogen, field)
+        values = getproperty(crop_prognostic(crop).nitrogen, field)
         values .= ifelse.(sowing, zero(T), values)
     end
-    crop.auxiliary.stress.nitrogen_deficit .= ifelse.(
-        sowing, zero(T), crop.auxiliary.stress.nitrogen_deficit,
+    crop_stress_auxiliary(crop).nitrogen_deficit .= ifelse.(
+        sowing, zero(T), crop_stress_auxiliary(crop).nitrogen_deficit,
     )
-    crop.state.nitrogen.sufficiency .= ifelse.(sowing, one(T), crop.state.nitrogen.sufficiency)
+    crop_prognostic(crop).nitrogen.sufficiency .= ifelse.(sowing, one(T), crop_prognostic(crop).nitrogen.sufficiency)
 
     for field in (:demand_sum, :supply_sum)
-        values = getproperty(crop.state.water, field)
+        values = getproperty(crop_prognostic(crop).water, field)
         values .= ifelse.(sowing, zero(T), values)
     end
-    crop.auxiliary.stress.water_deficit .= ifelse.(
-        sowing, zero(T), crop.auxiliary.stress.water_deficit,
+    crop_stress_auxiliary(crop).water_deficit .= ifelse.(
+        sowing, zero(T), crop_stress_auxiliary(crop).water_deficit,
     )
-    crop.state.water.sufficiency .= ifelse.(sowing, one(T), crop.state.water.sufficiency)
+    crop_prognostic(crop).water.sufficiency .= ifelse.(sowing, one(T), crop_prognostic(crop).water.sufficiency)
 
     # Daily fluxes and diagnostics (NPP, respiration, uptake, demand, current
     # management input, and harvest export) are intentionally not reset here:
@@ -82,52 +82,52 @@ function cultivate_reference!(crop::Crop,
 
 end
 
-function cultivate!(crop::Crop,
+function cultivate!(crop,
                     ml::ManagedLand,
-                    soil::Soil,
+                    soil,
                     day::Int;
                     lpjmlparams::LPJmLParams = lpjmlparams,
                     manure = false,
                     apply_prescribed_fertilizer::Bool = true,
                     laimax = cft1.laimax)
-    T = eltype(crop.state.canopy.lai)
+    T = eltype(crop_prognostic(crop).canopy.lai)
     launch_1D!(
         cultivate_kernel!,
-        crop.auxiliary.calendar.sowing_date,
-        crop.events.sowing,
-        crop.state.phenology.harvesting,
-        crop.state.phenology.harvesting_previous,
-        crop.state.phenology.is_growing,
-        crop.state.phenology.vdsum,
-        crop.state.phenology.husum,
-        crop.auxiliary.phenology.fphu,
-        crop.state.phenology.senescence,
-        crop.state.phenology.senescence_previous,
-        crop.state.phenology.growing_days,
-        crop.state.canopy.lai,
-        crop.auxiliary.canopy.flaimax,
-        crop.state.canopy.laimax_adjusted,
-        crop.state.canopy.lai_npp_deficit,
-        crop.state.carbon.biomass,
-        crop.state.carbon.root,
-        crop.state.carbon.leaf,
-        crop.state.carbon.storage,
-        crop.state.carbon.pool,
-        crop.fluxes.nitrogen.seed_input,
-        crop.state.nitrogen.total,
-        crop.state.nitrogen.leaf,
-        crop.state.nitrogen.root,
-        crop.state.nitrogen.pool,
-        crop.state.nitrogen.storage,
-        crop.state.nitrogen.pending_manure,
-        crop.state.nitrogen.pending_fertilizer,
-        crop.state.nitrogen.stress_sum,
-        crop.state.nitrogen.sufficiency,
-        crop.auxiliary.stress.nitrogen_deficit,
-        crop.auxiliary.stress.water_deficit,
-        crop.state.water.demand_sum,
-        crop.state.water.supply_sum,
-        crop.state.water.sufficiency,
+        crop_calendar_input(crop).sowing_date,
+        crop_events(crop).sowing,
+        crop_prognostic(crop).phenology.harvesting,
+        crop_prognostic(crop).phenology.harvesting_previous,
+        crop_prognostic(crop).phenology.is_growing,
+        crop_prognostic(crop).phenology.vdsum,
+        crop_prognostic(crop).phenology.husum,
+        crop_phenology_auxiliary(crop).fphu,
+        crop_prognostic(crop).phenology.senescence,
+        crop_prognostic(crop).phenology.senescence_previous,
+        crop_prognostic(crop).phenology.growing_days,
+        crop_prognostic(crop).canopy.lai,
+        crop_canopy_auxiliary(crop).flaimax,
+        crop_prognostic(crop).canopy.laimax_adjusted,
+        crop_prognostic(crop).canopy.lai_npp_deficit,
+        crop_prognostic(crop).carbon.biomass,
+        crop_prognostic(crop).carbon.root,
+        crop_prognostic(crop).carbon.leaf,
+        crop_prognostic(crop).carbon.storage,
+        crop_prognostic(crop).carbon.pool,
+        crop_fluxes(crop).nitrogen.seed_input,
+        crop_prognostic(crop).nitrogen.total,
+        crop_prognostic(crop).nitrogen.leaf,
+        crop_prognostic(crop).nitrogen.root,
+        crop_prognostic(crop).nitrogen.pool,
+        crop_prognostic(crop).nitrogen.storage,
+        crop_prognostic(crop).nitrogen.pending_manure,
+        crop_prognostic(crop).nitrogen.pending_fertilizer,
+        crop_prognostic(crop).nitrogen.stress_sum,
+        crop_prognostic(crop).nitrogen.sufficiency,
+        crop_stress_auxiliary(crop).nitrogen_deficit,
+        crop_stress_auxiliary(crop).water_deficit,
+        crop_prognostic(crop).water.demand_sum,
+        crop_prognostic(crop).water.supply_sum,
+        crop_prognostic(crop).water.sufficiency,
         T(0.000083),
         T(0.000083) * T(laimax),
         day,

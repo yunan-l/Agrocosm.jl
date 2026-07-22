@@ -58,6 +58,15 @@ function climate_block(::Type{T}, days, temperature, precipitation) where {T <: 
     )
 end
 
+function runtime_array_ids(value)
+    value isa AbstractArray && return UInt[objectid(value)]
+    ids = UInt[]
+    for name in fieldnames(typeof(value))
+        append!(ids, runtime_array_ids(getfield(value, name)))
+    end
+    return ids
+end
+
 @testset "Annual CO₂ forcing length is validated before kernel launch" begin
     initial, _ = simulation_api_fixture(Float32)
     simulation = initialize_simulation(
@@ -81,9 +90,29 @@ end
         auto_fertilizer = false,
     )
 
-    @test simulation.crop === simulation.state.crop
     @test simulation.output === simulation.state.output
-    @test eltype(simulation.crop.state.canopy.lai) == Float64
+    @test simulation.processes.crop === simulation.pft
+    @test simulation.processes.global_parameters === simulation.model_parameters
+    crop_lifecycle_ids = runtime_array_ids((
+        simulation.state.prognostic.crop,
+        simulation.state.fluxes.crop,
+        simulation.state.auxiliary.crop,
+        simulation.state.inputs.crop,
+        simulation.state.events.crop,
+        simulation.state.workspace.crop,
+    ))
+    soil_lifecycle_ids = runtime_array_ids((
+        simulation.state.prognostic.soil,
+        simulation.state.fluxes.soil,
+        simulation.state.auxiliary.soil,
+        simulation.state.inputs.soil,
+        simulation.state.workspace.soil,
+    ))
+    @test length(crop_lifecycle_ids) == length(unique(crop_lifecycle_ids))
+    @test !isempty(crop_lifecycle_ids)
+    @test length(soil_lifecycle_ids) == length(unique(soil_lifecycle_ids))
+    @test !isempty(soil_lifecycle_ids)
+    @test eltype(simulation.state.prognostic.crop.canopy.lai) == Float64
     @test eltype(simulation.water_balance.residual) == Float64
 
     returned = run_simulation!(simulation, climate; spinup = false)
@@ -127,11 +156,11 @@ end
     @test chunked.output.crop.npp ≈ single.output.crop.npp
     @test chunked.output.calendar.sowing_event == single.output.calendar.sowing_event
     @test findall(!iszero, vec(chunked.output.calendar.sowing_event)) == [1]
-    @test chunked.crop.state.carbon.leaf ≈ single.crop.state.carbon.leaf
-    @test chunked.crop.state.carbon.root ≈ single.crop.state.carbon.root
-    @test chunked.crop.state.carbon.pool ≈ single.crop.state.carbon.pool
-    @test chunked.crop.state.carbon.storage ≈ single.crop.state.carbon.storage
-    @test chunked.soil.water.storage ≈ single.soil.water.storage
+    @test chunked.state.prognostic.crop.carbon.leaf ≈ single.state.prognostic.crop.carbon.leaf
+    @test chunked.state.prognostic.crop.carbon.root ≈ single.state.prognostic.crop.carbon.root
+    @test chunked.state.prognostic.crop.carbon.pool ≈ single.state.prognostic.crop.carbon.pool
+    @test chunked.state.prognostic.crop.carbon.storage ≈ single.state.prognostic.crop.carbon.storage
+    @test chunked.state.prognostic.soil.water.storage ≈ single.state.prognostic.soil.water.storage
     @test chunked.water_balance.precipitation == reshape(Float64[1, 1, 3, 3], 4, 1)
 
     mktempdir() do directory
@@ -142,6 +171,62 @@ end
         from_files = create()
         run_simulation!(from_files, [first_path, second_path]; spinup = false)
         @test from_files.output.crop.npp ≈ single.output.crop.npp
-        @test from_files.soil.water.storage ≈ single.soil.water.storage
+        @test from_files.state.prognostic.soil.water.storage ≈ single.state.prognostic.soil.water.storage
+    end
+end
+
+@testset "Checkpoint restore preserves continuous simulation" begin
+    initial, _ = simulation_api_fixture(Float32)
+    first_block = climate_block(Float32, 2, 15, 1)
+    second_block = climate_block(Float32, 2, 17, 3)
+    continuous = (
+        temp_spinup = first_block.temp_spinup,
+        temp = vcat(first_block.temp, second_block.temp),
+        prec = vcat(first_block.prec, second_block.prec),
+        swdown = vcat(first_block.swdown, second_block.swdown),
+        lwnet = vcat(first_block.lwnet, second_block.lwnet),
+        windspeed = vcat(first_block.windspeed, second_block.windspeed),
+        co2 = Float32[400],
+    )
+    create(days = 4) = initialize_simulation(
+        cft1, initial;
+        indices = [1], T = Float32, days = days, auto_fertilizer = false,
+    )
+
+    reference = create()
+    run_simulation!(reference, continuous; spinup = false)
+
+    interrupted = create()
+    run_simulation!(interrupted, first_block; spinup = false)
+    mktempdir() do directory
+        path = joinpath(directory, "crop_checkpoint.jld2")
+        @test save_checkpoint(path, interrupted) == path
+
+        restored = create()
+        @test restore_checkpoint!(restored, path) === restored
+        @test restored.simulated_days == 2
+        @test restored.output.crop.npp == interrupted.output.crop.npp
+        @test restored.state.prognostic.crop.carbon.leaf == interrupted.state.prognostic.crop.carbon.leaf
+        @test restored.state.prognostic.soil.water.storage == interrupted.state.prognostic.soil.water.storage
+        @test restored.climbuf.atemp == interrupted.climbuf.atemp
+
+        run_simulation!(restored, second_block; spinup = false)
+        @test restored.simulated_days == reference.simulated_days
+        @test restored.output.crop.npp == reference.output.crop.npp
+        @test restored.output.crop.water_deficit ==
+            reference.output.crop.water_deficit
+        @test restored.state.prognostic.crop.carbon.leaf == reference.state.prognostic.crop.carbon.leaf
+        @test restored.state.prognostic.crop.nitrogen.total == reference.state.prognostic.crop.nitrogen.total
+        @test restored.state.prognostic.soil.water.storage == reference.state.prognostic.soil.water.storage
+        @test restored.state.prognostic.soil.carbon.fast == reference.state.prognostic.soil.carbon.fast
+        @test restored.state.prognostic.soil.nitrogen.nitrate == reference.state.prognostic.soil.nitrogen.nitrate
+        @test restored.water_balance.residual == reference.water_balance.residual
+        @test restored.nitrogen_balance.residual == reference.nitrogen_balance.residual
+        @test restored.carbon_balance.residual == reference.carbon_balance.residual
+        @test restored.thermal_balance.energy_residual ==
+            reference.thermal_balance.energy_residual
+
+        incompatible = create(5)
+        @test_throws ArgumentError restore_checkpoint!(incompatible, path)
     end
 end

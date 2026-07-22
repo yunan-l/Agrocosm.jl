@@ -183,10 +183,10 @@ end
 Solve the LPJmL water-stress equation independently for every grid cell. The
 fixed 30-step loop and scalar, allocation-free objective are compatible with
 both CPU and GPU backends. `co2` must be atmospheric partial pressure in Pa and
-`crop.auxiliary.canopy.canopy_conductance` must contain actual canopy conductance after water limitation.
+`crop_canopy_auxiliary(crop).canopy_conductance` must contain actual canopy conductance after water limitation.
 """
 function solve_lambda_c3!(PFT::PftParameters,
-                          crop::Crop,
+                          crop,
                           pet::PetPar,
                           temp::AbstractArray{T},
                           co2::AbstractArray{T};
@@ -201,12 +201,12 @@ function solve_lambda_c3!(PFT::PftParameters,
 
     launch_1D!(
         solve_lambda_c3_kernel!,
-        crop.auxiliary.photosynthesis.lambda,
-        crop.auxiliary.photosynthesis.vcmax,
-        crop.auxiliary.photosynthesis.temperature_stress,
-        crop.auxiliary.canopy.canopy_conductance,
-        crop.auxiliary.canopy.fpar,
-        crop.auxiliary.canopy.apar,
+        crop_photosynthesis_auxiliary(crop).lambda,
+        crop_photosynthesis_auxiliary(crop).vcmax,
+        crop_photosynthesis_auxiliary(crop).temperature_stress,
+        crop_canopy_auxiliary(crop).canopy_conductance,
+        crop_canopy_auxiliary(crop).fpar,
+        crop_canopy_auxiliary(crop).apar,
         pet.daylength,
         temp,
         co2,
@@ -222,7 +222,7 @@ GPU/CPU backend implementation of LPJmL's C4 water-stress lambda solve.
 `co2` is atmospheric partial pressure in Pa.
 """
 function solve_lambda_c4!(PFT::PftParameters,
-                          crop::Crop,
+                          crop,
                           pet::PetPar,
                           temp::AbstractArray{T},
                           co2::AbstractArray{T};
@@ -237,12 +237,12 @@ function solve_lambda_c4!(PFT::PftParameters,
 
     launch_1D!(
         solve_lambda_c4_kernel!,
-        crop.auxiliary.photosynthesis.lambda,
-        crop.auxiliary.photosynthesis.vcmax,
-        crop.auxiliary.photosynthesis.temperature_stress,
-        crop.auxiliary.canopy.canopy_conductance,
-        crop.auxiliary.canopy.fpar,
-        crop.auxiliary.canopy.apar,
+        crop_photosynthesis_auxiliary(crop).lambda,
+        crop_photosynthesis_auxiliary(crop).vcmax,
+        crop_photosynthesis_auxiliary(crop).temperature_stress,
+        crop_canopy_auxiliary(crop).canopy_conductance,
+        crop_canopy_auxiliary(crop).fpar,
+        crop_canopy_auxiliary(crop).apar,
         pet.daylength,
         temp,
         co2,

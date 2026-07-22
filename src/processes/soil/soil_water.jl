@@ -5,8 +5,8 @@ Apply throughfall infiltration and percolation before the daily plant water-stre
 For rainfed simulations, the resulting layer balance is immediately
 added to absolute soil water storage.
 """
-function soil_infiltration!(soil::Soil,
-                            crop::Crop,
+function soil_infiltration!(soil,
+                            crop,
                             prec::AbstractArray{T};
                             irrigation = false,
                             snowmelt::Union{Nothing, AbstractArray{T}} = nothing,
@@ -14,7 +14,7 @@ function soil_infiltration!(soil::Soil,
                             lpjmlparams::LPJmLParams = lpjmlparams,
                             thermalparams::SoilThermalParams{T} = SoilThermalParams{T}(),
 ) where {T <: AbstractFloat}
-    surface_litter_interception!(soil, prec, crop.fluxes.water.interception)
+    surface_litter_interception!(soil, prec, crop_fluxes(crop).water.interception)
     transfer_heat = !irrigation && snowmelt !== nothing && air_temperature !== nothing
     if transfer_heat
         infil_perc!(
@@ -29,10 +29,10 @@ function soil_infiltration!(soil::Soil,
     if !irrigation
         launch_custom!(
             add_layer_flux_kernel!,
-            soil.water.storage,
-            size(soil.water.storage, 2),
-            soil.water.percolation,
-            size(soil.water.storage, 1),
+            soil_water_prognostic(soil).storage,
+            size(soil_water_prognostic(soil).storage, 2),
+            soil_water_fluxes(soil).percolation,
+            size(soil_water_prognostic(soil).storage, 1),
         )
     end
     if transfer_heat
@@ -55,26 +55,26 @@ end
 Remove the current day's layer-resolved transpiration and soil evaporation after
 plant water demand and supply have been calculated.
 """
-function soil_evapotranspiration!(soil::Soil,
-                                  crop::Crop;
+function soil_evapotranspiration!(soil,
+                                  crop;
                                   irrigation = false)
     if irrigation
         launch_custom!(
             reset_irrigated_storage_kernel!,
-            soil.water.storage,
-            size(soil.water.storage, 2),
-            soil.water.field_capacity,
-            soil.properties.layer_depth,
-            size(soil.water.storage, 1),
+            soil_water_prognostic(soil).storage,
+            size(soil_water_prognostic(soil).storage, 2),
+            soil_water_auxiliary(soil).field_capacity,
+            soil_properties(soil).layer_depth,
+            size(soil_water_prognostic(soil).storage, 1),
         )
     else
         launch_custom!(
             remove_evapotranspiration_kernel!,
-            soil.water.storage,
-            size(soil.water.storage, 2),
-            crop.fluxes.water.transpiration_layer,
-            soil.water.evaporation,
-            size(soil.water.storage, 1),
+            soil_water_prognostic(soil).storage,
+            size(soil_water_prognostic(soil).storage, 2),
+            crop_fluxes(crop).water.transpiration_layer,
+            soil_water_fluxes(soil).evaporation,
+            size(soil_water_prognostic(soil).storage, 1),
         )
     end
     partition_soil_water_ice!(soil)

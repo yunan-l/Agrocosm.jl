@@ -5,40 +5,40 @@ Compute water demand/supply balance and layer-resolved transpiration uptake.
 """
 function transpiration!(photos_adtmm::AbstractArray{T},
                         PFT::PftParameters,
-                        crop::Crop,
+                        crop,
                         pet::PetPar,
-                        soil::Soil,
+                        soil,
                         co2::AbstractArray{T};
                         lpjmlparams::LPJmLParams = lpjmlparams
 ) where {T <: AbstractFloat}
 
     # Root-zone weighted water availability is accumulated inside the cell
     # kernel, avoiding a separate broadcast and reduction array every day.
-    # supply = emax * wr .* (1 .- exp.(-0.04f0 * crop.state.carbon.root))
-    # demand = ifelse.(crop.auxiliary.canopy.canopy_conductance .> 0, (1 .- crop.auxiliary.canopy.canopy_wet) .* pet.eeq * ALPHAM ./ (1 .+ (GM * ALPHAM) ./ crop.auxiliary.canopy.canopy_conductance), zero(T))
+    # supply = emax * wr .* (1 .- exp.(-0.04f0 * crop_prognostic(crop).carbon.root))
+    # demand = ifelse.(crop_canopy_auxiliary(crop).canopy_conductance .> 0, (1 .- crop_canopy_auxiliary(crop).canopy_wet) .* pet.eeq * ALPHAM ./ (1 .+ (GM * ALPHAM) ./ crop_canopy_auxiliary(crop).canopy_conductance), zero(T))
     # transp = ifelse.(wr .> 0, min.(supply, demand) ./ wr .* fpc, zero(T)) # here the crop.fpc = 1, so we just omit it in the kernel fucntion
 
     kernel_params = (lpjmlparams = lpjmlparams, soil_layers = 5)
 
     launch_1D!(water_demand_supply_kernel!,
-               crop.auxiliary.canopy.canopy_conductance,
+               crop_canopy_auxiliary(crop).canopy_conductance,
                photos_adtmm,
                co2,
                pet.daylength,
-               crop.auxiliary.canopy.fpar,
-               crop.fluxes.water.transpiration_layer,
-               crop.state.water.demand_sum,
-               crop.state.water.supply_sum,
-               crop.auxiliary.stress.water_deficit,
-               crop.state.water.sufficiency,
-               crop.state.carbon.root,
-               crop.auxiliary.canopy.canopy_wet,
-               crop.state.phenology.is_growing,
+               crop_canopy_auxiliary(crop).fpar,
+               crop_fluxes(crop).water.transpiration_layer,
+               crop_prognostic(crop).water.demand_sum,
+               crop_prognostic(crop).water.supply_sum,
+               crop_stress_auxiliary(crop).water_deficit,
+               crop_prognostic(crop).water.sufficiency,
+               crop_prognostic(crop).carbon.root,
+               crop_canopy_auxiliary(crop).canopy_wet,
+               crop_prognostic(crop).phenology.is_growing,
                pet.eeq,
-               crop.auxiliary.root.distribution,
-               crop.auxiliary.root.zone_available_water,
-               soil.water.relative_content,
-               soil.water.holding_capacity_storage,
+               crop_root_input(crop).distribution,
+               crop_root_auxiliary(crop).zone_available_water,
+               soil_water_auxiliary(soil).relative_content,
+               soil_water_auxiliary(soil).holding_capacity_storage,
                PFT,
                kernel_params)
 
@@ -111,7 +111,10 @@ end
         end
 
         if crop_w_demandsum[cell] > 0.0
-            crop_wdf[cell] = T(100.0) * crop_w_supplysum[cell] / crop_w_demandsum[cell]
+            crop_wdf[cell] = clamp(
+                T(100.0) * crop_w_supplysum[cell] / crop_w_demandsum[cell],
+                zero(T), T(100.0),
+            )
         else
             crop_wdf[cell] = T(100.0)
         end

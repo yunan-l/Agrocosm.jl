@@ -6,37 +6,37 @@ include("../../helpers/crop_lifecycle_fixture.jl")
 field_arrays(container) =
     [getproperty(container, field) for field in fieldnames(typeof(container))]
 
-function daily_owned_arrays(crop)
+function daily_owned_arrays(state::ModelState)
     return vcat(
-        field_arrays(crop.fluxes.carbon),
-        field_arrays(crop.fluxes.nitrogen),
-        field_arrays(crop.fluxes.water),
+        field_arrays(state.fluxes.crop.carbon),
+        field_arrays(state.fluxes.crop.nitrogen),
+        field_arrays(state.fluxes.crop.water),
         [
-            crop.auxiliary.phenology.fphu,
-            crop.auxiliary.canopy.flaimax,
-            crop.auxiliary.canopy.actual_lai,
-            crop.auxiliary.canopy.albedo,
-            crop.auxiliary.canopy.fpar,
-            crop.auxiliary.canopy.apar,
-            crop.auxiliary.canopy.canopy_conductance,
-            crop.auxiliary.canopy.canopy_wet,
+            state.auxiliary.crop.phenology.fphu,
+            state.auxiliary.crop.canopy.flaimax,
+            state.auxiliary.crop.canopy.actual_lai,
+            state.auxiliary.crop.canopy.albedo,
+            state.auxiliary.crop.canopy.fpar,
+            state.auxiliary.crop.canopy.apar,
+            state.auxiliary.crop.canopy.canopy_conductance,
+            state.auxiliary.crop.canopy.canopy_wet,
         ],
-        field_arrays(crop.auxiliary.photosynthesis),
+        field_arrays(state.auxiliary.crop.photosynthesis),
         [
-            crop.auxiliary.stress.nitrogen_demand_total,
-            crop.auxiliary.stress.nitrogen_demand_leaf,
-            crop.auxiliary.stress.nitrogen_deficit,
-            crop.auxiliary.stress.water_deficit,
-            crop.auxiliary.root.zone_available_water,
+            state.auxiliary.crop.stress.nitrogen_demand_total,
+            state.auxiliary.crop.stress.nitrogen_demand_leaf,
+            state.auxiliary.crop.stress.nitrogen_deficit,
+            state.auxiliary.crop.stress.water_deficit,
+            state.auxiliary.crop.root.zone_available_water,
         ],
-        field_arrays(crop.workspace),
+        field_arrays(state.workspace.crop),
     )
 end
 
-function poison_daily_fields!(crop, value)
-    crop.events.sowing .= 1
-    crop.events.harvest .= 1
-    for values in daily_owned_arrays(crop)
+function poison_daily_fields!(state::ModelState, value)
+    state.events.crop.sowing .= 1
+    state.events.crop.harvest .= 1
+    for values in daily_owned_arrays(state)
         values .= value
     end
     return nothing
@@ -70,7 +70,7 @@ function run_owner_overwrite_case(::Type{T}; poison::Bool) where {T <: AbstractF
     )
     one_day = lifecycle_climate(T, 1)
     run_simulation!(simulation, one_day; spinup = false)
-    poison && poison_daily_fields!(simulation.crop, T(123))
+    poison && poison_daily_fields!(simulation.state, T(123))
     run_simulation!(simulation, one_day; spinup = false)
     return simulation
 end
@@ -80,8 +80,7 @@ end
         clean = run_owner_overwrite_case(T; poison = false)
         poisoned = run_owner_overwrite_case(T; poison = true)
 
-        compare_nested_arrays(clean.crop, poisoned.crop)
-        compare_nested_arrays(clean.soil, poisoned.soil)
+        compare_nested_arrays(clean.state, poisoned.state)
         compare_nested_arrays(clean.output, poisoned.output)
     end
 end

@@ -2,54 +2,54 @@
 soil_decomp_response!(soil; lpjmlparams=lpjmlparams, soil_decomp_params=soil_decomp_params)
 
 Compute and store shared LPJmL decomposition response terms:
-- `soil.decomposition.response` for soil layers;
+- `soil_decomposition_auxiliary(soil).response` for soil layers;
 - row 1 of `litter_response` for surface litter using litter temperature and
   wetness;
 - rows 2–3 for incorporated and below-ground litter using the top soil layer.
 """
-function soil_decomp_response_reference!(soil::Soil;
+function soil_decomp_response_reference!(soil;
                                          lpjmlparams::LPJmLParams = lpjmlparams,
                                          soil_decomp_params::SoilDecompParams = soil_decomp_params
 )
     @unpack intercept, moist3, moist2, moist1, eps = soil_decomp_params
-    moisture = soil.decomposition.layer_scratch_1
-    temperature_response = soil.decomposition.layer_scratch_2
+    moisture = soil_decomposition_workspace(soil).layer_scratch_1
+    temperature_response = soil_decomposition_workspace(soil).layer_scratch_2
 
     # Reuse the two layer scratch buffers for wilting ice, liquid pore
     # capacity, moisture, and temperature response in sequence.
-    moisture .= soil.water.wilting_storage .* soil.water.wilting_ice_fraction
-    temperature_response .= soil.water.saturation_storage .- moisture .-
-        soil.water.available_ice_storage .- soil.water.free_ice_storage
+    moisture .= soil_water_auxiliary(soil).wilting_storage .* soil_water_prognostic(soil).wilting_ice_fraction
+    temperature_response .= soil_water_auxiliary(soil).saturation_storage .- moisture .-
+        soil_water_prognostic(soil).available_ice_storage .- soil_water_prognostic(soil).free_ice_storage
     moisture .= (
-        soil.water.relative_content .* soil.water.holding_capacity_storage .+
-        soil.water.wilting_storage .- moisture .+ soil.water.free_water
+        soil_water_auxiliary(soil).relative_content .* soil_water_auxiliary(soil).holding_capacity_storage .+
+        soil_water_auxiliary(soil).wilting_storage .- moisture .+ soil_water_auxiliary(soil).free_water
     ) ./ max.(temperature_response, eps)
     moisture .= clamp.(moisture, eps, 1.0f0)
 
     launch_1D!(
         soil_temperature_response_kernel!,
-        soil.thermal.temperature,
+        soil_thermal_prognostic(soil).temperature,
         lpjmlparams.e0,
         lpjmlparams.temp_response,
         temperature_response,
     )
-    soil.decomposition.response .= temperature_response .* (
+    soil_decomposition_auxiliary(soil).response .= temperature_response .* (
         intercept .+ moist3 .* moisture.^3 .+
         moist2 .* moisture.^2 .+ moist1 .* moisture
     )
-    soil.decomposition.response .= clamp.(soil.decomposition.response, 0.0f0, 1.0f0)
+    soil_decomposition_auxiliary(soil).response .= clamp.(soil_decomposition_auxiliary(soil).response, 0.0f0, 1.0f0)
 
-    surface_wetness = soil.decomposition.surface_scratch_1
-    surface_temperature_response = soil.decomposition.surface_scratch_2
+    surface_wetness = soil_decomposition_workspace(soil).surface_scratch_1
+    surface_temperature_response = soil_decomposition_workspace(soil).surface_scratch_2
     @views surface_wetness .= ifelse.(
-        soil.surface_litter.water_capacity .> eps,
-        clamp.(soil.surface_litter.water_storage ./
-               max.(soil.surface_litter.water_capacity, eps), 0.0f0, 1.0f0),
+        soil_surface_litter_auxiliary(soil).water_capacity .> eps,
+        clamp.(soil_surface_litter_prognostic(soil).water_storage ./
+               max.(soil_surface_litter_auxiliary(soil).water_capacity, eps), 0.0f0, 1.0f0),
         moisture[1, :],
     )
     launch_1D!(
         soil_temperature_response_kernel!,
-        soil.surface_litter.temperature,
+        soil_surface_litter_prognostic(soil).temperature,
         lpjmlparams.e0,
         lpjmlparams.temp_response,
         surface_temperature_response,
@@ -58,44 +58,44 @@ function soil_decomp_response_reference!(soil::Soil;
         intercept .+ moist3 .* surface_wetness.^3 .+
         moist2 .* surface_wetness.^2 .+ moist1 .* surface_wetness
     )
-    @views soil.decomposition.litter_response[1, :] .= ifelse.(
+    @views soil_decomposition_auxiliary(soil).litter_response[1, :] .= ifelse.(
         temperature_response[1, :] .> 0.0f0,
         clamp.(surface_temperature_response, 0.0f0, 1.0f0),
         0.0f0,
     )
-    @views soil.decomposition.litter_response[2, :] .= soil.decomposition.response[1, :]
-    @views soil.decomposition.litter_response[3, :] .= soil.decomposition.response[1, :]
+    @views soil_decomposition_auxiliary(soil).litter_response[2, :] .= soil_decomposition_auxiliary(soil).response[1, :]
+    @views soil_decomposition_auxiliary(soil).litter_response[3, :] .= soil_decomposition_auxiliary(soil).response[1, :]
     return nothing
 end
 
-function soil_decomp_response!(soil::Soil;
+function soil_decomp_response!(soil;
                                lpjmlparams::LPJmLParams = lpjmlparams,
                                soil_decomp_params::SoilDecompParams = soil_decomp_params)
     launch_custom!(
         soil_decomp_response_kernel!,
-        soil.decomposition.response,
-        size(soil.decomposition.response, 2),
-        soil.decomposition.litter_response,
-        soil.decomposition.layer_scratch_1,
-        soil.decomposition.layer_scratch_2,
-        soil.decomposition.surface_scratch_1,
-        soil.decomposition.surface_scratch_2,
-        soil.water.wilting_storage,
-        soil.water.wilting_ice_fraction,
-        soil.water.saturation_storage,
-        soil.water.available_ice_storage,
-        soil.water.free_ice_storage,
-        soil.water.relative_content,
-        soil.water.holding_capacity_storage,
-        soil.water.free_water,
-        soil.thermal.temperature,
-        soil.surface_litter.water_capacity,
-        soil.surface_litter.water_storage,
-        soil.surface_litter.temperature,
-        eltype(soil.decomposition.response)(lpjmlparams.e0),
-        eltype(soil.decomposition.response)(lpjmlparams.temp_response),
+        soil_decomposition_auxiliary(soil).response,
+        size(soil_decomposition_auxiliary(soil).response, 2),
+        soil_decomposition_auxiliary(soil).litter_response,
+        soil_decomposition_workspace(soil).layer_scratch_1,
+        soil_decomposition_workspace(soil).layer_scratch_2,
+        soil_decomposition_workspace(soil).surface_scratch_1,
+        soil_decomposition_workspace(soil).surface_scratch_2,
+        soil_water_auxiliary(soil).wilting_storage,
+        soil_water_prognostic(soil).wilting_ice_fraction,
+        soil_water_auxiliary(soil).saturation_storage,
+        soil_water_prognostic(soil).available_ice_storage,
+        soil_water_prognostic(soil).free_ice_storage,
+        soil_water_auxiliary(soil).relative_content,
+        soil_water_auxiliary(soil).holding_capacity_storage,
+        soil_water_auxiliary(soil).free_water,
+        soil_thermal_prognostic(soil).temperature,
+        soil_surface_litter_auxiliary(soil).water_capacity,
+        soil_surface_litter_prognostic(soil).water_storage,
+        soil_surface_litter_prognostic(soil).temperature,
+        eltype(soil_decomposition_auxiliary(soil).response)(lpjmlparams.e0),
+        eltype(soil_decomposition_auxiliary(soil).response)(lpjmlparams.temp_response),
         soil_decomp_params,
-        size(soil.decomposition.response, 1),
+        size(soil_decomposition_auxiliary(soil).response, 1),
     )
     return nothing
 end

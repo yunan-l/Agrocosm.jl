@@ -3,8 +3,8 @@ soil_carbon!(crop, soil)
 
 Update litter and soil carbon pools and heterotrophic respiration terms.
 """
-function soil_carbon_reference!(crop::Crop,
-                                soil::Soil;
+function soil_carbon_reference!(crop,
+                                soil;
                                 lpjmlparams::LPJmLParams = lpjmlparams,
                                 soil_decomp_params::SoilDecompParams = soil_decomp_params
 )
@@ -16,82 +16,82 @@ function soil_carbon_reference!(crop::Crop,
     soil_decomp_response_reference!(soil)
 
     # compute soil carbon: litter carbon and soil carbon
-    # soil.carbon.decomposed_litter = (1.0f0 .- exp.(-soil.carbon.litter_response / 100)) .* soil.carbon.litter
+    # soil_carbon_fluxes(soil).decomposed_litter = (1.0f0 .- exp.(-soil_carbon_auxiliary(soil).litter_response / 100)) .* soil_carbon_prognostic(soil).litter
 
     # Litter decomposition is represented as three aggregated litter pools.
     # We use top-layer response (LPJmL uses top/root layer litter environments).
     # `-expm1(-x)` is mathematically identical to `1-exp(-x)` but avoids
     # cancellation for the small daily rates used here on Float32 CPU/GPU.
-    soil.carbon.decomposed_litter .=
-        -expm1.(-soil.carbon.litter_response .* soil.decomposition.litter_response) .* soil.carbon.litter
-    soil.carbon.litter .-= soil.carbon.decomposed_litter
+    soil_carbon_fluxes(soil).decomposed_litter .=
+        -expm1.(-soil_carbon_auxiliary(soil).litter_response .* soil_decomposition_auxiliary(soil).litter_response) .* soil_carbon_prognostic(soil).litter
+    soil_carbon_prognostic(soil).litter .-= soil_carbon_fluxes(soil).decomposed_litter
 
     # LPJmL harvest first creates agtop/bg litter, then the KILL -> setaside
     # transition tills agtop into agsub on the same day.
     route_harvest_carbon_input_reference!(soil, crop)
 
-    # soil.carbon.decomposed_fast = (1.0f0 .- exp.(-soil.response_fastc .* response / 50)) .* soil.carbon.fast
-    soil.carbon.decomposed_fast .= max.(
+    # soil_carbon_fluxes(soil).decomposed_fast = (1.0f0 .- exp.(-soil.response_fastc .* response / 50)) .* soil_carbon_prognostic(soil).fast
+    soil_carbon_fluxes(soil).decomposed_fast .= max.(
         0.0f0,
-        -expm1.(-k_soil10.fast .* soil.decomposition.response) .* soil.carbon.fast,
+        -expm1.(-k_soil10.fast .* soil_decomposition_auxiliary(soil).response) .* soil_carbon_prognostic(soil).fast,
     )
-    decomposed_litter = soil.decomposition.surface_scratch_1
+    decomposed_litter = soil_decomposition_workspace(soil).surface_scratch_1
     @views decomposed_litter .=
-        soil.carbon.decomposed_litter[1, :] .+
-        soil.carbon.decomposed_litter[2, :] .+
-        soil.carbon.decomposed_litter[3, :]
-    soil.carbon.litter_to_fast .= soil.decomposition.shift_fast .*
+        soil_carbon_fluxes(soil).decomposed_litter[1, :] .+
+        soil_carbon_fluxes(soil).decomposed_litter[2, :] .+
+        soil_carbon_fluxes(soil).decomposed_litter[3, :]
+    soil_carbon_fluxes(soil).litter_to_fast .= soil_decomposition_input(soil).shift_fast .*
         reshape(decomposed_litter, 1, :) .* fastfrac .* (1.0f0 - atmfrac)
-    soil.carbon.fast .+= soil.carbon.litter_to_fast .- soil.carbon.decomposed_fast
+    soil_carbon_prognostic(soil).fast .+= soil_carbon_fluxes(soil).litter_to_fast .- soil_carbon_fluxes(soil).decomposed_fast
 
-    # soil.carbon.decomposed_slow = (1.0f0 .- exp.(-soil.response_slowc .* response / 10)) .* soil.carbon.slow
-    soil.carbon.decomposed_slow .= max.(
+    # soil_carbon_fluxes(soil).decomposed_slow = (1.0f0 .- exp.(-soil.response_slowc .* response / 10)) .* soil_carbon_prognostic(soil).slow
+    soil_carbon_fluxes(soil).decomposed_slow .= max.(
         0.0f0,
-        -expm1.(-k_soil10.slow .* soil.decomposition.response) .* soil.carbon.slow,
+        -expm1.(-k_soil10.slow .* soil_decomposition_auxiliary(soil).response) .* soil_carbon_prognostic(soil).slow,
     )
-    soil.carbon.litter_to_slow .= soil.decomposition.shift_slow .*
+    soil_carbon_fluxes(soil).litter_to_slow .= soil_decomposition_input(soil).shift_slow .*
         reshape(decomposed_litter, 1, :) .* (1.0f0 - fastfrac) .* (1.0f0 - atmfrac)
-    soil.carbon.slow .+= soil.carbon.litter_to_slow .- soil.carbon.decomposed_slow
+    soil_carbon_prognostic(soil).slow .+= soil_carbon_fluxes(soil).litter_to_slow .- soil_carbon_fluxes(soil).decomposed_slow
 
-    soil.carbon.heterotrophic_respiration .= decomposed_litter .* atmfrac
-    for layer in axes(soil.carbon.decomposed_fast, 1)
-        @views soil.carbon.heterotrophic_respiration .+=
-            soil.carbon.decomposed_fast[layer, :] .+
-            soil.carbon.decomposed_slow[layer, :]
+    soil_carbon_fluxes(soil).heterotrophic_respiration .= decomposed_litter .* atmfrac
+    for layer in axes(soil_carbon_fluxes(soil).decomposed_fast, 1)
+        @views soil_carbon_fluxes(soil).heterotrophic_respiration .+=
+            soil_carbon_fluxes(soil).decomposed_fast[layer, :] .+
+            soil_carbon_fluxes(soil).decomposed_slow[layer, :]
     end
 
 end
 
 """Decompose existing litter and SOM carbon without routing new harvest residues."""
-function soil_carbon_decomposition!(soil::Soil;
+function soil_carbon_decomposition!(soil;
                                     lpjmlparams::LPJmLParams = lpjmlparams,
                                     soil_decomp_params::SoilDecompParams = soil_decomp_params)
     soil_decomp_response!(
         soil; lpjmlparams = lpjmlparams, soil_decomp_params = soil_decomp_params,
     )
-    T = eltype(soil.carbon.litter)
+    T = eltype(soil_carbon_prognostic(soil).litter)
     launch_custom!(
         soil_carbon_decomposition_kernel!,
-        soil.carbon.litter,
-        size(soil.carbon.litter, 2),
-        soil.carbon.litter_response,
-        soil.decomposition.litter_response,
-        soil.carbon.decomposed_litter,
-        soil.carbon.fast,
-        soil.carbon.slow,
-        soil.decomposition.response,
-        soil.carbon.decomposed_fast,
-        soil.carbon.decomposed_slow,
-        soil.decomposition.shift_fast,
-        soil.decomposition.shift_slow,
-        soil.carbon.litter_to_fast,
-        soil.carbon.litter_to_slow,
-        soil.carbon.heterotrophic_respiration,
+        soil_carbon_prognostic(soil).litter,
+        size(soil_carbon_prognostic(soil).litter, 2),
+        soil_carbon_auxiliary(soil).litter_response,
+        soil_decomposition_auxiliary(soil).litter_response,
+        soil_carbon_fluxes(soil).decomposed_litter,
+        soil_carbon_prognostic(soil).fast,
+        soil_carbon_prognostic(soil).slow,
+        soil_decomposition_auxiliary(soil).response,
+        soil_carbon_fluxes(soil).decomposed_fast,
+        soil_carbon_fluxes(soil).decomposed_slow,
+        soil_decomposition_input(soil).shift_fast,
+        soil_decomposition_input(soil).shift_slow,
+        soil_carbon_fluxes(soil).litter_to_fast,
+        soil_carbon_fluxes(soil).litter_to_slow,
+        soil_carbon_fluxes(soil).heterotrophic_respiration,
         T(lpjmlparams.atmfrac),
         T(lpjmlparams.fastfrac),
         T(lpjmlparams.k_soil10.fast),
         T(lpjmlparams.k_soil10.slow),
-        size(soil.carbon.fast, 1),
+        size(soil_carbon_prognostic(soil).fast, 1),
     )
     return nothing
 end
@@ -103,8 +103,8 @@ Compatibility entry point for the former combined operation: decompose the
 carbon pools, then route harvest-day residues without decomposing those new
 residues until the following day.
 """
-function soil_carbon!(crop::Crop,
-                      soil::Soil;
+function soil_carbon!(crop,
+                      soil;
                       lpjmlparams::LPJmLParams = lpjmlparams,
                       soil_decomp_params::SoilDecompParams = soil_decomp_params)
     soil_carbon_decomposition!(

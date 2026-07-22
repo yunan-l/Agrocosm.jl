@@ -4,8 +4,8 @@ evaporation!(pet_eeq, crop, soil)
 Compute layer-wise bare-soil evaporation constrained by near-surface water.
 """
 function evaporation!(pet_eeq::AbstractArray{T},
-                      crop::Crop,
-                      soil::Soil;
+                      crop,
+                      soil;
                       lpjmlparams::LPJmLParams = lpjmlparams
 
 ) where {T <: AbstractFloat}
@@ -14,18 +14,18 @@ function evaporation!(pet_eeq::AbstractArray{T},
 
     launch_1D!(evaporation_kernel!,
                pet_eeq,
-               crop.auxiliary.canopy.fpar,
-               crop.fluxes.water.transpiration_layer,
-               crop.auxiliary.canopy.canopy_wet,
-               soil.water.relative_content,
-               soil.water.free_water,
-               soil.water.holding_capacity_storage,
-               soil.water.evaporation,
-               soil.surface_litter.cover,
-               soil.surface_litter.water_capacity,
-               soil.surface_litter.water_storage,
-               soil.surface_litter.evaporation,
-               soil.properties.layer_depth,
+               crop_canopy_auxiliary(crop).fpar,
+               crop_fluxes(crop).water.transpiration_layer,
+               crop_canopy_auxiliary(crop).canopy_wet,
+               soil_water_auxiliary(soil).relative_content,
+               soil_water_auxiliary(soil).free_water,
+               soil_water_auxiliary(soil).holding_capacity_storage,
+               soil_water_fluxes(soil).evaporation,
+               soil_surface_litter_prognostic(soil).cover,
+               soil_surface_litter_auxiliary(soil).water_capacity,
+               soil_surface_litter_prognostic(soil).water_storage,
+               soil_surface_litter_fluxes(soil).evaporation,
+               soil_properties(soil).layer_depth,
                kernel_params)
 
 end

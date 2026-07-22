@@ -3,9 +3,9 @@ fertilizer!(crop, ml, soil, day)
 
 Apply manure/fertilizer inputs and split timing to mineral nitrogen pools.
 """
-function fertilizer!(crop::Crop,
+function fertilizer!(crop,
                      ml::ManagedLand,
-                     soil::Soil,
+                     soil,
                      day;
                      enabled::Bool = true,
                      manure::Bool = false,
@@ -16,19 +16,19 @@ function fertilizer!(crop::Crop,
 
     launch_1D!(
         fertilizer_kernel!,
-        crop.state.nitrogen.pending_fertilizer,
-        crop.auxiliary.calendar.sowing_date,
+        crop_prognostic(crop).nitrogen.pending_fertilizer,
+        crop_calendar_input(crop).sowing_date,
         ml.manure,
         ml.fertilizer,
-        crop.state.nitrogen.pending_manure,
-        crop.fluxes.nitrogen.prescribed_manure_input,
-        crop.fluxes.nitrogen.prescribed_fertilizer_input,
-        crop.state.phenology.husum,
-        crop.auxiliary.phenology.phu,
-        soil.nitrogen.nitrate,
-        soil.nitrogen.ammonium,
-        soil.carbon.litter,
-        soil.nitrogen.litter,
+        crop_prognostic(crop).nitrogen.pending_manure,
+        crop_fluxes(crop).nitrogen.prescribed_manure_input,
+        crop_fluxes(crop).nitrogen.prescribed_fertilizer_input,
+        crop_prognostic(crop).phenology.husum,
+        crop_phenology_input(crop).phu,
+        soil_nitrogen_prognostic(soil).nitrate,
+        soil_nitrogen_prognostic(soil).ammonium,
+        soil_carbon_prognostic(soil).litter,
+        soil_nitrogen_prognostic(soil).litter,
         day,
         kernel_params
     )

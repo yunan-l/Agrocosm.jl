@@ -106,45 +106,45 @@ end
     # Final day 730 is fallow. Static templates and environmental diagnostics
     # are excluded: phu/winter_type, root_distribution, albedo and temperature responses.
     for (container, fields) in (
-        (simulation.crop.state.phenology,
+        (simulation.state.prognostic.crop.phenology,
          (:vdsum, :husum, :growing_days, :is_growing)),
-        (simulation.crop.state.canopy,
+        (simulation.state.prognostic.crop.canopy,
          (:lai, :laimax_adjusted, :lai_npp_deficit)),
-        (simulation.crop.auxiliary.phenology, (:fphu,)),
-        (simulation.crop.auxiliary.canopy,
+        (simulation.state.auxiliary.crop.phenology, (:fphu,)),
+        (simulation.state.auxiliary.crop.canopy,
          (:actual_lai, :flaimax, :fpar, :apar, :canopy_conductance, :canopy_wet)),
-        (simulation.crop.state.carbon,
+        (simulation.state.prognostic.crop.carbon,
          (:biomass, :leaf, :root, :pool, :storage)),
-        (simulation.crop.fluxes.carbon,
+        (simulation.state.fluxes.crop.carbon,
          (:yield, :harvest_export, :npp, :respiration, :gross_assimilation, :net_assimilation,
           :water_limited_assimilation, :leaf_respiration)),
-        (simulation.crop.state.nitrogen,
+        (simulation.state.prognostic.crop.nitrogen,
          (:total, :leaf, :root, :pool, :storage, :pending_manure,
           :pending_fertilizer, :stress_sum)),
-        (simulation.crop.fluxes.nitrogen,
+        (simulation.state.fluxes.crop.nitrogen,
          (:uptake, :auto_fertilizer, :seed_input, :prescribed_manure_input,
           :prescribed_fertilizer_input, :harvest_export)),
-        (simulation.crop.state.water,
+        (simulation.state.prognostic.crop.water,
          (:demand_sum, :supply_sum)),
-        (simulation.crop.fluxes.water,
+        (simulation.state.fluxes.crop.water,
          (:interception, :transpiration_layer)),
-        (simulation.crop.auxiliary.stress,
+        (simulation.state.auxiliary.crop.stress,
          (:nitrogen_demand_total, :nitrogen_demand_leaf,
           :nitrogen_deficit, :water_deficit)),
-        (simulation.crop.auxiliary.photosynthesis,
+        (simulation.state.auxiliary.crop.photosynthesis,
          (:potential_vcmax, :vcmax, :nitrogen_limitation, :lambda)),
     )
         for field in fields
             @test all(iszero, Array(getproperty(container, field)))
         end
     end
-    @test !simulation.crop.state.phenology.senescence[1]
-    @test !simulation.crop.state.phenology.senescence_previous[1]
-    @test !simulation.crop.state.phenology.harvesting[1]
-    @test !simulation.crop.state.phenology.harvesting_previous[1]
+    @test !simulation.state.prognostic.crop.phenology.senescence[1]
+    @test !simulation.state.prognostic.crop.phenology.senescence_previous[1]
+    @test !simulation.state.prognostic.crop.phenology.harvesting[1]
+    @test !simulation.state.prognostic.crop.phenology.harvesting_previous[1]
     @test simulation.output.annual.yield[1] == 0.0f0
-    @test simulation.crop.state.nitrogen.sufficiency[1] == 1.0f0
-    @test simulation.crop.state.water.sufficiency[1] == 1.0f0
+    @test simulation.state.prognostic.crop.nitrogen.sufficiency[1] == 1.0f0
+    @test simulation.state.prognostic.crop.water.sufficiency[1] == 1.0f0
 end
 
 @testset "Cultivation, fertilizer, and tillage are single-trigger events" begin

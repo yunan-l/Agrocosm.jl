@@ -28,22 +28,62 @@ validation.
   diagnostics, a high-level simulation API, and a 20-year rainfed-wheat
   notebook with numerically closed water, C, N, and energy ledgers.
 
-### Current closing work
+### Phase 1 acceptance status
 
-1. Rerun the rainfed-wheat notebook after the water-deficit output fix and add
-   CUDA regression coverage for that output trajectory.
-2. Complete the public checkpoint save/restore path and verify uninterrupted
-   versus resumed simulations on CPU and CUDA.
-3. Repeat the NH3 comparison with identical daily wind forcing in Agrocosm and
-   LPJmL. The equation and units are already audited; constant fallback wind is
-   the remaining input-parity gap.
-4. Keep a short end-to-end rainfed-wheat regression baseline and improve public
-   input/output documentation and benchmark reporting.
+- The 20-year rainfed-wheat notebook has been rerun after the water-deficit
+  output fix. Active-crop values are finite and physically bounded, and the
+  water, C, N, and energy ledgers remain numerically closed.
+- CPU/CUDA daily-output equivalence has been validated by the user.
+- Public `save_checkpoint`/`restore_checkpoint!` APIs now write
+  backend-independent files. An interrupted-file-restore trajectory is
+  identical to an uninterrupted CPU simulation for crop, soil, output, and all
+  four balance ledgers.
+- The NH3 equation and units have been audited and accepted; further LPJmL
+  input-parity comparison is not a Phase-1 requirement.
+
+Phase 1 is complete. The rainfed-wheat notebook and short end-to-end tests
+remain regression baselines rather than open implementation work.
+
+## Phase 1 → Phase 2 architecture transition
+
+The Terrarium-style separation of process configuration from numerical-state
+lifecycle is now the Phase-2 architecture baseline:
+
+- `ProcessModules` contains process choices and global parameters, with no
+  evolving backend arrays.
+- `ModelState` is the single canonical numerical tree, partitioned into
+  `prognostic`, `fluxes`, `auxiliary`, `inputs`, `events`, `workspace`, and
+  `output`, with crop and soil namespaces inside each lifecycle group.
+- All crop, soil, climate, and balance process wrappers now select their arrays
+  directly from `ModelState`; the bottom `@kernel` interfaces remain explicit
+  array arguments.
+- Checkpoint format v2 serializes prognostic state and restart-relevant inputs
+  directly from the lifecycle tree. The temporary format-v1 compatibility
+  path was removed together with the old runtime entry point.
+- C3 and C4 old/new entry routes are exactly equal across every runtime array
+  in the three-day regression (`1032/1032` assertions), and the complete CPU
+  suite passes (`2533/2533`).
+
+The legacy multi-argument C3/C4 drivers, `crop_process_view`,
+`soil_process_view`, and `lifecycle_state` branches have been removed. The
+post-removal CPU suite passes (`1686/1686`). Next, define a one-day transition
+suitable for AD and select active parameters.
 
 ## Phase 2 — modular process alternatives and multi-crop architecture
 
 The second phase turns the current process implementation into a framework for
 scientific comparison and model development.
+
+### Differentiable runtime foundation
+
+1. Define the one-day transition boundary over `ProcessModules` and
+   `ModelState`, keeping I/O and reporting outside the differentiated region.
+2. Add an Enzyme CPU smoke test for selected active parameters and prognostic
+   state, followed by a CUDA differentiation test where supported.
+3. Audit sowing, harvest, fertilization, clamps, and iterative solvers and
+   document which gradients are intentionally piecewise or inactive.
+4. Add differentiability regressions without reintroducing domain-container
+   aliases into the active runtime state.
 
 ### Spin-up, restart, and output completion
 

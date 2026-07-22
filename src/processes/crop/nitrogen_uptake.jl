@@ -5,9 +5,9 @@ Compute root uptake of mineral nitrogen from soil NH4/NO3 pools. When
 `auto_fertilizer=true`, supply the remaining plant demand as an explicit
 external N input after root uptake, following LPJmL's AUTO_FERTILIZER mode.
 """
-function nuptake_crop!(crop::Crop,
+function nuptake_crop!(crop,
                        PFT::PftParameters,
-                       soil::Soil;
+                       soil;
                        auto_fertilizer::Bool = false,
                        lpjmlparams::LPJmLParams = lpjmlparams
 )
@@ -20,24 +20,24 @@ function nuptake_crop!(crop::Crop,
 
     launch_1D!(
         nuptake_crop_kernel!,
-        crop.state.nitrogen.total,
-        crop.fluxes.nitrogen.uptake,
-        crop.fluxes.nitrogen.auto_fertilizer,
-        crop.state.nitrogen.leaf,
-        crop.state.carbon.leaf,
-        crop.state.nitrogen.root,
-        crop.state.carbon.root,
-        crop.auxiliary.stress.nitrogen_demand_leaf,
-        crop.auxiliary.stress.nitrogen_demand_total,
-        crop.state.nitrogen.sufficiency,
-        crop.auxiliary.root.distribution,
-        crop.state.phenology.is_growing,
-        soil.water.relative_content,
-        soil.water.saturation_fraction,
-        soil.nitrogen.nitrate,
-        soil.nitrogen.ammonium,
-        soil.properties.layer_depth,
-        soil.thermal.temperature,
+        crop_prognostic(crop).nitrogen.total,
+        crop_fluxes(crop).nitrogen.uptake,
+        crop_fluxes(crop).nitrogen.auto_fertilizer,
+        crop_prognostic(crop).nitrogen.leaf,
+        crop_prognostic(crop).carbon.leaf,
+        crop_prognostic(crop).nitrogen.root,
+        crop_prognostic(crop).carbon.root,
+        crop_stress_auxiliary(crop).nitrogen_demand_leaf,
+        crop_stress_auxiliary(crop).nitrogen_demand_total,
+        crop_prognostic(crop).nitrogen.sufficiency,
+        crop_root_input(crop).distribution,
+        crop_prognostic(crop).phenology.is_growing,
+        soil_water_auxiliary(soil).relative_content,
+        soil_water_prognostic(soil).saturation_fraction,
+        soil_nitrogen_prognostic(soil).nitrate,
+        soil_nitrogen_prognostic(soil).ammonium,
+        soil_properties(soil).layer_depth,
+        soil_thermal_prognostic(soil).temperature,
         PFT,
         kernel_params
     )

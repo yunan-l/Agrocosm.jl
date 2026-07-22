@@ -3,7 +3,7 @@ crop_carbon!(photos, PFT, crop, pet, soil, temp, co2)
 
 Run the daily crop carbon process chain: respiration, allocation, and phenology coupling.
 """
-function crop_carbon!(crop::Crop,
+function crop_carbon!(crop,
                       output::Output,
                       PFT::PftParameters,
                       air_temperature::AbstractVector{T},
@@ -15,8 +15,8 @@ function crop_carbon!(crop::Crop,
     # compute crop respiration
     respiration!(
         crop, PFT, air_temperature, soil_temperature,
-        crop.fluxes.carbon.gross_assimilation,
-        crop.fluxes.carbon.leaf_respiration;
+        crop_fluxes(crop).carbon.gross_assimilation,
+        crop_fluxes(crop).carbon.leaf_respiration;
         lpjmlparams = lpjmlparams,
     )
 
@@ -24,17 +24,17 @@ function crop_carbon!(crop::Crop,
     carbon_allocation!(PFT, crop)
 
     sources = (
-        gpp = crop.fluxes.carbon.gross_assimilation,
-        npp = crop.fluxes.carbon.npp,
-        lambda = crop.auxiliary.photosynthesis.lambda,
-        potential_vcmax = crop.auxiliary.photosynthesis.potential_vcmax,
-        vcmax = crop.auxiliary.photosynthesis.vcmax,
-        nitrogen_limitation = crop.auxiliary.photosynthesis.nitrogen_limitation,
-        respiration = crop.fluxes.carbon.respiration,
-        lai = crop.auxiliary.canopy.actual_lai,
-        fphu = crop.auxiliary.phenology.fphu,
-        water_deficit = crop.auxiliary.stress.water_deficit,
-        biomass = crop.state.carbon.biomass,
+        gpp = crop_fluxes(crop).carbon.gross_assimilation,
+        npp = crop_fluxes(crop).carbon.npp,
+        lambda = crop_photosynthesis_auxiliary(crop).lambda,
+        potential_vcmax = crop_photosynthesis_auxiliary(crop).potential_vcmax,
+        vcmax = crop_photosynthesis_auxiliary(crop).vcmax,
+        nitrogen_limitation = crop_photosynthesis_auxiliary(crop).nitrogen_limitation,
+        respiration = crop_fluxes(crop).carbon.respiration,
+        lai = crop_canopy_auxiliary(crop).actual_lai,
+        fphu = crop_phenology_auxiliary(crop).fphu,
+        water_deficit = crop_stress_auxiliary(crop).water_deficit,
+        biomass = crop_prognostic(crop).carbon.biomass,
     )
     for (field, source) in pairs(sources)
         if output_row === nothing

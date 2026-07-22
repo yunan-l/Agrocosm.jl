@@ -3,7 +3,7 @@ interception!(crop, PFT, pet_eeq, rain)
 
 Update canopy wetness and interception evaporation for the current day.
 """
-function interception!(crop::Crop,
+function interception!(crop,
                        PFT::PftParameters,
                        pet_eeq::AbstractArray{T},
                        rain::AbstractArray{T};
@@ -12,11 +12,11 @@ function interception!(crop::Crop,
 
     launch_1D!(
         interception_kernel!,
-        crop.fluxes.water.interception,
-        crop.auxiliary.canopy.canopy_wet,
-        crop.state.canopy.lai,
-        crop.state.canopy.lai_npp_deficit,
-        crop.state.phenology.is_growing,
+        crop_fluxes(crop).water.interception,
+        crop_canopy_auxiliary(crop).canopy_wet,
+        crop_prognostic(crop).canopy.lai,
+        crop_prognostic(crop).canopy.lai_npp_deficit,
+        crop_prognostic(crop).phenology.is_growing,
         pet_eeq,
         rain,
         PFT,

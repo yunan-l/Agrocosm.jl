@@ -7,8 +7,8 @@ day. Surface-litter cover is rebuilt directly from its carbon stock so event
 routing and restart initialization cannot leave radiation on a stale cache.
 """
 function albedo_reference!(PFT::PftParameters,
-                           crop::Crop,
-                           soil::Soil,
+                           crop,
+                           soil,
                            pet::PetPar;
                            maize::Bool = false,
                            soil_albedo = 0.3f0,
@@ -17,17 +17,17 @@ function albedo_reference!(PFT::PftParameters,
     T = eltype(pet.albedo)
     actual_lai = max.(
         zero(T),
-        crop.state.canopy.lai .- crop.state.canopy.lai_npp_deficit,
+        crop_prognostic(crop).canopy.lai .- crop_prognostic(crop).canopy.lai_npp_deficit,
     )
     green_fraction = if maize
         clamp.(T(0.2558) .* max.(T(0.01), actual_lai) .- T(0.0024), zero(T), one(T))
     else
         one(T) .- exp.(-T(PFT.lightextcoeff) .* actual_lai)
     end
-    litter_dry_matter = max.(@view(soil.carbon.litter[1, :]), zero(T)) ./
+    litter_dry_matter = max.(@view(soil_carbon_prognostic(soil).litter[1, :]), zero(T)) ./
         T(litter_carbon_fraction)
     litter_cover = one(T) .- exp.(-T(6e-3) .* litter_dry_matter)
-    snow_cover = soil.snow.height .> zero(T)
+    snow_cover = soil_snow_prognostic(soil).height .> zero(T)
 
     green_albedo = green_fraction .* ifelse.(
         snow_cover, T(snow_albedo), T(PFT.albedo_leaf),
@@ -39,15 +39,15 @@ function albedo_reference!(PFT::PftParameters,
     soil_background = (one(T) .- litter_cover) .* background_fraction
     soil_component = ifelse.(
         snow_cover,
-        soil_background .* soil.snow.fraction .* T(snow_albedo),
+        soil_background .* soil_snow_prognostic(soil).fraction .* T(snow_albedo),
         soil_background .* T(soil_albedo),
     )
     crop_surface_albedo = green_albedo .+ litter_albedo .+ soil_component
-    bare_surface_albedo = soil.snow.fraction .* T(snow_albedo) .+
-        (one(T) .- soil.snow.fraction) .* T(soil_albedo)
-    growing = crop.state.phenology.is_growing .!= 0
+    bare_surface_albedo = soil_snow_prognostic(soil).fraction .* T(snow_albedo) .+
+        (one(T) .- soil_snow_prognostic(soil).fraction) .* T(soil_albedo)
+    growing = crop_prognostic(crop).phenology.is_growing .!= 0
 
-    crop.auxiliary.canopy.albedo .= ifelse.(
+    crop_canopy_auxiliary(crop).albedo .= ifelse.(
         growing, crop_surface_albedo, zero(T),
     )
     pet.albedo .= ifelse.(
@@ -59,8 +59,8 @@ function albedo_reference!(PFT::PftParameters,
 end
 
 function albedo!(PFT::PftParameters,
-                 crop::Crop,
-                 soil::Soil,
+                 crop,
+                 soil,
                  pet::PetPar;
                  maize::Bool = false,
                  soil_albedo = 0.3f0,
@@ -70,13 +70,13 @@ function albedo!(PFT::PftParameters,
     launch_1D!(
         albedo_kernel!,
         pet.albedo,
-        crop.auxiliary.canopy.albedo,
-        crop.state.canopy.lai,
-        crop.state.canopy.lai_npp_deficit,
-        crop.state.phenology.is_growing,
-        soil.carbon.litter,
-        soil.snow.height,
-        soil.snow.fraction,
+        crop_canopy_auxiliary(crop).albedo,
+        crop_prognostic(crop).canopy.lai,
+        crop_prognostic(crop).canopy.lai_npp_deficit,
+        crop_prognostic(crop).phenology.is_growing,
+        soil_carbon_prognostic(soil).litter,
+        soil_snow_prognostic(soil).height,
+        soil_snow_prognostic(soil).fraction,
         T(PFT.lightextcoeff),
         T(PFT.albedo_leaf),
         T(PFT.albedo_litter),

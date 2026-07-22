@@ -109,6 +109,8 @@ diagnostics and workspace are excluded. Root distribution is reconstructed
 from PFT parameters at initialization. A full `CropSimulation` checkpoint must
 also retain `output.annual` when it may resume before the year-end annual row
 is emitted. A restart must be written only at a completed daily boundary.
+The public `save_checkpoint`/`restore_checkpoint!` API implements this boundary,
+stores arrays on the host, and restores them to the target CPU or CUDA backend.
 
 ## Regression coverage
 

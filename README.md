@@ -1,6 +1,7 @@
 # Agrocosm.jl
 
 [![Build Status](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![Documentation](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/Documentation.yml/badge.svg)](https://yunan-l.github.io/Agrocosm.jl/dev/)
 
 **🧑‍🌾 💧 ☀️ 🌾 🚀 Fast and flexible Julia framework for agricultural ecosystem modelling across scales.**
 
@@ -18,6 +19,10 @@ differentiable model architecture.
 
 > [!WARNING]
 > Agrocosm.jl is under active development, but almost done as a standalone model.
+
+Read the [online documentation](https://yunan-l.github.io/Agrocosm.jl/dev/)
+for installation, model concepts, input schemas, CPU/GPU execution,
+checkpoints, validation scope, and API reference.
 
 ## Vision
 
@@ -114,6 +119,24 @@ simulation = initialize_simulation(
 )
 run_simulation!(simulation, climate)
 ```
+
+Save at any completed daily boundary and resume into a newly initialized
+simulation with the same precision, dimensions, and run options:
+
+```julia
+save_checkpoint("wheat_checkpoint.jld2", simulation)
+resumed = initialize_simulation(
+    cft1, initial_data;
+    indices = [1], device = identity, T = Float32,
+    days = 10*365, auto_fertilizer = false,
+)
+restore_checkpoint!(resumed, "wheat_checkpoint.jld2")
+run_simulation!(resumed, remaining_climate; spinup = false)
+```
+
+Checkpoint arrays are stored on the host, so `resumed` may use `CuArray` even
+when the checkpoint was written by a CPU simulation.
+
 The 10-year GPP and NPP simulations see below:
 <p align="left">
   <img src="examples/crop_gpp_npp.png" width="1000">

@@ -11,7 +11,7 @@ using CUDA, Adapt
 
 # INPUT OUTPUT
 using DataFrames, NCDatasets, Random, Dates
-import JLD2: @load, @save, load
+import JLD2: @load, @save, jldsave, load
 
 # PARAMETER HANDLING
 import Parameters: @with_kw, @unpack
@@ -26,6 +26,7 @@ export CropPhenology, CropCarbonState, CropNitrogenState, CropWaterState
 export CropCalendarAuxiliary, CropCanopyState, CropCanopyAuxiliary, CropPhotosynthesisAuxiliary
 export CropCarbonFluxes, CropNitrogenFluxes, CropWaterFluxes, CropEvents
 export CropStressAuxiliary, CropRootAuxiliary, ManagedLand
+export ProcessModules, ModelState, model_state
 export SoilParams, SoilDecompParams, SoilThermalParams, SnowParams, Soil
 export SoilProperties, SoilWater, SoilThermal, SoilCarbon, SoilNitrogen
 export SoilDecomposition, SoilManagement, SoilSurfaceLitter, SoilSnow
@@ -79,6 +80,7 @@ export write_output_nc
 # DAILY CROP SIMULATIONS
 export daily_crop_C3!, daily_crop_C4!
 export CropSimulation, initialize_simulation, run_simulation!, simulation_summary
+export save_checkpoint, restore_checkpoint!
 
 
 # process-based crop model
@@ -112,6 +114,7 @@ include("processes/initialization/soil/surface_litter.jl")
 include("processes/initialization/soil/snow.jl")
 include("processes/initialization/soil/soil.jl")
 include("processes/initialization/init_states.jl")
+include("simulations/model_runtime.jl")
 
 # Diagnostics
 include("diagnostics/water_balance.jl")

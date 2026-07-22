@@ -3,9 +3,9 @@ crop_nitrogen!(crop, PFT, soil, photos_vcmax, temp; auto_fertilizer=true)
 
 Allocate acquired crop nitrogen among leaf, root, storage, and pool compartments.
 """
-function crop_nitrogen!(crop::Crop,
+function crop_nitrogen!(crop,
                         PFT::PftParameters,
-                        soil::Soil,
+                        soil,
                         photos_vcmax::AbstractArray{T},
                         temp::AbstractArray{T};
                         auto_fertilizer::Bool = true,
@@ -30,20 +30,20 @@ Redistribute the complete plant nitrogen stock among crop organs. Organ pools
 are derived stocks, not daily uptake fluxes, so repeated calls with unchanged
 carbon and total nitrogen are idempotent.
 """
-function allocate_crop_nitrogen!(crop::Crop,
+function allocate_crop_nitrogen!(crop,
                                  PFT::PftParameters)
 
     launch_1D!(crop_nitrogen_kernel!,
-               crop.state.nitrogen.total,
-               crop.state.phenology.is_growing,
-               crop.state.carbon.leaf,
-               crop.state.carbon.root,
-               crop.state.carbon.storage,
-               crop.state.carbon.pool,
-               crop.state.nitrogen.leaf,
-               crop.state.nitrogen.root,
-               crop.state.nitrogen.storage,
-               crop.state.nitrogen.pool,
+               crop_prognostic(crop).nitrogen.total,
+               crop_prognostic(crop).phenology.is_growing,
+               crop_prognostic(crop).carbon.leaf,
+               crop_prognostic(crop).carbon.root,
+               crop_prognostic(crop).carbon.storage,
+               crop_prognostic(crop).carbon.pool,
+               crop_prognostic(crop).nitrogen.leaf,
+               crop_prognostic(crop).nitrogen.root,
+               crop_prognostic(crop).nitrogen.storage,
+               crop_prognostic(crop).nitrogen.pool,
                PFT)
 
 end

@@ -3,52 +3,52 @@ pedotransfer!(soil; lpjmlparams=lpjmlparams)
 
 Derive soil hydraulic properties from texture and depth parameterizations.
 """
-function pedotransfer_reference!(soil::Soil;
+function pedotransfer_reference!(soil;
                                  lpjmlparams::LPJmLParams = lpjmlparams
 )
 
     @unpack MINERALDENS = lpjmlparams # mineral density in kg/m3
 
-    om_layer = 2 * ((soil.carbon.fast + soil.carbon.slow) ./ ((1 .- soil.water.saturation_fraction) * MINERALDENS .* soil.properties.layer_depth)) * 100 #calculation of soil organic matter in %
+    om_layer = 2 * ((soil_carbon_prognostic(soil).fast + soil_carbon_prognostic(soil).slow) ./ ((1 .- soil_water_prognostic(soil).saturation_fraction) * MINERALDENS .* soil_properties(soil).layer_depth)) * 100 #calculation of soil organic matter in %
 
     # idx = om_layer .> 8
     # om_layer[idx] .= T(8.0)
     # om_layer .= ifelse.(om_layer .> 8, 8.0, om_layer)
     om_layer .= clamp.(om_layer, 0.0f0, 8.0f0)
 
-    wpwpt = -0.024f0 * soil.properties.sand_fraction + 0.487f0 * soil.properties.clay_fraction .+ 0.006f0 * om_layer + 0.005f0 * (soil.properties.sand_fraction .* om_layer) - 0.013f0 * (soil.properties.clay_fraction .* om_layer) .+ 0.068f0 * (soil.properties.sand_fraction .* soil.properties.clay_fraction) .+ 0.031f0
-    soil.water.wilting_fraction .= wpwpt + (0.14 * wpwpt .- 0.02)
-    soil.water.wilting_storage .= soil.water.wilting_fraction .* soil.properties.layer_depth
-    ws33t = 0.278f0 * soil.properties.sand_fraction + 0.034f0 * soil.properties.clay_fraction .+ 0.022f0 * om_layer - 0.018f0 * (soil.properties.sand_fraction .* om_layer) - 0.027f0 * (soil.properties.clay_fraction .* om_layer) .- 0.584f0 * (soil.properties.sand_fraction .* soil.properties.clay_fraction) .+ 0.078f0
+    wpwpt = -0.024f0 * soil_properties(soil).sand_fraction + 0.487f0 * soil_properties(soil).clay_fraction .+ 0.006f0 * om_layer + 0.005f0 * (soil_properties(soil).sand_fraction .* om_layer) - 0.013f0 * (soil_properties(soil).clay_fraction .* om_layer) .+ 0.068f0 * (soil_properties(soil).sand_fraction .* soil_properties(soil).clay_fraction) .+ 0.031f0
+    soil_water_auxiliary(soil).wilting_fraction .= wpwpt + (0.14 * wpwpt .- 0.02)
+    soil_water_auxiliary(soil).wilting_storage .= soil_water_auxiliary(soil).wilting_fraction .* soil_properties(soil).layer_depth
+    ws33t = 0.278f0 * soil_properties(soil).sand_fraction + 0.034f0 * soil_properties(soil).clay_fraction .+ 0.022f0 * om_layer - 0.018f0 * (soil_properties(soil).sand_fraction .* om_layer) - 0.027f0 * (soil_properties(soil).clay_fraction .* om_layer) .- 0.584f0 * (soil_properties(soil).sand_fraction .* soil_properties(soil).clay_fraction) .+ 0.078f0
     ws33 = ws33t + (0.636f0 * ws33t .- 0.107f0)
 
-    wfct = -0.251f0 * soil.properties.sand_fraction + 0.195f0 * soil.properties.clay_fraction .+ 0.011f0 * om_layer + 0.006f0 * (soil.properties.sand_fraction .* om_layer) - 0.027f0 * (soil.properties.clay_fraction .* om_layer) .+ 0.452f0 * (soil.properties.sand_fraction .* soil.properties.clay_fraction) .+ 0.299f0
-    soil.water.field_capacity .= (wfct + (((1.283f0 * wfct) .^ 2) - 0.374f0 * wfct .- 0.015f0))
+    wfct = -0.251f0 * soil_properties(soil).sand_fraction + 0.195f0 * soil_properties(soil).clay_fraction .+ 0.011f0 * om_layer + 0.006f0 * (soil_properties(soil).sand_fraction .* om_layer) - 0.027f0 * (soil_properties(soil).clay_fraction .* om_layer) .+ 0.452f0 * (soil_properties(soil).sand_fraction .* soil_properties(soil).clay_fraction) .+ 0.299f0
+    soil_water_auxiliary(soil).field_capacity .= (wfct + (((1.283f0 * wfct) .^ 2) - 0.374f0 * wfct .- 0.015f0))
 
-    base_saturation = soil.water.field_capacity + ws33 .-
-        0.097f0 * soil.properties.sand_fraction .+ 0.043f0
-    soil.water.saturation_fraction .= base_saturation
+    base_saturation = soil_water_auxiliary(soil).field_capacity + ws33 .-
+        0.097f0 * soil_properties(soil).sand_fraction .+ 0.043f0
+    soil_water_prognostic(soil).saturation_fraction .= base_saturation
 
     # LPJmL tills only the upper soil layer. Lower bulk density increases its
     # pore volume and slightly shifts field capacity until rainfall settles it.
     @views begin
-        density_factor = soil.management.tillage_density_factor[1, :]
+        density_factor = soil_management_prognostic(soil).tillage_density_factor[1, :]
         tilled_saturation = one(eltype(base_saturation)) .-
             (one(eltype(base_saturation)) .- base_saturation[1, :]) .* density_factor
-        soil.water.saturation_fraction[1, :] .= tilled_saturation
-        soil.water.field_capacity[1, :] .-= 0.2f0 .* (
+        soil_water_prognostic(soil).saturation_fraction[1, :] .= tilled_saturation
+        soil_water_auxiliary(soil).field_capacity[1, :] .-= 0.2f0 .* (
             base_saturation[1, :] .- tilled_saturation
         )
     end
-    soil.water.saturation_storage .= soil.water.saturation_fraction .* soil.properties.layer_depth
+    soil_water_auxiliary(soil).saturation_storage .= soil_water_prognostic(soil).saturation_fraction .* soil_properties(soil).layer_depth
 
-    # idx = (soil.water.saturation_fraction - soil.water.field_capacity) .< 0.05
-    # soil.water.field_capacity[idx] .= soil.water.saturation_fraction[idx] .- 0.05
-    soil.water.field_capacity .= ifelse.((soil.water.saturation_fraction - soil.water.field_capacity) .< 0.05f0, soil.water.saturation_fraction .- 0.05f0, soil.water.field_capacity)
+    # idx = (soil_water_prognostic(soil).saturation_fraction - soil_water_auxiliary(soil).field_capacity) .< 0.05
+    # soil_water_auxiliary(soil).field_capacity[idx] .= soil_water_prognostic(soil).saturation_fraction[idx] .- 0.05
+    soil_water_auxiliary(soil).field_capacity .= ifelse.((soil_water_prognostic(soil).saturation_fraction - soil_water_auxiliary(soil).field_capacity) .< 0.05f0, soil_water_prognostic(soil).saturation_fraction .- 0.05f0, soil_water_auxiliary(soil).field_capacity)
 
-    soil.water.beta .= -2.655f0 ./ log10.(soil.water.field_capacity ./ soil.water.saturation_fraction)
-    soil.water.holding_capacity_fraction .= soil.water.field_capacity - soil.water.wilting_fraction
-    soil.water.holding_capacity_storage .= soil.water.holding_capacity_fraction .* soil.properties.layer_depth
+    soil_water_auxiliary(soil).beta .= -2.655f0 ./ log10.(soil_water_auxiliary(soil).field_capacity ./ soil_water_prognostic(soil).saturation_fraction)
+    soil_water_auxiliary(soil).holding_capacity_fraction .= soil_water_auxiliary(soil).field_capacity - soil_water_auxiliary(soil).wilting_fraction
+    soil_water_auxiliary(soil).holding_capacity_storage .= soil_water_auxiliary(soil).holding_capacity_fraction .* soil_properties(soil).layer_depth
 
     # Reconstruct LPJmL's below-PWP, plant-available, and free-water pools
     # after hydraulic capacities change. Total liquid water and total ice are
@@ -56,34 +56,57 @@ function pedotransfer_reference!(soil::Soil;
     partition_soil_water_ice!(soil)
 
     # Calculation of Ks
-    lambda = (log.(soil.water.field_capacity) - log.(soil.water.wilting_fraction)) / (log(1500) - log(33))
-    soil.water.saturated_conductivity .= 1930 * (soil.water.saturation_fraction - soil.water.field_capacity) .^ (3 .- lambda)
+    lambda = (log.(soil_water_auxiliary(soil).field_capacity) - log.(soil_water_auxiliary(soil).wilting_fraction)) / (log(1500) - log(33))
+    soil_water_auxiliary(soil).saturated_conductivity .= 1930 * (soil_water_prognostic(soil).saturation_fraction - soil_water_auxiliary(soil).field_capacity) .^ (3 .- lambda)
 
 end
 
 """Compute hydraulic properties in one backend-neutral layer/cell kernel."""
-function pedotransfer!(soil::Soil;
+function pedotransfer!(soil;
                        lpjmlparams::LPJmLParams = lpjmlparams)
     launch_2D!(
         pedotransfer_kernel!,
-        soil.water.wilting_fraction,
-        soil.properties.sand_fraction,
-        soil.properties.clay_fraction,
-        soil.properties.layer_depth,
-        soil.carbon.fast,
-        soil.carbon.slow,
-        soil.water.wilting_storage,
-        soil.water.field_capacity,
-        soil.water.saturation_fraction,
-        soil.water.saturation_storage,
-        soil.water.beta,
-        soil.water.holding_capacity_fraction,
-        soil.water.holding_capacity_storage,
-        soil.water.saturated_conductivity,
-        soil.management.tillage_density_factor,
-        eltype(soil.water.storage)(lpjmlparams.MINERALDENS),
+        soil_water_auxiliary(soil).wilting_fraction,
+        soil_properties(soil).sand_fraction,
+        soil_properties(soil).clay_fraction,
+        soil_properties(soil).layer_depth,
+        soil_carbon_prognostic(soil).fast,
+        soil_carbon_prognostic(soil).slow,
+        soil_water_auxiliary(soil).wilting_storage,
+        soil_water_auxiliary(soil).field_capacity,
+        soil_water_prognostic(soil).saturation_fraction,
+        soil_water_auxiliary(soil).saturation_storage,
+        soil_water_auxiliary(soil).beta,
+        soil_water_auxiliary(soil).holding_capacity_fraction,
+        soil_water_auxiliary(soil).holding_capacity_storage,
+        soil_water_auxiliary(soil).saturated_conductivity,
+        soil_management_prognostic(soil).tillage_density_factor,
+        eltype(soil_water_prognostic(soil).storage)(lpjmlparams.MINERALDENS),
     )
     partition_soil_water_ice!(soil)
+    return nothing
+end
+
+function pedotransfer!(state::ModelState;
+                       lpjmlparams::LPJmLParams = lpjmlparams)
+    water_state = state.prognostic.soil.water
+    water_auxiliary = state.auxiliary.soil.water
+    soil_inputs = state.inputs.soil
+    soil_carbon = state.prognostic.soil.carbon
+    launch_2D!(
+        pedotransfer_kernel!, water_auxiliary.wilting_fraction,
+        soil_inputs.properties.sand_fraction,
+        soil_inputs.properties.clay_fraction,
+        soil_inputs.properties.layer_depth, soil_carbon.fast, soil_carbon.slow,
+        water_auxiliary.wilting_storage, water_auxiliary.field_capacity,
+        water_state.saturation_fraction, water_auxiliary.saturation_storage,
+        water_auxiliary.beta, water_auxiliary.holding_capacity_fraction,
+        water_auxiliary.holding_capacity_storage,
+        water_auxiliary.saturated_conductivity,
+        state.prognostic.soil.management.tillage_density_factor,
+        eltype(water_state.storage)(lpjmlparams.MINERALDENS),
+    )
+    partition_soil_water_ice!(state)
     return nothing
 end
 

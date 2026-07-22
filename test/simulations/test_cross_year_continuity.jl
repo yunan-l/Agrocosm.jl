@@ -43,19 +43,19 @@ end
             getproperty(continuous.output.crop, field)
     end
     for (chunked_state, continuous_state) in (
-        (chunked.soil.water.storage, continuous.soil.water.storage),
-        (chunked.soil.water.ice_storage, continuous.soil.water.ice_storage),
-        (chunked.soil.thermal.temperature, continuous.soil.thermal.temperature),
-        (chunked.soil.carbon.litter, continuous.soil.carbon.litter),
-        (chunked.soil.carbon.fast, continuous.soil.carbon.fast),
-        (chunked.soil.carbon.slow, continuous.soil.carbon.slow),
-        (chunked.soil.nitrogen.litter, continuous.soil.nitrogen.litter),
-        (chunked.soil.nitrogen.fast, continuous.soil.nitrogen.fast),
-        (chunked.soil.nitrogen.slow, continuous.soil.nitrogen.slow),
-        (chunked.soil.nitrogen.nitrate, continuous.soil.nitrogen.nitrate),
-        (chunked.soil.nitrogen.ammonium, continuous.soil.nitrogen.ammonium),
-        (chunked.soil.management.tillage_density_factor,
-         continuous.soil.management.tillage_density_factor),
+        (chunked.state.prognostic.soil.water.storage, continuous.state.prognostic.soil.water.storage),
+        (chunked.state.prognostic.soil.water.ice_storage, continuous.state.prognostic.soil.water.ice_storage),
+        (chunked.state.prognostic.soil.thermal.temperature, continuous.state.prognostic.soil.thermal.temperature),
+        (chunked.state.prognostic.soil.carbon.litter, continuous.state.prognostic.soil.carbon.litter),
+        (chunked.state.prognostic.soil.carbon.fast, continuous.state.prognostic.soil.carbon.fast),
+        (chunked.state.prognostic.soil.carbon.slow, continuous.state.prognostic.soil.carbon.slow),
+        (chunked.state.prognostic.soil.nitrogen.litter, continuous.state.prognostic.soil.nitrogen.litter),
+        (chunked.state.prognostic.soil.nitrogen.fast, continuous.state.prognostic.soil.nitrogen.fast),
+        (chunked.state.prognostic.soil.nitrogen.slow, continuous.state.prognostic.soil.nitrogen.slow),
+        (chunked.state.prognostic.soil.nitrogen.nitrate, continuous.state.prognostic.soil.nitrogen.nitrate),
+        (chunked.state.prognostic.soil.nitrogen.ammonium, continuous.state.prognostic.soil.nitrogen.ammonium),
+        (chunked.state.prognostic.soil.management.tillage_density_factor,
+         continuous.state.prognostic.soil.management.tillage_density_factor),
     )
         @test chunked_state ≈ continuous_state
     end

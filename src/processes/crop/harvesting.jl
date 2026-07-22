@@ -3,8 +3,8 @@ harvest_crop!(crop, soil, output, residue_fraction, day)
 
 Handle harvest-day biomass removal, residue transfer, and crop state reset.
 """
-function harvest_crop!(crop::Crop,
-                       soil::Soil,
+function harvest_crop!(crop,
+                       soil,
                        output::Output,
                        residue_frac::AbstractArray{T},
                        day::Int;
@@ -14,46 +14,46 @@ function harvest_crop!(crop::Crop,
 
     launch_1D!(
         harvest_state_kernel!,
-        crop.events.harvest,
+        crop_events(crop).harvest,
         output.annual.harvest_date,
-        crop.state.phenology.harvesting_previous,
-        crop.state.phenology.harvesting,
-        crop.state.phenology.is_growing,
-        crop.fluxes.carbon.yield,
-        crop.fluxes.carbon.harvest_export,
+        crop_prognostic(crop).phenology.harvesting_previous,
+        crop_prognostic(crop).phenology.harvesting,
+        crop_prognostic(crop).phenology.is_growing,
+        crop_fluxes(crop).carbon.yield,
+        crop_fluxes(crop).carbon.harvest_export,
         output.annual.yield,
-        crop.state.carbon.storage,
-        crop.state.carbon.leaf,
-        crop.state.carbon.pool,
-        crop.state.carbon.root,
-        crop.fluxes.nitrogen.harvest_export,
-        crop.state.nitrogen.storage,
-        crop.state.nitrogen.leaf,
-        crop.state.nitrogen.pool,
-        crop.state.nitrogen.root,
-        soil.carbon.input,
-        soil.nitrogen.input,
-        soil.water.storage,
-        soil.properties.layer_depth,
+        crop_prognostic(crop).carbon.storage,
+        crop_prognostic(crop).carbon.leaf,
+        crop_prognostic(crop).carbon.pool,
+        crop_prognostic(crop).carbon.root,
+        crop_fluxes(crop).nitrogen.harvest_export,
+        crop_prognostic(crop).nitrogen.storage,
+        crop_prognostic(crop).nitrogen.leaf,
+        crop_prognostic(crop).nitrogen.pool,
+        crop_prognostic(crop).nitrogen.root,
+        soil_carbon_fluxes(soil).input,
+        soil_nitrogen_fluxes(soil).input,
+        soil_water_prognostic(soil).storage,
+        soil_properties(soil).layer_depth,
         residue_frac,
         day,
     )
 
-    # soil.carbon.input .= vcat(reshape((crop.state.carbon.leaf .+ crop.state.carbon.pool) .* residue_frac, (1, :)), device(zeros(Float32, (1, cell_size))), reshape(crop.state.carbon.root, (1, :))) .* reshape(crop.events.harvest, (1, :))
-    # soil.nitrogen.input .= vcat(reshape((crop.state.nitrogen.leaf .+ crop.state.nitrogen.pool) .* residue_frac, (1, :)), device(zeros(Float32, (1, cell_size))), reshape(crop.state.nitrogen.root, (1, :))) .* reshape(crop.events.harvest, (1, :))
-    # idx = ((crop.state.phenology.harvesting_previous .== true) .& (crop.state.phenology.harvesting .== true)) .| ((crop.state.phenology.harvesting_previous .== true) .& (crop.state.phenology.harvesting .== false)) .| ((crop.state.phenology.harvesting_previous .== false) .& (crop.state.phenology.harvesting .== false))
-    # crop.events.harvest[idx] .= 0
-    # crop.events.harvest .= ifelse.(((crop.state.phenology.harvesting_previous .== true) .& (crop.state.phenology.harvesting .== true)) .| ((crop.state.phenology.harvesting_previous .== true) .& (crop.state.phenology.harvesting .== false)) .| ((crop.state.phenology.harvesting_previous .== false) .& (crop.state.phenology.harvesting .== false)), 0, crop.events.harvest)
+    # soil_carbon_fluxes(soil).input .= vcat(reshape((crop_prognostic(crop).carbon.leaf .+ crop_prognostic(crop).carbon.pool) .* residue_frac, (1, :)), device(zeros(Float32, (1, cell_size))), reshape(crop_prognostic(crop).carbon.root, (1, :))) .* reshape(crop_events(crop).harvest, (1, :))
+    # soil_nitrogen_fluxes(soil).input .= vcat(reshape((crop_prognostic(crop).nitrogen.leaf .+ crop_prognostic(crop).nitrogen.pool) .* residue_frac, (1, :)), device(zeros(Float32, (1, cell_size))), reshape(crop_prognostic(crop).nitrogen.root, (1, :))) .* reshape(crop_events(crop).harvest, (1, :))
+    # idx = ((crop_prognostic(crop).phenology.harvesting_previous .== true) .& (crop_prognostic(crop).phenology.harvesting .== true)) .| ((crop_prognostic(crop).phenology.harvesting_previous .== true) .& (crop_prognostic(crop).phenology.harvesting .== false)) .| ((crop_prognostic(crop).phenology.harvesting_previous .== false) .& (crop_prognostic(crop).phenology.harvesting .== false))
+    # crop_events(crop).harvest[idx] .= 0
+    # crop_events(crop).harvest .= ifelse.(((crop_prognostic(crop).phenology.harvesting_previous .== true) .& (crop_prognostic(crop).phenology.harvesting .== true)) .| ((crop_prognostic(crop).phenology.harvesting_previous .== true) .& (crop_prognostic(crop).phenology.harvesting .== false)) .| ((crop_prognostic(crop).phenology.harvesting_previous .== false) .& (crop_prognostic(crop).phenology.harvesting .== false)), 0, crop_events(crop).harvest)
 
     daily_sources = (
         crop = (
-            growing_mask = crop.state.phenology.is_growing,
-            storage_carbon = crop.state.carbon.storage,
+            growing_mask = crop_prognostic(crop).phenology.is_growing,
+            storage_carbon = crop_prognostic(crop).carbon.storage,
         ),
         calendar = (
-            harvesting_mask = crop.events.harvest,
-            sowing_event = crop.events.sowing,
-            harvest_event = crop.events.harvest,
+            harvesting_mask = crop_events(crop).harvest,
+            sowing_event = crop_events(crop).sowing,
+            harvest_event = crop_events(crop).harvest,
         ),
     )
     for (container_name, sources) in pairs(daily_sources)
@@ -97,10 +97,10 @@ function harvest_crop!(crop::Crop,
         output.annual.yield .= zero(T)
         output.annual.harvest_date .= 0
     end
-    # crop.state.carbon.root = crop.state.carbon.root .* (1 .- crop.events.harvest)
-    # crop.state.carbon.leaf = crop.state.carbon.leaf .* (1 .- crop.events.harvest)
-    # crop.state.carbon.storage = crop.state.carbon.storage .* (1 .- crop.events.harvest)
-    # crop.state.carbon.pool = crop.state.carbon.pool .* (1 .- crop.events.harvest)
+    # crop_prognostic(crop).carbon.root = crop_prognostic(crop).carbon.root .* (1 .- crop_events(crop).harvest)
+    # crop_prognostic(crop).carbon.leaf = crop_prognostic(crop).carbon.leaf .* (1 .- crop_events(crop).harvest)
+    # crop_prognostic(crop).carbon.storage = crop_prognostic(crop).carbon.storage .* (1 .- crop_events(crop).harvest)
+    # crop_prognostic(crop).carbon.pool = crop_prognostic(crop).carbon.pool .* (1 .- crop_events(crop).harvest)
 
 end
 

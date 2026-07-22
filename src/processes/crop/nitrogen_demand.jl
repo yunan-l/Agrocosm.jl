@@ -3,7 +3,7 @@ ndemand_crop!(crop, PFT, photos_vcmax, temp)
 
 Compute crop nitrogen demand from photosynthetic potential and organ stoichiometry.
 """
-function ndemand_crop!(crop::Crop,
+function ndemand_crop!(crop,
                        PFT::PftParameters,
                        photos_vcmax::AbstractArray{T},
                        temp::AbstractArray{T};
@@ -14,13 +14,13 @@ function ndemand_crop!(crop::Crop,
 
     launch_1D!(
         ndemand_crop_kernel!,
-        crop.auxiliary.stress.nitrogen_demand_total,
-        crop.state.carbon.leaf,
-        crop.state.carbon.root,
-        crop.state.carbon.pool,
-        crop.state.carbon.storage,
-        crop.auxiliary.stress.nitrogen_demand_leaf,
-        crop.state.phenology.is_growing,
+        crop_stress_auxiliary(crop).nitrogen_demand_total,
+        crop_prognostic(crop).carbon.leaf,
+        crop_prognostic(crop).carbon.root,
+        crop_prognostic(crop).carbon.pool,
+        crop_prognostic(crop).carbon.storage,
+        crop_stress_auxiliary(crop).nitrogen_demand_leaf,
+        crop_prognostic(crop).phenology.is_growing,
         photos_vcmax,
         temp,
         PFT,
