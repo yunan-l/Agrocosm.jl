@@ -55,7 +55,7 @@ function run_lifecycle_fixture(device = identity; T = Float32, days = 730)
         T = T,
         days = days,
         diagnostics = false,
-        auto_fertilizer = false,
+        fertilizer = :yes,
     )
     run_simulation!(simulation, lifecycle_climate(T, days, device); spinup = false)
     return simulation

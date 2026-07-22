@@ -76,4 +76,13 @@ end
     end
     @test reference_co2 === reference.daily_co2
     @test kernel_co2 === kernel.daily_co2
+
+    global_daily_climate = merge(climate, (
+        co2 = Float32[401, 402, 403],
+        co2_daily = true,
+    ))
+    reference_co2 = Agrocosm.readclimate_reference!(global_daily_climate, reference, 2)
+    kernel_co2 = readclimate!(global_daily_climate, kernel, 2)
+    @test reference_co2[1] == 40.2f0
+    @test kernel_co2 == reference_co2
 end

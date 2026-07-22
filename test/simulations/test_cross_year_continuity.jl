@@ -10,7 +10,7 @@ function lifecycle_simulation(days)
         T = Float32,
         days = days,
         diagnostics = false,
-        auto_fertilizer = false,
+        fertilizer = :yes,
     )
 end
 

@@ -136,7 +136,7 @@ function run_c3_e2e(device, host_climate)
         1, C3_E2E_DAYS, processes, climate, state;
         irrigation = false,
         manure = false,
-        auto_fertilizer = false,
+        fertilizer = :yes,
         nitrogen_limit_vcmax = false,
         water_balance = water,
         nitrogen_balance = nitrogen,

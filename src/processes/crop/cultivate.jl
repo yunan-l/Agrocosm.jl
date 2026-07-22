@@ -75,7 +75,7 @@ function cultivate_reference!(crop,
         ml,
         soil,
         day;
-        enabled = apply_prescribed_fertilizer,
+        fertilizer = apply_prescribed_fertilizer,
         manure = manure,
         lpjmlparams = lpjmlparams,
     )
@@ -134,7 +134,7 @@ function cultivate!(crop,
     )
     fertilizer!(
         crop, ml, soil, day;
-        enabled = apply_prescribed_fertilizer,
+        fertilizer = apply_prescribed_fertilizer,
         manure = manure,
         lpjmlparams = lpjmlparams,
     )

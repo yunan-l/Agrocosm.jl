@@ -65,6 +65,8 @@ end
 Create a precision- and backend-consistent crop simulation. `initial_data` may
 be either raw input data accepted by `InitialDataLoader` or its normalized
 output. Set `diagnostics=false` to avoid allocating daily balance ledgers.
+`fertilizer` follows LPJmL's `:no`, `:yes`, and `:auto` modes; `manure` is an
+independent prescribed-input switch.
 """
 function initialize_simulation(
     pft::PftParameters,
@@ -76,12 +78,14 @@ function initialize_simulation(
     diagnostics::Bool = true,
     irrigation::Bool = false,
     manure::Bool = false,
-    auto_fertilizer::Bool = true,
+    fertilizer = :auto,
+    with_tillage::Bool = true,
     nitrogen_limit_vcmax::Bool = false,
     mineral_nitrogen_initialization::Symbol = :lpjml_initsoil,
     c_shift_initialization::Symbol = :lpjml_initsoil,
 )
     days > 0 || throw(ArgumentError("days must be positive"))
+    fertilizer = fertilizer_mode(fertilizer)
     prepared = _prepare_initial_data(initial_data, indices, device, T)
     cells = length(prepared.latitude)
     states = init_states!(
@@ -110,7 +114,8 @@ function initialize_simulation(
         days = Int(days),
         irrigation = irrigation,
         manure = manure,
-        auto_fertilizer = auto_fertilizer,
+        fertilizer = fertilizer,
+        with_tillage = with_tillage,
         nitrogen_limit_vcmax = nitrogen_limit_vcmax,
     )
     processes = ProcessModules(convert_precision(T, pft), ModelParameters(T))
@@ -159,10 +164,12 @@ function run_simulation!(
         "require 1 <= start_day <= end_day <= $climate_days climate rows",
     ))
     if ndims(prepared_climate.co2) == 1
-        required_co2_years = div(local_end_day - 1, 365) + 1
-        length(prepared_climate.co2) >= required_co2_years || throw(DimensionMismatch(
-            "annual CO₂ forcing has $(length(prepared_climate.co2)) value(s), " *
-            "but climate rows through day $local_end_day require $required_co2_years",
+        co2_daily = hasproperty(prepared_climate, :co2_daily) && prepared_climate.co2_daily
+        required_co2_values = co2_daily ? local_end_day : div(local_end_day - 1, 365) + 1
+        label = co2_daily ? "daily" : "annual"
+        length(prepared_climate.co2) >= required_co2_values || throw(DimensionMismatch(
+            "$label CO₂ forcing has $(length(prepared_climate.co2)) value(s), " *
+            "but climate rows through day $local_end_day require $required_co2_values",
         ))
     elseif ndims(prepared_climate.co2) == 2
         size(prepared_climate.co2, 1) >= local_end_day || throw(DimensionMismatch(
@@ -189,7 +196,8 @@ function run_simulation!(
     common = (
         irrigation = simulation.config.irrigation,
         manure = simulation.config.manure,
-        auto_fertilizer = simulation.config.auto_fertilizer,
+        fertilizer = simulation.config.fertilizer,
+        with_tillage = simulation.config.with_tillage,
         nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
         water_balance = simulation.water_balance,
         nitrogen_balance = simulation.nitrogen_balance,
@@ -254,7 +262,7 @@ function run_simulation!(
     return simulation
 end
 
-const _CHECKPOINT_FORMAT_VERSION = 2
+const _CHECKPOINT_FORMAT_VERSION = 3
 
 _checkpoint_snapshot(values::AbstractArray) = Array(values)
 _checkpoint_snapshot(values::NamedTuple) = map(_checkpoint_snapshot, values)
@@ -313,7 +321,8 @@ function _simulation_checkpoint(simulation::CropSimulation)
             photosynthetic_pathway = simulation.pft.path,
             irrigation = simulation.config.irrigation,
             manure = simulation.config.manure,
-            auto_fertilizer = simulation.config.auto_fertilizer,
+            fertilizer = simulation.config.fertilizer,
+            with_tillage = simulation.config.with_tillage,
             nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
         ),
         simulated_days = simulation.simulated_days,
@@ -360,7 +369,8 @@ function _validate_checkpoint_target(simulation::CropSimulation, checkpoint)
         ("photosynthetic pathway", metadata.photosynthetic_pathway, simulation.pft.path),
         ("irrigation", metadata.irrigation, simulation.config.irrigation),
         ("manure", metadata.manure, simulation.config.manure),
-        ("auto fertilizer", metadata.auto_fertilizer, simulation.config.auto_fertilizer),
+        ("fertilizer", metadata.fertilizer, simulation.config.fertilizer),
+        ("tillage", metadata.with_tillage, simulation.config.with_tillage),
         ("nitrogen Vcmax limitation", metadata.nitrogen_limit_vcmax,
          simulation.config.nitrogen_limit_vcmax),
     )

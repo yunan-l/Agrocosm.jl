@@ -3,7 +3,8 @@ function daily_crop_C3!(start_day, end_day,
                         processes::ProcessModules, climate, state::ModelState;
                         irrigation = false,
                         manure = false,
-                        auto_fertilizer = true,
+                        fertilizer = :auto,
+                        with_tillage = true,
                         nitrogen_limit_vcmax = false,
                         water_balance = nothing,
                         nitrogen_balance = nothing,
@@ -31,6 +32,8 @@ function daily_crop_C3!(start_day, end_day,
     snow_params = model_parameters.snow
     thermal_params = model_parameters.soil_thermal
     decomp_params = model_parameters.soil_decomposition
+    fertilizer = fertilizer_mode(fertilizer)
+    automatic_fertilizer = fertilizer === :auto
 
     if water_balance !== nothing && irrigation
         throw(ArgumentError("water-balance diagnostics currently support rainfed simulations only"))
@@ -77,7 +80,7 @@ function daily_crop_C3!(start_day, end_day,
             soil,
             day_of_year;
             manure = manure,
-            apply_prescribed_fertilizer = !auto_fertilizer,
+            apply_prescribed_fertilizer = fertilizer === :yes,
             lpjmlparams = global_params,
             laimax = pftparameters.laimax,
         )
@@ -88,8 +91,10 @@ function daily_crop_C3!(start_day, end_day,
 
         # LPJmL tills existing litter and loosens the topsoil at cultivation,
         # then applies daily agtop -> agsub bioturbation.
-        litter_tillage!(soil, crop)
-        tillage_hydraulics!(soil, crop; lpjmlparams = global_params)
+        if with_tillage
+            litter_tillage!(soil, crop)
+            tillage_hydraulics!(soil, crop; lpjmlparams = global_params)
+        end
         litter_bioturbation!(soil; lpjmlparams = global_params)
 
         # Preserve LPJmL's albedo/PET-before-snow ordering: radiation uses the
@@ -187,7 +192,7 @@ function daily_crop_C3!(start_day, end_day,
             # LPJmL obtains N using the potential capacity, constrains Vcmax
             # only when leaf N remains insufficient, then recomputes carbon.
             crop_nitrogen!(crop, pftparameters, soil, crop_photosynthesis_auxiliary(crop).potential_vcmax, dailyWeather.temp;
-                           auto_fertilizer = auto_fertilizer, lpjmlparams = global_params)
+                           auto_fertilizer = automatic_fertilizer, lpjmlparams = global_params)
             limit_vcmax_by_nitrogen!(crop, pftparameters, dailyWeather.temp;
                                     lpjmlparams = global_params)
         end
@@ -209,7 +214,7 @@ function daily_crop_C3!(start_day, end_day,
             allocate_crop_nitrogen!(crop, pftparameters)
         else
             crop_nitrogen!(crop, pftparameters, soil, crop_photosynthesis_auxiliary(crop).vcmax, dailyWeather.temp;
-                           auto_fertilizer = auto_fertilizer,
+                           auto_fertilizer = automatic_fertilizer,
                            lpjmlparams = global_params) # nitrogen cycle
         end
 

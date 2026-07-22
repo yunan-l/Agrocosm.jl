@@ -27,5 +27,9 @@ function ClimateDataLoader(climate::NamedTuple,
         )
     end
 
+    if hasproperty(climate, :co2_daily)
+        loaded_climate = merge(loaded_climate, (co2_daily = climate.co2_daily,))
+    end
+
     return device(loaded_climate)
 end

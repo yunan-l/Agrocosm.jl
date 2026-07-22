@@ -67,11 +67,31 @@ function runtime_array_ids(value)
     return ids
 end
 
+@testset "Daily global CO₂ remains aligned across climate blocks" begin
+    initial, _ = simulation_api_fixture(Float32)
+    simulation = initialize_simulation(
+        cft1, initial;
+        indices = [1], T = Float32, days = 4, fertilizer = :no,
+    )
+    first_block = merge(
+        climate_block(Float32, 2, 15, 1),
+        (co2 = Float32[400, 401], co2_daily = true),
+    )
+    second_block = merge(
+        climate_block(Float32, 2, 15, 1),
+        (co2 = Float32[402, 403], co2_daily = true),
+    )
+    run_simulation!(simulation, first_block; spinup = false)
+    run_simulation!(simulation, second_block; spinup = false)
+    @test simulation.simulated_days == 4
+    @test simulation.daily_weather.annual_co2[1] == 40.3f0
+end
+
 @testset "Annual CO₂ forcing length is validated before kernel launch" begin
     initial, _ = simulation_api_fixture(Float32)
     simulation = initialize_simulation(
         cft1, initial;
-        indices = [1], T = Float32, days = 366, auto_fertilizer = false,
+        indices = [1], T = Float32, days = 366, fertilizer = :yes,
     )
     incomplete = climate_block(Float32, 366, 15, 1)
     @test_throws DimensionMismatch run_simulation!(
@@ -87,10 +107,11 @@ end
         T = Float64,
         device = identity,
         days = 3,
-        auto_fertilizer = false,
+        fertilizer = :yes,
     )
 
     @test simulation.output === simulation.state.output
+    @test simulation.config.with_tillage
     @test simulation.processes.crop === simulation.pft
     @test simulation.processes.global_parameters === simulation.model_parameters
     crop_lifecycle_ids = runtime_array_ids((
@@ -145,7 +166,7 @@ end
 
     create() = initialize_simulation(
         cft1, initial;
-        indices = [1], T = Float64, days = 4, auto_fertilizer = false,
+        indices = [1], T = Float64, days = 4, fertilizer = :yes,
     )
     chunked = create()
     single = create()
@@ -190,7 +211,7 @@ end
     )
     create(days = 4) = initialize_simulation(
         cft1, initial;
-        indices = [1], T = Float32, days = days, auto_fertilizer = false,
+        indices = [1], T = Float32, days = days, fertilizer = :yes,
     )
 
     reference = create()

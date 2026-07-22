@@ -59,7 +59,7 @@ function run_c3_precision_smoke(::Type{T}, device = identity) where {T <: Abstra
     processes = ProcessModules(convert_precision(T, cft1), ModelParameters(T))
     daily_crop_C3!(
         1, days, processes, climate, state;
-        auto_fertilizer = false,
+        fertilizer = :yes,
         nitrogen_limit_vcmax = false,
     )
     return (; crop, soil, output)

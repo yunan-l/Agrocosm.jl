@@ -66,7 +66,7 @@ function run_owner_overwrite_case(::Type{T}; poison::Bool) where {T <: AbstractF
         T = T,
         days = 2,
         diagnostics = false,
-        auto_fertilizer = false,
+        fertilizer = :yes,
     )
     one_day = lifecycle_climate(T, 1)
     run_simulation!(simulation, one_day; spinup = false)

@@ -20,8 +20,9 @@ function readclimate_reference!(climate::NamedTuple,
         fill!(dailyWeather.wind, lpjmlparams.volatil_wind)
     end
     if ndims(climate.co2) == 1
-        co2_year = div(day - 1, 365) + 1
-        @views dailyWeather.annual_co2 .= climate.co2[co2_year:co2_year] .* 0.1f0
+        co2_daily = hasproperty(climate, :co2_daily) && climate.co2_daily
+        co2_index = co2_daily ? day : div(day - 1, 365) + 1
+        @views dailyWeather.annual_co2 .= climate.co2[co2_index:co2_index] .* 0.1f0
         return dailyWeather.annual_co2
     elseif ndims(climate.co2) == 2
         @views dailyWeather.daily_co2 .= climate.co2[day, :] .* 0.1f0
@@ -34,6 +35,7 @@ function readclimate!(climate::NamedTuple,
                       dailyWeather::DailyWeather,
                       day::Integer)
     has_wind = hasproperty(climate, :wind)
+    co2_daily = hasproperty(climate, :co2_daily) && climate.co2_daily
     wind = has_wind ? climate.wind : climate.temp
     default_wind = eltype(dailyWeather.temp)(lpjmlparams.volatil_wind)
     if ndims(climate.co2) == 1
@@ -53,6 +55,7 @@ function readclimate!(climate::NamedTuple,
             climate.co2,
             day,
             has_wind,
+            co2_daily,
             default_wind,
         )
         return dailyWeather.annual_co2
@@ -96,6 +99,7 @@ end
     co2_forcing::AbstractVector{T},
     day::Integer,
     has_wind::Bool,
+    co2_daily::Bool,
     default_wind::T,
 ) where {T <: AbstractFloat}
     cell = @index(Global)
@@ -105,8 +109,8 @@ end
     longwave[cell] = longwave_forcing[day, cell]
     wind[cell] = has_wind ? wind_forcing[day, cell] : default_wind
     if cell == 1
-        co2_year = div(day - 1, 365) + 1
-        annual_co2[1] = co2_forcing[co2_year] * T(0.1)
+        co2_index = co2_daily ? day : div(day - 1, 365) + 1
+        annual_co2[1] = co2_forcing[co2_index] * T(0.1)
     end
 end
 

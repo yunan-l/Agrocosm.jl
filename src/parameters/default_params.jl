@@ -234,6 +234,17 @@ end
 
 ModelParameters() = ModelParameters(Float32)
 
+const FERTILIZER_MODES = (:no, :yes, :auto)
+
+"""Normalize the LPJmL-style mineral-fertilizer mode."""
+function fertilizer_mode(mode)
+    normalized = mode isa Symbol ? mode : Symbol(lowercase(String(mode)))
+    normalized in FERTILIZER_MODES || throw(ArgumentError(
+        "fertilizer must be one of :no, :yes, or :auto",
+    ))
+    return normalized
+end
+
 _convert_parameter_value(::Type{T}, value::AbstractFloat) where {T <: AbstractFloat} = T(value)
 _convert_parameter_value(::Type{T}, value::Integer) where {T <: AbstractFloat} = value
 _convert_parameter_value(::Type{T}, value::K_Soil10) where {T <: AbstractFloat} =
