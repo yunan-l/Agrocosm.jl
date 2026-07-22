@@ -5,9 +5,10 @@ using Test
         source = read(joinpath(@__DIR__, "..", "..", "src", "simulations", driver), String)
 
         position = call -> begin
-            match = findfirst("\n        " * call * "(", source)
-            match === nothing && error("missing $call call in $driver")
-            first(match)
+            pattern = Regex("(?m)^[ \\t]*" * call * "[ \\t]*\\(")
+            location = findfirst(pattern, source)
+            location === nothing && error("missing $call call in $driver")
+            first(location)
         end
 
         @test position("update_climbuf!") < position("cultivate!")
