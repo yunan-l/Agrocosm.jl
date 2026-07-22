@@ -15,7 +15,7 @@ line-by-line translation.
 
 ## Why Agrocosm?
 
-- One process implementation runs on CPU and NVIDIA GPU backends.
+- One process implementation runs on CPU and GPU backends.
 - Both `Float32` and `Float64` simulations are supported.
 - Process configuration is separated from the numerical state lifecycle.
 - File checkpoints can resume a simulation at completed daily boundaries.
