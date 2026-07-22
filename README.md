@@ -200,4 +200,4 @@ no. 101137601).
 
 ## License
 
-Agrocosm.jl is released under the [MIT License](LICENSE).
+Agrocosm.jl is released under the [European Union Public Licence v1.2](https://eupl.eu/1.2/en). You are encouraged to copy, modify, and build upon our code to advance your research. 
