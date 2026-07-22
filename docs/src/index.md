@@ -17,7 +17,7 @@ line-by-line translation.
 
 - One process implementation runs on CPU and GPU backends.
 - Both `Float32` and `Float64` simulations are supported.
-- Process configuration is separated from the numerical state lifecycle.
+- Process configuration is separated from the numerical State variables.
 - File checkpoints can resume a simulation at completed daily boundaries.
 - Conservation diagnostics are built into end-to-end simulations.
 
@@ -30,7 +30,7 @@ metadata, Penman–Monteith/Medlyn alternatives, and end-to-end automatic
 differentiation are not yet production features.
 
 Start with [Getting started](@ref), then read [Model overview](@ref) and
-[State lifecycle](@ref) before extending a process.
+[State variables](@ref) before extending a process.
 
 ```@contents
 Pages = [

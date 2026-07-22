@@ -70,4 +70,4 @@ daily_percolation = simulation.state.fluxes.soil.water.percolation
 ```
 
 Do not treat daily fluxes and auxiliary fields as restart state. See
-[State lifecycle](@ref).
+[State variables](@ref).

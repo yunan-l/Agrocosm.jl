@@ -19,7 +19,7 @@ makedocs(
         "Getting started" => "getting_started.md",
         "Model concepts" => [
             "Overview" => "concepts/overview.md",
-            "State lifecycle" => "concepts/state_lifecycle.md",
+            "State variables" => "concepts/state_lifecycle.md",
             "Daily process order" => "concepts/daily_processes.md",
         ],
         "Using Agrocosm" => [

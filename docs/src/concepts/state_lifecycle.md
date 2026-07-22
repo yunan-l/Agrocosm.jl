@@ -1,4 +1,4 @@
-# State lifecycle
+# State variables
 
 Agrocosm separates scientific process organization from numerical variable
 lifetime. Both crop and soil variables use the same canonical lifecycle tree:
