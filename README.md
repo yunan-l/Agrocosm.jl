@@ -190,7 +190,7 @@ start a discussion.
 ## Acknowledgements
 
 Agrocosm.jl is a research project developed with the support of the
-[Earth System Modeling group](https://www.asg.ed.tum.de/) at the Technical
+[Earth System Modeling group](https://www.asg.ed.tum.de/esm/home/) at the Technical
 University of Munich (TUM) and the
 [FutureLab on Artificial Intelligence](https://www.pik-potsdam.de/en/futurelab-ai)
 at the Potsdam Institute for Climate Impact Research (PIK). The author
