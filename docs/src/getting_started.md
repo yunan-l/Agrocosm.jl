@@ -61,9 +61,6 @@ soil_water = Array(simulation.output.soil.water_storage)
 water_deficit_percent = Array(simulation.output.crop.water_deficit)
 ```
 
-Water deficit follows the LPJmL convention and is reported in **percent
-(0–100)**, not as a 0–1 fraction.
-
 The canonical numerical state is under `simulation.state`, for example:
 
 ```julia
