@@ -18,6 +18,8 @@ using SpeedyWeatherInternals.ParameterEditing: ParameterEditing, @parameterized,
 
 # Framework internals used when authoring processes and kernels.
 using Oceananigans.Fields: FunctionField
+using Oceananigans.Utils: launch!
+using KernelAbstractions: @kernel, @index
 
 # ---------------------------------------------------------------------------
 # Crop parameter sets and the 12-CFT registry (infrastructure-free physics
@@ -52,6 +54,9 @@ export lpj_bisect
 # ---------------------------------------------------------------------------
 include("crop/root_distribution.jl")
 export CropRootDistribution
+
+include("crop/photosynthesis.jl")
+export CropPhotosynthesis, C3Pathway, C4Pathway
 
 # ---------------------------------------------------------------------------
 # PHASE 3+ TODO — crop and soil-biogeochemistry physics not yet ported.

@@ -17,5 +17,6 @@ using Test
 
     @testset "Crop processes" begin
         include("crop/test_root_distribution.jl")
+        include("crop/test_photosynthesis.jl")
     end
 end
