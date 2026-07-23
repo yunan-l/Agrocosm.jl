@@ -84,6 +84,25 @@ Confirmed design decisions:
 >   the crop model is a Phase 5 concern. Multi-day *soil* integration is separately green
 >   (`spike_soil_column_cpu.jl`, 3-day `SoilModel` run).
 
+> 2026-07-23: started Phase 3 (port crop physiology).
+>
+> - Established the downstream crop-process pattern and ported the first process:
+>   `CropRootDistribution <: Terrarium.AbstractRootDistribution`
+>   (`src/crop/root_distribution.jl`), re-expressing LPJmL's cumulative root profile
+>   `Y(d) = 1 - β^d` as a continuous, column-normalized root density, with a CPU test. Added the
+>   crop-process dependencies (KernelAbstractions, Oceananigans) and module imports.
+> - Sequencing finding: after the self-contained root distribution, the remaining crop physiology
+>   (phenology, C3/C4 photosynthesis + λ solver, autotrophic respiration, carbon allocation, LAI,
+>   crop nitrogen) and soil C–N biogeochemistry are **mutually coupled through shared crop state**
+>   (~2,300+ source lines). Faithful continuous-time reformulation of these is only meaningfully
+>   testable once assembled into a crop `VegetationModel`/`LandModel`. Recommended approach for the
+>   remainder of Phase 3: port the coupled physiology as a cohesive unit alongside a minimal crop
+>   vegetation model (bringing part of Phase 5 forward), so each process's continuous tendencies can
+>   be validated end-to-end and against the legacy daily-loop numerics, rather than as isolated
+>   stubs. The discrete sowing/harvest/senescence lifecycle events remain Phase 4.
+> - `temp_stress` is a scalar primitive consumed by photosynthesis (not a standalone process); it
+>   ports as a Level-III primitive inside the crop photosynthesis process.
+
 ## Problem description
 
 Agrocosm.jl (~10,165 source lines) is a self-contained, LPJmL-derived crop-soil model with a
