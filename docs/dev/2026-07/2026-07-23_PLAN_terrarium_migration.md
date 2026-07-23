@@ -1,8 +1,10 @@
 # Re-architect Agrocosm.jl onto the Terrarium.jl framework
 
-> Status: **in progress**. Phases 0 (framework toolchain + conventions) and 1 (infrastructure swap)
-> are complete: Agrocosm is now a downstream Terrarium package whose skeleton loads on the framework,
-> with the crop/soil physics retained on disk for porting in Phases 2–6.
+> Status: **in progress**. Phases 0 (framework toolchain + conventions), 1 (infrastructure swap), and
+> 2 (reuse Terrarium soil & surface) are complete: Agrocosm is now a downstream Terrarium package
+> whose skeleton loads on the framework, the coupled Terrarium land stack it will build on is
+> validated on CPU, and the legacy→Terrarium soil/surface config mapping is documented. The crop/soil
+> physics is retained on disk for porting in Phases 3–6.
 
 Date of initial draft: 2026-07-23
 
@@ -62,6 +64,25 @@ Confirmed design decisions:
 >   the LPJmL defaults as physics reference). Their conversion to ModelParameters calibration hooks
 >   happens with the consuming processes (Phase 3) and the CFT presets (Phase 5), where it can be
 >   validated against behaviour.
+>
+> 2026-07-23: executed Phase 2 (reuse Terrarium soil & surface).
+>
+> - Documented the legacy→Terrarium soil/surface/climate configuration mapping and the crop coupling
+>   seams into Terrarium's vegetation stack (`AbstractPhotosynthesis`, stomatal conductance,
+>   respiration, phenology, carbon dynamics, root distribution, plant-available-water) and the soil
+>   `biogeochem` slot, in `docs/dev/2026-07/2026-07-23_PHASE2_soil_surface_config.md`.
+> - Validated the coupled Terrarium `LandModel` (soil energy+Richards hydrology + surface energy
+>   balance + surface hydrology + prescribed atmosphere + vegetation carbon) on CPU with a
+>   single-timestep spike (`docs/dev/2026-07/spike_land_column_cpu.jl`): the full coupled compute path
+>   runs and exposes 64 state variables (soil temperature/moisture, latent/ground heat flux, GPP, LAI,
+>   …). Per the retention policy, no legacy soil/surface files were deleted.
+> - Identified genuinely-missing pieces for later upstreaming/implementation: a snow scheme (no snow
+>   component in Terrarium's coupled path yet), nitrate advective transport (port with soil C–N),
+>   and crop canopy PAR / LAI-dependent albedo (port with crop photosynthesis).
+> - Known numerical note: a sustained VanGenuchten Richards integration is stiff at Δt = 60 s under a
+>   near-saturated column (the saturation prognostic diverges); selecting a stable timestepper/Δt for
+>   the crop model is a Phase 5 concern. Multi-day *soil* integration is separately green
+>   (`spike_soil_column_cpu.jl`, 3-day `SoilModel` run).
 
 ## Problem description
 
