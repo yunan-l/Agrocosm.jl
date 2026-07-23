@@ -99,6 +99,10 @@ include("crop/nitrification.jl")
 export CropNitrification, gross_nitrification
 export nitrification_moisture_factor, nitrification_temperature_factor, nitrification_ph_factor
 
+include("crop/denitrification.jl")
+export CropDenitrification, gross_denitrification
+export denitrification_temperature_factor, denitrification_moisture_factor
+
 # ---------------------------------------------------------------------------
 # PHASE 3+ TODO — crop and soil-biogeochemistry physics not yet ported.
 #
