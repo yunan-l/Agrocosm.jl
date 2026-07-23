@@ -73,6 +73,9 @@ export CropNitrogenVcmaxLimit
 include("crop/nitrogen_demand.jl")
 export CropNitrogenDemand
 
+include("crop/plant_available_water.jl")
+export soil_moisture_limiting_factor, plant_available_water
+
 # ---------------------------------------------------------------------------
 # PHASE 3+ TODO — crop and soil-biogeochemistry physics not yet ported.
 #

@@ -23,5 +23,6 @@ using Test
         include("crop/test_phenology.jl")
         include("crop/test_nitrogen_limitation.jl")
         include("crop/test_nitrogen_demand.jl")
+        include("crop/test_plant_available_water.jl")
     end
 end

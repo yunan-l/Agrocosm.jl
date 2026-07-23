@@ -145,6 +145,15 @@ Confirmed design decisions:
 >   carries turnover as yr⁻¹ but the timestepper integrates per-second — its own flagged TODO — which
 >   collapses `carbon_vegetation` negative in a single step, the true source of the negative default
 >   LAI). Unit-tested (`test/crop/test_carbon_dynamics.jl`).
+> 2026-07-23: ported crop plant-available-water stress (start of P3f).
+>
+> - `soil_moisture_limiting_factor` and `plant_available_water` (`src/crop/plant_available_water.jl`):
+>   the water-stress factor β = clamp((θ − θ_wilting)/(θ_field_capacity − θ_wilting), 0, 1) that crop
+>   photosynthesis/stomatal conductance consume (currently defaulted to 1), plus per-layer
+>   plant-available water. Unit-tested (`test/crop/test_plant_available_water.jl`). The depth-integrated,
+>   root-weighted coupling to Terrarium's soil hydraulics is wired in the crop vegetation model
+>   (Phase 5); soil C–N biogeochemistry is the rest of P3f.
+>
 > 2026-07-23: ported crop leaf-nitrogen limitation of Vcmax (part of P3e).
 >
 > - `CropNitrogenVcmaxLimit` + `nitrogen_limited_vcmax` (`src/crop/nitrogen_limitation.jl`): LPJmL's
