@@ -21,5 +21,6 @@ using Test
         include("crop/test_stomatal_conductance.jl")
         include("crop/test_carbon_dynamics.jl")
         include("crop/test_phenology.jl")
+        include("crop/test_nitrogen_limitation.jl")
     end
 end

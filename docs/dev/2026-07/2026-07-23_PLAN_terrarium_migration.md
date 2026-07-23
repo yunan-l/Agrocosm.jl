@@ -145,6 +145,16 @@ Confirmed design decisions:
 >   carries turnover as yr⁻¹ but the timestepper integrates per-second — its own flagged TODO — which
 >   collapses `carbon_vegetation` negative in a single step, the true source of the negative default
 >   LAI). Unit-tested (`test/crop/test_carbon_dynamics.jl`).
+> 2026-07-23: ported crop leaf-nitrogen limitation of Vcmax (part of P3e).
+>
+> - `CropNitrogenVcmaxLimit` + `nitrogen_limited_vcmax` (`src/crop/nitrogen_limitation.jl`): LPJmL's
+>   `limit_vcmax_by_nitrogen` as a tested scalar primitive — structural leaf N (`ncleaf_min·leaf_C`) is
+>   protected, only the excess supports Rubisco, temperature-scaled, capping the potential Vcmax and
+>   returning the retained fraction ∈ [0,1]. Unit-tested against the closed form plus the non-limiting,
+>   structural-protection, zero-potential, and temperature-dependence cases
+>   (`test/crop/test_nitrogen_limitation.jl`). Applied to the crop photosynthesis Vcmax within the crop
+>   nitrogen coupling (Phase 5); the full crop N cycle (demand/uptake/allocation) is the rest of P3e.
+>
 > 2026-07-23: ported crop phenology (LAI heat-unit trajectory).
 >
 > - `CropPhenology <: Terrarium.AbstractPhenology` (`src/crop/phenology.jl`): the LPJmL
