@@ -89,6 +89,9 @@ export CropGrowthRespiration, growth_respiration, net_primary_production
 include("crop/harvest_index.jl")
 export CropHarvestIndex, crop_harvest_index
 
+include("crop/nitrogen_allocation.jl")
+export CropNitrogenAllocation, allocate_crop_nitrogen
+
 # ---------------------------------------------------------------------------
 # PHASE 3+ TODO — crop and soil-biogeochemistry physics not yet ported.
 #

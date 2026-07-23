@@ -28,5 +28,6 @@ using Test
         include("crop/test_soil_decomposition_response.jl")
         include("crop/test_growth_respiration.jl")
         include("crop/test_harvest_index.jl")
+        include("crop/test_nitrogen_allocation.jl")
     end
 end
