@@ -145,6 +145,17 @@ Confirmed design decisions:
 >   carries turnover as yr⁻¹ but the timestepper integrates per-second — its own flagged TODO — which
 >   collapses `carbon_vegetation` negative in a single step, the true source of the negative default
 >   LAI). Unit-tested (`test/crop/test_carbon_dynamics.jl`).
+> 2026-07-23: ported crop harvest index + growth respiration (carbon allocation, part of P3d).
+>
+> - `CropHarvestIndex` / `crop_harvest_index` (`src/crop/harvest_index.jl`, LPJmL `carbon_allocation`):
+>   the storage-organ carbon fraction — a phenology-driven optimum (sigmoid in `fphu`) scaled between
+>   `himin` and `hiopt`, reduced by the water-deficit sufficiency factor, with HI > 1 scaled about 1
+>   for above-ground:total-biomass crops. Unit-tested against the closed form, water-stress limits,
+>   phenology dependence, and the HI > 1 case (`test/crop/test_harvest_index.jl`).
+> - `CropGrowthRespiration` (`src/crop/growth_respiration.jl`): the LPJmL `r_growth = 0.25`
+>   post-maintenance carbon split — `Rg = r_growth·max(0, GPP − Rm)`, `NPP = GPP − Rm − Rg`.
+>   Unit-tested.
+>
 > 2026-07-23: ported crop plant-available-water stress (start of P3f).
 >
 > - `soil_moisture_limiting_factor` and `plant_available_water` (`src/crop/plant_available_water.jl`):

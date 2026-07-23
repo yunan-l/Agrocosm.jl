@@ -86,6 +86,9 @@ export soil_decomposition_temperature_response, soil_decomposition_moisture_resp
 include("crop/growth_respiration.jl")
 export CropGrowthRespiration, growth_respiration, net_primary_production
 
+include("crop/harvest_index.jl")
+export CropHarvestIndex, crop_harvest_index
+
 # ---------------------------------------------------------------------------
 # PHASE 3+ TODO — crop and soil-biogeochemistry physics not yet ported.
 #
