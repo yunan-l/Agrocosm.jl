@@ -1,8 +1,8 @@
 # Re-architect Agrocosm.jl onto the Terrarium.jl framework
 
-> Status: **planned**. Full-rewrite migration turning Agrocosm from a standalone discrete-time
-> crop-soil model into a downstream Terrarium.jl package that contributes only crop-specific
-> processes and a managed-crop land model.
+> Status: **in progress**. Phases 0 (framework toolchain + conventions) and 1 (infrastructure swap)
+> are complete: Agrocosm is now a downstream Terrarium package whose skeleton loads on the framework,
+> with the crop/soil physics retained on disk for porting in Phases 2–6.
 
 Date of initial draft: 2026-07-23
 
@@ -30,6 +30,37 @@ Confirmed design decisions:
 ## Revision log
 
 > 2026-07-23: initial draft.
+>
+> 2026-07-23: executed Phases 0 and 1.
+>
+> - **Phase 0.** Reworked `Project.toml` to a downstream Terrarium package (Terrarium as a dev path
+>   dependency via `[sources]`; DocStringExtensions, SpeedyWeatherInternals, Unitful; dropped the
+>   standalone infra deps). Added `test/Project.toml` (TestEnv, ExplicitImports), `AGENTS.md`
+>   (deferring framework rules to `Terrarium/AGENTS.md`), `.claude/CLAUDE.md`, and a Runic CI
+>   workflow. Validated the toolchain with a CPU `SoilModel` column spike
+>   (`docs/dev/2026-07/spike_soil_column_cpu.jl`), which runs a 3-day soil integration end-to-end.
+>   The **GPU spike is deferred** — the dev host is Apple Silicon with no CUDA; GPU validation moves
+>   to CI/a CUDA host.
+> - **Phase 1.** Deleted the pure-infrastructure files outright (recoverable via git):
+>   `utils/{kernel_launch,conversions,load_nc,visualization}.jl`, `input_output/**`,
+>   `diagnostics/**`, `simulations/**`. Rewrote `src/Agrocosm.jl` to `using Terrarium`, including only
+>   the infrastructure-free files (`parameters/{default_params,pft}.jl`, `numerics/lpj_bisect.jl`) and
+>   re-exporting the crop parameter/CFT-registry/bisection API. `using Agrocosm` now precompiles and
+>   loads; the surviving numeric + CFT-registry tests pass (19/19).
+>
+> Deviations from the original phase text, made for safety and to ease later porting:
+>
+> - **Physical soil/surface/climate process files are retained on disk (excluded from the module)**
+>   rather than deleted in Phase 1. Every physics file depends on the deleted infrastructure
+>   (`launch_1D!`, `@unpack`, legacy state containers) and cannot compile yet; keeping them in place
+>   preserves the reference implementation for porting. They are deleted incrementally as each is
+>   superseded by a Terrarium config/process in Phases 2–3. `src/Agrocosm.jl` carries a documented
+>   manifest of these pending files.
+> - **The parameter migration to `@parameterized`/`@param` is deferred.** `default_params.jl` and
+>   `pft.jl` are already infrastructure-free `@kwdef` structs, so Phase 1 keeps them as-is (retaining
+>   the LPJmL defaults as physics reference). Their conversion to ModelParameters calibration hooks
+>   happens with the consuming processes (Phase 3) and the CFT presets (Phase 5), where it can be
+>   validated against behaviour.
 
 ## Problem description
 

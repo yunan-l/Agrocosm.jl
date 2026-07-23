@@ -1,55 +1,17 @@
 using Agrocosm
 using Test
 
+# During the Terrarium migration the crop/soil physics is being re-expressed as
+# continuous-time Terrarium processes (plan Phases 2–6). The legacy test files
+# under test/processes/**, test/diagnostics/**, and test/simulations/** target
+# the deleted standalone API and are re-enabled as each process is ported. Only
+# the infrastructure-free tests run in the interim.
 @testset "Agrocosm.jl" begin
-    include("numerics/test_lpj_bisect.jl")
-    include("processes/initialization/test_initialization.jl")
-    include("processes/climate/test_snow.jl")
-    include("processes/climate/test_readclimate.jl")
-    include("processes/crop/test_photosynthesis.jl")
-    include("processes/crop/test_pft_registry.jl")
-    include("processes/crop/test_temperature_stress_lpjml.jl")
-    include("processes/crop/test_respiration_lpjml.jl")
-    include("processes/crop/test_process_kernel_equivalence.jl")
-    include("processes/crop/test_actual_lai.jl")
-    include("processes/crop/test_canopy_snow_cover.jl")
-    include("processes/crop/test_lambda_solver_c3.jl")
-    include("processes/crop/test_lambda_solver_c4.jl")
-    include("processes/crop/test_lambda_water_coupling.jl")
-    include("processes/crop/test_fertilizer.jl")
-    include("processes/crop/test_crop_lifecycle.jl")
-    include("processes/crop/test_checkpoint_minimal_state.jl")
-    include("processes/crop/test_field_lifecycle.jl")
-    include("processes/crop/test_prescribed_phenology.jl")
-    include("processes/crop/test_harvest_balance.jl")
-    include("processes/crop/test_nitrogen_allocation.jl")
-    include("processes/crop/test_nitrogen_demand.jl")
-    include("processes/crop/test_nitrogen_uptake.jl")
-    include("processes/crop/test_nitrogen_vcmax_limit.jl")
-    include("processes/soil/test_mineralization_immobilization.jl")
-    include("processes/soil/test_nitrification.jl")
-    include("processes/soil/test_denitrification.jl")
-    include("processes/soil/test_volatilization.jl")
-    include("processes/soil/test_soil_water.jl")
-    include("processes/soil/test_tillage_hydraulics.jl")
-    include("processes/soil/test_surface_litter_water.jl")
-    include("processes/soil/test_soil_temperature.jl")
-    include("processes/soil/test_soil_freeze_thaw.jl")
-    include("processes/soil/test_water_ice_pools.jl")
-    include("processes/soil/test_percolation_enthalpy.jl")
-    include("processes/soil/test_untracked_water_enthalpy.jl")
-    include("processes/soil/test_soil_decomposition_response.jl")
-    include("processes/soil/test_soil_decomposition_fluxes.jl")
-    include("processes/soil/test_soil_cn_decomposition.jl")
-    include("processes/soil/test_soil_process_kernel_equivalence.jl")
-    include("processes/soil/test_litter_routing.jl")
-    include("processes/soil/test_c_shift_routing.jl")
-    include("processes/soil/test_soil_carbon.jl")
-    include("diagnostics/test_water_balance.jl")
-    include("diagnostics/test_nitrogen_balance.jl")
-    include("diagnostics/test_thermal_balance.jl")
-    include("simulations/test_daily_process_order.jl")
-    include("simulations/test_daily_crop_C3_precision.jl")
-    include("simulations/test_simulation_api.jl")
-    include("simulations/test_cross_year_continuity.jl")
+    @testset "Numerics" begin
+        include("numerics/test_lpj_bisect.jl")
+    end
+
+    @testset "Crop parameters" begin
+        include("processes/crop/test_pft_registry.jl")
+    end
 end

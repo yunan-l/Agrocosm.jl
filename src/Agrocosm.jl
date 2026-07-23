@@ -1,187 +1,71 @@
 module Agrocosm
 
-# Write your package code here.
-# NUMERICS
-using Statistics
+# Agrocosm is a downstream package built on the Terrarium.jl land-modeling
+# framework. Terrarium supplies all infrastructure (grids, state, timestepping,
+# architectures, parameters, I/O, diagnostics, checkpointing) and the physical
+# soil/surface processes; Agrocosm contributes crop-specific processes and a
+# managed-crop land model.
+#
+# See docs/dev/2026-07/2026-07-23_PLAN_terrarium_migration.md for the migration
+# plan and AGENTS.md for conventions.
+using Terrarium
 
-# GPU PARALLEL
-# import KernelAbstractions: @kernel, @index, @inbounds # get_backend, synchronize
-using KernelAbstractions # GPU/CPU parallelization
-using CUDA, Adapt
-
-# INPUT OUTPUT
-using DataFrames, NCDatasets, Random, Dates
-import JLD2: @load, @save, jldsave, load
-
-# PARAMETER HANDLING
-import Parameters: @with_kw, @unpack
-import MuladdMacro: @muladd
-
-# STRUCTURES
-export LPJmLParams, PftParameters, PhotoParams, ModelParameters, PetPar, Output
-export DailyWeather, ClimBuf, CO2
-export Crop, CropState, CropFluxes, CropAuxiliary, CropWorkspace
-export crop_restart_payload
-export CropPhenology, CropCarbonState, CropNitrogenState, CropWaterState
-export CropCalendarAuxiliary, CropCanopyState, CropCanopyAuxiliary, CropPhotosynthesisAuxiliary
-export CropCarbonFluxes, CropNitrogenFluxes, CropWaterFluxes, CropEvents
-export CropStressAuxiliary, CropRootAuxiliary, ManagedLand
-export ProcessModules, ModelState, model_state
-export SoilParams, SoilDecompParams, SoilThermalParams, SnowParams, Soil
-export SoilProperties, SoilWater, SoilThermal, SoilCarbon, SoilNitrogen
-export SoilDecomposition, SoilManagement, SoilSurfaceLitter, SoilSnow
-export CropOutput, SoilOutput, ClimateOutput, CalendarOutput, AnnualOutputAccumulator
-
-# PARAMETERS (PFTs)
-export lpjmlparams, photoparams, soilparams, soil_decomp_params, soil_thermal_params, snowparams
-export cft1, cft2, cft3, cft4, cft5, cft6, cft7, cft8, cft9, cft10, cft11, cft12
-export CROP_PFT_NAMES, CROP_PFTS, crop_pft
-export convert_precision
-export FERTILIZER_MODES, fertilizer_mode
-
-# INITIALIZATION
-export init_states!, init_climbuf, init_crop, init_pet, init_soil, init_output
-export init_weather, init_managed_land
-export WaterBalance, init_water_balance
-export NitrogenBalance, init_nitrogen_balance
-export CarbonBalance, init_carbon_balance
-export ThermalBalance, init_thermal_balance
-
-# CLIMATE
-export annual_climbuf!, daily_climbuf!, infil_perc!, spin_up_climbuf!, update_climbuf!, readclimate!, snow!
-
-# PHYSICS FUNCTIONS
-# RADIATION
-export albedo!, petpar!, apar_crop!, apar_crop_maize!
-
-# CROP
-export photosynthesis_C3!, photosynthesis_C4!, carbon_allocation!, respiration!
-export phenology_crop!, lai_crop!, cultivate!, harvest_crop!, fertilizer!
-export transpiration!, interception!
-export crop_carbon!, crop_nitrogen!, ndemand_crop!, nuptake_crop!
-export limit_vcmax_by_nitrogen!
-export root_distribution, temp_stress
-export lpj_bisect, solve_lambda_c3_lpj, solve_lambda_c4_lpj
-export solve_lambda_c3!, solve_lambda_c4!
-
-# SOIL
-export apply_percolation_enthalpy!, soil_temperature!
-export pedotransfer!, soil_carbon!
-export evaporation!, soil_infiltration!, soil_evapotranspiration!
-export soil_nitrogen!, nitrogen_transform!, soil_cn_decomposition!, post_crop_nitrogen_losses!
-export soil_decomp_response!
-export update_surface_litter_properties!, surface_litter_interception!
-export litter_tillage!, tillage_hydraulics!, litter_bioturbation!
-
-# UNITS
-export deg2rad, ppm2Pa, ppm2bar, hour2day, hour2sec, degCtoK
-
-# DATA
-export InitialDataLoader, ClimateDataLoader, DataLoader, DataLoader_winter_wheat
-export write_output_nc
-
-# DAILY CROP SIMULATIONS
-export daily_crop_C3!, daily_crop_C4!
-export CropSimulation, initialize_simulation, run_simulation!, simulation_summary
-export save_checkpoint, restore_checkpoint!
-
-
-# process-based crop model
-# Parameters
+# ---------------------------------------------------------------------------
+# Crop parameter sets and the 12-CFT registry (infrastructure-free physics
+# constants). These retain their LPJmL-derived defaults during the migration;
+# their conversion to ModelParameters `@parameterized`/`@param` calibration
+# hooks happens alongside the processes that consume them (plan Phases 3 & 5).
+# ---------------------------------------------------------------------------
 include("parameters/default_params.jl")
 include("parameters/pft.jl")
 
-# Numerics
+# Numerical primitives with no framework dependencies.
 include("numerics/lpj_bisect.jl")
 
-# Initialization
-include("processes/initialization/climate/climate.jl")
-include("processes/initialization/management/managed_land.jl")
-include("processes/initialization/output/output.jl")
-include("processes/initialization/crop/phenology.jl")
-include("processes/initialization/crop/canopy.jl")
-include("processes/initialization/crop/carbon.jl")
-include("processes/initialization/crop/nitrogen.jl")
-include("processes/initialization/crop/water.jl")
-include("processes/initialization/crop/calendar.jl")
-include("processes/initialization/crop/photosynthesis.jl")
-include("processes/initialization/crop/crop.jl")
-include("processes/initialization/soil/properties.jl")
-include("processes/initialization/soil/water.jl")
-include("processes/initialization/soil/thermal.jl")
-include("processes/initialization/soil/carbon.jl")
-include("processes/initialization/soil/nitrogen.jl")
-include("processes/initialization/soil/decomposition.jl")
-include("processes/initialization/soil/management.jl")
-include("processes/initialization/soil/surface_litter.jl")
-include("processes/initialization/soil/snow.jl")
-include("processes/initialization/soil/soil.jl")
-include("processes/initialization/init_states.jl")
-include("simulations/model_runtime.jl")
+# Global LPJmL-derived process parameters and precision handling.
+export LPJmLParams, PhotoParams, ModelParameters
+export SoilParams, SoilDecompParams, SoilThermalParams, SnowParams
+export lpjmlparams, photoparams, soilparams, soil_decomp_params, soil_thermal_params, snowparams
+export convert_precision
+export FERTILIZER_MODES, fertilizer_mode
 
-# Diagnostics
-include("diagnostics/water_balance.jl")
-include("diagnostics/nitrogen_balance.jl")
-include("diagnostics/carbon_balance.jl")
-include("diagnostics/thermal_balance.jl")
+# 12-CFT crop parameter registry (LPJmL 6.1.1 order).
+export PftParameters
+export CROP_PFT_NAMES, CROP_PFTS, crop_pft
+export cft1, cft2, cft3, cft4, cft5, cft6, cft7, cft8, cft9, cft10, cft11, cft12
 
-# Climate
-include("processes/climate/climbuf.jl")
-include("processes/climate/temp_stress.jl")
-include("processes/climate/spinup_climbuf.jl")
-include("processes/climate/readclimate.jl")
-include("processes/climate/snow.jl")
+# Numerics.
+export lpj_bisect
 
-# Crop
-include("processes/crop/cultivate.jl")
-include("processes/crop/phenology.jl")
-include("processes/crop/photosynthesis.jl")
-include("processes/crop/lambda_solver.jl")
-include("processes/crop/carbon_allocation.jl")
-include("processes/crop/crop_carbon.jl")
-include("processes/crop/lai_crop.jl")
-include("processes/crop/radiation.jl")
-include("processes/crop/albedo.jl")
-include("processes/crop/respiration.jl")
-include("processes/crop/interception.jl")
-include("processes/crop/transpiration.jl")
-include("processes/crop/nitrogen_allocation.jl")
-include("processes/crop/nitrogen_demand.jl")
-include("processes/crop/nitrogen_uptake.jl")
-include("processes/crop/nitrogen_vcmax_limit.jl")
-include("processes/crop/fertilizer.jl")
-include("processes/crop/harvesting.jl")
-
-# Soil
-include("processes/soil/water_ice_pools.jl")
-include("processes/soil/tillage.jl")
-include("processes/soil/pedotransfer.jl")
-include("processes/soil/evaporation.jl")
-include("processes/soil/soil_temp.jl")
-include("processes/soil/surface_litter.jl")
-include("processes/soil/litter_routing.jl")
-include("processes/soil/nitrogen_transform.jl")
-include("processes/soil/infil_perc.jl")
-include("processes/soil/soil_water.jl")
-include("processes/soil/soil_carbon.jl")
-include("processes/soil/soil_nitrogen.jl")
-include("processes/soil/soil_response.jl")
-
-# Input and output
-include("input_output/climate_data_loader.jl")
-include("input_output/initial_data_loader.jl")
-include("input_output/write_output_nc.jl")
-
-# Utilities
-include("utils/kernel_launch.jl")
-include("utils/visualization.jl")
-include("utils/conversions.jl")
-include("utils/load_nc.jl")
-include("utils/tools.jl")
-
-# Daily crop simulations
-include("simulations/daily_crop_C3.jl")
-include("simulations/daily_crop_C4.jl")
-include("simulations/simulation_api.jl")
+# ---------------------------------------------------------------------------
+# PHASE 3+ TODO — crop and soil-biogeochemistry physics not yet ported.
+#
+# The following source files remain on disk as the reference implementation but
+# are NOT included yet: they depend on the deleted standalone infrastructure
+# (`launch_1D!`, `Parameters.@unpack`, the legacy state containers) and must be
+# re-expressed as continuous-time Terrarium `AbstractProcess` implementations
+# with `variables()`/`compute_auxiliary!`/`compute_tendencies!`.
+#
+#   Crop physiology (Phase 3):
+#     processes/crop/{photosynthesis,lambda_solver,respiration,carbon_allocation,
+#                     crop_carbon,lai_crop,phenology}.jl
+#     processes/crop/{nitrogen_allocation,nitrogen_demand,nitrogen_uptake,
+#                     nitrogen_vcmax_limit}.jl
+#     processes/climate/{temp_stress,climbuf,spinup_climbuf}.jl  (temp stress +
+#                     vernalization are crop physics, not framework climate)
+#   Surface coupling to reuse Terrarium processes (Phase 2/3):
+#     processes/crop/{radiation,albedo,interception,transpiration}.jl
+#   Soil C–N biogeochemistry (Phase 3):
+#     processes/soil/{soil_carbon,soil_nitrogen,nitrogen_transform,soil_response,
+#                     litter_routing,surface_litter}.jl
+#   Physical soil to replace with Terrarium soil processes (Phase 2):
+#     processes/soil/{soil_temp,water_ice_pools,soil_water,infil_perc,
+#                     pedotransfer,evaporation}.jl  and  processes/climate/{readclimate,snow}.jl
+#   Management events (Phase 4, documented discrete-time exceptions):
+#     processes/crop/{cultivate,harvesting,fertilizer}.jl, processes/soil/tillage.jl
+#     utils/tools.jl (fixed-365 calendar convention)
+#   State schemas — reference for Terrarium `variables()` (Phase 3):
+#     processes/initialization/**
+# ---------------------------------------------------------------------------
 
 end
