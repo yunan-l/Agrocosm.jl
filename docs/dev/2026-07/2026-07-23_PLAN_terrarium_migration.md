@@ -1,10 +1,13 @@
 # Re-architect Agrocosm.jl onto the Terrarium.jl framework
 
-> Status: **in progress**. Phases 0 (framework toolchain + conventions), 1 (infrastructure swap), and
-> 2 (reuse Terrarium soil & surface) are complete: Agrocosm is now a downstream Terrarium package
-> whose skeleton loads on the framework, the coupled Terrarium land stack it will build on is
-> validated on CPU, and the legacy→Terrarium soil/surface config mapping is documented. The crop/soil
-> physics is retained on disk for porting in Phases 3–6.
+> Status: **in progress**. Phases 0–2 complete; Phase 3 (crop physiology) underway. Ported and
+> unit-validated: crop root distribution, C3/C4 photosynthesis (matches Terrarium's LUEPhotosynthesis
+> to rtol 1e-10), crop stomatal conductance, and crop carbon dynamics. **A first coupled crop model
+> runs end-to-end on CPU and produces positive GPP** (crop photosynthesis + stomatal conductance +
+> carbon dynamics assembled into a Terrarium `LandModel`, enabled by widening Terrarium's vegetation
+> dispatches to the abstract interfaces). Remaining Phase 3: crop phenology (heat units), crop
+> nitrogen, plant-available-water, and soil C–N biogeochemistry. Legacy physics retained on disk until
+> the Phase 6 cleanup.
 
 Date of initial draft: 2026-07-23
 
@@ -142,6 +145,26 @@ Confirmed design decisions:
 >   carries turnover as yr⁻¹ but the timestepper integrates per-second — its own flagged TODO — which
 >   collapses `carbon_vegetation` negative in a single step, the true source of the negative default
 >   LAI). Unit-tested (`test/crop/test_carbon_dynamics.jl`).
+> 2026-07-23: first crop coupled model producing positive GPP.
+>
+> - Resolved the sibling-coupling by **widening Terrarium's vegetation dispatches to the abstract
+>   interfaces** in `../Terrarium-copy/Terrarium.jl` (branch `mg/adjust-for-neuralcrop`, commit
+>   "Widen vegetation-process dispatch to abstract interfaces"): `MedlynStomatalConductance` →
+>   `AbstractPhotosynthesis` and `PALADYNAutotrophicRespiration` → `AbstractVegetationCarbonDynamics`
+>   (strictly more general; LUE/PALADYN still match; each reads only fields present on every
+>   implementation). Agrocosm's `[sources]` now points at the Terrarium-copy checkout.
+> - With those widenings, `spike_crop_vegetation_model.jl` assembles a `LandModel` whose
+>   `VegetationCarbon` uses crop photosynthesis + crop stomatal conductance + crop carbon dynamics,
+>   with the (coupling-free) `PALADYNPhenology` and the now-compatible `PALADYNAutotrophicRespiration`,
+>   and `vegetation_dynamics = nothing` (a single crop cell needs no PFT-spreading dynamics). It runs
+>   end-to-end on CPU and **produces positive GPP** (≈ 1.5e-8 kgC/m²/s ≈ 1.3 gC/m²/day),
+>   `net_assimilation`/`leaf_respiration` finite and positive, λ = 0.8, canopy conductance positive.
+>   This is the first coupled crop model on the Terrarium stack producing carbon assimilation.
+> - `PALADYNVegetationDynamics` also calls the carbon dynamics' `compute_λ_NPP` method (not just
+>   dispatches on its type), so it is not made compatible by dispatch-widening alone; it is bypassed
+>   (`nothing`) for the single-cell crop rather than widened. A crop `VegetationModel` (Phase 5) can
+>   wire it if PFT dynamics are needed.
+>
 > - **Architectural finding (drives Phase 5):** Terrarium's PALADYN vegetation processes are
 >   concretely coupled to each other's *types*, not the abstract interfaces —
 >   `MedlynStomatalConductance` dispatches on `LUEPhotosynthesis`, and

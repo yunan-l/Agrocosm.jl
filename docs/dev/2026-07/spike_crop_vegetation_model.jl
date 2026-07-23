@@ -12,15 +12,15 @@ using Terrarium
 arch = CPU()
 grid = ColumnGrid(arch, ExponentialSpacing(Δz_max = 1.0, N = 20))
 
-# Only the photosynthesis + stomatal-conductance slots are crop here. Swapping additional
-# slots (e.g. carbon_dynamics = CropCarbonDynamics(...)) currently fails because Terrarium's
-# PALADYN vegetation processes are concretely coupled to each other's types (e.g.
-# PALADYNAutotrophicRespiration dispatches on PALADYNCarbonDynamics). Assembling the full crop
-# physiology needs a dedicated crop VegetationModel (plan Phase 5), not slot-swapping.
+# Crop photosynthesis + stomatal conductance + carbon dynamics injected into VegetationCarbon;
+# the PALADYN phenology and autotrophic respiration are reused (Terrarium's stomatal/respiration
+# dispatches were widened to the abstract process interfaces so the crop processes pair cleanly).
 vegetation = VegetationCarbon(
     eltype(grid);
     photosynthesis = CropPhotosynthesis(eltype(grid)),
     stomatal_conductance = CropStomatalConductance(eltype(grid)),
+    carbon_dynamics = CropCarbonDynamics(eltype(grid)),
+    vegetation_dynamics = nothing,   # single-cell crop: no PFT-spreading dynamics
 )
 
 hydrology = SoilHydrology(eltype(grid), RichardsEq())
@@ -58,6 +58,8 @@ println("  leaf_respiration      = ", Rd, " gC/m^2/s")
 
 @assert land.vegetation.photosynthesis isa CropPhotosynthesis
 @assert land.vegetation.stomatal_conductance isa CropStomatalConductance
+@assert land.vegetation.carbon_dynamics isa CropCarbonDynamics
 @assert all(isfinite, (gpp, An, Rd, λc, gc))
-@assert gpp ≥ 0 "GPP should be non-negative under active conditions"
+@assert gpp > 0 "coupled crop model should produce positive GPP under active conditions"
+@assert gc > 0 "canopy conductance should be positive"
 println("SPIKE ASSERTIONS PASSED")

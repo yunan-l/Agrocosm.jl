@@ -12,7 +12,7 @@ Terrarium = "80418d68-07fa-499d-ae2b-c12e531f5cd8"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [sources]
-Terrarium = {path = "../Terrarium.jl"}
+Terrarium = {path = "../Terrarium-copy/Terrarium.jl"}
 
 [compat]
 DocStringExtensions = "0.9.5"
