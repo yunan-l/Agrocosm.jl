@@ -35,5 +35,6 @@ using Test
         include("crop/test_volatilization.jl")
         include("crop/test_mineralization.jl")
         include("crop/test_maintenance_respiration.jl")
+        include("crop/test_carbon_allocation.jl")
     end
 end

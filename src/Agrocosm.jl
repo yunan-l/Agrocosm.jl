@@ -93,6 +93,9 @@ export maintenance_temperature_response, organ_maintenance_respiration
 include("crop/harvest_index.jl")
 export CropHarvestIndex, crop_harvest_index
 
+include("crop/carbon_allocation.jl")
+export CropCarbonAllocation, root_allocation_fraction, leaf_carbon_from_lai
+
 include("crop/nitrogen_allocation.jl")
 export CropNitrogenAllocation, allocate_crop_nitrogen
 
