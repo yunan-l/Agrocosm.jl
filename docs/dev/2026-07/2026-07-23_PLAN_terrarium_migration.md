@@ -154,6 +154,14 @@ Confirmed design decisions:
 >   structural-protection, zero-potential, and temperature-dependence cases
 >   (`test/crop/test_nitrogen_limitation.jl`). Applied to the crop photosynthesis Vcmax within the crop
 >   nitrogen coupling (Phase 5); the full crop N cycle (demand/uptake/allocation) is the rest of P3e.
+>   Also ported the complementary **crop nitrogen demand** (`CropNitrogenDemand` /
+>   `crop_nitrogen_demand`, `src/crop/nitrogen_demand.jl`, LPJmL `ndemand_crop`): leaf demand = the
+>   Rubisco N requirement implied by Vcmax (the inverse of the Vcmax limitation — a cross-check test
+>   confirms feeding leaf demand back through the limitation recovers the Vcmax) plus structural leaf
+>   N, and total demand adds root/pool/storage at the leaf N:C ratio scaled by organ C:N ratios.
+>   Unit-tested against the closed form, the demand↔limitation inversion, and temperature/carbon
+>   dependence (`test/crop/test_nitrogen_demand.jl`). Still remaining for P3e: root uptake kinetics
+>   (NO₃/NH₄) and nitrogen allocation.
 >
 > 2026-07-23: ported crop phenology (LAI heat-unit trajectory).
 >

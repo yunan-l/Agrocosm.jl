@@ -70,6 +70,9 @@ export CropPhenology
 include("crop/nitrogen_limitation.jl")
 export CropNitrogenVcmaxLimit
 
+include("crop/nitrogen_demand.jl")
+export CropNitrogenDemand
+
 # ---------------------------------------------------------------------------
 # PHASE 3+ TODO — crop and soil-biogeochemistry physics not yet ported.
 #
