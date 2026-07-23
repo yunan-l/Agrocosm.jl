@@ -25,5 +25,6 @@ using Test
         include("crop/test_nitrogen_demand.jl")
         include("crop/test_plant_available_water.jl")
         include("crop/test_nitrogen_uptake.jl")
+        include("crop/test_soil_decomposition_response.jl")
     end
 end

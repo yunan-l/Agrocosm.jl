@@ -79,6 +79,10 @@ export soil_moisture_limiting_factor, plant_available_water
 include("crop/nitrogen_uptake.jl")
 export CropNitrogenUptakeKinetics, nitrogen_uptake_temperature_response, root_nitrogen_uptake_potential
 
+include("crop/soil_decomposition_response.jl")
+export CropSoilDecompositionResponse, soil_decomposition_response
+export soil_decomposition_temperature_response, soil_decomposition_moisture_response
+
 # ---------------------------------------------------------------------------
 # PHASE 3+ TODO — crop and soil-biogeochemistry physics not yet ported.
 #
