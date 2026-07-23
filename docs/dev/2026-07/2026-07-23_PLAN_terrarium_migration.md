@@ -157,9 +157,14 @@ Confirmed design decisions:
 >   (carbon-conserving), and heterotrophic respiration. `CropNitrification`
 >   (`src/crop/nitrification.jl`, LPJmL `nitrogen_transform`): gross NH₄→NO₃ nitrification as a peaked
 >   WFPS moisture factor × Gaussian temperature factor × atan pH factor, capped at the ammonium stock,
->   with the N₂O split. Both unit-tested (incl. the nitrification moisture closed form). Remaining P3f:
->   mineralization/immobilization, denitrification, NH₃ volatilization, and litter routing between the
->   soil N pools.
+>   with the N₂O split. `CropDenitrification` (`src/crop/denitrification.jl`, LPJmL
+>   `nitrogen_transform`): gross NO₃ denitrification as a WFPS moisture factor × an organic-carbon
+>   availability factor (fast + slow carbon with a peaked soil-temperature response) × nitrate, capped
+>   at the nitrate stock, split into N₂O/N₂. All unit-tested (incl. the nitrification moisture and
+>   denitrification temperature/moisture closed forms). Note: the nitrification/denitrification
+>   moisture/temperature factors use non-negative bases before their non-integer powers so they are
+>   throw-free (kernel/Reactant-safe), matching the LPJmL "0 outside support" behaviour. Remaining P3f:
+>   mineralization/immobilization, NH₃ volatilization, and litter routing between the soil N pools.
 >
 > 2026-07-23: ported crop harvest index + growth respiration (carbon allocation, part of P3d).
 >
