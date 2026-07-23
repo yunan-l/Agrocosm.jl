@@ -92,6 +92,9 @@ export CropHarvestIndex, crop_harvest_index
 include("crop/nitrogen_allocation.jl")
 export CropNitrogenAllocation, allocate_crop_nitrogen
 
+include("crop/soil_carbon.jl")
+export CropSoilCarbon, decomposed_carbon, route_litter_carbon, heterotrophic_respiration
+
 # ---------------------------------------------------------------------------
 # PHASE 3+ TODO — crop and soil-biogeochemistry physics not yet ported.
 #
