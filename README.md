@@ -3,22 +3,21 @@
 [![Build Status](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![Documentation](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/Documentation.yml/badge.svg)](https://yunan-l.github.io/Agrocosm.jl/dev/)
 
-**🧑‍🌾 💧 ☀️ 🌾 🚀 Fast and flexible Julia framework for agricultural ecosystem modelling across scales.**
+<!-- **🧑‍🌾 💧 ☀️ 🌾 🚀 A Julia-based crop model supporting differentiation and GPU acceleration.** -->
 
-Agrocosm.jl is a framework for building a new generation of
-process-based crop models. Technically it is a crop-soil model with water, carbon, nitrogen, and energy processes with a numerical design that can run on both CPUs and GPUs. It is easy to use and easy to extend. It is written in Julia to make physically based
+Agrocosm.jl is a A Julia-based crop model supporting differentiation and GPU acceleration. Technically it is a crop model with water, carbon, nitrogen, and energy processes with a numerical design that can run on both CPUs and GPUs. It is easy to use and easy to extend. It is written in Julia to make physically based
 simulation, differentiable programming, high-performance computing, and
 machine-learning workflows available within one modelling environment.
 
-The present implementation takes the crop module of
-[LPJmL](https://github.com/PIK-LPJmL/LPJmL) as an scientific
+Agrocosm follows the overall structure of [Terrarium.jl](https://github.com/NumericalEarth/Terrarium.jl) (a fast, differentiable, and GPU-aware land modelling across scales).
+Agrocosm takes the crop module of [LPJmL](https://github.com/PIK-LPJmL/LPJmL) as an scientific
 reference. Agrocosm is **not** a line-by-line port of LPJmL. It is an
-independent Julia implementation that preserves relevant process
-logic while developing a GPU-aware and increasingly
-differentiable model architecture.
+independent Julia package that preserves relevant process
+logic while developing a GPU-aware and increasing
+differentiation. Agrocosm will be further built on Terrarium and become its crop module in the coming future. 
 
 > [!WARNING]
-> Agrocosm.jl is under active development, but almost done as a standalone model.
+> Agrocosm.jl is under active development with assistance from Codex 🤖, but almost done as a crop model.
 
 Read the [online documentation](https://yunan-l.github.io/Agrocosm.jl/dev/)
 for installation, model concepts, input schemas, CPU/GPU execution,
@@ -176,7 +175,7 @@ When the roadmap is complete, Agrocosm should support:
 - Large-domain, high-resolution crop simulation on both CPUs and GPUs
 - Gradient-based calibration of cultivar and physiological parameters
 - Assimilation of remotely sensed LAI, GPP, evapotranspiration, and biomass
-- Combining Agrocosm with data-driven models to surpport hybrid modelling
+- Combination with data-driven models to surpport hybrid modelling
 - Sensitivity analysis of climate change and crop management strategies
 
 ## Contributing
