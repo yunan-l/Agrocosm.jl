@@ -50,12 +50,13 @@ Confirmed design decisions:
 >
 > Deviations from the original phase text, made for safety and to ease later porting:
 >
-> - **Physical soil/surface/climate process files are retained on disk (excluded from the module)**
->   rather than deleted in Phase 1. Every physics file depends on the deleted infrastructure
+> - **All superseded legacy source files are retained on disk (excluded from the module) until a
+>   single final cleanup in Phase 6**, rather than deleted incrementally (see the "Legacy-file
+>   retention policy" section). Every physics file depends on the deleted infrastructure
 >   (`launch_1D!`, `@unpack`, legacy state containers) and cannot compile yet; keeping them in place
->   preserves the reference implementation for porting. They are deleted incrementally as each is
->   superseded by a Terrarium config/process in Phases 2–3. `src/Agrocosm.jl` carries a documented
->   manifest of these pending files.
+>   preserves the reference implementation for porting. `src/Agrocosm.jl` carries a documented
+>   manifest of these pending files. Only the pure-infrastructure files with nothing to port were
+>   removed in Phase 1.
 > - **The parameter migration to `@parameterized`/`@param` is deferred.** `default_params.jl` and
 >   `pft.jl` are already infrastructure-free `@kwdef` structs, so Phase 1 keeps them as-is (retaining
 >   the LPJmL defaults as physics reference). Their conversion to ModelParameters calibration hooks
@@ -145,6 +146,16 @@ routing, surface litter); management (sowing, fertilizer, manure, tillage, harve
 λ solver, carbon allocation + harvest index, crop phenology, crop nitrogen, soil C–N
 biogeochemistry, management events, CFT registry.
 
+## Legacy-file retention policy
+
+Superseded legacy source files are **retained on disk (excluded from the module) until a single
+final cleanup in Phase 6**, rather than deleted in the phase that supersedes them. They are the
+reference implementation used while porting physics, and keeping them in place avoids `git show`
+round-trips during Phases 2–5. Only the pure-infrastructure files with nothing to port were removed
+in Phase 1. Every phase below that says "supersede" leaves the old files in place; the mass deletion
+of all superseded legacy source happens once, in Phase 6, after the new stack reproduces the
+acceptance example.
+
 ## Summary of changes (planned phases)
 
 Because the migration is a single-branch full rewrite, all phases land on one long-lived
@@ -158,9 +169,10 @@ feature branch; end-to-end runs are restored at Phase 6.
   constants, diagnostics, and checkpointing with Terrarium equivalents (first table block). Rewrite
   `src/Agrocosm.jl` to `using Terrarium` and re-export the crop API.
 - **Phase 2 — Reuse Terrarium soil & surface.** Configure `SoilEnergyWaterCarbon` (energy +
-  Richards hydrology + stratigraphy) and the surface stack; delete Agrocosm's physical soil/surface
-  code. Contribute upstream only genuinely-missing pieces (e.g. multi-layer snow, already on
-  Terrarium's roadmap).
+  Richards hydrology + stratigraphy) and the surface stack for the crop context; the physical
+  soil/surface code is superseded but retained per the retention policy (deleted in Phase 6).
+  Contribute upstream only genuinely-missing pieces (e.g. multi-layer snow, already on Terrarium's
+  roadmap).
 - **Phase 3 — Port crop physiology.** New processes under Terrarium vegetation & soil-biogeochem
   abstract types: C3/C4 photosynthesis (alternative `AbstractPhotosynthesis` + λ solver),
   autotrophic respiration, carbon dynamics/allocation, LAI/canopy, root distribution, plant
@@ -176,7 +188,8 @@ feature branch; end-to-end runs are restored at Phase 6.
   ModelParameters presets; multi-crop via the planned `TiledVegetationModel`.
 - **Phase 6 — Validation, AD, docs, cleanup.** Reproduce the 10-year wheat GPP/NPP example on the
   new stack; conservation, Enzyme adjoint, and Reactant global tests; rewrite README/docs/examples to
-  Terrarium idioms; final dead-code and redundancy audit.
+  Terrarium idioms; **delete all superseded legacy source files retained during Phases 1–5** (the
+  single mass cleanup per the retention policy) and do a final dead-code and redundancy audit.
 
 ## Testing and verification
 
