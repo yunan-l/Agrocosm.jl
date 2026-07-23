@@ -274,6 +274,25 @@ Confirmed design decisions:
 >   crop vegetation model. (An alternative is to widen the offending Terrarium dispatches to the
 >   abstract supertypes upstream — a small, correct framework improvement.)
 
+> 2026-07-23: started Phase 5 (crop vegetation model assembly).
+>
+> - `CropPhenologyDynamics` (`src/crop/phenology_dynamics.jl`): the prognostic phenological-heat-unit
+>   accumulator — `d(HU)/dt = max(0, T_air − T_base)/seconds_per_day` (continuous-time replacement for
+>   LPJmL's daily heat-unit sum), producing the heat-unit fraction `fphu` that drives the LAI
+>   trajectory. Unit-tested.
+> - `CropVegetation` (`src/crop/vegetation.jl`): a minimal crop `AbstractVegetation` wiring
+>   `phenology_dynamics → phenology → stomatal_conductance → photosynthesis` with the correct
+>   auxiliary/tendency ordering, slotting into a Terrarium `LandModel`. The spike
+>   `spike_crop_vegetation_phenology.jl` validates it end-to-end on CPU: **heat units accumulate over
+>   the integration (0 → 1.74 °C·d in 20 steps at 25 °C), and a mid-season heat-unit state
+>   (fphu = 0.5) yields LAI ≈ 6.8 and positive GPP (~8 gC/m²/day)** — the crop LAI now responds to the
+>   growing season (accumulated heat units) rather than a carbon-pool equilibrium.
+> - Remaining Phase 5: multi-organ prognostic carbon (leaf/root/storage/pool via the ported allocation
+>   + respiration + harvest index) and nitrogen pools; couple the soil C–N transforms to the soil
+>   mineral-N state; wire the 12 CFT parameter sets as ModelParameters presets (via
+>   `CropPhenologyDynamics.heat_unit_requirement`, `CropPhotosynthesis`/`CropPhenology` per-CFT
+>   thresholds, etc.); optional multi-crop tiling.
+
 ## Problem description
 
 Agrocosm.jl (~10,165 source lines) is a self-contained, LPJmL-derived crop-soil model with a

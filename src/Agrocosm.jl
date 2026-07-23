@@ -67,6 +67,9 @@ export CropCarbonDynamics
 include("crop/phenology.jl")
 export CropPhenology
 
+include("crop/phenology_dynamics.jl")
+export CropPhenologyDynamics, heat_unit_fraction, heat_unit_rate
+
 include("crop/nitrogen_limitation.jl")
 export CropNitrogenVcmaxLimit
 
@@ -95,6 +98,12 @@ export CropHarvestIndex, crop_harvest_index
 
 include("crop/carbon_allocation.jl")
 export CropCarbonAllocation, root_allocation_fraction, leaf_carbon_from_lai
+
+# ---------------------------------------------------------------------------
+# Phase 5 — crop vegetation model assembling the crop processes.
+# ---------------------------------------------------------------------------
+include("crop/vegetation.jl")
+export CropVegetation
 
 include("crop/nitrogen_allocation.jl")
 export CropNitrogenAllocation, allocate_crop_nitrogen
