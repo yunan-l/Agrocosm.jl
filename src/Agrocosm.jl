@@ -86,6 +86,10 @@ export soil_decomposition_temperature_response, soil_decomposition_moisture_resp
 include("crop/growth_respiration.jl")
 export CropGrowthRespiration, growth_respiration, net_primary_production
 
+include("crop/maintenance_respiration.jl")
+export CropMaintenanceRespiration, maintenance_respiration
+export maintenance_temperature_response, organ_maintenance_respiration
+
 include("crop/harvest_index.jl")
 export CropHarvestIndex, crop_harvest_index
 
