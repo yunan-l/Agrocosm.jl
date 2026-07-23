@@ -133,6 +133,27 @@ Confirmed design decisions:
 >   robust to the out-of-range upstream values from the not-yet-ported slots: β clamped to [0,1] in
 >   both crop kernels, and canopy cover clamped to ≥ 0 (a negative default LAI was otherwise driving
 >   `canopy_water_conductance` negative).
+>
+> 2026-07-23: ported crop carbon dynamics; key architectural finding for Phase 5.
+>
+> - `CropCarbonDynamics <: Terrarium.AbstractVegetationCarbonDynamics` (`src/crop/carbon_dynamics.jl`):
+>   prognostic `carbon_vegetation`, `balanced_leaf_area_index = C_veg/(2/SLA + awl)` (clamped ≥ 0), and
+>   a **dimensionally-correct per-second** turnover tendency (Terrarium's `PALADYNCarbonDynamics`
+>   carries turnover as yr⁻¹ but the timestepper integrates per-second — its own flagged TODO — which
+>   collapses `carbon_vegetation` negative in a single step, the true source of the negative default
+>   LAI). Unit-tested (`test/crop/test_carbon_dynamics.jl`).
+> - **Architectural finding (drives Phase 5):** Terrarium's PALADYN vegetation processes are
+>   concretely coupled to each other's *types*, not the abstract interfaces —
+>   `MedlynStomatalConductance` dispatches on `LUEPhotosynthesis`, and
+>   `PALADYNAutotrophicRespiration.compute_autotrophic_respiration`/`compute_Ra` dispatch on
+>   `PALADYNCarbonDynamics` (`respiration/autotrophic_respiration.jl:133,185`). Swapping any single
+>   crop process into `VegetationCarbon` therefore cascades into its PALADYN siblings. Conclusion: the
+>   coupled crop physiology must be assembled in a **dedicated crop `VegetationModel`** (plan Phase 5)
+>   that wires the crop processes together, rather than by slot-swapping into `VegetationCarbon`. The
+>   `spike_crop_vegetation_model.jl` therefore swaps only the photosynthesis + stomatal-conductance
+>   slots (which pair cleanly); `CropCarbonDynamics` is delivered and unit-validated, ready for that
+>   crop vegetation model. (An alternative is to widen the offending Terrarium dispatches to the
+>   abstract supertypes upstream — a small, correct framework improvement.)
 
 ## Problem description
 

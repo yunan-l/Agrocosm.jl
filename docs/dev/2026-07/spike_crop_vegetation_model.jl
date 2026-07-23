@@ -12,6 +12,11 @@ using Terrarium
 arch = CPU()
 grid = ColumnGrid(arch, ExponentialSpacing(Δz_max = 1.0, N = 20))
 
+# Only the photosynthesis + stomatal-conductance slots are crop here. Swapping additional
+# slots (e.g. carbon_dynamics = CropCarbonDynamics(...)) currently fails because Terrarium's
+# PALADYN vegetation processes are concretely coupled to each other's types (e.g.
+# PALADYNAutotrophicRespiration dispatches on PALADYNCarbonDynamics). Assembling the full crop
+# physiology needs a dedicated crop VegetationModel (plan Phase 5), not slot-swapping.
 vegetation = VegetationCarbon(
     eltype(grid);
     photosynthesis = CropPhotosynthesis(eltype(grid)),
