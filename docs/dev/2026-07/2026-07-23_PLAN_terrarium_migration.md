@@ -102,6 +102,20 @@ Confirmed design decisions:
 >   stubs. The discrete sowing/harvest/senescence lifecycle events remain Phase 4.
 > - `temp_stress` is a scalar primitive consumed by photosynthesis (not a standalone process); it
 >   ports as a Level-III primitive inside the crop photosynthesis process.
+>
+> 2026-07-23: ported C3/C4 crop photosynthesis (plan Phase 3c).
+>
+> - `CropPhotosynthesis <: Terrarium.AbstractPhotosynthesis` (`src/crop/photosynthesis.jl`),
+>   continuous-time C3/C4 with the full three-level structure. C3 reproduces Terrarium's
+>   `LUEPhotosynthesis` scalar `(Rd, An)` to `rtol = 1e-10` across 72 input combinations
+>   (`test/crop/test_photosynthesis.jl`); C4 uses `c₂ = 1`, `φ = min(1, λ/λ_mc4)`, tested for gating,
+>   light response, φ saturation, and the 55/45 °C cutoffs. Design + finding in
+>   `2026-07-23_PHASE3_photosynthesis_design.md`.
+> - **Integration finding:** `MedlynStomatalConductance` dispatches on `LUEPhotosynthesis`
+>   specifically (not `AbstractPhotosynthesis`), which blocks injecting `CropPhotosynthesis` into
+>   `VegetationCarbon`. Fix is a one-line upstream Terrarium widening, or the planned crop
+>   stomatal-conductance (LPJmL λ solver) port; until then the crop photosynthesis is validated at the
+>   process/unit level and end-to-end assembly is deferred to that next port.
 
 ## Problem description
 
