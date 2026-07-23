@@ -64,6 +64,9 @@ export CropStomatalConductance
 include("crop/carbon_dynamics.jl")
 export CropCarbonDynamics
 
+include("crop/phenology.jl")
+export CropPhenology
+
 # ---------------------------------------------------------------------------
 # PHASE 3+ TODO — crop and soil-biogeochemistry physics not yet ported.
 #

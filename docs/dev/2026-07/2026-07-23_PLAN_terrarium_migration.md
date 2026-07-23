@@ -145,6 +145,18 @@ Confirmed design decisions:
 >   carries turnover as yr⁻¹ but the timestepper integrates per-second — its own flagged TODO — which
 >   collapses `carbon_vegetation` negative in a single step, the true source of the negative default
 >   LAI). Unit-tested (`test/crop/test_carbon_dynamics.jl`).
+> 2026-07-23: ported crop phenology (LAI heat-unit trajectory).
+>
+> - `CropPhenology <: Terrarium.AbstractPhenology` (`src/crop/phenology.jl`): the LPJmL
+>   heat-unit-driven leaf-area-index trajectory `LAI = f(fphu)·laimax` — a logistic-like rise to the
+>   senescence onset `fphusen` then a power-law decline to a harvest floor. Unit-tested against the
+>   trajectory's exact design anchors (`flaimaxc` at `fphuc`, `flaimaxk` at `fphuk`, peak 1 at
+>   `fphusen`, bare at `fphu = 1`) plus monotonicity and bounds (`test/crop/test_phenology.jl`). The
+>   heat-unit fraction `fphu` is supplied as the input `phenology_heat_unit_fraction`; its prognostic
+>   accumulation `d(HU)/dt = max(0, T − T_base)` (with vernalization/photoperiod modifiers, from the
+>   legacy `phenology`/`climbuf`) is integrated in the crop vegetation model (Phase 5). This replaces
+>   the carbon-pool-equilibrium LAI with the faithful growing-season LAI shape.
+>
 > 2026-07-23: first crop coupled model producing positive GPP.
 >
 > - Resolved the sibling-coupling by **widening Terrarium's vegetation dispatches to the abstract
