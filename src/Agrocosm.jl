@@ -10,6 +10,15 @@ module Agrocosm
 # plan and AGENTS.md for conventions.
 using Terrarium
 
+# Documentation and parameter macros.
+using DocStringExtensions
+# `@param`/`@component` are field markers consumed by `@parameterized`, not standalone macros.
+using SpeedyWeatherInternals.ParameterEditing: ParameterEditing, @parameterized,
+    Positive, Nonnegative, Unbounded, UnitInterval
+
+# Framework internals used when authoring processes and kernels.
+using Oceananigans.Fields: FunctionField
+
 # ---------------------------------------------------------------------------
 # Crop parameter sets and the 12-CFT registry (infrastructure-free physics
 # constants). These retain their LPJmL-derived defaults during the migration;
@@ -36,6 +45,13 @@ export cft1, cft2, cft3, cft4, cft5, cft6, cft7, cft8, cft9, cft10, cft11, cft12
 
 # Numerics.
 export lpj_bisect
+
+# ---------------------------------------------------------------------------
+# Crop processes (Terrarium-native, continuous-time). Ported incrementally in
+# Phase 3 from the legacy discrete-daily implementations under src/processes/.
+# ---------------------------------------------------------------------------
+include("crop/root_distribution.jl")
+export CropRootDistribution
 
 # ---------------------------------------------------------------------------
 # PHASE 3+ TODO — crop and soil-biogeochemistry physics not yet ported.

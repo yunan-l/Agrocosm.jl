@@ -14,4 +14,8 @@ using Test
     @testset "Crop parameters" begin
         include("processes/crop/test_pft_registry.jl")
     end
+
+    @testset "Crop processes" begin
+        include("crop/test_root_distribution.jl")
+    end
 end
