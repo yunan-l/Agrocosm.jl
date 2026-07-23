@@ -163,8 +163,15 @@ Confirmed design decisions:
 >   at the nitrate stock, split into N₂O/N₂. All unit-tested (incl. the nitrification moisture and
 >   denitrification temperature/moisture closed forms). Note: the nitrification/denitrification
 >   moisture/temperature factors use non-negative bases before their non-integer powers so they are
->   throw-free (kernel/Reactant-safe), matching the LPJmL "0 outside support" behaviour. Remaining P3f:
->   mineralization/immobilization, NH₃ volatilization, and litter routing between the soil N pools.
+>   throw-free (kernel/Reactant-safe), matching the LPJmL "0 outside support" behaviour.
+> - Completed the soil-N transform set: `CropVolatilization` (`src/crop/volatilization.jl`, NH₃ flux =
+>   aqueous-NH₃ fraction × Henry's constant × wind mass-transfer, capped at top-layer ammonium) and
+>   `CropNitrogenMineralization` (`src/crop/mineralization.jl`, the `litter_C/soil_CN − litter_N`
+>   immobilization demand and its Michaelis-Menten limitation by available mineral N). Both
+>   unit-tested. **P3f soil C–N is now ported as tested scalar physics** (carbon pool decomposition +
+>   litter routing, nitrification, denitrification, volatilization, mineralization/immobilization);
+>   the multi-layer pool state, C-shift/litter routing between pools, and the coupled assembly to the
+>   soil hydrology/temperature are Phase 5.
 >
 > 2026-07-23: ported crop harvest index + growth respiration (carbon allocation, part of P3d).
 >

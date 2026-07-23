@@ -106,6 +106,9 @@ export denitrification_temperature_factor, denitrification_moisture_factor
 include("crop/volatilization.jl")
 export CropVolatilization, ammonia_volatilization
 
+include("crop/mineralization.jl")
+export CropNitrogenMineralization, immobilization_demand, immobilization_limitation, immobilized_nitrogen
+
 # ---------------------------------------------------------------------------
 # PHASE 3+ TODO — crop and soil-biogeochemistry physics not yet ported.
 #
