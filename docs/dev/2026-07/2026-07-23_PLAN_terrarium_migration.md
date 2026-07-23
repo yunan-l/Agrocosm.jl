@@ -127,11 +127,12 @@ Confirmed design decisions:
 >   documented refinement.
 > - **End-to-end assembly validated:** `spike_crop_vegetation_model.jl` injects both crop processes
 >   into `VegetationCarbon`/`LandModel` and takes a coupled CPU timestep — the crop physiology runs in
->   the full stack (λ = 0.8 well-watered, conductance positive after a defensive β clamp). GPP is
->   still 0 because the PALADYN-default phenology/carbon and plant-available-water slots feed a
->   non-physical `leaf_area_index` (≤ 0) and β; meaningful GPP awaits the crop LAI (phenology/carbon,
->   P3d) and crop PAW (P3f) ports. Added defensive β∈[0,1] clamping in the crop photosynthesis and
->   stomatal-conductance kernels.
+>   the full stack (λ = 0.8 well-watered). GPP is still 0 because the PALADYN-default phenology/carbon
+>   slot feeds a non-physical `leaf_area_index` (≤ 0); meaningful GPP awaits the crop LAI
+>   (phenology/carbon, P3d) and crop PAW (P3f) ports. Added defensive guards so the crop processes are
+>   robust to the out-of-range upstream values from the not-yet-ported slots: β clamped to [0,1] in
+>   both crop kernels, and canopy cover clamped to ≥ 0 (a negative default LAI was otherwise driving
+>   `canopy_water_conductance` negative).
 
 ## Problem description
 

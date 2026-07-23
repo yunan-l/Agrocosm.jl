@@ -51,7 +51,9 @@ end
 
 """$(TYPEDSIGNATURES) Canopy water conductance scaled by canopy cover (Lambert–Beer) and β."""
 @inline function compute_canopy_conductance(stomcond::CropStomatalConductance{NF}, LAI::NF, β::NF) where {NF}
-    canopy_cover = NF(1) - exp(-stomcond.k_ext * LAI)
+    # Canopy cover is bounded to [0, 1]; guard against a non-physical (negative) LAI so the
+    # conductance never falls below g_min.
+    canopy_cover = max(zero(NF), NF(1) - exp(-stomcond.k_ext * LAI))
     return stomcond.g_min + (stomcond.g_max - stomcond.g_min) * canopy_cover * β
 end
 
