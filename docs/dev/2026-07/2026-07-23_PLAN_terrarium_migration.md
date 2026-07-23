@@ -145,6 +145,22 @@ Confirmed design decisions:
 >   carries turnover as yr⁻¹ but the timestepper integrates per-second — its own flagged TODO — which
 >   collapses `carbon_vegetation` negative in a single step, the true source of the negative default
 >   LAI). Unit-tested (`test/crop/test_carbon_dynamics.jl`).
+> 2026-07-23: completed crop nitrogen cycle (P3e) and advanced soil C–N (P3f).
+>
+> - **P3e complete.** Crop nitrogen allocation (`CropNitrogenAllocation` / `allocate_crop_nitrogen`,
+>   `src/crop/nitrogen_allocation.jl`, LPJmL `crop_nitrogen`): total plant N redistributed among
+>   leaf/root/storage/pool by carbon-to-target-C:N weights, conserving N. Unit-tested. Together with
+>   the earlier demand, NO₃/NH₄ uptake kinetics, and Vcmax limitation, the crop nitrogen cycle is
+>   ported as tested scalar physics.
+> - **P3f soil C–N.** `CropSoilCarbon` (`src/crop/soil_carbon.jl`, LPJmL `soil_carbon`): first-order
+>   pool decomposition `(1 − exp(−rate·response))·pool`, litter routing to fast/slow/atmosphere
+>   (carbon-conserving), and heterotrophic respiration. `CropNitrification`
+>   (`src/crop/nitrification.jl`, LPJmL `nitrogen_transform`): gross NH₄→NO₃ nitrification as a peaked
+>   WFPS moisture factor × Gaussian temperature factor × atan pH factor, capped at the ammonium stock,
+>   with the N₂O split. Both unit-tested (incl. the nitrification moisture closed form). Remaining P3f:
+>   mineralization/immobilization, denitrification, NH₃ volatilization, and litter routing between the
+>   soil N pools.
+>
 > 2026-07-23: ported crop harvest index + growth respiration (carbon allocation, part of P3d).
 >
 > - `CropHarvestIndex` / `crop_harvest_index` (`src/crop/harvest_index.jl`, LPJmL `carbon_allocation`):

@@ -95,6 +95,10 @@ export CropNitrogenAllocation, allocate_crop_nitrogen
 include("crop/soil_carbon.jl")
 export CropSoilCarbon, decomposed_carbon, route_litter_carbon, heterotrophic_respiration
 
+include("crop/nitrification.jl")
+export CropNitrification, gross_nitrification
+export nitrification_moisture_factor, nitrification_temperature_factor, nitrification_ph_factor
+
 # ---------------------------------------------------------------------------
 # PHASE 3+ TODO — crop and soil-biogeochemistry physics not yet ported.
 #
