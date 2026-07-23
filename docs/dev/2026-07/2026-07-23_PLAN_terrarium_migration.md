@@ -169,8 +169,14 @@ Confirmed design decisions:
 >   confirms feeding leaf demand back through the limitation recovers the Vcmax) plus structural leaf
 >   N, and total demand adds root/pool/storage at the leaf N:C ratio scaled by organ C:N ratios.
 >   Unit-tested against the closed form, the demand↔limitation inversion, and temperature/carbon
->   dependence (`test/crop/test_nitrogen_demand.jl`). Still remaining for P3e: root uptake kinetics
->   (NO₃/NH₄) and nitrogen allocation.
+>   dependence (`test/crop/test_nitrogen_demand.jl`).
+>   Also ported the **root nitrogen uptake kinetics** (`CropNitrogenUptakeKinetics`,
+>   `nitrogen_uptake_temperature_response`, `root_nitrogen_uptake_potential`,
+>   `src/crop/nitrogen_uptake.jl`, LPJmL `nuptake_crop`): per-pool Michaelis-Menten uptake
+>   `vmax·(kmin + N/(N + Km·scale))·root_factor` capped at the available N, with the LPJmL parabolic
+>   soil-temperature response (normalized to 1 at the reference temperature). Unit-tested
+>   (`test/crop/test_nitrogen_uptake.jl`). Still remaining for P3e: nitrogen allocation across organs
+>   and wiring demand/uptake/limitation into the coupled model (needs soil mineral-N pools from P3f).
 >
 > 2026-07-23: ported crop phenology (LAI heat-unit trajectory).
 >
