@@ -173,6 +173,18 @@ Confirmed design decisions:
 >   the multi-layer pool state, C-shift/litter routing between pools, and the coupled assembly to the
 >   soil hydrology/temperature are Phase 5.
 >
+> 2026-07-23: completed crop carbon physics (maintenance respiration + organ allocation).
+>
+> - `CropMaintenanceRespiration` (`src/crop/maintenance_respiration.jl`, LPJmL crop `respiration`):
+>   per-organ maintenance respiration `carbon·respcoeff·k·nc_ratio·f(T)` with a Lloyd-Taylor
+>   temperature response (root at soil temperature, storage/pool at air temperature). With growth
+>   respiration this completes crop autotrophic respiration `Ra = Rm + Rg`.
+> - `CropCarbonAllocation` (`src/crop/carbon_allocation.jl`, LPJmL/SWAT `carbon_allocation`): the
+>   SWAT-style root fraction of biomass (declines through the season, rises under water/N stress) and
+>   the LAI/SLA-constrained leaf carbon. Both unit-tested. The crop carbon-cycle physics
+>   (photosynthesis → respiration → NPP → allocation → LAI, with the harvest index) is now ported as
+>   tested scalar primitives.
+>
 > 2026-07-23: ported crop harvest index + growth respiration (carbon allocation, part of P3d).
 >
 > - `CropHarvestIndex` / `crop_harvest_index` (`src/crop/harvest_index.jl`, LPJmL `carbon_allocation`):
