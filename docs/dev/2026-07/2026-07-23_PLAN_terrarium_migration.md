@@ -116,6 +116,22 @@ Confirmed design decisions:
 >   `VegetationCarbon`. Fix is a one-line upstream Terrarium widening, or the planned crop
 >   stomatal-conductance (LPJmL λ solver) port; until then the crop photosynthesis is validated at the
 >   process/unit level and end-to-end assembly is deferred to that next port.
+>
+> 2026-07-23: ported crop stomatal conductance and assembled the first coupled crop model.
+>
+> - `CropStomatalConductance <: Terrarium.AbstractStomatalConductance` (`src/crop/stomatal_conductance.jl`)
+>   supplies `leaf_to_air_co2_ratio` (λ = LAMBDA_OPT reduced toward a stressed floor by β) and
+>   `canopy_water_conductance`; dispatches on `AbstractPhotosynthesis`, so it pairs with
+>   `CropPhotosynthesis` (avoiding the Terrarium Medlyn edit). Unit-tested
+>   (`test/crop/test_stomatal_conductance.jl`). The full LPJmL supply=demand λ bisection remains a
+>   documented refinement.
+> - **End-to-end assembly validated:** `spike_crop_vegetation_model.jl` injects both crop processes
+>   into `VegetationCarbon`/`LandModel` and takes a coupled CPU timestep — the crop physiology runs in
+>   the full stack (λ = 0.8 well-watered, conductance positive after a defensive β clamp). GPP is
+>   still 0 because the PALADYN-default phenology/carbon and plant-available-water slots feed a
+>   non-physical `leaf_area_index` (≤ 0) and β; meaningful GPP awaits the crop LAI (phenology/carbon,
+>   P3d) and crop PAW (P3f) ports. Added defensive β∈[0,1] clamping in the crop photosynthesis and
+>   stomatal-conductance kernels.
 
 ## Problem description
 

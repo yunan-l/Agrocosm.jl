@@ -58,6 +58,9 @@ export CropRootDistribution
 include("crop/photosynthesis.jl")
 export CropPhotosynthesis, C3Pathway, C4Pathway
 
+include("crop/stomatal_conductance.jl")
+export CropStomatalConductance
+
 # ---------------------------------------------------------------------------
 # PHASE 3+ TODO — crop and soil-biogeochemistry physics not yet ported.
 #

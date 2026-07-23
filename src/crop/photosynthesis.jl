@@ -206,7 +206,8 @@ Base.@propagate_inbounds function compute_photosynthesis(
     pres = Terrarium.air_pressure(i, j, grid, fields, atmos)
     swdown = Terrarium.shortwave_down(i, j, grid, fields, atmos)
     co2 = fields.CO2[i, j]
-    β = fields.soil_moisture_limiting_factor[i, j]
+    # β is a limiting factor by definition bounded to [0, 1]; clamp defensively.
+    β = clamp(fields.soil_moisture_limiting_factor[i, j], zero(T_air), one(T_air))
     LAI = fields.leaf_area_index[i, j]
     λc = fields.leaf_to_air_co2_ratio[i, j]
     cmass = constants.material.atomic_weight_carbon
