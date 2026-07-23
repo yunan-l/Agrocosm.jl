@@ -1,9 +1,9 @@
 # Agrocosm.jl — Agent Rules
 
-Agrocosm.jl is a **downstream package built on [Terrarium.jl](../Terrarium-copy/Terrarium.jl)**
-(the `[sources]` dev dependency currently points at the `Terrarium-copy` checkout on branch
-`mg/adjust-for-neuralcrop`, which carries the vegetation-dispatch widenings the crop processes
-depend on). It contributes
+Agrocosm.jl is a **downstream package built on [Terrarium.jl](https://github.com/NumericalEarth/Terrarium.jl)**
+(the `[sources]` dependency tracks the remote branch `mg/adjust-for-neuralcrop` on
+`github.com/NumericalEarth/Terrarium.jl`, which carries the vegetation-dispatch widenings the crop
+processes depend on). It contributes
 crop-specific processes (C3/C4 photosynthesis, carbon/nitrogen allocation, phenology, coupled soil
 C–N biogeochemistry, and crop management) plus a managed-crop land model. Terrarium supplies **all**
 infrastructure and the physical soil/surface processes.
