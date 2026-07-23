@@ -32,5 +32,6 @@ using Test
         include("crop/test_soil_carbon.jl")
         include("crop/test_nitrification.jl")
         include("crop/test_denitrification.jl")
+        include("crop/test_volatilization.jl")
     end
 end
