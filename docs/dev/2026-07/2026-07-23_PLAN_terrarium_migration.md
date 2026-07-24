@@ -1,15 +1,15 @@
 # Re-architect Agrocosm.jl onto the Terrarium.jl framework
 
-> Status: **in progress**. Phases 0–3 and Phase 5 complete; Phase 4 (management events) next, then the
-> Phase 6 cleanup. **The full managed-crop `CropModel` runs end-to-end on CPU**: C3/C4 photosynthesis
-> (matches Terrarium's LUEPhotosynthesis to rtol 1e-10), stomatal conductance, phenology (prognostic
-> heat units), carbon and nitrogen pools with the N→Vcmax feedback, and a dynamic soil C–N
-> biogeochemistry (litter/fast/slow C + NH₄/NO₃ with mineralization/nitrification/denitrification), all
-> assembled into a Terrarium `LandModel` and enabled by widening Terrarium's vegetation dispatches to
-> the abstract interfaces. **The plant↔soil flux loop is closed and mass-conserving** — the crop draws
-> mineral N from the soil and returns litter C/N over the root zone. Remaining: Phase 4 discrete
-> management (sowing/harvest/tillage as documented Oceananigans callbacks) and the Phase 6 legacy
-> cleanup. Legacy physics retained on disk until Phase 6.
+> Status: **in progress**. Phases 0–5 complete; only the Phase 6 validation/cleanup remains. **The full
+> managed-crop `CropModel` runs end-to-end on CPU**: C3/C4 photosynthesis (matches Terrarium's
+> LUEPhotosynthesis to rtol 1e-10), stomatal conductance, phenology (prognostic heat units), carbon and
+> nitrogen pools with the N→Vcmax feedback, and a dynamic soil C–N biogeochemistry (litter/fast/slow C +
+> NH₄/NO₃ with mineralization/nitrification/denitrification), all assembled into a Terrarium `LandModel`
+> and enabled by widening Terrarium's vegetation dispatches to the abstract interfaces. **The plant↔soil
+> flux loop is closed and mass-conserving** — the crop draws mineral N from the soil and returns litter
+> C/N over the root zone. **Discrete management (sowing/harvest) runs as documented Oceananigans
+> callbacks and fertilizer as a continuous input flux** (Phase 4). Remaining: the Phase 6 validation, AD
+> tests, docs, and the single legacy-file cleanup. Legacy physics retained on disk until Phase 6.
 
 Date of initial draft: 2026-07-23
 
@@ -37,6 +37,21 @@ Confirmed design decisions:
 ## Revision log
 
 > 2026-07-23: initial draft.
+>
+> 2026-07-24: **Phase 4 — crop management (hybrid).** Added `src/crop/management.jl`. Discrete lifecycle
+> events run as Oceananigans `Callback`s on a `Simulation` (the sanctioned continuous-time exception):
+> `sow!` establishes a seeded stand and resets the phenological clock; `harvest!` exports the grain,
+> returns the residue (leaf·residue_fraction + root) to the soil litter/ammonium distributed over the
+> root zone (mass-conserving), and clears the stand; `add_crop_management!(sim, calendar::CropCalendar)`
+> registers both at their `SpecifiedTimes`. Fertilizer is **continuous** — `CropFertilization` +
+> `fertilize!` set the soil biogeochemistry's `fertilizer_ammonium_flux`/`fertilizer_nitrate_flux`
+> inputs (windowed by the clock), which the soil bgc integrates into the mineral-N tendencies over the
+> root zone; `add_crop_fertilization!` keeps them current each step. Unit-tested (state transitions +
+> carbon closure at harvest + fertilizer mass conservation to rtol 1e-8–1e-10 + window gating) and a
+> spike (`spike_crop_management.jl`) runs a managed season on a `Simulation`: biomass grows from the
+> seed, harvest clears it with a soil-litter jump, fertilizer raises the soil mineral N. **Tillage is
+> deferred** — it modifies the topsoil bulk density / hydraulics, which Terrarium's soil stratigraphy
+> owns; it needs an upstream hook and is documented as future work.
 >
 > 2026-07-24: **closed the plant↔soil flux loop — Phase 5 complete.** Added per-area crop turnover and
 > uptake fluxes to `CropCarbon`/`CropNitrogen` and made `CropSoilBiogeochemistry` consume them

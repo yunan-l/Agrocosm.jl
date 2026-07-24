@@ -21,6 +21,10 @@ using Oceananigans.Fields: FunctionField
 using Oceananigans.Utils: launch!
 using Oceananigans.Operators: Δzᵃᵃᶜ
 using KernelAbstractions: @kernel, @index
+# Oceananigans simulation callbacks — the mechanism for the crop-management events (Phase 4):
+# `SpecifiedTimes` for the discrete sowing/harvest jumps, `IterationInterval` for the continuous
+# fertilizer application flux.
+using Oceananigans: add_callback!, SpecifiedTimes, IterationInterval
 
 # ---------------------------------------------------------------------------
 # Crop parameter sets and the 12-CFT registry (infrastructure-free physics
@@ -141,6 +145,14 @@ export CropNitrogenMineralization, immobilization_demand, immobilization_limitat
 
 include("crop/soil_biogeochemistry.jl")
 export CropSoilBiogeochemistry, soil_carbon_tendencies, soil_nitrogen_tendencies
+
+# ---------------------------------------------------------------------------
+# Phase 4 — crop management. Discrete lifecycle events (sowing, harvest) as
+# documented Oceananigans callbacks; fertilizer as a continuous input flux.
+# ---------------------------------------------------------------------------
+include("crop/management.jl")
+export CropCalendar, sow!, harvest!, add_crop_management!
+export CropFertilization, fertilize!, add_crop_fertilization!
 
 # ---------------------------------------------------------------------------
 # PHASE 3+ TODO — crop and soil-biogeochemistry physics not yet ported.

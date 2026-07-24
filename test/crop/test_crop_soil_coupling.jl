@@ -58,6 +58,20 @@ using Test
         set!(state.crop_litterfall_nitrogen, 0.0)
     end
 
+    @testset "fertilizer adds to the mineral pools (mass-conserving)" begin
+        ammonium_rate = 4.0e-8   # kgN/m²/s
+        nitrate_rate = 6.0e-8    # kgN/m²/s
+        set!(state.fertilizer_ammonium_flux, ammonium_rate)
+        set!(state.fertilizer_nitrate_flux, nitrate_rate)
+        Terrarium.compute_tendencies!(state, grid, bgc)
+        Δammonium = column(dtend.soil_ammonium) .- base_ammonium
+        Δnitrate = column(dtend.soil_nitrate) .- base_nitrate
+        @test integral(Δammonium) ≈ ammonium_rate rtol = 1e-10   # column integral recovers the flux
+        @test integral(Δnitrate) ≈ nitrate_rate rtol = 1e-10
+        set!(state.fertilizer_ammonium_flux, 0.0)
+        set!(state.fertilizer_nitrate_flux, 0.0)
+    end
+
     @testset "crop uptake draws down mineral N, split by pool share" begin
         # Equal ammonium and nitrate pools → the uptake splits evenly between them.
         set!(state.soil_ammonium, 0.05)

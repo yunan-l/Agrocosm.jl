@@ -64,6 +64,9 @@ Terrarium.variables(::CropSoilBiogeochemistry{NF}) where {NF} = (
     Terrarium.input(:crop_litterfall_carbon, XY(), default = zero(NF), units = u"kg/m^2/s"),
     Terrarium.input(:crop_litterfall_nitrogen, XY(), default = zero(NF), units = u"kg/m^2/s"),
     Terrarium.input(:crop_nitrogen_uptake, XY(), default = zero(NF), units = u"kg/m^2/s"),
+    # Fertilizer: continuous 0D per-area mineral-N application fluxes (see `CropFertilization`).
+    Terrarium.input(:fertilizer_ammonium_flux, XY(), default = zero(NF), units = u"kg/m^2/s"),
+    Terrarium.input(:fertilizer_nitrate_flux, XY(), default = zero(NF), units = u"kg/m^2/s"),
 )
 
 Terrarium.density_pure_soc(bgc::CropSoilBiogeochemistry) = bgc.ρ_org
@@ -181,11 +184,15 @@ end
     total_mineral = max(ammonium + nitrate, eps(NF))
     uptake_ammonium = uptake * ammonium / total_mineral
     uptake_nitrate = uptake * nitrate / total_mineral
+    # Fertilizer application, distributed over the root zone like the crop fluxes.
+    fertilizer_ammonium = fields.fertilizer_ammonium_flux[i, j] * per_volume
+    fertilizer_nitrate = fields.fertilizer_nitrate_flux[i, j] * per_volume
 
     out.litter_carbon[i, j, k] = d_litter + litterfall_carbon
     out.fast_carbon[i, j, k] = d_fast
     out.slow_carbon[i, j, k] = d_slow
-    # Litterfall nitrogen mineralizes into ammonium; crop uptake draws down both mineral pools.
-    out.soil_ammonium[i, j, k] = d_ammonium + litterfall_nitrogen - uptake_ammonium
-    out.soil_nitrate[i, j, k] = d_nitrate - uptake_nitrate
+    # Litterfall nitrogen mineralizes into ammonium; crop uptake draws down both mineral pools;
+    # fertilizer adds to each mineral pool.
+    out.soil_ammonium[i, j, k] = d_ammonium + litterfall_nitrogen - uptake_ammonium + fertilizer_ammonium
+    out.soil_nitrate[i, j, k] = d_nitrate - uptake_nitrate + fertilizer_nitrate
 end
