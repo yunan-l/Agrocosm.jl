@@ -3,3 +3,6 @@
 /docs/Manifest.toml
 /docs/build/
 .DS_Store
+# Sub-environment manifests are machine-specific (dev paths); instantiate from the Project.toml.
+/test/reactant/Manifest.toml
+/examples/autodiff/Manifest.toml

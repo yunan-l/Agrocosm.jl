@@ -2,8 +2,8 @@ using Agrocosm
 using Test
 
 # Agrocosm's crop/soil physics is implemented as continuous-time Terrarium processes; each has its own
-# test under test/crop/. The legacy standalone-API tests were removed in the Phase 6 cleanup (preserved
-# in the git history) alongside the reference implementation they targeted.
+# test under test/crop/. The legacy standalone-API tests were removed (preserved in the git history)
+# alongside the reference implementation they targeted.
 @testset "Agrocosm.jl" begin
     @testset "Numerics" begin
         include("numerics/test_lpj_bisect.jl")
@@ -41,5 +41,6 @@ using Test
         include("crop/test_nitrogen_feedback.jl")
         include("crop/test_crop_soil_coupling.jl")
         include("crop/test_management.jl")
+        include("crop/test_differentiability.jl")
     end
 end

@@ -1,5 +1,7 @@
 [deps]
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
+FiniteDifferences = "26cc04aa-876d-5657-8c51-4c34ba976000"
 SpeedyWeatherInternals = "34489162-d270-4603-8b96-37b04f830d73"
 Terrarium = "80418d68-07fa-499d-ae2b-c12e531f5cd8"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
