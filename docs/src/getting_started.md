@@ -81,10 +81,10 @@ stand is cleared.
 
 ## Differentiability
 
-The crop processes differentiate with Enzyme, on the CPU and through Reactant. Worked examples are in
-`examples/autodiff/`:
+The crop processes differentiate with Enzyme, on the CPU and through Reactant. Reverse-mode adjoints of
+the crop scalar primitives are checked on the CPU in `test/crop/test_differentiability.jl`; model-level
+examples are in `examples/autodiff/`:
 
-- `differentiating_crop_soil.jl` — reverse-mode AD of the crop soil biogeochemistry on the CPU.
 - `crop_soil_reactant.jl` — compiling and running the model through Reactant.
 - `differentiating_crop_soil_reactant.jl` — reverse-mode AD of the Reactant-compiled rollout.
 

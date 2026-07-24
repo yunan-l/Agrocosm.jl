@@ -1,7 +1,10 @@
 # Re-architect Agrocosm.jl onto the Terrarium.jl framework
 
-> Status: **in progress**. Phases 0–5 complete; only the Phase 6 validation/cleanup remains. **The full
-> managed-crop `CropModel` runs end-to-end on CPU**: C3/C4 photosynthesis (matches Terrarium's
+> Status: **in progress**. Phases 0–5 complete; Phase 6 (validation, AD, docs, cleanup) largely done —
+> legacy files deleted, CPU Enzyme + Reactant correctness/autodiff tests and examples added, README/docs
+> rewritten; remaining Phase 6 items are the full 10-year wheat acceptance run (gated on the surface
+> turbulent-flux robustness item) and a final audit pass. **The full managed-crop `CropModel` runs
+> end-to-end on CPU**: C3/C4 photosynthesis (matches Terrarium's
 > LUEPhotosynthesis to rtol 1e-10), stomatal conductance, phenology (prognostic heat units), carbon and
 > nitrogen pools with the N→Vcmax feedback, and a dynamic soil C–N biogeochemistry (litter/fast/slow C +
 > NH₄/NO₃ with mineralization/nitrification/denitrification), all assembled into a Terrarium `LandModel`
@@ -37,6 +40,29 @@ Confirmed design decisions:
 ## Revision log
 
 > 2026-07-23: initial draft.
+>
+> 2026-07-24: **Phase 6 — validation, AD, docs, cleanup (in progress).**
+> - **Legacy cleanup:** deleted the standalone reference implementation (`src/processes/**`,
+>   `src/utils/tools.jl`) and its tests (`test/processes/**`, `test/diagnostics/**`,
+>   `test/simulations/**`, `test/helpers/**`), preserved in git history; `test_pft_registry.jl` moved to
+>   `test/crop/`. The live module is unchanged; the suite stayed green.
+> - **Differentiability:** added CPU Enzyme reverse-mode adjoint tests of the crop scalar primitives vs
+>   finite differences (`test/crop/test_differentiability.jl`, in the main suite). Added a dedicated
+>   `test/reactant/` environment (Julia 1.12) mirroring Terrarium's: CPU-vs-Reactant **correctness**
+>   (`crop_soil_biogeochemistry` on uniform + stretched grids — every field bit-matches, 62/62) and
+>   **Reactant + Enzyme reverse-mode autodiff** through the compiled rollout (gradient finite, nonzero,
+>   checkpointing-invariant, 6/6). Worked examples in `examples/autodiff/` for Reactant and
+>   Enzyme+Reactant (the standalone-CPU-Enzyme example was dropped since Enzyme+Reactant covers
+>   model-level AD; CPU Enzyme is covered by the primitive adjoint tests). The AD/correctness target is
+>   the soil-column crop biogeochemistry, which compiles cleanly under Reactant. The full crop
+>   `LandModel` cannot yet be built on `ReactantState`: the static root-fraction `FunctionField` fails to
+>   trace (`exp(::TracedRArray)` via `sum(R, dims=3)`), a **Terrarium** gap shared by its
+>   `StaticExponentialRootDistribution` and untested upstream (no vegetation in Terrarium's Reactant
+>   suite); pure-Terrarium repro at `docs/dev/2026-07/reactant_rootfraction_repro.jl`. Separately, on CPU
+>   the surface turbulent-flux thermodynamics `DomainError`s at Δt ≳ 1800 s (a `log` of negative
+>   saturation), so the crop `Simulation`/validation run at Δt = 600 s. Both are deferred upstream items.
+> - **Docs:** rewrote README + `docs/src/{index,getting_started,api}.md` and `docs/make.jl` for the
+>   downstream-Terrarium API; removed the superseded wheat example notebook/figure.
 >
 > 2026-07-24: **Phase 4 — crop management (hybrid).** Added `src/crop/management.jl`. Discrete lifecycle
 > events run as Oceananigans `Callback`s on a `Simulation` (the sanctioned continuous-time exception):

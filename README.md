@@ -126,10 +126,9 @@ run!(simulation)
 
 Because the crop processes are differentiable Terrarium kernels, you can take derivatives straight
 through a model integration — the basis for gradient-based calibration and hybrid physics/ML models.
-Worked examples live in `examples/autodiff/`:
+Reverse-mode adjoints of the crop scalar primitives are checked on the CPU in the test suite
+(`test/crop/test_differentiability.jl`); worked model-level examples live in `examples/autodiff/`:
 
-- `differentiating_crop_soil.jl` — reverse-mode AD of the crop soil biogeochemistry on the CPU
-  (Enzyme + Checkpointing.jl).
 - `crop_soil_reactant.jl` — compiling and running the model through Reactant.
 - `differentiating_crop_soil_reactant.jl` — reverse-mode AD of the compiled rollout (Enzyme + Reactant).
 
