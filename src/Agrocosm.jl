@@ -117,6 +117,10 @@ export CropVegetation
 # CFT presets: build the crop processes from the 12-CFT registry (must follow the process includes).
 include("crop/cft_presets.jl")
 
+# Top-level managed-crop model constructor (must follow CropVegetation + the soil biogeochemistry).
+include("crop/crop_model.jl")
+export CropModel
+
 include("crop/soil_carbon.jl")
 export CropSoilCarbon, decomposed_carbon, route_litter_carbon, heterotrophic_respiration
 

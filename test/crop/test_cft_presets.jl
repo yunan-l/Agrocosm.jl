@@ -40,4 +40,14 @@ using Test
         wheat_veg = CropVegetation(Float64, crop_pft("temperate cereals"))
         @test wheat_veg.photosynthesis.pathway isa C3Pathway
     end
+
+    @testset "managed-crop model assembly" begin
+        grid = ColumnGrid(CPU(), ExponentialSpacing(N = 5))
+        model = CropModel(grid, crop_pft("maize"))
+        @test model.vegetation isa CropVegetation
+        @test model.vegetation.photosynthesis.pathway isa C4Pathway
+        @test model.soil.biogeochem isa CropSoilBiogeochemistry
+        # the named-crop convenience form
+        @test CropModel(grid; crop = "temperate cereals").vegetation.photosynthesis.pathway isa C3Pathway
+    end
 end
