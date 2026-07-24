@@ -310,11 +310,17 @@ Confirmed design decisions:
 >   ported `allocate_crop_nitrogen` (nitrogen-conserving). Wired into `CropVegetation`. Spike confirms
 >   crop N accumulates at exactly the target N:C (N/C = 1/30) with organ N conserving the total. **The
 >   crop model now carries three prognostics: heat units, biomass, and nitrogen.**
+> - **Nitrogen → photosynthesis feedback** (refinement): `CropPhotosynthesis` now reads a
+>   `nitrogen_limitation ∈ [0,1]` input that scales Vc_max (hence JC and Rd); `CropNitrogen` computes it
+>   from the leaf N:C ratio between the structural minimum (→0) and a reference (→1), applied as a
+>   lagged field (the standard circular-dependency break) and seeded to 1 in `CropVegetation.initialize!`
+>   so the first assimilation step is unlimited. Default 1 preserves the C3↔LUE equivalence (rtol 1e-10).
+>   Unit-tested; coupled spike green. **The crop nitrogen-productivity feedback loop is now closed**
+>   (leaf N limits photosynthesis → carbon → N uptake → leaf N).
 > - Remaining Phase 5: replace the first-order N uptake with the full demand/uptake kinetics
->   (`CropNitrogenDemand`/`CropNitrogenUptake`) coupled to the soil mineral-N pools, and feed the Vcmax
->   nitrogen limitation back into photosynthesis (all scalar physics already ported/tested); couple the
->   soil C–N transforms to the soil biogeochemistry slot; the LAI-feedback carbon deficit; per-CFT
->   heat-unit requirement (climate-derived); optional multi-crop tiling.
+>   (`CropNitrogenDemand`/`CropNitrogenUptake`) coupled to the soil mineral-N pools; couple the soil C–N
+>   transforms to the soil biogeochemistry slot; the LAI-feedback carbon deficit; per-CFT heat-unit
+>   requirement (climate-derived); optional multi-crop tiling.
 
 ## Problem description
 
