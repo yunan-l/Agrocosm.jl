@@ -10,10 +10,9 @@ simulation, differentiable programming, high-performance computing, and
 machine-learning workflows available within one modelling environment.
 
 Agrocosm takes the crop module of [LPJmL](https://github.com/PIK-LPJmL/LPJmL) as an scientific
-reference. Agrocosm is **not** a line-by-line port of LPJmL. It is an
-independent Julia package that preserves relevant process
-logic while implementing a GPU-aware architecture and enhancing its differentiability. 
-Agrocosm will be further built on [Terrarium.jl](https://github.com/NumericalEarth/Terrarium.jl) (a fast, differentiable, and GPU-aware land modelling across scales) and become its crop module in the coming future. 
+reference. Agrocosm is **not** a line-by-line port of LPJmL. 
+It maintains relevant process logic of LPJmL while implementing a GPU-aware architecture and enhancing its differentiability. 
+Agrocosm will be further built on [Terrarium.jl](https://github.com/NumericalEarth/Terrarium.jl) (a fast and differentiable land modelling across scales) and become its crop module in the coming future. 
 
 > [!WARNING]
 > Agrocosm.jl is under active development with assistance from Codex 🤖, but almost done as a crop model.
