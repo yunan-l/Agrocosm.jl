@@ -36,17 +36,20 @@ Terrarium.compute_auxiliary!(integrator.state, integrator.model)
 fphu = interior(integrator.state.phenology_heat_unit_fraction)[1, 1, 1]
 lai = interior(integrator.state.leaf_area_index)[1, 1, 1]
 gpp = interior(integrator.state.gross_primary_production)[1, 1, 1]
+β = interior(integrator.state.soil_moisture_limiting_factor)[1, 1, 1]
 
 println("SPIKE OK")
 println("  vegetation             = ", typeof(land.vegetation).name.name)
 println("  heat units: ", hu0, " -> ", hu1, " (accumulated over 20 steps)")
 println("  mid-season fphu        = ", fphu)
 println("  leaf_area_index        = ", lai)
+println("  soil_moisture_factor β = ", β)
 println("  gross_primary_prod.    = ", gpp, " kgC/m^2/s")
 
 @assert land.vegetation isa CropVegetation
 @assert hu1 > hu0 "heat units should accumulate at 25 °C"
 @assert fphu ≈ 0.5 rtol = 1e-6
 @assert lai > 0 "mid-season LAI should be positive"
+@assert isfinite(β) "soil-moisture limiting factor should be finite"
 @assert gpp > 0 "mid-season GPP should be positive"
 println("SPIKE ASSERTIONS PASSED")

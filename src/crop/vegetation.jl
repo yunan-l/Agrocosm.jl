@@ -21,6 +21,8 @@ $(TYPEDFIELDS)
         Phenology <: CropPhenology{NF},
         StomatalConductance <: CropStomatalConductance{NF},
         Photosynthesis <: CropPhotosynthesis{NF},
+        RootDistribution <: Terrarium.AbstractRootDistribution{NF},
+        PlantAvailableWater <: Union{Nothing, Terrarium.AbstractPlantAvailableWater{NF}},
     } <: Terrarium.AbstractVegetation{NF}
     "Phenological heat-unit accumulation (prognostic)"
     phenology_dynamics::PhenologyDynamics
@@ -30,29 +32,46 @@ $(TYPEDFIELDS)
     stomatal_conductance::StomatalConductance
     "C3/C4 crop photosynthesis"
     photosynthesis::Photosynthesis
+    "Root distribution (root fraction per soil layer)"
+    root_distribution::RootDistribution
+    "Plant-available-water soil-moisture stress factor β, or `nothing` for a well-watered crop (β=1)"
+    plant_available_water::PlantAvailableWater
 end
 
+# The default is a well-watered crop (β=1). To make photosynthesis respond to soil water, pass
+# `plant_available_water = FieldCapacityLimitedPAW(NF)` AND configure the soil with a clay-bearing
+# texture — the default pure-sand texture gives field_capacity == wilting_point, so β is undefined.
 function CropVegetation(
         ::Type{NF};
         phenology_dynamics = CropPhenologyDynamics(NF),
         phenology = CropPhenology(NF),
         stomatal_conductance = CropStomatalConductance(NF),
         photosynthesis = CropPhotosynthesis(NF),
+        root_distribution = CropRootDistribution(NF),
+        plant_available_water = nothing,
     ) where {NF}
-    return CropVegetation(phenology_dynamics, phenology, stomatal_conductance, photosynthesis)
+    return CropVegetation(
+        phenology_dynamics, phenology, stomatal_conductance, photosynthesis,
+        root_distribution, plant_available_water,
+    )
 end
+
+# Skip the plant-available-water computation when it is not configured (β keeps its default of 1).
+@inline compute_plant_available_water!(state, grid, ::Nothing, soil) = nothing
+@inline compute_plant_available_water!(state, grid, paw, soil) = compute_auxiliary!(state, grid, paw, soil)
 
 """
     $(TYPEDSIGNATURES)
 
-Compute the crop vegetation auxiliaries in dependency order: heat-unit fraction → LAI → stomatal
-conductance (λ) → photosynthesis (GPP). `soil` and any further arguments are accepted for interface
-compatibility but not used by this minimal model.
+Compute the crop vegetation auxiliaries in dependency order: soil-moisture stress β (if configured) →
+heat-unit fraction → LAI → stomatal conductance (λ) → photosynthesis (GPP).
 """
 function Terrarium.compute_auxiliary!(
         state, grid, veg::CropVegetation,
-        constants::Terrarium.PhysicalConstants, atmos::Terrarium.AbstractAtmosphere, args...,
+        constants::Terrarium.PhysicalConstants, atmos::Terrarium.AbstractAtmosphere,
+        soil::Terrarium.AbstractSoil, args...,
     )
+    compute_plant_available_water!(state, grid, veg.plant_available_water, soil)
     compute_auxiliary!(state, grid, veg.phenology_dynamics)
     compute_auxiliary!(state, grid, veg.phenology)
     compute_auxiliary!(state, grid, veg.stomatal_conductance, veg.photosynthesis, constants, atmos)
