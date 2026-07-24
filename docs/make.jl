@@ -17,20 +17,6 @@ makedocs(
     pages = [
         "Home" => "index.md",
         "Getting started" => "getting_started.md",
-        "Model concepts" => [
-            "Overview" => "concepts/overview.md",
-            "State variables" => "concepts/state_lifecycle.md",
-            "Daily process order" => "concepts/daily_processes.md",
-        ],
-        "Using Agrocosm" => [
-            "Inputs and outputs" => "guide/inputs_outputs.md",
-            "CPU, GPU, and precision" => "guide/backends.md",
-            "Checkpoints" => "guide/checkpoints.md",
-        ],
-        "Science and development" => [
-            "Validation and limitations" => "science/validation.md",
-            "Roadmap" => "development/roadmap.md",
-        ],
         "API reference" => "api.md",
     ],
     warnonly = [:missing_docs],

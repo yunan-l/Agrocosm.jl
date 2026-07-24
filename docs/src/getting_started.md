@@ -2,15 +2,8 @@
 
 ## Installation
 
-Agrocosm is not yet registered in Julia's General registry. Install it from
-GitHub or clone the repository:
-
-```julia
-import Pkg
-Pkg.add(url = "https://github.com/yunan-l/Agrocosm.jl")
-```
-
-For development:
+Agrocosm is not yet registered in Julia's General registry. Clone the repository and instantiate its
+project environment:
 
 ```bash
 git clone https://github.com/yunan-l/Agrocosm.jl.git
@@ -18,59 +11,86 @@ cd Agrocosm.jl
 julia --project=. -e 'import Pkg; Pkg.instantiate()'
 ```
 
-Julia 1.10 is currently supported. A CUDA device is optional.
+Agrocosm tracks [Terrarium.jl](https://github.com/NumericalEarth/Terrarium.jl) via a `[sources]` entry
+in `Project.toml`, so instantiation fetches the required Terrarium revision automatically. A CUDA
+device is optional and needed only for GPU execution and the Reactant tests (see below).
 
-## Run the included wheat example
+## Build and run a crop model
 
-The repository includes initial conditions and ten years of daily forcing in
-`examples/`. From the repository root:
+Agrocosm's entry point is [`CropModel`](@ref), which assembles a Terrarium `LandModel` from the crop
+vegetation and the crop soil carbon–nitrogen biogeochemistry for a chosen crop functional type:
 
 ```julia
 using Agrocosm
-using JLD2
+using Terrarium
 
-initial_data = load("examples/initial_wheat.jld2", "initial_data")
-climate = load("examples/climate_2000_2009.jld2", "climate")
+# A single soil column, 20 exponentially stretched layers.
+grid = ColumnGrid(CPU(), ExponentialSpacing(Δz_max = 1.0, N = 20))
 
-simulation = initialize_simulation(
-    cft1,
-    initial_data;
-    indices = [1],
-    device = identity,
-    T = Float32,
-    days = size(climate.temp, 1),
-    fertilizer = :yes,
-)
+# Maize (CFT 3, a C4 crop).
+model = CropModel(grid, crop_pft("maize"))
 
-run_simulation!(simulation, climate)
-summary = simulation_summary(simulation)
+integrator = initialize(model; initializers = (temperature = 20.0,))
+set!(integrator.state.air_temperature, 25.0)
+set!(integrator.state.surface_shortwave_down, 400.0)
+
+run!(integrator; steps = 100, Δt = 600.0)
 ```
 
-`fertilizer` accepts `:no`, `:yes`, or `:auto`: no mineral fertilizer,
-prescribed fertilizer input, or demand-driven automatic mineral N. Manure is
-controlled independently with `manure = true`.
+The 12 LPJmL crop functional types are addressed by name or number through `crop_pft`, or via the
+`cft1`…`cft12` presets:
 
-`cft1` through `cft12` follow the LPJmL crop and management-band order.
-Parameter sets are research defaults, not universal cultivar calibrations.
+```julia
+crop_pft("temperate cereals")   # CFT 1
+crop_pft(3)                      # maize
+```
 
 ## Inspect results
 
-Completed daily outputs are stored under `simulation.output`:
+State variables are Terrarium `Field`s; read their interiors with `interior`:
 
 ```julia
-npp = Array(simulation.output.crop.npp)
-lai = Array(simulation.output.crop.lai)
-soil_water = Array(simulation.output.soil.water_storage)
-water_deficit_percent = Array(simulation.output.crop.water_deficit)
+lai = interior(integrator.state.leaf_area_index)              # crop canopy
+gpp = interior(integrator.state.gross_primary_production)     # crop GPP
+biomass = interior(integrator.state.crop_biomass)             # crop carbon pool
+nitrate = interior(integrator.state.soil_nitrate)             # soil mineral nitrogen
+litter = interior(integrator.state.litter_carbon)             # soil litter carbon
 ```
 
-The canonical numerical state is under `simulation.state`, for example:
+## Crop management
+
+Sowing and harvest are discrete lifecycle events, applied through Oceananigans callbacks on a
+`Simulation`; fertilizer is a continuous input flux. See [`CropCalendar`](@ref),
+[`add_crop_management!`](@ref), and [`add_crop_fertilization!`](@ref):
 
 ```julia
-leaf_carbon = simulation.state.prognostic.crop.carbon.leaf
-soil_liquid_water = simulation.state.prognostic.soil.water.storage
-daily_percolation = simulation.state.fluxes.soil.water.percolation
+simulation = Simulation(integrator; Δt = 600.0, stop_time = 200 * 24 * 3600.0)
+
+calendar = CropCalendar(Float64; sowing_day = 120, harvest_day = 280, residue_fraction = 0.25)
+add_crop_management!(simulation, calendar)
+
+fertilization = CropFertilization(Float64; application_rate = 1e-7, application_start_day = 120, application_end_day = 160)
+add_crop_fertilization!(simulation, fertilization)
+
+run!(simulation)
 ```
 
-Do not treat daily fluxes and auxiliary fields as restart state. See
-[State variables](@ref).
+At `sowing_day` the stand is seeded and the phenological clock is reset; at `harvest_day` the grain is
+exported, the residue is returned to the soil litter over the root zone (mass-conserving), and the
+stand is cleared.
+
+## Differentiability
+
+The crop processes differentiate with Enzyme, on the CPU and through Reactant. Worked examples are in
+`examples/autodiff/`:
+
+- `differentiating_crop_soil.jl` — reverse-mode AD of the crop soil biogeochemistry on the CPU.
+- `crop_soil_reactant.jl` — compiling and running the model through Reactant.
+- `differentiating_crop_soil_reactant.jl` — reverse-mode AD of the Reactant-compiled rollout.
+
+The CPU-vs-Reactant correctness tests and the Reactant autodiff tests live in `test/reactant/` and run
+on Julia 1.12:
+
+```bash
+julia +1.12 --project=test/reactant test/reactant/runtests.jl
+```

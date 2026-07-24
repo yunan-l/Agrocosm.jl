@@ -1,43 +1,41 @@
 # Agrocosm.jl
 
-**Agrocosm.jl is a process-based, GPU-capable Julia model of crop–soil water,
-carbon, nitrogen, and energy dynamics.** It is designed for transparent daily
-simulation from individual sites to batches of independent grid cells.
+**Agrocosm.jl is a process-based, GPU-capable, differentiable Julia model of crop–soil water, carbon,
+nitrogen, and energy dynamics.**
 
-The current model provides C3 and C4 crop pathways, phenology and management,
-five-layer soil hydrology and heat transport, snow and freeze–thaw processes,
-and coupled soil carbon–nitrogen transformations. Carbon, nitrogen, water, and
-thermal balance ledgers make the implementation auditable.
+Agrocosm is a **downstream package built on the [Terrarium.jl](https://github.com/NumericalEarth/Terrarium.jl)
+land-modelling framework**. Terrarium supplies the infrastructure — grids, state, continuous-time
+timestepping, CPU/GPU/Reactant architectures, parameters, I/O, checkpointing, and differentiability —
+and the physical soil and surface processes (soil energy, Richards hydrology, the surface energy
+balance). Agrocosm contributes the crop-specific parts:
 
-Agrocosm uses LPJmL crop and soil processes as an important scientific
-reference, but is an independent Julia implementation rather than a
-line-by-line translation.
+- **Crop physiology** — C3/C4 photosynthesis with the λ water-coupling solver, stomatal conductance,
+  phenology driven by prognostic heat units, carbon and nitrogen pools with the nitrogen→Vcmax
+  feedback, root distribution, and plant-available water.
+- **Soil biogeochemistry** — `CropSoilBiogeochemistry`, with prognostic litter/fast/slow soil carbon
+  and ammonium/nitrate mineral nitrogen, coupled by mineralization, nitrification, and denitrification,
+  and closing the plant↔soil flux loop (crop nitrogen uptake and litter return).
+- **Management** — sowing and harvest as discrete Oceananigans callbacks (the continuous-time
+  framework's sanctioned exception) and fertilizer as a continuous input flux.
+- **A managed-crop model** — `CropModel`, assembling all of the above into a Terrarium `LandModel`, and
+  the 12 LPJmL crop functional types.
+
+The crop physiology uses [LPJmL](https://github.com/PIK-LPJmL/LPJmL) as a scientific reference, but is
+an independent Julia implementation re-expressed as continuous-time, differentiable Terrarium
+processes rather than a line-by-line translation.
 
 ## Why Agrocosm?
 
-- One process implementation runs on CPU and GPU backends.
-- Both `Float32` and `Float64` simulations are supported.
-- Process configuration is separated from the numerical State variables.
-- File checkpoints can resume a simulation at completed daily boundaries.
-- Conservation diagnostics are built into end-to-end simulations.
+- One process implementation runs on CPU and GPU (and compiles through Reactant/XLA).
+- Both `Float32` and `Float64` are supported.
+- The crop processes differentiate with Enzyme — directly on the CPU and through Reactant — for
+  gradient-based calibration and hybrid physics/ML models.
+- Crop physics is modular: alternative photosynthesis, phenology, or biogeochemistry can be swapped in
+  without rebuilding the model.
 
-## Current maturity
-
-The rainfed single-crop C3/C4 pathway is implemented and covered by CPU and
-CUDA-oriented regression tests. The model is under active research
-development: soil/ecosystem spin-up, multi-crop rotations, broader output
-metadata, Penman–Monteith/Medlyn alternatives, and end-to-end automatic
-differentiation are not yet production features.
-
-Start with [Getting started](@ref), then read [Model overview](@ref) and
-[State variables](@ref) before extending a process.
+Start with [Getting started](@ref) to build and run a crop model, then see the [API reference](@ref).
 
 ```@contents
-Pages = [
-    "getting_started.md",
-    "concepts/overview.md",
-    "concepts/state_lifecycle.md",
-    "concepts/daily_processes.md",
-]
+Pages = ["getting_started.md", "api.md"]
 Depth = 2
 ```
