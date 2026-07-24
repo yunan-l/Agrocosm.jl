@@ -20,12 +20,22 @@ using Test
         @test maize.T_photos_low ≈ 21.0 && maize.T_photos_high ≈ 26.0
     end
 
+    @testset "root distribution + nitrogen from the registry" begin
+        # beta_root is CFT-specific: rice (CFT 2) differs from the others.
+        @test CropRootDistribution(Float64, crop_pft(2)).beta_root ≈ 0.91 atol = 1e-6
+        @test CropRootDistribution(Float64, crop_pft(1)).beta_root ≈ 0.94 atol = 1e-6
+        # storage-organ C:N ratio is CFT-specific (storage_ratio): temperate roots (CFT 6) is larger.
+        @test CropNitrogen(Float64, crop_pft(1)).allocation.ratio_storage ≈ 0.99 atol = 1e-6
+        @test CropNitrogen(Float64, crop_pft(6)).allocation.ratio_storage ≈ 1.74 atol = 1e-6
+    end
+
     @testset "vegetation model for a CFT" begin
         veg = CropVegetation(Float64, crop_pft("maize"))
         @test veg isa CropVegetation
         @test veg.photosynthesis.pathway isa C4Pathway
         @test veg.phenology.laimax ≈ 5.0
         @test veg.phenology_dynamics.base_temperature ≈ 5.0   # maize basetemp
+        @test veg.root_distribution.beta_root ≈ 0.94 atol = 1e-6
         # a C3 crop for contrast
         wheat_veg = CropVegetation(Float64, crop_pft("temperate cereals"))
         @test wheat_veg.photosynthesis.pathway isa C3Pathway

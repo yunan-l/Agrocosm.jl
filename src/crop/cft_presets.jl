@@ -38,6 +38,15 @@ function CropPhenologyDynamics(::Type{NF}, pft::PftParameters) where {NF}
     return CropPhenologyDynamics(NF; base_temperature = NF(pft.basetemp.low))
 end
 
+"""$(TYPEDSIGNATURES) Crop root distribution for a CFT (exponential β profile from the registry)."""
+CropRootDistribution(::Type{NF}, pft::PftParameters) where {NF} =
+    CropRootDistribution(NF; beta_root = NF(pft.beta_root))
+
+"""$(TYPEDSIGNATURES) Crop nitrogen pool for a CFT (storage-organ C:N ratio from the registry)."""
+function CropNitrogen(::Type{NF}, pft::PftParameters) where {NF}
+    return CropNitrogen(NF; allocation = CropNitrogenAllocation(NF; ratio_storage = NF(pft.ratio.sto)))
+end
+
 """
     $(TYPEDSIGNATURES)
 
@@ -50,6 +59,8 @@ function CropVegetation(::Type{NF}, pft::PftParameters) where {NF}
         phenology_dynamics = CropPhenologyDynamics(NF, pft),
         phenology = CropPhenology(NF, pft),
         photosynthesis = CropPhotosynthesis(NF, pft),
+        root_distribution = CropRootDistribution(NF, pft),
+        nitrogen = CropNitrogen(NF, pft),
         # PFT specific leaf area is m²/gC; the carbon pool uses m²/kgC.
         carbon = CropCarbon(NF; specific_leaf_area = NF(pft.sla) * NF(1000)),
     )
