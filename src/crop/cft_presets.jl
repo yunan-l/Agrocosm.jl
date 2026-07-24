@@ -50,5 +50,7 @@ function CropVegetation(::Type{NF}, pft::PftParameters) where {NF}
         phenology_dynamics = CropPhenologyDynamics(NF, pft),
         phenology = CropPhenology(NF, pft),
         photosynthesis = CropPhotosynthesis(NF, pft),
+        # PFT specific leaf area is m²/gC; the carbon pool uses m²/kgC.
+        carbon = CropCarbon(NF; specific_leaf_area = NF(pft.sla) * NF(1000)),
     )
 end

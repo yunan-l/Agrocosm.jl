@@ -23,6 +23,7 @@ $(TYPEDFIELDS)
         Photosynthesis <: CropPhotosynthesis{NF},
         RootDistribution <: Terrarium.AbstractRootDistribution{NF},
         PlantAvailableWater <: Union{Nothing, Terrarium.AbstractPlantAvailableWater{NF}},
+        Carbon <: CropCarbon{NF},
     } <: Terrarium.AbstractVegetation{NF}
     "Phenological heat-unit accumulation (prognostic)"
     phenology_dynamics::PhenologyDynamics
@@ -36,6 +37,8 @@ $(TYPEDFIELDS)
     root_distribution::RootDistribution
     "Plant-available-water soil-moisture stress factor β, or `nothing` for a well-watered crop (β=1)"
     plant_available_water::PlantAvailableWater
+    "Prognostic crop carbon pool + organ partitioning"
+    carbon::Carbon
 end
 
 # The default is a well-watered crop (β=1). To make photosynthesis respond to soil water, pass
@@ -49,10 +52,11 @@ function CropVegetation(
         photosynthesis = CropPhotosynthesis(NF),
         root_distribution = CropRootDistribution(NF),
         plant_available_water = nothing,
+        carbon = CropCarbon(NF),
     ) where {NF}
     return CropVegetation(
         phenology_dynamics, phenology, stomatal_conductance, photosynthesis,
-        root_distribution, plant_available_water,
+        root_distribution, plant_available_water, carbon,
     )
 end
 
@@ -76,11 +80,13 @@ function Terrarium.compute_auxiliary!(
     compute_auxiliary!(state, grid, veg.phenology)
     compute_auxiliary!(state, grid, veg.stomatal_conductance, veg.photosynthesis, constants, atmos)
     compute_auxiliary!(state, grid, veg.photosynthesis, veg.stomatal_conductance, constants, atmos)
+    compute_auxiliary!(state, grid, veg.carbon)   # organ partitioning + NPP (needs GPP)
     return nothing
 end
 
-""" $(TYPEDSIGNATURES) Integrate the prognostic phenological heat units. """
+""" $(TYPEDSIGNATURES) Integrate the prognostic phenological heat units and crop biomass. """
 function Terrarium.compute_tendencies!(state, grid, veg::CropVegetation, args...)
     compute_tendencies!(state, grid, veg.phenology_dynamics)
+    compute_tendencies!(state, grid, veg.carbon)
     return nothing
 end

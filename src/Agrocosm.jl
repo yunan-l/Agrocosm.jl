@@ -99,6 +99,9 @@ export CropHarvestIndex, crop_harvest_index
 include("crop/carbon_allocation.jl")
 export CropCarbonAllocation, root_allocation_fraction, leaf_carbon_from_lai
 
+include("crop/carbon.jl")
+export CropCarbon, crop_carbon_budget
+
 # ---------------------------------------------------------------------------
 # Phase 5 — crop vegetation model assembling the crop processes.
 # ---------------------------------------------------------------------------
