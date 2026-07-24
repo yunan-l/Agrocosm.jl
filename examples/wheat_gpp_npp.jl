@@ -1,55 +1,68 @@
-# # A ten-year wheat GPP/NPP simulation
+# # A ten-year wheat GPP/NPP simulation driven by real climate data
 #
-# This example runs a single-column temperate-cereals (wheat, CFT 1) crop for ten years under a
-# synthetic seasonal climate, sowing and harvesting each year through the crop management events, and
-# records the annual gross and net primary production, the peak leaf area index, and the harvest yield.
-# It exercises the whole managed-crop stack — phenology, photosynthesis, the carbon and nitrogen pools,
-# the soil carbon–nitrogen biogeochemistry, and the sowing/harvest lifecycle — and shows that the crop
-# settles into a stable, repeating seasonal carbon cycle.
+# This example reproduces the spirit of Agrocosm's original wheat example on the Terrarium stack: it
+# runs a single-column temperate-cereals (wheat, CFT 1) crop for ten years, **driven by ten years of
+# daily climate forcing** loaded from `climate_2000_2009.jld2`, sowing and harvesting each year through
+# the crop management events, and recording the annual gross and net primary production, the peak leaf
+# area index, and the harvest yield.
+#
+# The climate forcing is fed in the Terrarium-idiomatic way: `surface_climate_inputs` packs the daily
+# series into Oceananigans `FieldTimeSeries` wrapped in Terrarium `FieldTimeSeriesInputSource`s, and
+# `run!` interpolates them to the current time on every step — no manual per-step `set!` of the forcing.
 #
 # Run:  julia --project=. examples/wheat_gpp_npp.jl
 
 using Agrocosm
 using Terrarium
+using JLD2
 
-const DAY = Terrarium.seconds_per_day(Float64)
-const YEAR_DAYS = 365
-const NYEARS = 10
+const NF = Float64
 const SUBSTEPS = 144        # Δt = 600 s → 144 sub-steps per day
 const Δt = 600.0
 
-# A single wheat column.
+# --- load ten years of daily forcing for one grid cell -------------------------------------
+climate = load(joinpath(@__DIR__, "climate_2000_2009.jld2"), "climate")
+cell = 1
+air_temperature = NF.(climate.temp[:, cell])         # °C
+surface_shortwave = NF.(climate.swdown[:, cell])     # W/m²
+ndays = length(air_temperature)                      # 3650 = 10 × 365
+nyears = ndays ÷ 365
+
+# One extra endpoint so the final day stays within the time-series range (no extrapolation).
+times = (0:ndays) .* Terrarium.seconds_per_day(NF)
+append_last(v) = vcat(v, v[end])
+
 grid = ColumnGrid(CPU(), ExponentialSpacing(Δz_max = 1.0, N = 20))
 model = CropModel(grid, crop_pft("temperate cereals"))
-integrator = initialize(model; initializers = (temperature = 8.0,))
-state = integrator.state
 
-# Physical atmospheric forcing held constant (pressure, humidity, wind, downwelling longwave, CO₂) so
-# the surface energy balance stays well-posed; temperature and shortwave follow the season.
+# Time-varying temperature and shortwave come from the input sources; the remaining atmospheric forcing
+# is held at physical constants (kept well-posed for the surface energy balance).
+climate_inputs = surface_climate_inputs(
+    grid, times;
+    air_temperature = append_last(air_temperature),
+    surface_shortwave_down = append_last(surface_shortwave),
+)
+
+integrator = initialize(model; inputs = climate_inputs, initializers = (temperature = 2.0,))
+state = integrator.state
 set!(state.air_pressure, 101325.0)
 set!(state.specific_humidity, 0.006)
 set!(state.windspeed, 2.0)
 set!(state.surface_longwave_down, 300.0)
 set!(state.CO2, 400.0)
 
-# Northern-hemisphere growing season: air temperature and incoming shortwave peak near midsummer.
-seasonal_temperature(doy) = 10.0 + 12.0 * sin(2π * (doy - 100) / YEAR_DAYS)          # °C
-seasonal_shortwave(doy) = 150.0 + 200.0 * max(0.0, sin(2π * (doy - 100) / YEAR_DAYS))  # W/m²
+calendar = CropCalendar(NF; sowing_day = 90, harvest_day = 240, residue_fraction = 0.25)
 
-# Spring wheat: sow in spring, harvest in late summer.
-calendar = CropCalendar(Float64; sowing_day = 90, harvest_day = 240, residue_fraction = 0.25)
+annual_gpp = zeros(nyears)
+annual_npp = zeros(nyears)
+annual_yield = zeros(nyears)
+peak_lai = zeros(nyears)
 
-annual_gpp = zeros(NYEARS)
-annual_npp = zeros(NYEARS)
-annual_yield = zeros(NYEARS)
-peak_lai = zeros(NYEARS)
-
-# Step day by day: update the daily forcing, apply sowing/harvest at the season boundaries, advance the
-# continuous dynamics for a day, and accumulate the daily carbon fluxes.
-for year in 1:NYEARS
-    for doy in 1:YEAR_DAYS
-        set!(state.air_temperature, seasonal_temperature(doy))
-        set!(state.surface_shortwave_down, seasonal_shortwave(doy))
+# Step day by day: apply sowing/harvest at the season boundaries and advance a day; `run!` pulls the
+# interpolated temperature/shortwave from the input sources automatically.
+DAY = Terrarium.seconds_per_day(NF)
+for year in 1:nyears
+    for doy in 1:365
         doy == calendar.sowing_day && sow!(integrator, calendar)
         doy == calendar.harvest_day && (annual_yield[year] = harvest!(integrator, calendar))
         run!(integrator; steps = SUBSTEPS, Δt = Δt)
@@ -63,6 +76,4 @@ for year in 1:NYEARS
     flush(stdout)
 end
 
-# After the first (spin-up) year the crop reaches a stable, repeating seasonal cycle.
-mean_gpp = sum(annual_gpp[3:NYEARS]) / (NYEARS - 2)
-println("mean GPP (years 3–10) = ", round(mean_gpp, digits = 4), " kgC/m²/yr")
+println("mean GPP (all years) = ", round(sum(annual_gpp) / nyears, digits = 4), " kgC/m²/yr")

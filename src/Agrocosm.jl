@@ -51,6 +51,13 @@ export cft1, cft2, cft3, cft4, cft5, cft6, cft7, cft8, cft9, cft10, cft11, cft12
 export lpj_bisect
 
 # ---------------------------------------------------------------------------
+# Input data handling: build Terrarium time-varying input sources from tabulated
+# climate series (reuses Oceananigans `FieldTimeSeries` + Terrarium input sources).
+# ---------------------------------------------------------------------------
+include("input_output/climate_forcing.jl")
+export surface_climate_inputs
+
+# ---------------------------------------------------------------------------
 # Crop processes (Terrarium-native, continuous-time), ported from the legacy
 # discrete-daily LPJmL-derived implementation (now in the git history).
 # ---------------------------------------------------------------------------
