@@ -35,9 +35,6 @@ We want Agrocosm to be:
 - **Open and community-oriented**, providing a foundation that can incorporate
   new crop physiology and collaborate with the wider crop-modelling community.
 
-Agrocosm keeps an independent crop-model architecture, while aiming to remain suitable for
-future coupling with land and Earth system modelling frameworks.
-
 ## Current scope
 
 Agrocosm currently focuses on daily, gridded simulations of a single crop.
