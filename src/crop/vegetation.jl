@@ -24,6 +24,7 @@ $(TYPEDFIELDS)
         RootDistribution <: Terrarium.AbstractRootDistribution{NF},
         PlantAvailableWater <: Union{Nothing, Terrarium.AbstractPlantAvailableWater{NF}},
         Carbon <: CropCarbon{NF},
+        Nitrogen <: CropNitrogen{NF},
     } <: Terrarium.AbstractVegetation{NF}
     "Phenological heat-unit accumulation (prognostic)"
     phenology_dynamics::PhenologyDynamics
@@ -39,6 +40,8 @@ $(TYPEDFIELDS)
     plant_available_water::PlantAvailableWater
     "Prognostic crop carbon pool + organ partitioning"
     carbon::Carbon
+    "Prognostic crop nitrogen pool + organ partitioning"
+    nitrogen::Nitrogen
 end
 
 # The default is a well-watered crop (β=1). To make photosynthesis respond to soil water, pass
@@ -53,10 +56,11 @@ function CropVegetation(
         root_distribution = CropRootDistribution(NF),
         plant_available_water = nothing,
         carbon = CropCarbon(NF),
+        nitrogen = CropNitrogen(NF),
     ) where {NF}
     return CropVegetation(
         phenology_dynamics, phenology, stomatal_conductance, photosynthesis,
-        root_distribution, plant_available_water, carbon,
+        root_distribution, plant_available_water, carbon, nitrogen,
     )
 end
 
@@ -80,13 +84,15 @@ function Terrarium.compute_auxiliary!(
     compute_auxiliary!(state, grid, veg.phenology)
     compute_auxiliary!(state, grid, veg.stomatal_conductance, veg.photosynthesis, constants, atmos)
     compute_auxiliary!(state, grid, veg.photosynthesis, veg.stomatal_conductance, constants, atmos)
-    compute_auxiliary!(state, grid, veg.carbon)   # organ partitioning + NPP (needs GPP)
+    compute_auxiliary!(state, grid, veg.carbon)     # organ carbon partitioning + NPP (needs GPP)
+    compute_auxiliary!(state, grid, veg.nitrogen)   # organ nitrogen partitioning (needs organ carbon)
     return nothing
 end
 
-""" $(TYPEDSIGNATURES) Integrate the prognostic phenological heat units and crop biomass. """
+""" $(TYPEDSIGNATURES) Integrate the prognostic heat units, crop biomass, and crop nitrogen. """
 function Terrarium.compute_tendencies!(state, grid, veg::CropVegetation, args...)
     compute_tendencies!(state, grid, veg.phenology_dynamics)
     compute_tendencies!(state, grid, veg.carbon)
+    compute_tendencies!(state, grid, veg.nitrogen)
     return nothing
 end

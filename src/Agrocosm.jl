@@ -102,6 +102,12 @@ export CropCarbonAllocation, root_allocation_fraction, leaf_carbon_from_lai
 include("crop/carbon.jl")
 export CropCarbon, crop_carbon_budget
 
+include("crop/nitrogen_allocation.jl")
+export CropNitrogenAllocation, allocate_crop_nitrogen
+
+include("crop/nitrogen.jl")
+export CropNitrogen
+
 # ---------------------------------------------------------------------------
 # Phase 5 — crop vegetation model assembling the crop processes.
 # ---------------------------------------------------------------------------
@@ -110,9 +116,6 @@ export CropVegetation
 
 # CFT presets: build the crop processes from the 12-CFT registry (must follow the process includes).
 include("crop/cft_presets.jl")
-
-include("crop/nitrogen_allocation.jl")
-export CropNitrogenAllocation, allocate_crop_nitrogen
 
 include("crop/soil_carbon.jl")
 export CropSoilCarbon, decomposed_carbon, route_litter_carbon, heterotrophic_respiration

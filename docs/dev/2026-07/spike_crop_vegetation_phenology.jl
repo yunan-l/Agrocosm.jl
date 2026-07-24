@@ -34,10 +34,19 @@ npp = interior(integrator.state.net_primary_production)[1, 1, 1]
 biomass0 = interior(integrator.state.crop_biomass)[1, 1, 1]
 hu0 = interior(integrator.state.phenological_heat_units)[1, 1, 1]
 
-# Integrate: crop biomass should accumulate NPP and heat units should keep rising.
+nitrogen0 = interior(integrator.state.crop_nitrogen)[1, 1, 1]
+
+# Integrate: crop biomass and nitrogen should accumulate; heat units keep rising.
 run!(integrator; steps = 20)
 biomass1 = interior(integrator.state.crop_biomass)[1, 1, 1]
+nitrogen1 = interior(integrator.state.crop_nitrogen)[1, 1, 1]
 hu1 = interior(integrator.state.phenological_heat_units)[1, 1, 1]
+
+# Organ nitrogen partitioning should conserve the total plant nitrogen.
+Terrarium.compute_auxiliary!(integrator.state, integrator.model)
+leaf_n = interior(integrator.state.leaf_nitrogen)[1, 1, 1]
+root_n = interior(integrator.state.root_nitrogen)[1, 1, 1]
+storage_n = interior(integrator.state.storage_nitrogen)[1, 1, 1]
 
 println("SPIKE OK")
 println("  vegetation             = ", typeof(land.vegetation).name.name)
@@ -45,8 +54,10 @@ println("  mid-season fphu        = ", fphu)
 println("  leaf_area_index        = ", lai)
 println("  gross_primary_prod.    = ", gpp, " kgC/m^2/s")
 println("  net_primary_prod.      = ", npp, " kgC/m^2/s")
-println("  crop_biomass: ", biomass0, " -> ", biomass1, " kgC/m^2 (accumulated over 20 steps)")
-println("  heat units:   ", hu0, " -> ", hu1)
+println("  crop_biomass:  ", biomass0, " -> ", biomass1, " kgC/m^2 (accumulated over 20 steps)")
+println("  crop_nitrogen: ", nitrogen0, " -> ", nitrogen1, " kgN/m^2")
+println("  organ N (leaf/root/storage) = ", (leaf_n, root_n, storage_n), " sum=", leaf_n + root_n + storage_n)
+println("  heat units:    ", hu0, " -> ", hu1)
 
 @assert land.vegetation isa CropVegetation
 @assert fphu ≈ 0.5 rtol = 1e-6
@@ -54,5 +65,7 @@ println("  heat units:   ", hu0, " -> ", hu1)
 @assert gpp > 0 "mid-season GPP should be positive"
 @assert npp > 0 "mid-season NPP should be positive"
 @assert biomass1 > biomass0 "crop biomass should accumulate NPP"
+@assert nitrogen1 > nitrogen0 "crop nitrogen should accumulate with carbon gain"
+@assert leaf_n + root_n + storage_n ≈ nitrogen1 rtol = 1e-6 "organ nitrogen should conserve the total"
 @assert hu1 > hu0 "heat units should keep accumulating at 25 °C"
 println("SPIKE ASSERTIONS PASSED")

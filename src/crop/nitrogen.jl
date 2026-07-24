@@ -1,0 +1,73 @@
+# Prognostic crop nitrogen pool. Total plant nitrogen (kgN/m²) is acquired in proportion to the net
+# carbon gain at the plant's target nitrogen:carbon ratio, and is partitioned into leaf/root/storage
+# organs each step by the ported allocation primitive (nitrogen-conserving):
+#
+#   d(N)/dt = max(0, NPP)·target_nc_ratio
+#   (leaf_N, root_N, storage_N) = allocate_crop_nitrogen(N, leaf_C, root_C, storage_C)
+#
+# This is a first-order closure of the crop nitrogen loop that keeps the plant N:C near its target as
+# biomass grows. The full demand/uptake kinetics (CropNitrogenDemand/CropNitrogenUptake) coupled to
+# the soil mineral-N pools, and the Vcmax nitrogen feedback into photosynthesis, are the next
+# refinements (the scalar physics for all of these is already ported and tested).
+
+"""
+    $(TYPEDEF)
+
+Prognostic crop nitrogen pool and organ partitioning.
+
+Properties:
+$(TYPEDFIELDS)
+"""
+@kwdef struct CropNitrogen{NF} <: Terrarium.AbstractProcess{NF}
+    "Organ nitrogen-allocation ratios"
+    allocation::CropNitrogenAllocation{NF} = CropNitrogenAllocation(NF)
+    "Target plant nitrogen:carbon ratio (gN/gC) governing uptake per unit carbon gain"
+    target_nc_ratio::NF = 1 / 30
+end
+
+CropNitrogen(::Type{NF}; kwargs...) where {NF} = CropNitrogen{NF}(; kwargs...)
+
+Terrarium.variables(::CropNitrogen{NF}) where {NF} = (
+    Terrarium.prognostic(:crop_nitrogen, XY(), units = u"kg/m^2"),
+    Terrarium.auxiliary(:leaf_nitrogen, XY(), units = u"kg/m^2"),
+    Terrarium.auxiliary(:root_nitrogen, XY(), units = u"kg/m^2"),
+    Terrarium.auxiliary(:storage_nitrogen, XY(), units = u"kg/m^2"),
+    Terrarium.input(:net_primary_production, XY(), units = u"kg/m^2/s"),
+    Terrarium.input(:leaf_carbon, XY(), units = u"kg/m^2"),
+    Terrarium.input(:root_carbon, XY(), units = u"kg/m^2"),
+    Terrarium.input(:storage_carbon, XY(), units = u"kg/m^2"),
+)
+
+# ---- interface methods --------------------------------------------------------------------
+
+""" $(TYPEDSIGNATURES) """
+function Terrarium.compute_auxiliary!(state, grid, n::CropNitrogen, args...)
+    out = Terrarium.auxiliary_fields(state, n)
+    fields = get_fields(state, n; except = out)
+    launch!(grid, XY, compute_crop_nitrogen_auxiliary_kernel!, out, fields, n)
+    return nothing
+end
+
+""" $(TYPEDSIGNATURES) Acquire nitrogen in proportion to net carbon gain at the target N:C ratio. """
+function Terrarium.compute_tendencies!(state, grid, n::CropNitrogen, args...)
+    tend = Terrarium.tendency_fields(state, n)
+    fields = get_fields(state, n)
+    launch!(grid, XY, compute_crop_nitrogen_tendency_kernel!, tend, fields, n)
+    return nothing
+end
+
+@kernel inbounds = true function compute_crop_nitrogen_auxiliary_kernel!(out, grid, fields, n::CropNitrogen)
+    i, j = @index(Global, NTuple)
+    leaf, root, storage, _pool = allocate_crop_nitrogen(
+        n.allocation, fields.crop_nitrogen[i, j],
+        fields.leaf_carbon[i, j], fields.root_carbon[i, j], fields.storage_carbon[i, j], zero(eltype(out.leaf_nitrogen)),
+    )
+    out.leaf_nitrogen[i, j, 1] = leaf
+    out.root_nitrogen[i, j, 1] = root
+    out.storage_nitrogen[i, j, 1] = storage
+end
+
+@kernel inbounds = true function compute_crop_nitrogen_tendency_kernel!(tend, grid, fields, n::CropNitrogen)
+    i, j = @index(Global, NTuple)
+    tend.crop_nitrogen[i, j, 1] = max(zero(eltype(tend.crop_nitrogen)), fields.net_primary_production[i, j]) * n.target_nc_ratio
+end
