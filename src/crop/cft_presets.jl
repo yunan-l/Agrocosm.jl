@@ -32,10 +32,12 @@ function CropPhotosynthesis(::Type{NF}, pft::PftParameters) where {NF}
 end
 
 """$(TYPEDSIGNATURES) Crop heat-unit accumulation for a CFT (base temperature from the registry)."""
-function CropPhenologyDynamics(::Type{NF}, pft::PftParameters) where {NF}
-    # heat_unit_requirement is climate-derived (sowing→maturity heat sum) and kept at its default;
-    # the base temperature comes from the CFT trait.
-    return CropPhenologyDynamics(NF; base_temperature = NF(pft.basetemp.low))
+function CropPhenologyDynamics(::Type{NF}, pft::PftParameters; heat_unit_requirement = nothing) where {NF}
+    # The base temperature comes from the CFT trait. `heat_unit_requirement` is the sowing→maturity heat
+    # sum: climate/site-derived, so it defaults to the process default and can be overridden per site
+    # (e.g. from an initial-condition file).
+    phu = isnothing(heat_unit_requirement) ? (;) : (; heat_unit_requirement = NF(heat_unit_requirement))
+    return CropPhenologyDynamics(NF; base_temperature = NF(pft.basetemp.low), phu...)
 end
 
 """$(TYPEDSIGNATURES) Crop root distribution for a CFT (exponential β profile from the registry)."""
@@ -53,10 +55,10 @@ end
 Crop vegetation model for a CFT: assembles the per-crop phenology dynamics, LAI trajectory, and C3/C4
 photosynthesis from the registry entry `pft` (e.g. `crop_pft(:maize)`).
 """
-function CropVegetation(::Type{NF}, pft::PftParameters) where {NF}
+function CropVegetation(::Type{NF}, pft::PftParameters; heat_unit_requirement = nothing) where {NF}
     return CropVegetation(
         NF;
-        phenology_dynamics = CropPhenologyDynamics(NF, pft),
+        phenology_dynamics = CropPhenologyDynamics(NF, pft; heat_unit_requirement),
         phenology = CropPhenology(NF, pft),
         photosynthesis = CropPhotosynthesis(NF, pft),
         root_distribution = CropRootDistribution(NF, pft),

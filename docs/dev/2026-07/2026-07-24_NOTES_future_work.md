@@ -54,17 +54,26 @@ Date started: 2026-07-24
   / limitation) is ported and tested but the soil biogeochemistry currently uses net mineralization at
   the soil C:N ratio directly; wire the immobilization limitation into the NH₄ tendency.
 
-## Not yet re-implemented on the Terrarium stack (gaps from the original code)
+## Input data handling — status
 
-- **Input data loading.** The original `InitialDataLoader` and `ClimateDataLoader`
-  (`src/input_output/`) were removed in the infrastructure swap, and the richer companion package
-  `lib/AgrocosmData/` (NetCDF climate blocks, soil lookup, management bands, crop masks, CO₂ series,
-  grid indexing) is **not wired to the new model** — it still targets the old ModelState schema and is
-  not a dependency of the main package. Every current example and the 10-year validation uses
-  **synthetic forcing** (`set!` + seasonal functions). To run on real data, connect either Terrarium's
-  I/O (`FieldTimeSeries`/input readers) or an updated `AgrocosmData` to the crop model's input fields
-  (`air_temperature`, `surface_shortwave_down`, soil texture, sowing calendars, CO₂, …), and provide a
-  real-IC initializer. **This is the main thing standing between the model and a real gridded run.**
+- **Climate forcing: done (reusing Terrarium/Oceananigans).** `surface_climate_inputs`
+  (`src/input_output/climate_forcing.jl`) packs tabulated daily series into Oceananigans
+  `FieldTimeSeries` wrapped in Terrarium `FieldTimeSeriesInputSource`s, which `run!` interpolates to the
+  current time every step. It takes a vector (horizontally uniform) or a `time × column` matrix
+  (per-column, for global grids). Worked examples: `examples/wheat_gpp_npp.jl` (single column, ten years
+  of real daily climate → interannual GPP variability) and `examples/wheat_gpp_npp_global.jl` (a batch
+  of columns on a global `ColumnRingGrid`). JLD2 and RingGrids were added as dependencies.
+- **Still open:**
+  - **Initial conditions** still come from the model's default initializers + a scalar `temperature`;
+    the original `InitialDataLoader` (crop stand, soil pools, per-site parameters) is not wired. Add a
+    real-IC initializer (or read `initial_wheat.jld2` into the state).
+  - **Soil texture, sowing calendars, CO₂ time series, management bands** are still constants/defaults —
+    only temperature and shortwave are data-driven so far. Extend the input path to these.
+  - **`lib/AgrocosmData/`** (NetCDF climate blocks, soil lookup, crop masks, grid indexing) still targets
+    the old ModelState schema and is not connected; refresh it to feed `surface_climate_inputs` /
+    Terrarium initializers, or retire it in favour of Terrarium I/O.
+  - **Geography:** the global example *tiles* the available climate cells across the grid rather than
+    placing them at their true coordinates; a real run needs proper lon/lat mapping (and a land mask).
 
 - **Runtime balance/diagnostic ledgers.** The original per-quantity ledgers
   (`src/diagnostics/{carbon,nitrogen,thermal,water}_balance.jl`) were removed; conservation is now

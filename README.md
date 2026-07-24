@@ -101,6 +101,17 @@ interior(integrator.state.soil_nitrate)              # soil mineral nitrogen
 The 12 LPJmL crop functional types are available through `crop_pft(name_or_number)` (e.g.
 `crop_pft("temperate cereals")`, `crop_pft(3)`) or the `cft1`…`cft12` presets.
 
+## Data-driven runs
+
+Real forcing and initial conditions are fed through Terrarium's input system: `surface_climate_inputs`
+packs daily climate series into Oceananigans `FieldTimeSeries` input sources (interpolated each step),
+and `load_crop_initial_conditions` reads a site's sowing date, heat-unit requirement, residue fraction,
+and initial soil carbon. Two worked examples reproduce (on the new stack) the original wheat example:
+
+- `examples/wheat_gpp_npp.jl` — a ten-year single-column wheat run driven by daily climate and
+  initialised from `initial_wheat.jld2`.
+- `examples/wheat_gpp_npp_global.jl` — the same over a batch of columns on a global `ColumnRingGrid`.
+
 ## Crop management
 
 Sowing and harvest are genuine discrete lifecycle events, implemented as

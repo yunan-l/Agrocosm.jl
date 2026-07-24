@@ -57,6 +57,33 @@ nitrate = interior(integrator.state.soil_nitrate)             # soil mineral nit
 litter = interior(integrator.state.litter_carbon)             # soil litter carbon
 ```
 
+## Driving the model with climate data
+
+Instead of constant forcing, drive the model with tabulated climate series through Terrarium's
+time-varying input sources. [`surface_climate_inputs`](@ref) packs each daily series into an
+Oceananigans `FieldTimeSeries` wrapped in a `FieldTimeSeriesInputSource`; passing the result as
+`inputs` lets `run!` interpolate the forcing to the current time on every step — no manual per-step
+`set!`:
+
+```julia
+using JLD2
+climate = load("examples/climate_2000_2009.jld2", "climate")   # 3650 days × cells
+temp = Float64.(climate.temp[:, 1])                            # °C
+shortwave = Float64.(climate.swdown[:, 1])                     # W/m²
+times = (0:length(temp) - 1) .* Terrarium.seconds_per_day(Float64)
+
+inputs = surface_climate_inputs(grid, times; air_temperature = temp, surface_shortwave_down = shortwave)
+integrator = initialize(model; inputs, initializers = (temperature = 2.0,))
+run!(integrator; steps = 144, Δt = 600.0)                     # one day of forcing
+```
+
+`surface_climate_inputs` also accepts a `time × column` matrix per variable, giving each column of a
+multi-column / global [`ColumnRingGrid`](@extref Terrarium.ColumnRingGrid) its own series. The complete
+worked runs are in `examples/`:
+
+- `wheat_gpp_npp.jl` — a ten-year single-column wheat run driven by the daily climate.
+- `wheat_gpp_npp_global.jl` — the same over a batch of columns on a global grid.
+
 ## Crop management
 
 Sowing and harvest are discrete lifecycle events, applied through Oceananigans callbacks on a

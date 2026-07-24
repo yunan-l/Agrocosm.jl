@@ -15,6 +15,9 @@ using DocStringExtensions
 using SpeedyWeatherInternals.ParameterEditing: ParameterEditing, @parameterized,
     Positive, Nonnegative, Unbounded, UnitInterval
 
+# Reading legacy input-data files (climate/initial-condition JLD2).
+import JLD2
+
 # Framework internals used when authoring processes and kernels.
 using Oceananigans.Fields: FunctionField
 using Oceananigans.Utils: launch!
@@ -56,6 +59,8 @@ export lpj_bisect
 # ---------------------------------------------------------------------------
 include("input_output/climate_forcing.jl")
 export surface_climate_inputs
+include("input_output/crop_initial_conditions.jl")
+export load_crop_initial_conditions
 
 # ---------------------------------------------------------------------------
 # Crop processes (Terrarium-native, continuous-time), ported from the legacy

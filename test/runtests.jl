@@ -42,5 +42,6 @@ using Test
         include("crop/test_crop_soil_coupling.jl")
         include("crop/test_management.jl")
         include("crop/test_differentiability.jl")
+        include("crop/test_climate_forcing.jl")
     end
 end
