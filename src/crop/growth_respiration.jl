@@ -1,7 +1,7 @@
 # Crop growth respiration and net primary production. A fixed fraction `r_growth` of the assimilate
 # remaining after maintenance respiration is spent on growth respiration (LPJmL `r_growth = 0.25`):
 # Rg = r_growth·max(0, GPP − Rm), and NPP = GPP − Rm − Rg. This is the tested scalar physics; it is
-# applied within the crop carbon coupling (plan Phase 5).
+# applied within the crop carbon coupling.
 
 """
     $(TYPEDEF)

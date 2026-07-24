@@ -2,8 +2,8 @@
 # interface, so it slots into a `LandModel` alongside Terrarium's soil, surface, and atmosphere. The
 # crop leaf area index is driven by the prognostic phenological heat units (not a carbon-pool
 # equilibrium): heat units accumulate with temperature, set the heat-unit fraction, which drives the
-# LAI trajectory, which feeds photosynthesis. This is the Phase 5 assembly of the ported crop
-# primitives; the multi-organ carbon/nitrogen pools and soil C–N coupling are added incrementally.
+# LAI trajectory, which feeds photosynthesis. It assembles the ported crop primitives with the
+# multi-organ carbon/nitrogen pools and the soil C–N coupling.
 
 """
     $(TYPEDEF)

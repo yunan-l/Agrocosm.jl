@@ -1,7 +1,7 @@
 # Crop plant-available-water stress: the soil-moisture limiting factor β ∈ [0,1] used by crop
 # photosynthesis and stomatal conductance. β is the fraction of plant-available water remaining
 # between the wilting point and field capacity. The depth-integrated, root-weighted coupling to the
-# Terrarium soil hydraulics is wired in the crop vegetation model (plan Phase 5); this is the tested
+# Terrarium soil hydraulics is wired in the crop vegetation model; this is the tested
 # scalar physics.
 
 """

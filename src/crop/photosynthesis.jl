@@ -23,7 +23,7 @@ struct C4Pathway <: AbstractCropPathway end
 Crop C3/C4 photosynthesis. The `pathway` field selects the biochemistry; parameters default
 to the PALADYN/BIOME3 needleleaf values so a C3 instance reproduces Terrarium's
 `LUEPhotosynthesis`. Crop functional-type presets (temperature thresholds, quantum
-efficiencies) are wired from the CFT registry in Phase 5.
+efficiencies) are wired from the CFT registry.
 
 Properties:
 $(TYPEDFIELDS)

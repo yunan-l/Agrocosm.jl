@@ -10,7 +10,7 @@
 # This is the coupled-model-enabling carbon→LAI mapping (leaf carbon × specific leaf area). The
 # fully LPJmL-faithful crop LAI additionally caps this by the phenological heat-unit trajectory
 # (flaimax·laimax); that requires the crop phenology's prognostic heat-unit accumulation and is
-# wired in the crop vegetation model (Phase 5). See the migration plan.
+# wired in the crop vegetation model.
 
 """
     $(TYPEDEF)

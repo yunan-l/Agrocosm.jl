@@ -8,9 +8,9 @@ crop-specific processes (C3/C4 photosynthesis, carbon/nitrogen allocation, pheno
 C–N biogeochemistry, and crop management) plus a managed-crop land model. Terrarium supplies **all**
 infrastructure and the physical soil/surface processes.
 
-> **Status:** mid-migration from a standalone discrete-time LPJmL-derived model onto Terrarium.
-> The active plan lives in `docs/dev/2026-07/2026-07-23_PLAN_terrarium_migration.md`. Read it before
-> making structural changes.
+The managed-crop `CropModel` runs end-to-end on CPU (`CropModel(grid, crop_pft(...))` → `initialize` →
+`run!`) and the crop soil biogeochemistry differentiates through Reactant. Design notes and history live
+under `docs/dev/`.
 
 ## Framework rules come from Terrarium
 
@@ -59,11 +59,9 @@ Terrarium's `AGENTS.md` is authoritative for framework conventions and is **requ
 - New crop processes require CPU + GPU tests and Enzyme adjoint tests, plus conservation checks in
   place of the legacy bespoke balance ledgers.
 
-## Migration guardrails
+## Legacy reference implementation
 
-- The migration is a single long-lived feature branch (`mg/revise-terrarium`); there is **no working
-  end-to-end model until the crop physics are ported** (plan Phase 6). Do not expect `using
-  Agrocosm` to reproduce the old simulation API mid-migration.
-- When deleting legacy infrastructure, preserve embedded physics flagged in the plan (temperature
-  stress, vernalization, root distribution, nitrate advective transport, the daily process ordering,
-  and the flux/stock taxonomy behind the balance ledgers). Git is the journal for anything removed.
+- The original standalone LPJmL-derived model (the discrete-daily `initialize_simulation`/
+  `run_simulation!` API and its bespoke infrastructure) has been removed; its physics is re-expressed as
+  the continuous-time Terrarium crop processes. Git is the journal for anything removed — look there
+  (not in the tree) for the old code.

@@ -2,7 +2,7 @@
 # rate modifiers that scale heterotrophic decomposition of the soil carbon/nitrogen pools. The
 # combined response is a Lloyd-Taylor temperature function (normalized to 1 at 10 °C) times a cubic
 # soil-moisture polynomial, clamped to [0,1]. This is the tested scalar physics; it is applied to the
-# soil C-N pools in the crop soil-biogeochemistry coupling (plan Phase 3/6, part of P3f).
+# soil C-N pools in the crop soil-biogeochemistry coupling.
 
 """
     $(TYPEDEF)

@@ -6,8 +6,7 @@ module Agrocosm
 # soil/surface processes; Agrocosm contributes crop-specific processes and a
 # managed-crop land model.
 #
-# See docs/dev/2026-07/2026-07-23_PLAN_terrarium_migration.md for the migration
-# plan and AGENTS.md for conventions.
+# See AGENTS.md for conventions and docs/dev/ for design notes.
 using Terrarium
 
 # Documentation and parameter macros.
@@ -21,16 +20,14 @@ using Oceananigans.Fields: FunctionField
 using Oceananigans.Utils: launch!
 using Oceananigans.Operators: Δzᵃᵃᶜ
 using KernelAbstractions: @kernel, @index
-# Oceananigans simulation callbacks — the mechanism for the crop-management events (Phase 4):
+# Oceananigans simulation callbacks — the mechanism for the crop-management events:
 # `SpecifiedTimes` for the discrete sowing/harvest jumps, `IterationInterval` for the continuous
 # fertilizer application flux.
 using Oceananigans: add_callback!, SpecifiedTimes, IterationInterval
 
 # ---------------------------------------------------------------------------
-# Crop parameter sets and the 12-CFT registry (infrastructure-free physics
-# constants). These retain their LPJmL-derived defaults during the migration;
-# their conversion to ModelParameters `@parameterized`/`@param` calibration
-# hooks happens alongside the processes that consume them (plan Phases 3 & 5).
+# Crop parameter sets and the 12-CFT registry: infrastructure-free physics
+# constants with LPJmL-derived defaults.
 # ---------------------------------------------------------------------------
 include("parameters/default_params.jl")
 include("parameters/pft.jl")
@@ -114,7 +111,7 @@ include("crop/nitrogen.jl")
 export CropNitrogen, leaf_nitrogen_limitation
 
 # ---------------------------------------------------------------------------
-# Phase 5 — crop vegetation model assembling the crop processes.
+# Crop vegetation model assembling the crop processes.
 # ---------------------------------------------------------------------------
 include("crop/vegetation.jl")
 export CropVegetation
@@ -147,16 +144,16 @@ include("crop/soil_biogeochemistry.jl")
 export CropSoilBiogeochemistry, soil_carbon_tendencies, soil_nitrogen_tendencies
 
 # ---------------------------------------------------------------------------
-# Phase 4 — crop management. Discrete lifecycle events (sowing, harvest) as
-# documented Oceananigans callbacks; fertilizer as a continuous input flux.
+# Crop management. Discrete lifecycle events (sowing, harvest) as documented
+# Oceananigans callbacks; fertilizer as a continuous input flux.
 # ---------------------------------------------------------------------------
 include("crop/management.jl")
 export CropCalendar, sow!, harvest!, add_crop_management!
 export CropFertilization, fertilize!, add_crop_fertilization!
 
 # The standalone LPJmL-derived reference implementation (the discrete-daily crop/soil physics and its
-# bespoke infrastructure under the former `src/processes/` and `src/utils/`) was removed in the Phase 6
-# cleanup once its physics had been re-expressed as the continuous-time Terrarium processes above; it
-# remains available in the git history (see the migration plan under docs/dev/2026-07/).
+# bespoke infrastructure under the former `src/processes/` and `src/utils/`) was removed once its
+# physics had been re-expressed as the continuous-time Terrarium processes above; it remains available
+# in the git history.
 
 end

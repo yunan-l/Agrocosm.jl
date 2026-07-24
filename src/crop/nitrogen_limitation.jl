@@ -1,7 +1,7 @@
 # Crop leaf-nitrogen limitation of the Rubisco capacity (LPJmL `limit_vcmax_by_nitrogen`).
 # Structural leaf nitrogen (ncleaf_min·leaf_carbon) is protected; only the excess supports Rubisco
 # activity, which — temperature-scaled — caps the potential Vcmax. This is applied to the crop
-# photosynthesis Vcmax within the crop nitrogen coupling (plan Phase 5); here it is the tested
+# photosynthesis Vcmax within the crop nitrogen coupling; here it is the tested
 # scalar physics.
 
 """

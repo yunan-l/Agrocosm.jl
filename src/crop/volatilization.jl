@@ -2,7 +2,7 @@
 # is the aqueous NH₃ concentration (set by soil pH and the temperature-dependent dissociation) times
 # Henry's constant and a wind-driven mass-transfer coefficient, capped at the top-layer ammonium.
 # Tested scalar physics; the multi-layer accounting is assembled in the crop soil biogeochemistry
-# (plan Phase 5).
+#.
 
 """
     $(TYPEDEF)

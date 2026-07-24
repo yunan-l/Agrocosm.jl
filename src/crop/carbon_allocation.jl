@@ -3,7 +3,7 @@
 # `FROOTMAX − FROOTMIN`, modulated by a water/nitrogen stress factor `df` (low stress → more roots).
 # Leaf carbon is constrained by the phenological LAI and the specific leaf area. Tested scalar
 # physics; the stateful biomass/senescence accounting is assembled in the crop carbon coupling
-# (plan Phase 5).
+#.
 
 """
     $(TYPEDEF)

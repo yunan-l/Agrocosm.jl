@@ -2,7 +2,7 @@
 # product of a water-filled-pore-space moisture factor, a soil-carbon availability factor (driven by
 # the fast + slow organic carbon and a soil-temperature response), and the nitrate stock; the gaseous
 # loss is split into N₂O and N₂. Tested scalar physics; the multi-layer soil mineral-N accounting is
-# assembled in the crop soil biogeochemistry (plan Phase 5).
+# assembled in the crop soil biogeochemistry.
 
 """
     $(TYPEDEF)

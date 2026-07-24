@@ -3,7 +3,7 @@
 # fraction `fphu`) scaled between the minimum (`himin`) and optimal (`hiopt`) harvest index, then
 # reduced by the water-deficit sufficiency factor `wdf`. Values > 1 encode above-ground vs total
 # biomass ratios for some crops (e.g. sugarcane). Tested scalar physics; applied in the crop carbon
-# allocation coupling (plan Phase 5).
+# allocation coupling.
 
 """
     $(TYPEDEF)

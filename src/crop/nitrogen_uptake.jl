@@ -2,7 +2,7 @@
 # mineral-N pool follows Michaelis-Menten saturation with a baseline term, scaled by a root factor
 # that includes a parabolic soil-temperature response. This is the tested scalar kinetics; the
 # per-layer, root-weighted coupling to the soil mineral-N pools and the demand-limited two-pass
-# accounting are assembled in the crop nitrogen coupling (plan Phase 5).
+# accounting are assembled in the crop nitrogen coupling.
 
 """
     $(TYPEDSIGNATURES)

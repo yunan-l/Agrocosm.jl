@@ -3,7 +3,7 @@
 # water-filled-pore-space (WFPS) moisture response, a Gaussian soil-temperature response, and an
 # atan soil-pH response — capped at the available ammonium. A fixed fraction is lost as N₂O. Tested
 # scalar physics; the multi-layer soil mineral-N accounting is assembled in the crop soil
-# biogeochemistry (plan Phase 5).
+# biogeochemistry.
 
 """
     $(TYPEDEF)

@@ -4,7 +4,7 @@
 # available mineral nitrogen concentration and capped at the available pool. (Gross mineralization
 # itself is the nitrogen released by the decomposed carbon pools — an input from decomposition.)
 # Tested scalar physics; the multi-layer fast/slow accounting is assembled in the crop soil
-# biogeochemistry (plan Phase 5).
+# biogeochemistry.
 
 """
     $(TYPEDEF)

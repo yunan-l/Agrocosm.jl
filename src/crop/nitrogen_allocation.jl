@@ -1,7 +1,7 @@
 # Crop nitrogen allocation (LPJmL `crop_nitrogen`). The total plant nitrogen stock is redistributed
 # among the leaf, root, storage, and mobile-pool organs in proportion to each organ's carbon divided
 # by its target C:N ratio (relative to leaf). This conserves total plant nitrogen. Tested scalar
-# physics; assembled in the crop nitrogen coupling (plan Phase 5).
+# physics; assembled in the crop nitrogen coupling.
 
 """
     $(TYPEDEF)

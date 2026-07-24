@@ -2,7 +2,7 @@
 # implied by the photosynthetic capacity (temperature-scaled — the inverse of the Vcmax nitrogen
 # limitation) plus the structural minimum leaf N; total demand adds the other organs (root, mobile
 # pool, storage) at the leaf N:C ratio scaled by their relative C:N ratios. This is the tested
-# scalar physics; it is wired into the crop nitrogen coupling (plan Phase 5).
+# scalar physics; it is wired into the crop nitrogen coupling.
 
 """
     $(TYPEDEF)

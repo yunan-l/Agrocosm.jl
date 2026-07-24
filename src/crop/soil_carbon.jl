@@ -2,7 +2,7 @@
 # a first-order rate scaled by the environmental decomposition response; decomposed litter carbon is
 # partitioned into the fast and slow soil pools and the atmosphere (heterotrophic respiration), and
 # decomposed fast/slow carbon is respired. Tested scalar physics; the full multi-layer pool state and
-# its coupling to the soil nitrogen pools are assembled in the crop soil biogeochemistry (plan Phase 5).
+# its coupling to the soil nitrogen pools are assembled in the crop soil biogeochemistry.
 
 """
     $(TYPEDEF)

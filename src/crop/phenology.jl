@@ -1,11 +1,11 @@
 # Crop phenology: the LPJmL heat-unit-driven leaf-area-index trajectory. The leaf area index is
 # `LAI = f(fphu)·laimax`, where `fphu ∈ [0,1]` is the fraction of accumulated phenological heat
-# units and `f` is the LPJmL LAI-fraction curve (`src/processes/crop/phenology.jl`): a logistic-like
-# rise up to the senescence onset `fphusen`, then a power-law decline to a harvest floor.
+# units and `f` is the LPJmL LAI-fraction curve: a logistic-like rise up to the senescence onset
+# `fphusen`, then a power-law decline to a harvest floor.
 #
 # Continuous-time note: `fphu` is supplied here as the input `phenology_heat_unit_fraction`. Its
 # prognostic accumulation `d(heat units)/dt = max(0, T − T_base)` (with vernalization/photoperiod
-# modifiers) is integrated in the crop vegetation model (plan Phase 5); this process contributes the
+# modifiers) is integrated in the crop vegetation model; this process contributes the
 # faithful LAI *shape* of the growing season.
 
 """

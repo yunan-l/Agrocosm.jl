@@ -2,7 +2,7 @@
 # pool) respires in proportion to its carbon, a respiration coefficient, its nitrogen:carbon ratio,
 # and a Lloyd-Taylor soil/air-temperature response normalized to 1 at 10 °C. Total autotrophic
 # respiration is this maintenance term plus growth respiration (see `growth_respiration.jl`). Tested
-# scalar physics; assembled in the crop carbon coupling (plan Phase 5).
+# scalar physics; assembled in the crop carbon coupling.
 
 """
     $(TYPEDEF)
