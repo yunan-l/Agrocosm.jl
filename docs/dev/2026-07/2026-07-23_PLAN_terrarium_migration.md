@@ -287,11 +287,18 @@ Confirmed design decisions:
 >   the integration (0 → 1.74 °C·d in 20 steps at 25 °C), and a mid-season heat-unit state
 >   (fphu = 0.5) yields LAI ≈ 6.8 and positive GPP (~8 gC/m²/day)** — the crop LAI now responds to the
 >   growing season (accumulated heat units) rather than a carbon-pool equilibrium.
+> - **CFT presets** (`src/crop/cft_presets.jl`): `CropVegetation(NF, crop_pft(:maize))` and the
+>   per-component `CropPhenology/CropPhotosynthesis/CropPhenologyDynamics(NF, pft)` constructors map the
+>   12-CFT trait registry (Phase 1's `pft.jl`) onto the crop processes — the LAI trajectory, C3/C4
+>   pathway + temperature thresholds, and base temperature. Unit-tested (wheat→C3, maize→C4). The crop
+>   model is now configurable per crop type.
+> - **Root distribution + optional plant-available-water** added to `CropVegetation`. Default is a
+>   well-watered crop (β=1, robust); passing `plant_available_water=FieldCapacityLimitedPAW(NF)` couples
+>   β to soil water, but **requires a clay-bearing soil texture** — the default pure-sand texture makes
+>   field_capacity==wilting_point so β is NaN (documented finding).
 > - Remaining Phase 5: multi-organ prognostic carbon (leaf/root/storage/pool via the ported allocation
 >   + respiration + harvest index) and nitrogen pools; couple the soil C–N transforms to the soil
->   mineral-N state; wire the 12 CFT parameter sets as ModelParameters presets (via
->   `CropPhenologyDynamics.heat_unit_requirement`, `CropPhotosynthesis`/`CropPhenology` per-CFT
->   thresholds, etc.); optional multi-crop tiling.
+>   mineral-N state; per-CFT heat-unit requirement (climate-derived); optional multi-crop tiling.
 
 ## Problem description
 
