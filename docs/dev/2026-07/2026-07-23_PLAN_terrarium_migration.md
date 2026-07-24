@@ -325,10 +325,21 @@ Confirmed design decisions:
 >   senescence onset `fphusen` = 0.70), declining to LAI = 0 at maturity (fphu = 1.0)** — driven purely
 >   by the prognostic heat-unit accumulation. The assembled crop model produces a realistic
 >   growth→senescence cycle end-to-end on the Terrarium stack.
-> - Remaining Phase 5: replace the first-order N uptake with the full demand/uptake kinetics
->   (`CropNitrogenDemand`/`CropNitrogenUptake`) coupled to the soil mineral-N pools; couple the soil C–N
->   transforms to the soil biogeochemistry slot; the LAI-feedback carbon deficit; per-CFT heat-unit
->   requirement (climate-derived); optional multi-crop tiling.
+> - **Soil carbon biogeochemistry** (`src/crop/soil_biogeochemistry.jl`): `CropSoilBiogeochemistry <:
+>   AbstractSoilBiogeochemistry` replaces `ConstantSoilCarbonDensity` in the soil `biogeochem` slot with
+>   prognostic litter/fast/slow carbon pools (kgC/m³, per layer) decomposing by first-order rates
+>   modulated by the soil temperature × moisture decomposition response (reusing the ported
+>   decomposition-response + litter-routing primitives). The live fast+slow density feeds `density_soc`,
+>   so the soil organic fraction responds to the carbon dynamics. Unit-tested (carbon conservation:
+>   pool loss = respiration); a `SoilModel` spike shows litter decomposing, positive heterotrophic
+>   respiration, declining total soil carbon, and a **stable `density_soc` → soil-physics coupling**
+>   (soil temperature finite over 50 steps). The nitrogen transforms (nitrification/denitrification/
+>   mineralization — already ported) and the crop-litterfall input into the litter pool are the next
+>   coupling steps.
+> - Remaining Phase 5: add the soil mineral-N pools + transforms to the biogeochemistry and couple the
+>   crop N uptake (`CropNitrogenDemand`/`CropNitrogenUptake`) to them; feed crop litterfall into the
+>   soil litter pool; the LAI-feedback carbon deficit; per-CFT heat-unit requirement (climate-derived);
+>   optional multi-crop tiling.
 
 ## Problem description
 
