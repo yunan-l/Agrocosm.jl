@@ -296,9 +296,18 @@ Confirmed design decisions:
 >   well-watered crop (β=1, robust); passing `plant_available_water=FieldCapacityLimitedPAW(NF)` couples
 >   β to soil water, but **requires a clay-bearing soil texture** — the default pure-sand texture makes
 >   field_capacity==wilting_point so β is NaN (documented finding).
-> - Remaining Phase 5: multi-organ prognostic carbon (leaf/root/storage/pool via the ported allocation
->   + respiration + harvest index) and nitrogen pools; couple the soil C–N transforms to the soil
->   mineral-N state; per-CFT heat-unit requirement (climate-derived); optional multi-crop tiling.
+> - **Prognostic carbon pool** (`src/crop/carbon.jl`): `CropCarbon` closes the crop carbon loop —
+>   biomass (kgC/m²) accumulates NPP and partitions into leaf/root/storage each step via the ported
+>   allocation + respiration primitives (`root = root_allocation_fraction(fphu, df)·biomass`,
+>   `leaf = min(LAI/SLA, biomass − root)`, `NPP = GPP − Rm − Rg`, `d(biomass)/dt = NPP`), all in
+>   kgC/m²/s. Wired into `CropVegetation` and the CFT presets (SLA from the registry). Spike shows
+>   GPP → NPP (~75 % of GPP) and biomass accumulating over the integration; unit-tested (organ
+>   conservation, NPP < GPP, water-stress root shift). The crop model now carries **two prognostics
+>   (heat units + biomass)** and produces a growing-season carbon budget.
+> - Remaining Phase 5: multi-pool nitrogen (leaf/root/storage) coupled to the crop N demand/uptake and
+>   the soil mineral-N state; couple the soil C–N transforms to the soil biogeochemistry slot; the
+>   LAI-feedback carbon deficit; per-CFT heat-unit requirement (climate-derived); optional multi-crop
+>   tiling.
 
 ## Problem description
 
