@@ -1,18 +1,16 @@
 using Agrocosm
 using Test
 
-# During the Terrarium migration the crop/soil physics is being re-expressed as
-# continuous-time Terrarium processes (plan Phases 2–6). The legacy test files
-# under test/processes/**, test/diagnostics/**, and test/simulations/** target
-# the deleted standalone API and are re-enabled as each process is ported. Only
-# the infrastructure-free tests run in the interim.
+# Agrocosm's crop/soil physics is implemented as continuous-time Terrarium processes; each has its own
+# test under test/crop/. The legacy standalone-API tests were removed in the Phase 6 cleanup (preserved
+# in the git history) alongside the reference implementation they targeted.
 @testset "Agrocosm.jl" begin
     @testset "Numerics" begin
         include("numerics/test_lpj_bisect.jl")
     end
 
     @testset "Crop parameters" begin
-        include("processes/crop/test_pft_registry.jl")
+        include("crop/test_pft_registry.jl")
     end
 
     @testset "Crop processes" begin

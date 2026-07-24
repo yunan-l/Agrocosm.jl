@@ -54,8 +54,8 @@ export cft1, cft2, cft3, cft4, cft5, cft6, cft7, cft8, cft9, cft10, cft11, cft12
 export lpj_bisect
 
 # ---------------------------------------------------------------------------
-# Crop processes (Terrarium-native, continuous-time). Ported incrementally in
-# Phase 3 from the legacy discrete-daily implementations under src/processes/.
+# Crop processes (Terrarium-native, continuous-time), ported from the legacy
+# discrete-daily LPJmL-derived implementation (now in the git history).
 # ---------------------------------------------------------------------------
 include("crop/root_distribution.jl")
 export CropRootDistribution
@@ -154,35 +154,9 @@ include("crop/management.jl")
 export CropCalendar, sow!, harvest!, add_crop_management!
 export CropFertilization, fertilize!, add_crop_fertilization!
 
-# ---------------------------------------------------------------------------
-# PHASE 3+ TODO — crop and soil-biogeochemistry physics not yet ported.
-#
-# The following source files remain on disk as the reference implementation but
-# are NOT included yet: they depend on the deleted standalone infrastructure
-# (`launch_1D!`, `Parameters.@unpack`, the legacy state containers) and must be
-# re-expressed as continuous-time Terrarium `AbstractProcess` implementations
-# with `variables()`/`compute_auxiliary!`/`compute_tendencies!`.
-#
-#   Crop physiology (Phase 3):
-#     processes/crop/{photosynthesis,lambda_solver,respiration,carbon_allocation,
-#                     crop_carbon,lai_crop,phenology}.jl
-#     processes/crop/{nitrogen_allocation,nitrogen_demand,nitrogen_uptake,
-#                     nitrogen_vcmax_limit}.jl
-#     processes/climate/{temp_stress,climbuf,spinup_climbuf}.jl  (temp stress +
-#                     vernalization are crop physics, not framework climate)
-#   Surface coupling to reuse Terrarium processes (Phase 2/3):
-#     processes/crop/{radiation,albedo,interception,transpiration}.jl
-#   Soil C–N biogeochemistry (Phase 3):
-#     processes/soil/{soil_carbon,soil_nitrogen,nitrogen_transform,soil_response,
-#                     litter_routing,surface_litter}.jl
-#   Physical soil to replace with Terrarium soil processes (Phase 2):
-#     processes/soil/{soil_temp,water_ice_pools,soil_water,infil_perc,
-#                     pedotransfer,evaporation}.jl  and  processes/climate/{readclimate,snow}.jl
-#   Management events (Phase 4, documented discrete-time exceptions):
-#     processes/crop/{cultivate,harvesting,fertilizer}.jl, processes/soil/tillage.jl
-#     utils/tools.jl (fixed-365 calendar convention)
-#   State schemas — reference for Terrarium `variables()` (Phase 3):
-#     processes/initialization/**
-# ---------------------------------------------------------------------------
+# The standalone LPJmL-derived reference implementation (the discrete-daily crop/soil physics and its
+# bespoke infrastructure under the former `src/processes/` and `src/utils/`) was removed in the Phase 6
+# cleanup once its physics had been re-expressed as the continuous-time Terrarium processes above; it
+# remains available in the git history (see the migration plan under docs/dev/2026-07/).
 
 end
