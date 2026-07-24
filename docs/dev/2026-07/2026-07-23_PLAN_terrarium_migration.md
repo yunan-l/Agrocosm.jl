@@ -343,11 +343,17 @@ Confirmed design decisions:
 >   applied per second. Unit-tested; the `SoilModel` spike shows mineralization > 0, ammonium declining
 >   (mineralization vs nitrification) and **nitrate building up via nitrification**, all finite/stable.
 >   The **soil C–N cycle is now dynamic** (carbon pools → mineralization → NH₄ → NO₃ → denitrification).
-> - Remaining Phase 5: NH₃ volatilization (top-layer surface flux); couple the crop N uptake
+> - **`CropModel`** (`src/crop/crop_model.jl`): the top-level managed-crop model constructor —
+>   `CropModel(grid, crop_pft(:maize))` assembles a Terrarium `LandModel` from the crop vegetation and
+>   a soil with the crop C–N biogeochemistry, configured for a CFT; a `CropModel(grid; crop=…)`
+>   named/numbered form is also provided. Unit-tested; a spike runs the full maize model end-to-end
+>   (LAI 4.75, GPP 1.3e-7, biomass growing; soil heterotrophic respiration + NH₄/NO₃ pools cycling),
+>   all finite/stable. **This is the managed-crop `LandModel`/`CropModel` Phase 5 deliverable — both the
+>   crop C–N cycle and the soil C–N cycle run in one model.**
+> - Remaining Phase 5: close the plant↔soil flux loop — couple the crop N uptake
 >   (`CropNitrogenDemand`/`CropNitrogenUptake`) to the soil mineral-N pools and feed crop litterfall (C
->   and N) into the soil litter pool (closing the plant↔soil loop); the LAI-feedback carbon deficit;
->   per-CFT heat-unit requirement (climate-derived); a named `CropModel` convenience constructor;
->   optional multi-crop tiling.
+>   and N) into the soil litter pool; NH₃ volatilization (top-layer surface flux); the LAI-feedback
+>   carbon deficit; per-CFT heat-unit requirement (climate-derived); optional multi-crop tiling.
 
 ## Problem description
 
