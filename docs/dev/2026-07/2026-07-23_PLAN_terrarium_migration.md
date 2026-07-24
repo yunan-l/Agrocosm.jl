@@ -304,10 +304,17 @@ Confirmed design decisions:
 >   GPP → NPP (~75 % of GPP) and biomass accumulating over the integration; unit-tested (organ
 >   conservation, NPP < GPP, water-stress root shift). The crop model now carries **two prognostics
 >   (heat units + biomass)** and produces a growing-season carbon budget.
-> - Remaining Phase 5: multi-pool nitrogen (leaf/root/storage) coupled to the crop N demand/uptake and
->   the soil mineral-N state; couple the soil C–N transforms to the soil biogeochemistry slot; the
->   LAI-feedback carbon deficit; per-CFT heat-unit requirement (climate-derived); optional multi-crop
->   tiling.
+> - **Prognostic nitrogen pool** (`src/crop/nitrogen.jl`): `CropNitrogen` closes a first-order crop
+>   nitrogen loop — total plant N (kgN/m²) is acquired in proportion to net carbon gain at the target
+>   N:C ratio (`d(N)/dt = max(0, NPP)·target_nc_ratio`) and partitioned into leaf/root/storage via the
+>   ported `allocate_crop_nitrogen` (nitrogen-conserving). Wired into `CropVegetation`. Spike confirms
+>   crop N accumulates at exactly the target N:C (N/C = 1/30) with organ N conserving the total. **The
+>   crop model now carries three prognostics: heat units, biomass, and nitrogen.**
+> - Remaining Phase 5: replace the first-order N uptake with the full demand/uptake kinetics
+>   (`CropNitrogenDemand`/`CropNitrogenUptake`) coupled to the soil mineral-N pools, and feed the Vcmax
+>   nitrogen limitation back into photosynthesis (all scalar physics already ported/tested); couple the
+>   soil C–N transforms to the soil biogeochemistry slot; the LAI-feedback carbon deficit; per-CFT
+>   heat-unit requirement (climate-derived); optional multi-crop tiling.
 
 ## Problem description
 
