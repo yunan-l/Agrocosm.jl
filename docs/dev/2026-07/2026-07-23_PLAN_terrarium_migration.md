@@ -317,6 +317,14 @@ Confirmed design decisions:
 >   so the first assimilation step is unlimited. Default 1 preserves the C3↔LUE equivalence (rtol 1e-10).
 >   Unit-tested; coupled spike green. **The crop nitrogen-productivity feedback loop is now closed**
 >   (leaf N limits photosynthesis → carbon → N uptake → leaf N).
+> - **Extended CFT presets** (`cft_presets.jl`): per-crop `CropVegetation` now also configures the root
+>   distribution (`beta_root`) and the nitrogen pool's storage-organ C:N ratio (`ratio.sto`) from the
+>   registry. Unit-tested as CFT-specific.
+> - **Seasonal validation** (`spike_crop_season.jl`): running the crop model through a full phenological
+>   cycle reproduces the LPJmL LAI trajectory dynamically — **peak LAI ≈ 6.98 at fphu = 0.694 (the
+>   senescence onset `fphusen` = 0.70), declining to LAI = 0 at maturity (fphu = 1.0)** — driven purely
+>   by the prognostic heat-unit accumulation. The assembled crop model produces a realistic
+>   growth→senescence cycle end-to-end on the Terrarium stack.
 > - Remaining Phase 5: replace the first-order N uptake with the full demand/uptake kinetics
 >   (`CropNitrogenDemand`/`CropNitrogenUptake`) coupled to the soil mineral-N pools; couple the soil C–N
 >   transforms to the soil biogeochemistry slot; the LAI-feedback carbon deficit; per-CFT heat-unit
