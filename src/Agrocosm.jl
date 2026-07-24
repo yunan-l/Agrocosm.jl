@@ -105,6 +105,9 @@ export CropCarbonAllocation, root_allocation_fraction, leaf_carbon_from_lai
 include("crop/vegetation.jl")
 export CropVegetation
 
+# CFT presets: build the crop processes from the 12-CFT registry (must follow the process includes).
+include("crop/cft_presets.jl")
+
 include("crop/nitrogen_allocation.jl")
 export CropNitrogenAllocation, allocate_crop_nitrogen
 
