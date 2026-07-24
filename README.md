@@ -5,7 +5,7 @@
 
 <!-- **🧑‍🌾 💧 ☀️ 🌾 🚀 A Julia-based crop model supporting differentiation and GPU acceleration.** -->
 
-Agrocosm.jl is a Julia-based crop model supporting differentiation and GPU acceleration. Technically it is a crop model with water, carbon, nitrogen, and energy processes with a numerical design that can run on both CPUs and GPUs. It is easy to use and easy to extend. It is written in Julia to make physically based
+Agrocosm.jl is a Julia-based crop model supporting differentiation and GPU acceleration. Technically it is a crop model with carbon, nitrogen, water, and energy processes with a numerical design that can run on both CPUs and GPUs. It is easy to use and easy to extend. It is written in Julia to make physically based
 simulation, differentiable programming, high-performance computing, and
 machine-learning workflows available within one modelling environment.
 
