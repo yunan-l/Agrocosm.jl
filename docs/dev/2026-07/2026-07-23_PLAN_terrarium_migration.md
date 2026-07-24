@@ -336,9 +336,17 @@ Confirmed design decisions:
 >   (soil temperature finite over 50 steps). The nitrogen transforms (nitrification/denitrification/
 >   mineralization — already ported) and the crop-litterfall input into the litter pool are the next
 >   coupling steps.
-> - Remaining Phase 5: add the soil mineral-N pools + transforms to the biogeochemistry and couple the
->   crop N uptake (`CropNitrogenDemand`/`CropNitrogenUptake`) to them; feed crop litterfall into the
->   soil litter pool; the LAI-feedback carbon deficit; per-CFT heat-unit requirement (climate-derived);
+> - **Soil mineral-nitrogen pools + transforms** (`soil_biogeochemistry.jl`): `CropSoilBiogeochemistry`
+>   now carries prognostic soil ammonium/nitrate pools and wires the ported transforms — mineralization
+>   (N from respired carbon at the soil C:N ratio → NH₄), nitrification (NH₄ → NO₃ minus N₂O), and
+>   denitrification (NO₃ → gas, driven by soil T/moisture and the fast+slow carbon). Per-day amounts
+>   applied per second. Unit-tested; the `SoilModel` spike shows mineralization > 0, ammonium declining
+>   (mineralization vs nitrification) and **nitrate building up via nitrification**, all finite/stable.
+>   The **soil C–N cycle is now dynamic** (carbon pools → mineralization → NH₄ → NO₃ → denitrification).
+> - Remaining Phase 5: NH₃ volatilization (top-layer surface flux); couple the crop N uptake
+>   (`CropNitrogenDemand`/`CropNitrogenUptake`) to the soil mineral-N pools and feed crop litterfall (C
+>   and N) into the soil litter pool (closing the plant↔soil loop); the LAI-feedback carbon deficit;
+>   per-CFT heat-unit requirement (climate-derived); a named `CropModel` convenience constructor;
 >   optional multi-crop tiling.
 
 ## Problem description
