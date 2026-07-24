@@ -23,6 +23,10 @@ $(TYPEDFIELDS)
     allocation::CropNitrogenAllocation{NF} = CropNitrogenAllocation(NF)
     "Target plant nitrogen:carbon ratio (gN/gC) governing uptake per unit carbon gain"
     target_nc_ratio::NF = 1 / 30
+    "Minimum (structural) leaf nitrogen:carbon ratio — nitrogen limitation reaches 0 here"
+    ncleaf_min::NF = 1 / 58.8
+    "Reference leaf nitrogen:carbon ratio — nitrogen limitation reaches 1 here"
+    ncleaf_ref::NF = 1 / 25
 end
 
 CropNitrogen(::Type{NF}; kwargs...) where {NF} = CropNitrogen{NF}(; kwargs...)
@@ -32,11 +36,25 @@ Terrarium.variables(::CropNitrogen{NF}) where {NF} = (
     Terrarium.auxiliary(:leaf_nitrogen, XY(), units = u"kg/m^2"),
     Terrarium.auxiliary(:root_nitrogen, XY(), units = u"kg/m^2"),
     Terrarium.auxiliary(:storage_nitrogen, XY(), units = u"kg/m^2"),
+    Terrarium.auxiliary(:nitrogen_limitation, XY()),
     Terrarium.input(:net_primary_production, XY(), units = u"kg/m^2/s"),
     Terrarium.input(:leaf_carbon, XY(), units = u"kg/m^2"),
     Terrarium.input(:root_carbon, XY(), units = u"kg/m^2"),
     Terrarium.input(:storage_carbon, XY(), units = u"kg/m^2"),
 )
+
+"""
+    $(TYPEDSIGNATURES)
+
+Leaf-nitrogen limitation factor ∈ [0,1] on the Rubisco capacity, from the leaf N:C ratio between the
+structural minimum (`ncleaf_min` → 0) and the reference (`ncleaf_ref` → 1). Returns 1 when there is no
+leaf carbon yet, so early growth is not deadlocked.
+"""
+@inline function leaf_nitrogen_limitation(n::CropNitrogen{NF}, leaf_nitrogen::NF, leaf_carbon::NF) where {NF}
+    nc = leaf_nitrogen / max(leaf_carbon, eps(NF))
+    limited = clamp((nc - n.ncleaf_min) / (n.ncleaf_ref - n.ncleaf_min), zero(NF), one(NF))
+    return ifelse(leaf_carbon > zero(NF), limited, one(NF))
+end
 
 # ---- interface methods --------------------------------------------------------------------
 
@@ -65,6 +83,7 @@ end
     out.leaf_nitrogen[i, j, 1] = leaf
     out.root_nitrogen[i, j, 1] = root
     out.storage_nitrogen[i, j, 1] = storage
+    out.nitrogen_limitation[i, j, 1] = leaf_nitrogen_limitation(n, leaf, fields.leaf_carbon[i, j])
 end
 
 @kernel inbounds = true function compute_crop_nitrogen_tendency_kernel!(tend, grid, fields, n::CropNitrogen)

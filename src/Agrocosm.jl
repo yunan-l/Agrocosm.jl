@@ -106,7 +106,7 @@ include("crop/nitrogen_allocation.jl")
 export CropNitrogenAllocation, allocate_crop_nitrogen
 
 include("crop/nitrogen.jl")
-export CropNitrogen
+export CropNitrogen, leaf_nitrogen_limitation
 
 # ---------------------------------------------------------------------------
 # Phase 5 — crop vegetation model assembling the crop processes.

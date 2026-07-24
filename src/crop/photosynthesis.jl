@@ -83,6 +83,7 @@ Terrarium.variables(::CropPhotosynthesis{NF}) where {NF} = (
     Terrarium.auxiliary(:gross_primary_production, XY(), units = u"kg/m^2/s"),
     Terrarium.input(:soil_moisture_limiting_factor, XY(), default = NF(1)),
     Terrarium.input(:leaf_area_index, XY()),
+    Terrarium.input(:nitrogen_limitation, XY(), default = NF(1)),  # leaf-N Rubisco limitation ∈ [0,1]
 )
 
 # ---- scalar primitives (Level III) --------------------------------------------------------
@@ -171,6 +172,7 @@ ratio `λc`, and soil-moisture limiting factor `β`.
 function compute_respiration_assimilation(
         photo::CropPhotosynthesis{NF}, cmass::NF,
         T_air::NF, swdown::NF, pres::NF, co2::NF, LAI::NF, λc::NF, β::NF,
+        nitrogen_limitation::NF = one(NF),
     ) where {NF}
     path = photo.pathway
     pres_O2 = Terrarium.partial_pressure_O2(pres)
@@ -181,6 +183,10 @@ function compute_respiration_assimilation(
         pres_i = λc * pres_a
         T_stress = compute_temperature_stress(photo, path, T_air)
         c_1, c_2, Vc_max = compute_assimilation_terms(photo, path, cmass, T_air, T_stress, apar, pres_i, pres_O2, λc)
+        # Leaf nitrogen limits the Rubisco capacity: scale Vc_max (and hence JC and Rd) by the
+        # nitrogen-limitation factor ∈ [0,1]. Default 1 (no limitation) reproduces the light/Rubisco
+        # coordination scheme exactly.
+        Vc_max = Vc_max * nitrogen_limitation
         Rd = respiration_coefficient(photo, path) * Vc_max * β
         JE = c_1 * apar
         JC = c_2 * Vc_max
@@ -210,8 +216,9 @@ Base.@propagate_inbounds function compute_photosynthesis(
     β = clamp(fields.soil_moisture_limiting_factor[i, j], zero(T_air), one(T_air))
     LAI = fields.leaf_area_index[i, j]
     λc = fields.leaf_to_air_co2_ratio[i, j]
+    nitrogen_limitation = fields.nitrogen_limitation[i, j]
     cmass = constants.material.atomic_weight_carbon
-    Rd, An = compute_respiration_assimilation(photo, cmass, T_air, swdown, pres, co2, LAI, λc, β)
+    Rd, An = compute_respiration_assimilation(photo, cmass, T_air, swdown, pres, co2, LAI, λc, β, nitrogen_limitation)
     GPP = compute_gpp(photo, An)
     return Rd, An, GPP
 end
