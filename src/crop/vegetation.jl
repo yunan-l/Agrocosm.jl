@@ -89,6 +89,18 @@ function Terrarium.compute_auxiliary!(
     return nothing
 end
 
+"""
+    $(TYPEDSIGNATURES)
+
+Initialize the crop vegetation. The `nitrogen_limitation` factor is a lagged auxiliary consumed by
+photosynthesis before the nitrogen pool has run, so it is seeded to 1 (no limitation) to avoid
+zeroing the first assimilation step.
+"""
+function Terrarium.initialize!(state, grid, veg::CropVegetation, args...)
+    set!(state.nitrogen_limitation, one(eltype(state.nitrogen_limitation)))
+    return nothing
+end
+
 """ $(TYPEDSIGNATURES) Integrate the prognostic heat units, crop biomass, and crop nitrogen. """
 function Terrarium.compute_tendencies!(state, grid, veg::CropVegetation, args...)
     compute_tendencies!(state, grid, veg.phenology_dynamics)
