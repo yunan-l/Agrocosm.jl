@@ -134,6 +134,9 @@ export CropVolatilization, ammonia_volatilization
 include("crop/mineralization.jl")
 export CropNitrogenMineralization, immobilization_demand, immobilization_limitation, immobilized_nitrogen
 
+include("crop/soil_biogeochemistry.jl")
+export CropSoilBiogeochemistry, soil_carbon_tendencies
+
 # ---------------------------------------------------------------------------
 # PHASE 3+ TODO — crop and soil-biogeochemistry physics not yet ported.
 #

@@ -33,6 +33,7 @@ using Test
         include("crop/test_soil_carbon.jl")
         include("crop/test_nitrification.jl")
         include("crop/test_denitrification.jl")
+        include("crop/test_soil_biogeochemistry.jl")
         include("crop/test_volatilization.jl")
         include("crop/test_mineralization.jl")
         include("crop/test_maintenance_respiration.jl")
