@@ -28,6 +28,8 @@ $(TYPEDFIELDS)
     growth::CropGrowthRespiration{NF} = CropGrowthRespiration(NF)
     "Specific leaf area (m² leaf per kgC)"
     specific_leaf_area::NF = 30.0
+    "Biomass turnover rate to litter (per day)"
+    turnover_rate::NF = 0.01
 end
 
 CropCarbon(::Type{NF}; kwargs...) where {NF} = CropCarbon{NF}(; kwargs...)
@@ -38,6 +40,7 @@ Terrarium.variables(::CropCarbon{NF}) where {NF} = (
     Terrarium.auxiliary(:root_carbon, XY(), units = u"kg/m^2"),
     Terrarium.auxiliary(:storage_carbon, XY(), units = u"kg/m^2"),
     Terrarium.auxiliary(:net_primary_production, XY(), units = u"kg/m^2/s"),
+    Terrarium.auxiliary(:crop_litterfall_carbon, XY(), units = u"kg/m^2/s"),
     Terrarium.input(:gross_primary_production, XY(), units = u"kg/m^2/s"),
     Terrarium.input(:leaf_area_index, XY()),
     Terrarium.input(:phenology_heat_unit_fraction, XY()),
@@ -96,9 +99,13 @@ end
     out.root_carbon[i, j, 1] = root
     out.storage_carbon[i, j, 1] = storage
     out.net_primary_production[i, j, 1] = npp
+    # Biomass turnover to soil litter (per second), consumed by the soil biogeochemistry.
+    out.crop_litterfall_carbon[i, j, 1] =
+        c.turnover_rate / Terrarium.seconds_per_day(eltype(out.crop_litterfall_carbon)) * max(zero(npp), fields.crop_biomass[i, j])
 end
 
 @kernel inbounds = true function compute_crop_carbon_tendency_kernel!(tend, grid, fields, c::CropCarbon)
     i, j = @index(Global, NTuple)
-    tend.crop_biomass[i, j, 1] = fields.net_primary_production[i, j]
+    # d(biomass)/dt = NPP − litterfall (turnover carbon leaves for the soil litter pool).
+    tend.crop_biomass[i, j, 1] = fields.net_primary_production[i, j] - fields.crop_litterfall_carbon[i, j]
 end

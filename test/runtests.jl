@@ -41,5 +41,6 @@ using Test
         include("crop/test_cft_presets.jl")
         include("crop/test_carbon.jl")
         include("crop/test_nitrogen_feedback.jl")
+        include("crop/test_crop_soil_coupling.jl")
     end
 end

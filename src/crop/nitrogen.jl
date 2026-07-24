@@ -27,6 +27,8 @@ $(TYPEDFIELDS)
     ncleaf_min::NF = 1 / 58.8
     "Reference leaf nitrogen:carbon ratio — nitrogen limitation reaches 1 here"
     ncleaf_ref::NF = 1 / 25
+    "Nitrogen turnover rate to litter (per day)"
+    turnover_rate::NF = 0.01
 end
 
 CropNitrogen(::Type{NF}; kwargs...) where {NF} = CropNitrogen{NF}(; kwargs...)
@@ -37,6 +39,8 @@ Terrarium.variables(::CropNitrogen{NF}) where {NF} = (
     Terrarium.auxiliary(:root_nitrogen, XY(), units = u"kg/m^2"),
     Terrarium.auxiliary(:storage_nitrogen, XY(), units = u"kg/m^2"),
     Terrarium.auxiliary(:nitrogen_limitation, XY()),
+    Terrarium.auxiliary(:crop_nitrogen_uptake, XY(), units = u"kg/m^2/s"),
+    Terrarium.auxiliary(:crop_litterfall_nitrogen, XY(), units = u"kg/m^2/s"),
     Terrarium.input(:net_primary_production, XY(), units = u"kg/m^2/s"),
     Terrarium.input(:leaf_carbon, XY(), units = u"kg/m^2"),
     Terrarium.input(:root_carbon, XY(), units = u"kg/m^2"),
@@ -84,9 +88,16 @@ end
     out.root_nitrogen[i, j, 1] = root
     out.storage_nitrogen[i, j, 1] = storage
     out.nitrogen_limitation[i, j, 1] = leaf_nitrogen_limitation(n, leaf, fields.leaf_carbon[i, j])
+    # Uptake demand (per unit net carbon gain at the target N:C) drawn from the soil mineral N,
+    # and turnover of plant nitrogen returned to the soil, both consumed by the soil biogeochemistry.
+    NF = eltype(out.crop_nitrogen_uptake)
+    out.crop_nitrogen_uptake[i, j, 1] = max(zero(NF), fields.net_primary_production[i, j]) * n.target_nc_ratio
+    out.crop_litterfall_nitrogen[i, j, 1] =
+        n.turnover_rate / Terrarium.seconds_per_day(NF) * max(zero(NF), fields.crop_nitrogen[i, j])
 end
 
 @kernel inbounds = true function compute_crop_nitrogen_tendency_kernel!(tend, grid, fields, n::CropNitrogen)
     i, j = @index(Global, NTuple)
-    tend.crop_nitrogen[i, j, 1] = max(zero(eltype(tend.crop_nitrogen)), fields.net_primary_production[i, j]) * n.target_nc_ratio
+    # d(N)/dt = uptake − litterfall (plant nitrogen: gained by root uptake, lost to soil litter).
+    tend.crop_nitrogen[i, j, 1] = fields.crop_nitrogen_uptake[i, j] - fields.crop_litterfall_nitrogen[i, j]
 end

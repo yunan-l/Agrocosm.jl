@@ -19,6 +19,7 @@ using SpeedyWeatherInternals.ParameterEditing: ParameterEditing, @parameterized,
 # Framework internals used when authoring processes and kernels.
 using Oceananigans.Fields: FunctionField
 using Oceananigans.Utils: launch!
+using Oceananigans.Operators: Δzᵃᵃᶜ
 using KernelAbstractions: @kernel, @index
 
 # ---------------------------------------------------------------------------

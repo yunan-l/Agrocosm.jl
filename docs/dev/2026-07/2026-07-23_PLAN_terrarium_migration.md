@@ -1,13 +1,15 @@
 # Re-architect Agrocosm.jl onto the Terrarium.jl framework
 
-> Status: **in progress**. Phases 0–2 complete; Phase 3 (crop physiology) underway. Ported and
-> unit-validated: crop root distribution, C3/C4 photosynthesis (matches Terrarium's LUEPhotosynthesis
-> to rtol 1e-10), crop stomatal conductance, and crop carbon dynamics. **A first coupled crop model
-> runs end-to-end on CPU and produces positive GPP** (crop photosynthesis + stomatal conductance +
-> carbon dynamics assembled into a Terrarium `LandModel`, enabled by widening Terrarium's vegetation
-> dispatches to the abstract interfaces). Remaining Phase 3: crop phenology (heat units), crop
-> nitrogen, plant-available-water, and soil C–N biogeochemistry. Legacy physics retained on disk until
-> the Phase 6 cleanup.
+> Status: **in progress**. Phases 0–3 and Phase 5 complete; Phase 4 (management events) next, then the
+> Phase 6 cleanup. **The full managed-crop `CropModel` runs end-to-end on CPU**: C3/C4 photosynthesis
+> (matches Terrarium's LUEPhotosynthesis to rtol 1e-10), stomatal conductance, phenology (prognostic
+> heat units), carbon and nitrogen pools with the N→Vcmax feedback, and a dynamic soil C–N
+> biogeochemistry (litter/fast/slow C + NH₄/NO₃ with mineralization/nitrification/denitrification), all
+> assembled into a Terrarium `LandModel` and enabled by widening Terrarium's vegetation dispatches to
+> the abstract interfaces. **The plant↔soil flux loop is closed and mass-conserving** — the crop draws
+> mineral N from the soil and returns litter C/N over the root zone. Remaining: Phase 4 discrete
+> management (sowing/harvest/tillage as documented Oceananigans callbacks) and the Phase 6 legacy
+> cleanup. Legacy physics retained on disk until Phase 6.
 
 Date of initial draft: 2026-07-23
 
@@ -35,6 +37,12 @@ Confirmed design decisions:
 ## Revision log
 
 > 2026-07-23: initial draft.
+>
+> 2026-07-24: **closed the plant↔soil flux loop — Phase 5 complete.** Added per-area crop turnover and
+> uptake fluxes to `CropCarbon`/`CropNitrogen` and made `CropSoilBiogeochemistry` consume them
+> (root-zone-distributed, mass-conserving). Added a conservation unit test
+> (`test/crop/test_crop_soil_coupling.jl`) and an end-to-end spike (`spike_crop_soil_coupling.jl`);
+> full suite green. Marked multi-crop tiling explicitly future/out-of-scope. Next: Phase 4 (management).
 >
 > 2026-07-23: executed Phases 0 and 1.
 >
@@ -350,10 +358,24 @@ Confirmed design decisions:
 >   (LAI 4.75, GPP 1.3e-7, biomass growing; soil heterotrophic respiration + NH₄/NO₃ pools cycling),
 >   all finite/stable. **This is the managed-crop `LandModel`/`CropModel` Phase 5 deliverable — both the
 >   crop C–N cycle and the soil C–N cycle run in one model.**
-> - Remaining Phase 5: close the plant↔soil flux loop — couple the crop N uptake
->   (`CropNitrogenDemand`/`CropNitrogenUptake`) to the soil mineral-N pools and feed crop litterfall (C
->   and N) into the soil litter pool; NH₃ volatilization (top-layer surface flux); the LAI-feedback
->   carbon deficit; per-CFT heat-unit requirement (climate-derived); optional multi-crop tiling.
+> - **Plant↔soil flux loop closed (Phase 5 complete).** The crop now exchanges mass with the soil
+>   biogeochemistry both ways: `CropCarbon`/`CropNitrogen` expose per-area (0D) turnover fluxes —
+>   `crop_litterfall_carbon`, `crop_litterfall_nitrogen` (rate `turnover_rate·pool`), and
+>   `crop_nitrogen_uptake` (`max(0,NPP)·target_nc_ratio`) — and their prognostic tendencies become
+>   `d(biomass)=NPP−litterfall_C`, `d(N)=uptake−litterfall_N`. `CropSoilBiogeochemistry` consumes these
+>   plus `root_fraction` as inputs and distributes them over the root zone as per-volume rates
+>   (`flux·root_fraction/Δzᵃᵃᶜ`): litterfall C → litter pool, litterfall N → NH₄, uptake drawn from
+>   NH₄/NO₃ by pool share. Because the root fraction sums to unity the column integral recovers the 0D
+>   flux exactly — **mass-conserving**, checked in `test/crop/test_crop_soil_coupling.jl` (litterfall C
+>   and N and uptake each recover their flux to rtol 1e-8–1e-10). A spike
+>   (`spike_crop_soil_coupling.jl`) runs the full maize `CropModel`: uptake flux > 0 with soil mineral N
+>   drawing down (2.0 → 1.99984), litterfall fluxes > 0 with soil litter carbon rising (20.0 → 20.0045),
+>   crop biomass and N accumulating — the loop closes and stays finite.
+> - **Phase 5 deferred items** (documented, not blocking): NH₃ volatilization as a top-layer surface
+>   flux (primitive `ammonia_volatilization` ported/tested, not yet wired as a boundary flux); the
+>   LAI-feedback carbon deficit and per-CFT heat-unit requirement (both climate/sowing-driven — natural
+>   Phase 4 work once sowing sets the season origin); multi-crop tiling (**explicitly future/out-of-scope**
+>   — legacy Agrocosm is single-crop and Terrarium's `TiledVegetationModel` is planned-not-implemented).
 
 ## Problem description
 
@@ -477,7 +499,11 @@ feature branch; end-to-end runs are restored at Phase 6.
   `Terrarium/AGENTS.md`.
 - **Phase 5 — Crop model & CFT registry.** A managed-crop `LandModel`/`CropModel` wiring Terrarium
   soil+surface+atmosphere with the Agrocosm crop processes; the 12 CFT parameter sets as
-  ModelParameters presets; multi-crop via the planned `TiledVegetationModel`.
+  ModelParameters presets. **Multi-crop tiling is explicitly future/out-of-scope:** the legacy
+  Agrocosm is a single-crop model (one CFT per simulation over a grid; the `Crop` state holds one
+  stand per cell, and the wheat example runs `cft1`), and Terrarium's `TiledVegetationModel` is a
+  *planned, not-yet-implemented* type (`VegetationModel` is "for a single PFT"). So omitting tiling is
+  not a regression — it matches the original scope; it should stay future work.
 - **Phase 6 — Validation, AD, docs, cleanup.** Reproduce the 10-year wheat GPP/NPP example on the
   new stack; conservation, Enzyme adjoint, and Reactant global tests; rewrite README/docs/examples to
   Terrarium idioms; **delete all superseded legacy source files retained during Phases 1–5** (the

@@ -59,6 +59,11 @@ Terrarium.variables(::CropSoilBiogeochemistry{NF}) where {NF} = (
     Terrarium.auxiliary(:net_mineralization, XYZ(), units = u"kg/m^3/s"),
     Terrarium.input(:temperature, XYZ(), default = NF(5), units = u"°C"),
     Terrarium.input(:saturation_water_ice, XYZ(), default = NF(0.5)),
+    # Crop coupling: 0D per-area fluxes distributed over the root zone, and the root fraction.
+    Terrarium.input(:root_fraction, XYZ(), default = zero(NF)),
+    Terrarium.input(:crop_litterfall_carbon, XY(), default = zero(NF), units = u"kg/m^2/s"),
+    Terrarium.input(:crop_litterfall_nitrogen, XY(), default = zero(NF), units = u"kg/m^2/s"),
+    Terrarium.input(:crop_nitrogen_uptake, XY(), default = zero(NF), units = u"kg/m^2/s"),
 )
 
 Terrarium.density_pure_soc(bgc::CropSoilBiogeochemistry) = bgc.ρ_org
@@ -152,18 +157,35 @@ end
 
 @kernel inbounds = true function compute_soil_bgc_tendency_kernel!(out, grid, fields, bgc::CropSoilBiogeochemistry)
     i, j, k = @index(Global, NTuple)
+    NF = eltype(out.litter_carbon)
     resp = fields.decomposition_response[i, j, k]
     d_litter, d_fast, d_slow, _het = soil_carbon_tendencies(
         bgc, fields.litter_carbon[i, j, k], fields.fast_carbon[i, j, k], fields.slow_carbon[i, j, k], resp,
     )
-    out.litter_carbon[i, j, k] = d_litter
-    out.fast_carbon[i, j, k] = d_fast
-    out.slow_carbon[i, j, k] = d_slow
+    ammonium = fields.soil_ammonium[i, j, k]
+    nitrate = fields.soil_nitrate[i, j, k]
     organic_carbon = fields.fast_carbon[i, j, k] + fields.slow_carbon[i, j, k]
     d_ammonium, d_nitrate = soil_nitrogen_tendencies(
-        bgc, fields.soil_ammonium[i, j, k], fields.soil_nitrate[i, j, k], fields.net_mineralization[i, j, k],
+        bgc, ammonium, nitrate, fields.net_mineralization[i, j, k],
         fields.temperature[i, j, k], fields.saturation_water_ice[i, j, k], organic_carbon,
     )
-    out.soil_ammonium[i, j, k] = d_ammonium
-    out.soil_nitrate[i, j, k] = d_nitrate
+
+    # Crop coupling: distribute the 0D per-area crop fluxes over the root zone as per-volume rates
+    # (÷ layer thickness); the root fraction sums to unity over the column, so mass is conserved.
+    field_grid = get_field_grid(grid)
+    per_volume = fields.root_fraction[i, j, k] / Δzᵃᵃᶜ(i, j, k, field_grid)
+    litterfall_carbon = fields.crop_litterfall_carbon[i, j] * per_volume
+    litterfall_nitrogen = fields.crop_litterfall_nitrogen[i, j] * per_volume
+    uptake = fields.crop_nitrogen_uptake[i, j] * per_volume
+    # Split the crop uptake between the ammonium and nitrate pools by their share.
+    total_mineral = max(ammonium + nitrate, eps(NF))
+    uptake_ammonium = uptake * ammonium / total_mineral
+    uptake_nitrate = uptake * nitrate / total_mineral
+
+    out.litter_carbon[i, j, k] = d_litter + litterfall_carbon
+    out.fast_carbon[i, j, k] = d_fast
+    out.slow_carbon[i, j, k] = d_slow
+    # Litterfall nitrogen mineralizes into ammonium; crop uptake draws down both mineral pools.
+    out.soil_ammonium[i, j, k] = d_ammonium + litterfall_nitrogen - uptake_ammonium
+    out.soil_nitrate[i, j, k] = d_nitrate - uptake_nitrate
 end
