@@ -68,27 +68,89 @@ the *coupling* (LAI feedback, soil water/temperature, radiation), not the crop p
 
 ## Sources of the difference
 
-The residual gap is **mostly structural** — it is the price of running the crop physiology on
-Terrarium's soil/surface rather than LPJmL's, and is *not* expected to close to zero. In rough order of
-contribution:
+The gap has both crop-physiology and structural contributions. In rough order of contribution:
 
-1. **Definitional (fixable):** Terrarium's `gpp` is net of leaf respiration; the original's is gross.
-   Comparing NPP (both *net*) removes this offset and already agrees to ~35 %. A gross-GPP diagnostic
-   would make the GPP columns like-for-like too.
-2. **Structural (inherent to the re-architecture):** a different soil water/temperature model (Richards
-   + energy vs the LPJmL 5-layer scheme) and a different surface-radiation scheme (the PALADYN surface
-   energy balance vs LPJmL APAR/albedo/PET) drive different water stress, canopy light absorption, and
-   phenology timing. These are intended differences, not defects.
-3. **Documented crop-feature gaps (small, tracked):** the LAI–NPP carbon-deficit feedback (so the
-   revised canopy is always full), temperature stress, and the full nitrogen demand/uptake cycle +
-   fertilizer are ported as tested primitives but not yet wired; site soil texture and the real initial
-   mineral-N pools are left out (LPJmL unit/scaling differences and fill values in the file).
+1. **Missing λ water-coupling solver (crop physiology — closeable).** The original couples
+   photosynthesis to soil water through the optimal-λ (cᵢ/cₐ) bisection (`solve_lambda_*` + `lpj_bisect`);
+   the revised uses a crude `λ = λ_min + (λ_opt − λ_min)·β`, and **water stress is off by default**
+   (β = 1, `plant_available_water = nothing`, and the default `SoilHydrology` = `NoFlow`). This severs the
+   water→GPP/transpiration feedback that is central to LPJmL and is the single largest value-changing
+   difference (see the audit, gap #1).
+2. **Definitional GPP offset (fixable).** Terrarium's `gpp` is net of leaf respiration; the original's is
+   gross. On NPP (both *net*) the models already agree to ~35 %.
+3. **Ported-but-not-wired crop features (closeable, incremental).** The full nitrogen demand/uptake
+   kinetics, the faithful Vcmax N-limitation, the harvest index (yield), and the LAI–NPP carbon-deficit
+   feedback are tested primitives that are not yet connected — they shift GPP, N status, yield, and the
+   canopy trajectory.
+4. **Re-ported physics that is simply absent.** Vernalization + the climate buffer/spinup (winter wheat
+   needs vernalization for correct phenology timing) and NO₃ leaching were removed and not re-added.
+5. **Structural (intended).** A different soil water/temperature model (Richards + energy vs the LPJmL
+   5-layer scheme) and surface-radiation scheme (PALADYN surface energy balance vs LPJmL APAR/albedo/PET)
+   necessarily change water stress, light absorption, and timing. These are intended, not defects.
 
-The takeaway: the revised model **faithfully reproduces the crop physiology** (validated at the kernel
-level) and gives **the same order of magnitude and seasonal behaviour** end-to-end; exact numerical
-agreement is neither achievable nor the goal once the soil/surface infrastructure is Terrarium's.
+The takeaway: the revised model **reproduces the crop physiology kernels faithfully** (C3/C4
+photosynthesis matches Terrarium's `LUEPhotosynthesis` to rtol 1e-10) and gives the **same order of
+magnitude and seasonal behaviour** end-to-end. The residual ~2× GPP / ~35 % NPP gap is driven mostly by
+the missing λ/water coupling and the not-yet-wired crop features (items 1–4, which are closeable), on top
+of the intended soil/surface infrastructure change (item 5). Exact numerical agreement is not expected
+once the soil/surface is Terrarium's, but the value-changing crop gaps below could be closed to bring the
+two substantially closer.
 
-See `2026-07-24_NOTES_future_work.md` for the tracked gaps and the feature-parity audit below.
+## Feature-parity audit (base revision `2192dc1f` vs current tree)
+
+The revised version does **not** yet carry every feature of the original. Status legend: **PRESENT**
+(wired into the running model), **PORTED-NOT-WIRED** (tested primitive, not connected),
+**REPLACED-BY-TERRARIUM**, **MISSING/DEFERRED**.
+
+**Crop physiology:** C3/C4 photosynthesis PRESENT · APAR PRESENT · carbon allocation PRESENT ·
+autotrophic respiration PRESENT · phenology + LAI PRESENT (carbon-deficit LAI cap DEFERRED) · crop carbon
+PRESENT · crop nitrogen PRESENT (simplified) · temperature stress PRESENT · root distribution PRESENT ·
+**λ solver MISSING** · **N demand/uptake kinetics PORTED-NOT-WIRED** · **Vcmax N-limitation primitive
+PORTED-NOT-WIRED** (effect approximated) · **vernalization MISSING** · **harvest index PORTED-NOT-WIRED**.
+
+**Management:** sowing PRESENT · harvest PRESENT · fertilizer PRESENT (continuous flux) · **tillage
+MISSING/DEFERRED**.
+
+**Soil/surface (delegated to Terrarium):** soil temperature, evaporation, infiltration/percolation,
+transpiration, interception, freeze-thaw, radiation/albedo/PET all REPLACED-BY-TERRARIUM (note: default
+crop model uses `NoFlow` hydrology → static water) · **snow MISSING** (Terrarium has only an abstract
+stub).
+
+**Soil biogeochemistry:** decomposition, nitrification, denitrification PRESENT · mineralization PRESENT
+(simplified) · litter routing PRESENT (simplified) · **immobilization PORTED-NOT-WIRED** · **NH₃
+volatilization PORTED-NOT-WIRED** · **NO₃ leaching MISSING** · **surface-litter hydrology/thermal
+MISSING**.
+
+**Climate/forcing:** climate input REPLACED-BY-TERRARIUM (`surface_climate_inputs` → `FieldTimeSeries`) ·
+CO₂ PRESENT (constant; time-series DEFERRED) · **climate buffer/spinup MISSING**.
+
+**Diagnostics:** **runtime Water/Nitrogen/Carbon/Thermal balance ledgers MISSING** (conservation is
+unit-tested only).
+
+**Numerics:** CPU PRESENT · GPU PRESENT (framework; full-model run DEFERRED) · Float32/Float64 PRESENT ·
+checkpoints REPLACED-BY-TERRARIUM · differentiability PARTIAL (soil biogeochem via Reactant; full crop
+`LandModel` blocked by the root-fraction Reactant gap).
+
+### Key gaps, ordered by impact on a wheat run
+
+1. λ water-coupling solver — MISSING (water→GPP feedback severed; water stress off by default).
+2. Crop N demand + uptake kinetics — PORTED-NOT-WIRED.
+3. Vernalization + climate buffer/spinup — MISSING (winter wheat phenology timing).
+4. Harvest index — PORTED-NOT-WIRED (grain-yield diagnostic).
+5. Faithful Vcmax N-limitation — PORTED-NOT-WIRED (approximated).
+6. Immobilization limitation — PORTED-NOT-WIRED.
+7. NH₃ volatilization — PORTED-NOT-WIRED.
+8. NO₃ leaching — MISSING.
+9. Surface-litter hydrology/thermal — MISSING.
+10. Tillage — MISSING (upstream Terrarium hook).
+11. Snow model — MISSING (Terrarium stub only).
+12. LAI↔NPP carbon-deficit feedback — DEFERRED.
+13. Runtime balance-ledger diagnostics — MISSING.
+
+Items 1–4 change the *values* a wheat run produces; 5–13 are narrower fidelity/robustness gaps. Most
+PORTED-NOT-WIRED primitives are individually tested, so wiring them is incremental — except the λ solver
+(#1) and vernalization + climate buffer (#3), which require re-porting removed code. These are tracked in
+`2026-07-24_NOTES_future_work.md`.
 
 ## Feature-parity audit
 

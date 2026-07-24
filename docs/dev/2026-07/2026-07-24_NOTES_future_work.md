@@ -38,10 +38,31 @@ Date started: 2026-07-24
 
 ## Deferred crop/soil features (physics ported or straightforward; wiring pending)
 
+> A full feature-parity audit vs the original standalone model, and a matched wheat-run comparison, are
+> in `2026-07-24_original_vs_revised_comparison.md`. The **value-changing** gaps (in impact order) are
+> below; the rest of that doc lists the narrower fidelity gaps.
+
+- **λ water-coupling solver (highest impact).** The original couples photosynthesis to soil water via
+  the optimal-λ (cᵢ/cₐ) bisection (`solve_lambda_c3/c4_lpj` + `lpj_bisect`, the latter still exported but
+  unused). The revised uses a crude `λ = λ_min + (λ_opt − λ_min)·β` in `stomatal_conductance.jl`, and
+  water stress is **off by default** (β = 1, `plant_available_water = nothing`, default `SoilHydrology` =
+  `NoFlow`). Re-port the bisection solver and enable the plant-available-water path so water limits GPP.
+- **Crop N demand + uptake kinetics.** `CropNitrogenDemand` / `CropNitrogenUptakeKinetics` (Michaelis–
+  Menten, soil-supply/temperature-limited) are ported and tested but not wired; uptake is currently
+  `NPP·target_nc_ratio`. Wire them (and the faithful `CropNitrogenVcmaxLimit`, currently approximated by
+  a linear ncleaf ramp).
+- **Vernalization + climate buffer/spinup.** Removed, not re-ported. Winter wheat needs vernalization for
+  correct phenology timing; the heat-unit requirement is a single value, not the climate-derived
+  sowing→maturity sum. Requires re-porting `climbuf`/`spin_up_climbuf!` and the vernalization terms.
+- **Harvest index.** `CropHarvestIndex` / `crop_harvest_index` is ported and tested but `harvest!` uses a
+  fixed residue split for grain instead of the LPJmL fphu×water-deficit HI — affects the yield diagnostic.
 - **Tillage.** Modifies the topsoil bulk density / hydraulics, which Terrarium's soil stratigraphy
   owns. Needs an upstream hook (a mutable, event-updatable stratigraphy/bulk-density field) before it
   can be wired as a sowing-day management event. Legacy physics: `tillage_hydraulics!` (mixing toward a
   target bulk density by a mixing efficiency).
+- **NO₃ leaching / surface litter / snow.** The original's NO₃ advective transport+leaching, the
+  surface-litter hydrology/thermal sub-model, and the snowpack (`snow!`) were not ported; Terrarium
+  currently supplies no snowpack (abstract stub only).
 - **NH₃ volatilization.** The scalar physics (`ammonia_volatilization`, `CropVolatilization`) is ported
   and tested but not yet wired as a top-layer **surface** N flux out of the ammonium pool.
 - **LAI ↔ NPP feedback (carbon deficit).** The fully LPJmL-faithful LAI caps the phenological LAI by a
