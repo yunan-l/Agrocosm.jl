@@ -25,6 +25,8 @@ integrator = initialize(model; boundary_conditions = PrescribedSurfaceTemperatur
 fast0 = sum(interior(integrator.state.fast_carbon))
 slow0 = sum(interior(integrator.state.slow_carbon))
 litter0 = sum(interior(integrator.state.litter_carbon))
+nh4_0 = sum(interior(integrator.state.soil_ammonium))
+no3_0 = sum(interior(integrator.state.soil_nitrate))
 
 run!(integrator; steps = 50)
 
@@ -32,12 +34,18 @@ fast1 = sum(interior(integrator.state.fast_carbon))
 slow1 = sum(interior(integrator.state.slow_carbon))
 litter1 = sum(interior(integrator.state.litter_carbon))
 het = sum(interior(integrator.state.heterotrophic_respiration))
+mineralization = sum(interior(integrator.state.net_mineralization))
+nh4_1 = sum(interior(integrator.state.soil_ammonium))
+no3_1 = sum(interior(integrator.state.soil_nitrate))
 
 println("SPIKE OK")
 println("  litter carbon: ", litter0, " -> ", litter1)
 println("  fast carbon:   ", fast0, " -> ", fast1)
 println("  slow carbon:   ", slow0, " -> ", slow1)
 println("  heterotrophic respiration (sum) = ", het, " kgC/m^3/s")
+println("  net mineralization (sum)        = ", mineralization, " kgN/m^3/s")
+println("  soil ammonium: ", nh4_0, " -> ", nh4_1)
+println("  soil nitrate:  ", no3_0, " -> ", no3_1)
 
 @assert soil.biogeochem isa CropSoilBiogeochemistry
 @assert all(isfinite, interior(integrator.state.temperature)) "soil temperature stayed finite"
@@ -45,4 +53,7 @@ println("  heterotrophic respiration (sum) = ", het, " kgC/m^3/s")
 @assert het > 0 "heterotrophic respiration should be positive"
 # Total soil carbon decreases (no input yet); the loss balances the respired carbon.
 @assert (litter1 + fast1 + slow1) < (litter0 + fast0 + slow0) "total soil carbon should decline without input"
+@assert mineralization > 0 "decomposition should mineralize nitrogen"
+@assert all(isfinite, interior(integrator.state.soil_nitrate)) "mineral nitrogen stayed finite"
+@assert no3_1 > no3_0 "nitrification should build up soil nitrate"
 println("SPIKE ASSERTIONS PASSED")
