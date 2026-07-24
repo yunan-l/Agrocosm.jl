@@ -54,6 +54,25 @@ Date started: 2026-07-24
   / limitation) is ported and tested but the soil biogeochemistry currently uses net mineralization at
   the soil C:N ratio directly; wire the immobilization limitation into the NH₄ tendency.
 
+## Not yet re-implemented on the Terrarium stack (gaps from the original code)
+
+- **Input data loading.** The original `InitialDataLoader` and `ClimateDataLoader`
+  (`src/input_output/`) were removed in the infrastructure swap, and the richer companion package
+  `lib/AgrocosmData/` (NetCDF climate blocks, soil lookup, management bands, crop masks, CO₂ series,
+  grid indexing) is **not wired to the new model** — it still targets the old ModelState schema and is
+  not a dependency of the main package. Every current example and the 10-year validation uses
+  **synthetic forcing** (`set!` + seasonal functions). To run on real data, connect either Terrarium's
+  I/O (`FieldTimeSeries`/input readers) or an updated `AgrocosmData` to the crop model's input fields
+  (`air_temperature`, `surface_shortwave_down`, soil texture, sowing calendars, CO₂, …), and provide a
+  real-IC initializer. **This is the main thing standing between the model and a real gridded run.**
+
+- **Runtime balance/diagnostic ledgers.** The original per-quantity ledgers
+  (`src/diagnostics/{carbon,nitrogen,thermal,water}_balance.jl`) were removed; conservation is now
+  checked only by **unit tests** (the crop↔soil flux-loop and soil-carbon mass-conservation tests) — not
+  tracked at runtime over a simulation. Re-add runtime carbon/nitrogen/water/energy closure diagnostics
+  (on Terrarium's `diagnostics/` infrastructure) if online conservation monitoring is wanted, and extend
+  the conservation tests to water/thermal/full-nitrogen budgets.
+
 ## Explicitly out of scope (future model generation)
 
 - **Multi-crop tiling / rotations.** Legacy Agrocosm is single-crop; Terrarium's `TiledVegetationModel`
