@@ -9,12 +9,11 @@ Agrocosm.jl is a Julia-based crop model supporting differentiation and GPU accel
 simulation, differentiable programming, high-performance computing, and
 machine-learning workflows available within one modelling environment.
 
-Agrocosm follows the overall structure of [Terrarium.jl](https://github.com/NumericalEarth/Terrarium.jl) (a fast, differentiable, and GPU-aware land modelling across scales).
 Agrocosm takes the crop module of [LPJmL](https://github.com/PIK-LPJmL/LPJmL) as an scientific
 reference. Agrocosm is **not** a line-by-line port of LPJmL. It is an
 independent Julia package that preserves relevant process
-logic while developing a GPU-aware and increasing
-differentiation. Agrocosm will be further built on Terrarium and become its crop module in the coming future. 
+logic while implementing a GPU-aware architecture and enhancing its differentiability. 
+Agrocosm will be further built on [Terrarium.jl](https://github.com/NumericalEarth/Terrarium.jl) (a fast, differentiable, and GPU-aware land modelling across scales) and become its crop module in the coming future. 
 
 > [!WARNING]
 > Agrocosm.jl is under active development with assistance from Codex 🤖, but almost done as a crop model.
