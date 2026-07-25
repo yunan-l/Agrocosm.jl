@@ -29,6 +29,7 @@ makedocs(
         ],
         "Science and development" => [
             "Validation and limitations" => "science/validation.md",
+            "Citations" => "science/citations.md",
             "Roadmap" => "development/roadmap.md",
         ],
         "API reference" => "api.md",
