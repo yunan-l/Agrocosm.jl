@@ -5,11 +5,7 @@
 
 <!-- **🧑‍🌾 💧 ☀️ 🌾 🚀 A Julia-based crop model supporting differentiation and GPU acceleration.** -->
 
-Agrocosm.jl is a fully process-based crop model supporting differentiation and GPU acceleration. Technically it is a crop model with carbon, nitrogen, water, and energy processes with a numerical design that can run on both CPUs and GPUs. It is easy to use and easy to extend. It is written in Julia to make physically based
-simulation, differentiable programming, high-performance computing, and
-machine-learning workflows available within one modelling environment.
-Agrocosm takes the crop module of [LPJmL](https://github.com/PIK-LPJmL/LPJmL) as an scientific
-reference. Agrocosm is **not** a line-by-line port of LPJmL. 
+Agrocosm.jl is a process-based crop model that simulates coupled carbon, nitrogen, water, and energy processes with a numerical design for CPUs and GPUs. It is easy to use and easy to extend. It is written in Julia to make physically based simulation, differentiable programming, high-performance computing, and machine-learning workflows available within one modelling environment. Agrocosm takes the crop module of [LPJmL](https://github.com/PIK-LPJmL/LPJmL) as an scientific reference. Agrocosm is **not** a line-by-line port of LPJmL. 
 It maintains relevant process logic of LPJmL while implementing a GPU-aware architecture and enhancing its differentiability. 
 
 > [!WARNING]
