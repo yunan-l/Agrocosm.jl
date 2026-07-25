@@ -67,6 +67,61 @@ function runtime_array_ids(value)
     return ids
 end
 
+@testset "Simulation memory estimate" begin
+    initial, _ = simulation_api_fixture(Float32)
+    simulation = initialize_simulation(
+        cft1, initial;
+        indices = [1], T = Float32, days = 4,
+        diagnostics = false, fertilizer = :no,
+    )
+    estimate = estimate_memory(simulation; block_days = 2, safety_factor = 1)
+    preallocation = estimate_memory(
+        1, 4; T = Float32, diagnostics = false, block_days = 2,
+        backend = :cpu, safety_factor = 1,
+    )
+    prefetched = estimate_memory(
+        simulation; block_days = 2, prefetch = true, safety_factor = 1,
+    )
+
+    @test estimate.cells == 1
+    @test estimate.days == 4
+    @test estimate.backend == :cpu
+    @test estimate.diagnostics_bytes == 0
+    @test estimate.projected_output_bytes == 264
+    @test preallocation == estimate
+    @test estimate_memory(
+        1, 1; T = Float64, diagnostics = false, block_days = 1,
+        backend = :cpu, safety_factor = 1,
+    ).persistent_state_bytes == 7074
+    @test estimate.forcing_block_bytes == 40
+    @test prefetched.host_forcing_bytes == estimate.host_forcing_bytes + 40
+    @test prefetched.host_peak_bytes == estimate.host_peak_bytes + 40
+    @test estimate.device_peak_bytes == 0
+    @test estimate.recommended_host_peak_gib == estimate.host_peak_bytes / 2.0^30
+    reader = (block_days = 2, selection = (compact_indices = [1],))
+    @test estimate_memory(simulation, reader; safety_factor = 1) == estimate
+    mismatched = (block_days = 2, selection = (compact_indices = [1, 2],))
+    @test_throws DimensionMismatch estimate_memory(simulation, mismatched)
+    @test_throws ArgumentError estimate_memory(simulation; block_days = 0)
+    @test_throws ArgumentError estimate_memory(0, 4; block_days = 2)
+    @test_throws ArgumentError estimate_memory(1, 4; block_days = 2, backend = :gpu)
+    @test_throws ArgumentError estimate_memory(
+        simulation; block_days = 2, safety_factor = 0.9,
+    )
+
+    with_diagnostics = initialize_simulation(
+        cft1, initial;
+        indices = [1], T = Float32, days = 4,
+        diagnostics = true, fertilizer = :no,
+    )
+    allocated = estimate_memory(with_diagnostics; block_days = 2, safety_factor = 1)
+    predicted = estimate_memory(
+        1, 4; T = Float32, diagnostics = true, block_days = 2,
+        backend = :cpu, safety_factor = 1,
+    )
+    @test predicted == allocated
+end
+
 @testset "Daily global CO₂ remains aligned across climate blocks" begin
     initial, _ = simulation_api_fixture(Float32)
     simulation = initialize_simulation(
@@ -85,6 +140,61 @@ end
     run_simulation!(simulation, second_block; spinup = false)
     @test simulation.simulated_days == 4
     @test simulation.daily_weather.annual_co2[1] == 40.3f0
+end
+
+@testset "High-level C4 simulation uses the shared daily driver" begin
+    initial, climate = simulation_api_fixture(Float32)
+    simulation = initialize_simulation(
+        cft4, initial;
+        indices = [1], T = Float32, days = 3, fertilizer = :no,
+    )
+    run_simulation!(simulation, climate; spinup = false)
+    @test simulation.simulated_days == 3
+    @test size(simulation.output.crop.npp) == (3, 1)
+    @test all(isfinite, simulation.output.crop.npp)
+end
+
+@testset "Backend-neutral climate blocks use the simulation precision" begin
+    initial, climate = simulation_api_fixture(Float32)
+    simulation = initialize_simulation(
+        cft1, initial;
+        indices = [1], T = Float64, days = 3, fertilizer = :no,
+    )
+    forcing = (
+        temp = climate.temp,
+        prec = climate.prec,
+        sw = climate.swdown,
+        lw = climate.lwnet,
+        co2 = fill(400.0f0, 3),
+        co2_daily = true,
+        backend_neutral = true,
+    )
+    run_simulation!(simulation, [forcing]; spinup = false)
+    @test simulation.simulated_days == 3
+    @test eltype(simulation.daily_weather.temp) == Float64
+    @test simulation.daily_weather.temp == [15.0]
+end
+
+@testset "Backend-neutral initial data need no source indices" begin
+    initial, climate = simulation_api_fixture(Float32)
+    backend_neutral = merge(initial, (backend_neutral = true,))
+    simulation = initialize_simulation(
+        cft1, backend_neutral;
+        T = Float64, days = 3, fertilizer = :no,
+    )
+    forcing = (
+        temp = climate.temp,
+        prec = climate.prec,
+        sw = climate.swdown,
+        lw = climate.lwnet,
+        co2 = fill(400.0f0, 3),
+        co2_daily = true,
+        backend_neutral = true,
+    )
+    run_simulation!(simulation, [forcing]; spinup = false)
+    @test simulation.config.indices === nothing
+    @test simulation.simulated_days == 3
+    @test eltype(simulation.managed_land.latitude) == Float64
 end
 
 @testset "Annual CO₂ forcing length is validated before kernel launch" begin

@@ -128,9 +128,11 @@ Acceptance:
 Replace eager whole-file reads with time-blocked access over the fixed active
 cell set.
 
-Status: the first streaming reader is implemented for daily temperature,
-precipitation, net longwave, and downward shortwave, with annual global CO₂
-matched to each block. Prefetching and production-scale benchmarks remain.
+Status: streaming is implemented for daily temperature, precipitation, net
+longwave, and downward shortwave, with annual global CO₂ matched to each block.
+Gregorian leap days are normalized to the model's 365-day calendar, and forcing
+units are converted to the canonical model contract. Prefetching and
+production-scale benchmarks remain.
 
 Deliverables:
 
@@ -181,6 +183,11 @@ Acceptance:
 - restart across a climate-block boundary matches an uninterrupted run;
 - a one-year global crop smoke test completes with bounded memory and closed
   model balance diagnostics.
+
+Status: `estimate_memory` now reports the projected model payload, diagnostics,
+final output, output-growth scratch space, current forcing-transfer copies, and
+an optional prefetched host block. It is advisory only; automatic spatial
+fallback and asynchronous prefetching remain future work.
 
 ## Milestone 7 — spin-up handoff and production hardening
 

@@ -12,6 +12,7 @@ The implementation roadmap is maintained in
 [`docs/agrocosm_data_roadmap.md`](../../docs/agrocosm_data_roadmap.md).
 
 ```julia
+using Agrocosm
 using AgrocosmData
 
 catalog = load_catalog("catalog.toml")
@@ -21,6 +22,9 @@ landuse = read_management(catalog, :landuse, grid, 1; years = 2000:2019)
 crop_mask = build_crop_mask(grid, landuse.values)
 soil = read_soil_data(catalog, grid; selection = crop_mask.selection)
 
+# `crop` comes from crop_inputs(...) using single-time management readers.
+# `initial_state` currently comes from the pre-spin-up u0 handoff.
+
 reader = climate_blocks(
     catalog,
     grid;
@@ -29,11 +33,43 @@ reader = climate_blocks(
     end_year = 2019,
     block_days = 31,
 )
-for block in reader
-    forcing = climate_forcing(block) # bounded time × cell arrays
-    # Transfer `forcing` to the selected backend and advance the model block.
-end
+initial = model_initial_data(grid, soil, crop, initial_state)
+
+simulation = initialize_simulation(
+    cft1,
+    initial;
+    days = climate_days(reader),
+    device = identity,
+)
+run_simulation!(simulation, climate_forcings(reader); spinup = false)
 ```
+
+Before allocating a large run, estimate the final model payload and
+forcing-buffer peak from the selected-cell count:
+
+```julia
+memory = estimate_memory(
+    length(reader.selection.compact_indices), climate_days(reader);
+    T = Float32,
+    diagnostics = false,
+    block_days = reader.block_days,
+    backend = :accelerator,
+    prefetch = false,
+)
+memory.recommended_host_peak_gib
+memory.recommended_device_peak_gib
+```
+
+After initialization, `estimate_memory(simulation, reader)` replaces the
+persistent-state formula with the bytes of the actual allocated arrays.
+
+Setting `prefetch=true` only reserves one additional host forcing block in the
+estimate. It does not enable asynchronous reading.
+
+`climate_forcings(reader)` remains lazy: each block is read only when
+`run_simulation!` requests it, then Agrocosm converts it to the simulation
+precision and transfers it to the configured backend. Crop, soil, climate
+buffers, diagnostics, and checkpoint state remain continuous between blocks.
 
 `crop_mask.selection` has a stable, `cellid`-sorted order for the full run.
 `crop_mask.active` retains the year-specific land-use state for switching crop
@@ -50,3 +86,9 @@ Climate blocks read only the requested daily rows from `temp`, `prec`, `lwnet`,
 and `swdown`. Annual global CO₂ from the two-column text file is matched by
 calendar year and emitted as a small daily vector, so arbitrary block boundaries
 remain correct.
+
+The model calendar is explicitly 365-day. Standard/Gregorian inputs have
+February 29 removed, while `noleap` and `365_day` inputs are retained. A
+`360_day` calendar or an incomplete year is rejected. Climate values are
+normalized before handoff to °C, mm/day, and W/m²; provenance retains both the
+source metadata and these canonical model units.

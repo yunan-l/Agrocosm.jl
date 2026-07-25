@@ -84,6 +84,7 @@ export write_output_nc
 export daily_crop_C3!, daily_crop_C4!
 export CropSimulation, initialize_simulation, run_simulation!, simulation_summary
 export save_checkpoint, restore_checkpoint!
+export estimate_memory
 
 
 # process-based crop model
@@ -183,5 +184,6 @@ include("utils/tools.jl")
 include("simulations/daily_crop_C3.jl")
 include("simulations/daily_crop_C4.jl")
 include("simulations/simulation_api.jl")
+include("simulations/memory_estimate.jl")
 
 end

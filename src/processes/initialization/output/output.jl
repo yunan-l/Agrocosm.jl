@@ -63,6 +63,18 @@ mutable struct Output{C, S, F, K, A}
     annual::A   # In-progress annual output records required before year-end emission.
 end
 
+const _DAILY_CROP_FLOAT_OUTPUT_FIELDS = (
+    :gpp, :npp, :lambda, :potential_vcmax, :vcmax,
+    :nitrogen_limitation, :respiration, :biomass, :lai,
+    :storage_carbon, :fphu, :water_deficit,
+)
+const _DAILY_CROP_INTEGER_OUTPUT_FIELDS = (:growing_mask,)
+const _DAILY_CALENDAR_INTEGER_OUTPUT_FIELDS = (
+    :harvesting_mask, :sowing_event, :harvest_event,
+)
+const _ANNUAL_CROP_FLOAT_OUTPUT_FIELDS = (:yield,)
+const _ANNUAL_CALENDAR_INTEGER_OUTPUT_FIELDS = (:harvest_date, :harvesting_year)
+
 init_output(cell_size::Int, device; kwargs...) =
     init_output(Float32, cell_size, device; kwargs...)
 function init_output(::Type{T},
@@ -130,18 +142,14 @@ function prepare_output_block!(output::Output,
     first_daily_row = size(output.crop.gpp, 1) + 1
     first_annual_row = size(output.crop.yield, 1) + 1
 
-    for field in (
-        :gpp, :npp, :lambda, :potential_vcmax, :vcmax,
-        :nitrogen_limitation, :respiration, :biomass, :lai,
-        :storage_carbon, :fphu, :water_deficit, :growing_mask,
-    )
+    for field in (_DAILY_CROP_FLOAT_OUTPUT_FIELDS..., _DAILY_CROP_INTEGER_OUTPUT_FIELDS...)
         setproperty!(
             output.crop,
             field,
             _extend_output_rows(getproperty(output.crop, field), daily_rows),
         )
     end
-    for field in (:harvesting_mask, :sowing_event, :harvest_event)
+    for field in _DAILY_CALENDAR_INTEGER_OUTPUT_FIELDS
         setproperty!(
             output.calendar,
             field,
