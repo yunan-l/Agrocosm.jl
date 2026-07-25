@@ -136,7 +136,8 @@ end
 """
 apar_crop!(PFT, crop, pet)
 
-Compute absorbed PAR and fPAR for non-maize crops.
+Compute absorbed PAR and fPAR. Set `maize=true` for the maize-specific fPAR
+parameterization.
 """
 function apar_crop_reference!(PFT::PftParameters,
                               crop,
@@ -159,7 +160,9 @@ function apar_crop_reference!(PFT::PftParameters,
 
 end
 
-function apar_crop!(PFT::PftParameters, crop, pet::PetPar, snow_height = nothing)
+function apar_crop!(
+    PFT::PftParameters, crop, pet::PetPar, snow_height = nothing; maize::Bool = false,
+)
     T = eltype(crop_canopy_auxiliary(crop).apar)
     launch_1D!(
         apar_crop_kernel!,
@@ -172,7 +175,7 @@ function apar_crop!(PFT::PftParameters, crop, pet::PetPar, snow_height = nothing
         T(PFT.lightextcoeff),
         T(PFT.albedo_leaf),
         T(PFT.alphaa),
-        false,
+        maize,
         snow_height !== nothing,
     )
     return nothing
@@ -206,24 +209,8 @@ function apar_crop_maize_reference!(PFT::PftParameters,
 end
 
 
-function apar_crop_maize!(PFT::PftParameters, crop, pet::PetPar, snow_height = nothing)
-    T = eltype(crop_canopy_auxiliary(crop).apar)
-    launch_1D!(
-        apar_crop_kernel!,
-        crop_canopy_auxiliary(crop).apar,
-        crop_canopy_auxiliary(crop).fpar,
-        crop_prognostic(crop).canopy.lai,
-        crop_prognostic(crop).canopy.lai_npp_deficit,
-        snow_height === nothing ? pet.eeq : snow_height,
-        pet.par,
-        T(PFT.lightextcoeff),
-        T(PFT.albedo_leaf),
-        T(PFT.alphaa),
-        true,
-        snow_height !== nothing,
-    )
-    return nothing
-end
+apar_crop_maize!(PFT::PftParameters, crop, pet::PetPar, snow_height = nothing) =
+    apar_crop!(PFT, crop, pet, snow_height; maize = true)
 
 @kernel inbounds = true function apar_crop_kernel!(
     apar::AbstractVector{T},

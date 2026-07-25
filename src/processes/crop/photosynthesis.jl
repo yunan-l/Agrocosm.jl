@@ -311,6 +311,12 @@ function photosynthesis_C4!(PFT::PftParameters,
     return nothing
 end
 
+"""Dispatch photosynthesis to the compile-time C3 or C4 pathway."""
+photosynthesis!(::Val{:C3}, PFT, crop, apar, daylength, temperature, co2; kwargs...) =
+    photosynthesis_C3!(PFT, crop, apar, daylength, temperature, co2; kwargs...)
+photosynthesis!(::Val{:C4}, PFT, crop, apar, daylength, temperature, co2; kwargs...) =
+    photosynthesis_C4!(PFT, crop, apar, daylength, temperature; kwargs...)
+
 @kernel inbounds = true function photosynthesis_c4_kernel!(
     gross_assimilation::AbstractVector{T},
     net_assimilation::AbstractVector{T},

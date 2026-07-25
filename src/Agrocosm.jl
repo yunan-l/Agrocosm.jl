@@ -56,6 +56,7 @@ export albedo!, petpar!, apar_crop!, apar_crop_maize!
 
 # CROP
 export photosynthesis_C3!, photosynthesis_C4!, carbon_allocation!, respiration!
+export photosynthesis!, solve_lambda!
 export phenology_crop!, lai_crop!, cultivate!, harvest_crop!, fertilizer!
 export transpiration!, interception!
 export crop_carbon!, crop_nitrogen!, ndemand_crop!, nuptake_crop!
@@ -181,8 +182,7 @@ include("utils/load_nc.jl")
 include("utils/tools.jl")
 
 # Daily crop simulations
-include("simulations/daily_crop_C3.jl")
-include("simulations/daily_crop_C4.jl")
+include("simulations/daily_crop.jl")
 include("simulations/simulation_api.jl")
 include("simulations/memory_estimate.jl")
 

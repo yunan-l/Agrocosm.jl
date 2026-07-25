@@ -250,6 +250,12 @@ function solve_lambda_c4!(PFT::PftParameters,
     )
 end
 
+"""Dispatch the water-limited lambda solve to the compile-time crop pathway."""
+solve_lambda!(::Val{:C3}, PFT, crop, pet, temperature, co2; kwargs...) =
+    solve_lambda_c3!(PFT, crop, pet, temperature, co2; kwargs...)
+solve_lambda!(::Val{:C4}, PFT, crop, pet, temperature, co2; kwargs...) =
+    solve_lambda_c4!(PFT, crop, pet, temperature, co2; kwargs...)
+
 @kernel inbounds = true function solve_lambda_c4_kernel!(
     lambda::AbstractArray{T},
     vcmax::AbstractArray{T},

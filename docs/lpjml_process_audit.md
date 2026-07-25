@@ -17,8 +17,9 @@ daily data flow, and intentional simplifications explicit.
 
 ## Daily process order
 
-The two drivers are `src/simulations/daily_crop_C3.jl` and
-`src/simulations/daily_crop_C4.jl`.  Their common scientific pathway is:
+The shared C3/C4 driver is `src/simulations/daily_crop.jl`. Compile-time
+pathway dispatch selects the C3 or C4 radiation, photosynthesis, and water-
+limited lambda operations without changing their common scientific sequence:
 
 ```text
 climate history → cultivation/tillage/bioturbation → albedo/PET → snow
