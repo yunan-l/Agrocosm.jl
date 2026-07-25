@@ -257,7 +257,8 @@ function run_simulation!(
 end
 
 """
-    run_simulation!(simulation, climate_blocks; spinup=true, spinup_years=1)
+    run_simulation!(simulation, climate_blocks;
+                    spinup=true, spinup_years=1, output_stream=nothing)
 
 Run an ordered collection of climate `NamedTuple`s or JLD2 file paths without
 concatenating them in memory. The first block may initialize the climate
@@ -268,14 +269,31 @@ function run_simulation!(
     climate_blocks::AbstractVector;
     spinup::Bool = true,
     spinup_years::Integer = 1,
+    output_stream::Union{Nothing, OutputStream} = nothing,
 )
     isempty(climate_blocks) && throw(ArgumentError("climate_blocks must not be empty"))
+    if output_stream !== nothing
+        all(isnothing, values(simulation.diagnostics)) || throw(ArgumentError(
+            "streamed global runs require initialize_simulation(...; diagnostics=false)",
+        ))
+        _output_timeseries_empty(simulation.output) || throw(ArgumentError(
+            "streaming must start with empty output time series",
+        ))
+    end
     for (block_index, block) in pairs(climate_blocks)
+        first_day = simulation.simulated_days + 1
         run_simulation!(
             simulation, block;
             spinup = spinup && block_index == firstindex(climate_blocks),
             spinup_years = spinup_years,
         )
+        if output_stream !== nothing
+            consume_output!(output_stream, simulation.output, first_day)
+            clear_output_timeseries!(simulation.output)
+        end
+    end
+    if output_stream !== nothing && simulation.simulated_days == simulation.config.days
+        finish_output_stream!(output_stream, simulation.simulated_days)
     end
     return simulation
 end

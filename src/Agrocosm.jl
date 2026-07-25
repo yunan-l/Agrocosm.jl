@@ -80,6 +80,9 @@ export deg2rad, ppm2Pa, ppm2bar, hour2day, hour2sec, degCtoK
 # DATA
 export InitialDataLoader, ClimateDataLoader, DataLoader, DataLoader_winter_wheat
 export write_output_nc
+export OutputVariable, OutputChunk, OutputStream
+export JLD2BlockWriter, NetCDFBlockWriter
+export consume_output!, finish_output_stream!, clear_output_timeseries!
 
 # DAILY CROP SIMULATIONS
 export daily_crop_C3!, daily_crop_C4!
@@ -173,6 +176,7 @@ include("processes/soil/soil_response.jl")
 include("input_output/climate_data_loader.jl")
 include("input_output/initial_data_loader.jl")
 include("input_output/write_output_nc.jl")
+include("input_output/stream_output.jl")
 
 # Utilities
 include("utils/kernel_launch.jl")
