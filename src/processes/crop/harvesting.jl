@@ -11,6 +11,7 @@ function harvest_crop!(crop,
                        output_row::Union{Nothing, Integer} = nothing,
                        annual_output_row::Union{Nothing, Integer} = nothing
 ) where {T <: AbstractFloat}
+    annual_row = something(annual_output_row, 0)
 
     launch_1D!(
         harvest_state_kernel!,
@@ -36,14 +37,12 @@ function harvest_crop!(crop,
         soil_water_prognostic(soil).storage,
         soil_properties(soil).layer_depth,
         residue_frac,
+        output.crop.yield,
+        output.calendar.harvest_date,
+        output.calendar.harvesting_year,
+        annual_row,
         day,
     )
-
-    # soil_carbon_fluxes(soil).input .= vcat(reshape((crop_prognostic(crop).carbon.leaf .+ crop_prognostic(crop).carbon.pool) .* residue_frac, (1, :)), device(zeros(Float32, (1, cell_size))), reshape(crop_prognostic(crop).carbon.root, (1, :))) .* reshape(crop_events(crop).harvest, (1, :))
-    # soil_nitrogen_fluxes(soil).input .= vcat(reshape((crop_prognostic(crop).nitrogen.leaf .+ crop_prognostic(crop).nitrogen.pool) .* residue_frac, (1, :)), device(zeros(Float32, (1, cell_size))), reshape(crop_prognostic(crop).nitrogen.root, (1, :))) .* reshape(crop_events(crop).harvest, (1, :))
-    # idx = ((crop_prognostic(crop).phenology.harvesting_previous .== true) .& (crop_prognostic(crop).phenology.harvesting .== true)) .| ((crop_prognostic(crop).phenology.harvesting_previous .== true) .& (crop_prognostic(crop).phenology.harvesting .== false)) .| ((crop_prognostic(crop).phenology.harvesting_previous .== false) .& (crop_prognostic(crop).phenology.harvesting .== false))
-    # crop_events(crop).harvest[idx] .= 0
-    # crop_events(crop).harvest .= ifelse.(((crop_prognostic(crop).phenology.harvesting_previous .== true) .& (crop_prognostic(crop).phenology.harvesting .== true)) .| ((crop_prognostic(crop).phenology.harvesting_previous .== true) .& (crop_prognostic(crop).phenology.harvesting .== false)) .| ((crop_prognostic(crop).phenology.harvesting_previous .== false) .& (crop_prognostic(crop).phenology.harvesting .== false)), 0, crop_events(crop).harvest)
 
     daily_sources = (
         crop = (
@@ -70,38 +69,191 @@ function harvest_crop!(crop,
             end
         end
     end
-    if day == 365
+    if day == 365 && annual_output_row === nothing
         annual_yield = max.(output.annual.yield, zero(T))
         harvesting_year = ifelse.(annual_yield .!= zero(T), Int32(1), Int32(0))
-        if annual_output_row === nothing
-            output.calendar.harvest_date = _append_output_row(
-                output.calendar.harvest_date, output.annual.harvest_date,
-            )
-            output.crop.yield = _append_output_row(
-                output.crop.yield, annual_yield,
-            )
-            output.calendar.harvesting_year = _append_output_row(
-                output.calendar.harvesting_year, harvesting_year,
-            )
-        else
-            _write_output_row!(
-                output.calendar.harvest_date, annual_output_row, output.annual.harvest_date,
-            )
-            _write_output_row!(output.crop.yield, annual_output_row, annual_yield)
-            _write_output_row!(
-                output.calendar.harvesting_year,
-                annual_output_row,
-                harvesting_year,
-            )
-        end
-        output.annual.yield .= zero(T)
-        output.annual.harvest_date .= 0
+        output.calendar.harvest_date = _append_output_row(
+            output.calendar.harvest_date, output.annual.harvest_date,
+        )
+        output.crop.yield = _append_output_row(output.crop.yield, annual_yield)
+        output.calendar.harvesting_year = _append_output_row(
+            output.calendar.harvesting_year, harvesting_year,
+        )
+        launch_1D!(
+            reset_annual_harvest_kernel!,
+            output.annual.yield,
+            output.annual.harvest_date,
+        )
     end
-    # crop_prognostic(crop).carbon.root = crop_prognostic(crop).carbon.root .* (1 .- crop_events(crop).harvest)
-    # crop_prognostic(crop).carbon.leaf = crop_prognostic(crop).carbon.leaf .* (1 .- crop_events(crop).harvest)
-    # crop_prognostic(crop).carbon.storage = crop_prognostic(crop).carbon.storage .* (1 .- crop_events(crop).harvest)
-    # crop_prognostic(crop).carbon.pool = crop_prognostic(crop).carbon.pool .* (1 .- crop_events(crop).harvest)
+end
 
+"""
+    terminate_failed_crop!(crop, soil, output, residue_fraction, day; output_row, annual_output_row)
+
+Harvest and remove crop stands flagged by the LPJmL negative-biomass test.
+Normal calendar harvests have already set `is_growing` to zero and are ignored.
+"""
+function terminate_failed_crop!(crop,
+                                soil,
+                                output::Output,
+                                residue_fraction::AbstractVector{T},
+                                day::Integer;
+                                output_row::Integer,
+                                annual_output_row::Union{Nothing, Integer} = nothing,
+) where {T <: AbstractFloat}
+    day == 365 && annual_output_row === nothing &&
+        throw(ArgumentError("annual_output_row is required on day 365"))
+    annual_row = something(annual_output_row, 0)
+    launch_1D!(
+        terminate_failed_crop_kernel!,
+        crop_events(crop).harvest,
+        output.annual.harvest_date,
+        crop_prognostic(crop).phenology.is_growing,
+        crop_prognostic(crop).phenology.harvesting,
+        crop_prognostic(crop).phenology.harvesting_previous,
+        crop_fluxes(crop).carbon.yield,
+        crop_fluxes(crop).carbon.harvest_export,
+        output.annual.yield,
+        crop_prognostic(crop).carbon.biomass,
+        crop_prognostic(crop).carbon.storage,
+        crop_prognostic(crop).carbon.leaf,
+        crop_prognostic(crop).carbon.pool,
+        crop_prognostic(crop).carbon.root,
+        crop_fluxes(crop).nitrogen.harvest_export,
+        crop_prognostic(crop).nitrogen.total,
+        crop_prognostic(crop).nitrogen.storage,
+        crop_prognostic(crop).nitrogen.leaf,
+        crop_prognostic(crop).nitrogen.pool,
+        crop_prognostic(crop).nitrogen.root,
+        crop_prognostic(crop).nitrogen.pending_manure,
+        crop_prognostic(crop).nitrogen.pending_fertilizer,
+        crop_prognostic(crop).canopy.lai,
+        crop_prognostic(crop).canopy.lai_npp_deficit,
+        crop_canopy_auxiliary(crop).actual_lai,
+        soil_carbon_fluxes(soil).input,
+        soil_nitrogen_fluxes(soil).input,
+        residue_fraction,
+        output.crop.biomass,
+        output.crop.lai,
+        output.crop.storage_carbon,
+        output.crop.growing_mask,
+        output.calendar.harvesting_mask,
+        output.calendar.harvest_event,
+        output.crop.yield,
+        output.calendar.harvest_date,
+        output.calendar.harvesting_year,
+        output_row,
+        annual_row,
+        day,
+    )
+    return nothing
+end
+
+@kernel inbounds = true function terminate_failed_crop_kernel!(
+    harvest_event::AbstractVector{S},
+    harvest_date::AbstractVector{S},
+    is_growing::AbstractVector{S},
+    harvesting::AbstractVector{B},
+    harvesting_previous::AbstractVector{B},
+    crop_yield::AbstractVector{T},
+    carbon_harvest_export::AbstractVector{T},
+    annual_yield::AbstractVector{T},
+    biomass::AbstractVector{T},
+    storage_carbon::AbstractVector{T},
+    leaf_carbon::AbstractVector{T},
+    pool_carbon::AbstractVector{T},
+    root_carbon::AbstractVector{T},
+    nitrogen_harvest_export::AbstractVector{T},
+    total_nitrogen::AbstractVector{T},
+    storage_nitrogen::AbstractVector{T},
+    leaf_nitrogen::AbstractVector{T},
+    pool_nitrogen::AbstractVector{T},
+    root_nitrogen::AbstractVector{T},
+    pending_manure::AbstractVector{T},
+    pending_fertilizer::AbstractVector{T},
+    lai::AbstractVector{T},
+    lai_npp_deficit::AbstractVector{T},
+    actual_lai::AbstractVector{T},
+    carbon_input::AbstractMatrix{T},
+    nitrogen_input::AbstractMatrix{T},
+    residue_fraction::AbstractVector{T},
+    output_biomass::AbstractMatrix{T},
+    output_lai::AbstractMatrix{T},
+    output_storage_carbon::AbstractMatrix{T},
+    output_growing_mask::AbstractMatrix{S},
+    output_harvesting_mask::AbstractMatrix{S},
+    output_harvest_event::AbstractMatrix{S},
+    output_yield::AbstractMatrix{T},
+    output_harvest_date::AbstractMatrix{S},
+    output_harvesting_year::AbstractMatrix{S},
+    output_row::Integer,
+    annual_output_row::Integer,
+    day::Integer,
+) where {T <: AbstractFloat, S <: Integer, B <: Bool}
+    cell = @index(Global)
+    failed = harvest_event[cell] != 0 && is_growing[cell] != 0
+    if failed
+        crop_yield[cell] = storage_carbon[cell]
+        annual_yield[cell] += crop_yield[cell]
+        harvest_date[cell] = S(day)
+        carbon_harvest_export[cell] = crop_yield[cell] +
+            (leaf_carbon[cell] + pool_carbon[cell]) *
+            (one(T) - residue_fraction[cell])
+        nitrogen_harvest_export[cell] = storage_nitrogen[cell] +
+            (leaf_nitrogen[cell] + pool_nitrogen[cell]) *
+            (one(T) - residue_fraction[cell])
+        carbon_input[SURFACE_LITTER, cell] =
+            (leaf_carbon[cell] + pool_carbon[cell]) * residue_fraction[cell]
+        carbon_input[ROOT_LITTER, cell] = root_carbon[cell]
+        nitrogen_input[SURFACE_LITTER, cell] =
+            (leaf_nitrogen[cell] + pool_nitrogen[cell]) * residue_fraction[cell]
+        nitrogen_input[ROOT_LITTER, cell] = root_nitrogen[cell]
+        carbon_input[INCORPORATED_LITTER, cell] = zero(T)
+        nitrogen_input[INCORPORATED_LITTER, cell] = zero(T)
+
+        is_growing[cell] = zero(S)
+        harvesting[cell] = false
+        harvesting_previous[cell] = false
+        biomass[cell] = zero(T)
+        storage_carbon[cell] = zero(T)
+        leaf_carbon[cell] = zero(T)
+        pool_carbon[cell] = zero(T)
+        root_carbon[cell] = zero(T)
+        total_nitrogen[cell] = zero(T)
+        storage_nitrogen[cell] = zero(T)
+        leaf_nitrogen[cell] = zero(T)
+        pool_nitrogen[cell] = zero(T)
+        root_nitrogen[cell] = zero(T)
+        pending_manure[cell] = zero(T)
+        pending_fertilizer[cell] = zero(T)
+        lai[cell] = zero(T)
+        lai_npp_deficit[cell] = zero(T)
+        actual_lai[cell] = zero(T)
+    end
+    output_biomass[output_row, cell] = biomass[cell]
+    output_lai[output_row, cell] = actual_lai[cell]
+    output_storage_carbon[output_row, cell] = storage_carbon[cell]
+    output_growing_mask[output_row, cell] = is_growing[cell]
+    output_harvesting_mask[output_row, cell] = max(
+        output_harvesting_mask[output_row, cell], failed ? one(S) : zero(S),
+    )
+    output_harvest_event[output_row, cell] = max(
+        output_harvest_event[output_row, cell], failed ? one(S) : zero(S),
+    )
+
+    # The regular harvest kernel has already emitted and cleared day 365.
+    if day == 365
+        if failed
+            output_yield[annual_output_row, cell] += crop_yield[cell]
+            output_harvest_date[annual_output_row, cell] = S(day)
+            output_harvesting_year[annual_output_row, cell] = one(S)
+        end
+        annual_yield[cell] = zero(T)
+        harvest_date[cell] = zero(S)
+    end
+    # Keep only failure events in the live state so the second residue-routing
+    # pass cannot route a normal calendar harvest twice.
+    harvest_event[cell] = failed ? one(S) : zero(S)
 end
 
 @kernel inbounds = true function harvest_state_kernel!(
@@ -127,6 +279,10 @@ end
     soil_water_storage::AbstractMatrix{T},
     soil_layer_depth::AbstractVector{T},
     residue_fraction::AbstractVector{T},
+    output_yield::AbstractMatrix{T},
+    output_harvest_date::AbstractMatrix{S},
+    output_harvesting_year::AbstractMatrix{S},
+    annual_output_row::Integer,
     day::Integer,
 ) where {T <: AbstractFloat, S <: Integer, B <: Bool}
     cell = @index(Global)
@@ -161,4 +317,22 @@ end
     end
     carbon_input[INCORPORATED_LITTER, cell] = zero(T)
     nitrogen_input[INCORPORATED_LITTER, cell] = zero(T)
+    if day == 365 && annual_output_row != 0
+        emitted_yield = max(annual_yield[cell], zero(T))
+        output_yield[annual_output_row, cell] = emitted_yield
+        output_harvest_date[annual_output_row, cell] = harvest_date[cell]
+        output_harvesting_year[annual_output_row, cell] =
+            emitted_yield != zero(T) ? one(S) : zero(S)
+        annual_yield[cell] = zero(T)
+        harvest_date[cell] = zero(S)
+    end
+end
+
+@kernel inbounds = true function reset_annual_harvest_kernel!(
+    annual_yield::AbstractVector{T},
+    harvest_date::AbstractVector{S},
+) where {T <: AbstractFloat, S <: Integer}
+    cell = @index(Global)
+    annual_yield[cell] = zero(T)
+    harvest_date[cell] = zero(S)
 end

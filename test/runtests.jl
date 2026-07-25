@@ -6,6 +6,7 @@ using Test
     include("processes/initialization/test_initialization.jl")
     include("processes/climate/test_snow.jl")
     include("processes/climate/test_readclimate.jl")
+    include("processes/climate/test_climbuf.jl")
     include("processes/crop/test_photosynthesis.jl")
     include("processes/crop/test_pft_registry.jl")
     include("processes/crop/test_temperature_stress_lpjml.jl")

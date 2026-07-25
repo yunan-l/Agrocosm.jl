@@ -45,3 +45,51 @@ using Test
     @test sum(soil.nitrogen.litter) == nitrogen_residue
     @test crop.state.phenology.is_growing[1] == 0
 end
+
+@testset "Negative biomass terminates the failed crop conservatively" begin
+    crop = init_crop(1, identity)
+    soil = init_soil(1, soilparams.soildepth, identity)
+    output = init_output(1, identity)
+    Agrocosm.prepare_output_block!(output, 1, 0)
+    residue_fraction = Float32[0.6]
+    soil.management.tillage_fraction .= Float32[1 0 0; 0 1 0; 0 0 1]
+
+    crop.state.phenology.is_growing .= Int32(1)
+    crop.state.canopy.lai .= 1.0f0
+    crop.auxiliary.canopy.actual_lai .= 1.0f0
+    crop.state.carbon.biomass .= 1.0f0
+    crop.state.carbon.leaf .= 0.2f0
+    crop.state.carbon.root .= 0.3f0
+    crop.state.carbon.pool .= 0.5f0
+    crop.fluxes.carbon.respiration .= 2.0f0
+    crop.state.nitrogen.total .= 0.4f0
+    crop.state.nitrogen.leaf .= 0.1f0
+    crop.state.nitrogen.root .= 0.1f0
+    crop.state.nitrogen.pool .= 0.2f0
+
+    carbon_allocation!(cft1, crop)
+    @test crop.fluxes.carbon.npp[1] == -2.0f0
+    @test crop.events.harvest[1] == 1
+
+    Agrocosm.terminate_failed_crop!(
+        crop, soil, output, residue_fraction, 100; output_row = 1,
+    )
+    Agrocosm.route_harvest_residues!(soil, crop)
+
+    @test crop.state.phenology.is_growing[1] == 0
+    @test crop.events.harvest[1] == 1
+    @test crop.state.carbon.biomass[1] == 0.0f0
+    @test crop.state.carbon.leaf[1] == 0.0f0
+    @test crop.state.carbon.root[1] == 0.0f0
+    @test crop.state.carbon.pool[1] == 0.0f0
+    @test crop.state.carbon.storage[1] == 0.0f0
+    @test crop.state.nitrogen.total[1] == 0.0f0
+    @test output.crop.growing_mask[1, 1] == 0
+    @test output.calendar.harvest_event[1, 1] == 1
+    @test crop.fluxes.carbon.harvest_export[1] + sum(soil.carbon.input) ≈ -1.0f0
+    @test crop.fluxes.nitrogen.harvest_export[1] + sum(soil.nitrogen.input) ≈ 0.4f0
+
+    # An absent stand cannot continue producing a negative-NPP tail.
+    carbon_allocation!(cft1, crop)
+    @test crop.fluxes.carbon.npp[1] == 0.0f0
+end

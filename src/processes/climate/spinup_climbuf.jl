@@ -13,7 +13,6 @@ function spin_up_climbuf!(PFT::PftParameters,
         for day in axes(year_temp, 1)
             daily_climbuf!(year_temp[day, :], climbuf.temp)
         end
-        climbuf.V_req_a .= zero(T)
         annual_climbuf!(year_temp, climbuf, PFT)
     end
 
@@ -31,11 +30,7 @@ function update_climbuf!(PFT::PftParameters,
                          day::Integer
 )where {T <: AbstractFloat}
 
-    daily_climbuf!(temp, climbuf.temp)
-
     if day > 1 && day % 365 == 1
-        # year_temp = climate_temp[day-365:day-1, :]
-        climbuf.V_req_a .= 0.0f0
         annual_climbuf!(climbuf.atemp, climbuf, PFT)
     end
     
@@ -45,6 +40,10 @@ function update_climbuf!(PFT::PftParameters,
         day = day % 365
     end
     
-    climbuf.atemp[day, :] .= temp
+    daily_climbuf!(
+        temp, climbuf.temp;
+        annual_temperature = climbuf.atemp,
+        annual_day = day,
+    )
 
 end

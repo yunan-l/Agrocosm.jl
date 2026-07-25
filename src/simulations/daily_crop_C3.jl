@@ -206,6 +206,18 @@ function daily_crop_C3!(start_day, end_day,
             output_row = output_row,
             lpjmlparams = global_params,
         )
+        terminate_failed_crop!(
+            crop, soil, output, managed_land.residue_fraction, day_of_year;
+            output_row = output_row,
+            annual_output_row = annual_output_row,
+        )
+        route_harvest_residues!(soil, crop)
+        if carbon_balance !== nothing
+            record_carbon_balance_after_harvest!(
+                carbon_balance, diagnostic_day, crop, soil,
+                managed_land.residue_fraction,
+            )
+        end
 
         # crop nitrogen allocation
         if nitrogen_limit_vcmax

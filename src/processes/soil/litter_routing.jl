@@ -136,7 +136,7 @@ unchanged by the tillage matrix.
 function route_harvest_carbon_input_reference!(soil, crop)
     event = reshape(crop_events(crop).harvest, (1, :))
     litter_with_input = soil_carbon_prognostic(soil).litter .+
-                        max.(soil_carbon_fluxes(soil).input, zero(eltype(soil_carbon_fluxes(soil).input)))
+                        soil_carbon_fluxes(soil).input
     routed_litter = soil_management_input(soil).tillage_fraction * litter_with_input
     soil_management_fluxes(soil).tillage_carbon .+=
         max.((@view litter_with_input[SURFACE_LITTER, :]) .-
@@ -164,7 +164,7 @@ end
 function route_harvest_nitrogen_input_reference!(soil, crop)
     event = reshape(crop_events(crop).harvest, (1, :))
     litter_with_input = soil_nitrogen_prognostic(soil).litter .+
-                        max.(soil_nitrogen_fluxes(soil).input, zero(eltype(soil_nitrogen_fluxes(soil).input)))
+                        soil_nitrogen_fluxes(soil).input
     routed_litter = soil_management_input(soil).tillage_fraction * litter_with_input
     soil_management_fluxes(soil).tillage_nitrogen .+=
         max.((@view litter_with_input[SURFACE_LITTER, :]) .-
@@ -198,9 +198,11 @@ end
 ) where {T <: AbstractFloat, S <: Integer}
     cell = @index(Global)
     if harvest_event[cell] != 0
-        litter_1 = litter[1, cell] + max(litter_input[1, cell], zero(T))
-        litter_2 = litter[2, cell] + max(litter_input[2, cell], zero(T))
-        litter_3 = litter[3, cell] + max(litter_input[3, cell], zero(T))
+        # LPJmL routes the pools verbatim. In a negative-biomass failure the
+        # mobile pool can be negative, and clipping it here would create carbon.
+        litter_1 = litter[1, cell] + litter_input[1, cell]
+        litter_2 = litter[2, cell] + litter_input[2, cell]
+        litter_3 = litter[3, cell] + litter_input[3, cell]
         routed_1 = tillage_fraction[1, 1] * litter_1 +
             tillage_fraction[1, 2] * litter_2 + tillage_fraction[1, 3] * litter_3
         tillage_flux[cell] += max(litter_1 - routed_1, zero(T))

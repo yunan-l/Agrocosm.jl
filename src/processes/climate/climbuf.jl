@@ -1,8 +1,6 @@
 # Climate buffer updates: monthly aggregation, rolling means, and vernalization metrics.
-using CUDA
-
 """
-annual_climbuf!(daily_temp, climbuf, PFT, device; n=5, kk=0.05)
+annual_climbuf!(daily_temp, climbuf, PFT; n=5, kk=0.05)
 
 Update annual climate-buffer diagnostics used by phenology, including rolling
 monthly means and vernalization requirements.
@@ -13,6 +11,7 @@ function annual_climbuf!(daily_temp::AbstractArray{T},
                          n::Int = 5,
                          kk = T(0.05)
 ) where {T <: AbstractFloat}
+    kk = T(kk)
     # Calculate the average temperature for each month.
     # update_monthly
     # length(daily_temp) = 365
@@ -28,37 +27,22 @@ function annual_climbuf!(daily_temp::AbstractArray{T},
         climbuf.mtemp,
         kk,
     )
-    # climbuf.mtemp20 .= ifelse.(climbuf.mtemp20 .< -9998, climbuf.mtemp, (1 - kk) * climbuf.mtemp20 .+ kk * climbuf.mtemp)
-    
-    # getmintemp20_n!(climbuf, n)
-    # Keep n coldest months per grid cell for vernalization requirement diagnostics.
-    climbuf.min_temp .= sort(climbuf.mtemp20, dims=1)[1:n, :]
-    
-    launch_1D!(
-        climbuf_V_req_a_kernel!,
+    n == size(climbuf.min_temp, 1) || throw(ArgumentError(
+        "n must match the first dimension of climbuf.min_temp",
+    ))
+    launch_custom!(
+        climbuf_annual_diagnostics_kernel!,
         climbuf.V_req_a,
+        length(climbuf.V_req_a),
         climbuf.min_temp,
+        climbuf.V_req,
+        climbuf.atemp_mean,
+        climbuf.mtemp20,
+        daily_temp,
         PFT,
         n,
-    )
-    
-    # for m = 1:n
-    #     if climbuf.min_temp[m] <= PFT.tv_opt.low && climbuf.min_temp[m]> -9999
-    #         climbuf.V_req_a += PFT.pvd_max/ n
-    #     elseif climbuf.min_temp[m] > PFT.tv_opt.low && climbuf.min_temp[m] < PFT.tv_opt.high
-    #         climbuf.V_req_a += PFT.pvd_max / n * (1-(climbuf.min_temp[m] - PFT.tv_opt.low) / (PFT.tv_opt.high - PFT.tv_opt.low))
-    #     end
-    # end
-    
-    launch_1D!(
-        climbuf_V_req_kernel!,
-        climbuf.V_req,
-        climbuf.V_req_a,
         kk,
     )
-    # climbuf.V_req .= ifelse.(climbuf.V_req .< -9998, climbuf.V_req_a, (1 - kk) * climbuf.V_req .+ kk .* climbuf.V_req_a)
-
-    climbuf.atemp_mean .= vec(mean(daily_temp, dims = 1))
 
 end
 
@@ -80,70 +64,58 @@ end
 end
 
 
-@kernel inbounds = true function climbuf_V_req_a_kernel!(
-                                         climbuf_V_req_a::AbstractArray{T},
-                                         climbuf_min_temp::AbstractArray{T},
-                                         PFT::PftParameters,
-                                         n
+@kernel inbounds = true function climbuf_annual_diagnostics_kernel!(
+    climbuf_V_req_a::AbstractVector{T},
+    climbuf_min_temp::AbstractMatrix{T},
+    climbuf_V_req::AbstractVector{T},
+    climbuf_atemp_mean::AbstractVector{T},
+    climbuf_mtemp20::AbstractMatrix{T},
+    daily_temp::AbstractMatrix{T},
+    PFT::PftParameters,
+    n::Integer,
+    kk::T,
 ) where {T <: AbstractFloat}
-    
     cell = @index(Global)
-
     @unpack tv_opt, pvd_max = PFT
-    
-    sum_v_req = zero(T)
 
-    for i in 1:n
-        if climbuf_min_temp[i, cell] <= tv_opt.low && climbuf_min_temp[i, cell]> -9999
-            sum_v_req += pvd_max / n
-        elseif climbuf_min_temp[i, cell] > tv_opt.low && climbuf_min_temp[i, cell] < tv_opt.high
-            sum_v_req += pvd_max / n * (1 - (climbuf_min_temp[i, cell] - tv_opt.low) / (tv_opt.high - tv_opt.low))
+    # One thread owns one cell. Maintain the n smallest monthly values in
+    # sorted order without allocating or sorting a 12-by-cells temporary.
+    for rank in 1:n
+        climbuf_min_temp[rank, cell] = typemax(T)
+    end
+    for month in axes(climbuf_mtemp20, 1)
+        candidate = climbuf_mtemp20[month, cell]
+        for rank in 1:n
+            if candidate < climbuf_min_temp[rank, cell]
+                candidate, climbuf_min_temp[rank, cell] =
+                    climbuf_min_temp[rank, cell], candidate
+            end
         end
     end
-    
-    climbuf_V_req_a[cell] = sum_v_req
 
-end
-
-
-@kernel inbounds = true function climbuf_V_req_kernel!(
-                                       climbuf_V_req::AbstractArray{T},
-                                       climbuf_V_req_a::AbstractArray{T},
-                                       kk
-) where {T <: AbstractFloat}
-    
-    cell = @index(Global)
-    
-    if climbuf_V_req[cell] < -9998
-        climbuf_V_req[cell] = climbuf_V_req_a[cell]
-    else
-        climbuf_V_req[cell] = (1 - kk) * climbuf_V_req[cell] + kk * climbuf_V_req_a[cell]
+    sum_v_req = zero(T)
+    for rank in 1:n
+        temperature = climbuf_min_temp[rank, cell]
+        if temperature <= tv_opt.low && temperature > T(-9999)
+            sum_v_req += pvd_max / T(n)
+        elseif temperature > tv_opt.low && temperature < tv_opt.high
+            sum_v_req += pvd_max / T(n) *
+                (one(T) - (temperature - tv_opt.low) / (tv_opt.high - tv_opt.low))
+        end
     end
-    
+    climbuf_V_req_a[cell] = sum_v_req
+    if climbuf_V_req[cell] < -9998
+        climbuf_V_req[cell] = sum_v_req
+    else
+        climbuf_V_req[cell] = (one(T) - kk) * climbuf_V_req[cell] + kk * sum_v_req
+    end
+
+    annual_temperature = zero(T)
+    for day in axes(daily_temp, 1)
+        annual_temperature += daily_temp[day, cell]
+    end
+    climbuf_atemp_mean[cell] = annual_temperature / T(size(daily_temp, 1))
 end
-
-# function getmintemp20_n!(climbuf::ClimBuf,
-#                          n::Int
-# )
-#     """
-#     Calculates the n coldest months from the climate buffer and returns their values.
-
-#     Args:
-#         climbuf: A dictionary containing climate data, specifically `:mtemp20` for monthly temperatures.
-#         n: The number of coldest months to extract.
-
-#     Return:
-#         A vector containing the n coldest monthly temperatures.
-#     """
-#     climbuf.min_temp = sort(climbuf.mtemp20, dims=1)[1:n, :] # Array to store n coldest months
-    
-#     # for i in 1:n
-#     #     index = argmin(temp[i:NMONTH]) + (i - 1)
-#     #     min_temp[i] = temp[index]
-#     #     # Swap the values
-#     #     temp[i], temp[index] = temp[index], temp[i]
-#     # end
-# end
 
 function monthlytemp!(daily_temp::AbstractArray{T},
                       climbuf_mtemp::AbstractArray{T}
@@ -212,7 +184,9 @@ daily_climbuf!(temp, climbuf_temp)
 Advance the rolling daily temperature buffer by one day.
 """
 function daily_climbuf!(temp::AbstractArray{T},
-                        climbuf_temp::AbstractArray{T}
+                        climbuf_temp::AbstractArray{T};
+                        annual_temperature::AbstractArray{T} = climbuf_temp,
+                        annual_day::Integer = 0,
 ) where {T <: AbstractFloat}
 
     kernel_params = (NDAYS = 31,)
@@ -221,6 +195,8 @@ function daily_climbuf!(temp::AbstractArray{T},
         daily_climbuf_kernel!,
         temp,
         climbuf_temp,
+        annual_temperature,
+        annual_day,
         kernel_params
     )
 
@@ -230,6 +206,8 @@ end
 @kernel inbounds = true function daily_climbuf_kernel!(
                                        temp::AbstractArray{T},
                                        climbuf_temp::AbstractArray{T},
+                                       annual_temperature::AbstractArray{T},
+                                       annual_day::Integer,
                                        kernel_params
 ) where {T <: AbstractFloat}
 
@@ -242,5 +220,8 @@ end
         climbuf_temp[day-1, cell] = climbuf_temp[day, cell]
     end
     climbuf_temp[NDAYS, cell] = temp[cell]
+    if annual_day != 0
+        annual_temperature[annual_day, cell] = temp[cell]
+    end
 
 end

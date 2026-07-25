@@ -12,6 +12,7 @@ function carbon_allocation!(PFT::PftParameters,
 
     launch_1D!(carbon_allocation_kernel!,
                crop_prognostic(crop).carbon.storage,
+               crop_events(crop).harvest,
                crop_prognostic(crop).phenology.is_growing,
                crop_prognostic(crop).phenology.growing_days,
                crop_prognostic(crop).nitrogen.stress_sum,
@@ -38,6 +39,7 @@ end
 
 @kernel inbounds = true function carbon_allocation_kernel!(
                                            crop_stoc::AbstractArray{T},
+                                           crop_harvest::AbstractArray{S},
                                            crop_isgrowing::AbstractArray{S},
                                            crop_growingdays::AbstractArray{S},
                                            crop_vscal_sum::AbstractArray{T},
@@ -74,8 +76,11 @@ end
         # respiration, including root respiration.
         crop_npp[cell] = (photos_agd[cell] - photos_rd[cell] - crop_resp[cell])
         if ((crop_biomass[cell] + crop_npp[cell]) <= T(0.0001)) || ((actual_lai <= zero(T)) && (!crop_senescence[cell]))
+            # LPJmL reports `negbm` here. The daily driver then harvests the
+            # remaining pools and removes the failed crop stand.
             crop_poolc[cell] += crop_npp[cell]
             crop_biomass[cell] += crop_npp[cell]
+            crop_harvest[cell] = one(S)
         else
             crop_biomass[cell] += crop_npp[cell]
             crop_vscal_sum[cell] += crop_vscal[cell]
