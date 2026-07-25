@@ -11,7 +11,7 @@ It maintains relevant process logic of LPJmL while implementing a GPU-aware arch
 > [!WARNING]
 > Agrocosm.jl is under active development with assistance from Codex 🤖, but almost done as a crop model.
 
-Read the [online documentation](https://yunan-l.github.io/Agrocosm.jl/dev/)
+Read the [documentation](https://yunan-l.github.io/Agrocosm.jl/dev/)
 for installation, model concepts, input schemas, CPU/GPU execution,
 checkpoints, validation scope, and API reference.
 
