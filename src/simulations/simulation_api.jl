@@ -53,6 +53,9 @@ function _prepare_initial_data(data::NamedTuple, indices, device, T)
     if hasproperty(data, :ModelState) && hasproperty(data, :soilparams)
         return data
     end
+    if hasproperty(data, :backend_neutral) && data.backend_neutral
+        return InitialDataLoader(data, collect(1:length(data.latitude)), device; T = T)
+    end
     indices === nothing && throw(ArgumentError(
         "indices are required when initialize_simulation receives raw initial data",
     ))
@@ -125,6 +128,21 @@ function initialize_simulation(
 end
 
 function _prepare_climate(simulation::CropSimulation, climate::NamedTuple)
+    if hasproperty(climate, :backend_neutral) && climate.backend_neutral
+        T = simulation.config.T
+        prepared = (
+            temp = T.(climate.temp),
+            prec = T.(climate.prec),
+            sw = T.(climate.sw),
+            lw = T.(climate.lw),
+            co2 = T.(climate.co2),
+            co2_daily = true,
+        )
+        if hasproperty(climate, :wind)
+            prepared = merge(prepared, (wind = T.(climate.wind),))
+        end
+        return simulation.config.device(prepared)
+    end
     if hasproperty(climate, :swdown) && hasproperty(climate, :lwnet)
         indices = simulation.config.indices
         indices === nothing && throw(ArgumentError(

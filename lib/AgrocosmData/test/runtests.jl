@@ -1,4 +1,5 @@
 using AgrocosmData
+using Dates
 using Test
 
 include("fixtures/fixture_data.jl")
@@ -34,12 +35,24 @@ using .FixtureData
             catalog, grid; co2_path = paths.co2_path, block_days = 2,
         )
         @test length(climate_reader) == 3
+        @test climate_days(climate_reader) == 6
         climate = [block for block in climate_reader]
         @test size.(getfield.(climate, :temperature)) == fill((2, 4), 3)
         @test climate[1].co2 == Float32[369.5, 369.5]
         @test climate[2].co2 == Float32[369.5, 371.0]
+        @test climate[1].provenance.calendar == "unspecified"
+        @test climate[1].provenance.model_units == (
+            temp = "degC", prec = "mm/day", lwnet = "W/m2",
+            swdown = "W/m2", co2 = "ppm",
+        )
         @test climate_forcing(climate[1]).co2_daily
+        @test climate_forcing(climate[1]).backend_neutral
         @test !hasproperty(climate_forcing(climate[1]), :provenance)
+        forcings = climate_forcings(climate_reader)
+        @test forcings isa AbstractVector{NamedTuple}
+        @test length(forcings) == length(climate_reader)
+        @test forcings[2].temp == climate[2].temperature
+        @test forcings[2].co2 == climate[2].co2
 
         eager_temp = read_compact_variable(
             dataset(catalog, :temp), grid; order = (:time, :cell), T = Float32,
@@ -109,6 +122,26 @@ using .FixtureData
         @test size(soil.saturation) == (5, 4)
         @test soilparams(soil).soilph === soil.ph
 
+        selected_soil = read_soil_data(
+            catalog, grid; selection = crop_mask.selection,
+        )
+        initial_state = (
+            swc = zeros(Float32, 5, 3),
+            litc = zeros(Float32, 3, 3),
+            fastc = zeros(Float32, 5, 3),
+            slowc = zeros(Float32, 5, 3),
+            litn = zeros(Float32, 3, 3),
+            fastn = zeros(Float32, 5, 3),
+            slown = zeros(Float32, 5, 3),
+        )
+        initial = model_initial_data(
+            grid, selected_soil, automatic_crop, initial_state,
+        )
+        @test initial.backend_neutral
+        @test initial.coords == crop_mask.selection.cell_ids
+        @test initial.latitude == Float32[11, 10, 11]
+        @test initial.initialLPJmL.u0 === initial_state
+
         baseline_selection = CellSelection(1:10, 0:9)
         baseline_codes = Int32[6, 7, 9, 9, 9, 9, 9, 9, 9, 9]
         baseline_ph = Float32[6.5, 7, 7, 7, 5.5, 5.5, 5.5, 5.5, 7, 5.5]
@@ -134,4 +167,32 @@ using .FixtureData
     @test dataset(example, :landuse).management_bands.irrigated == Int32.(17:28)
     @test dataset(example, :sowing_date).management_bands.irrigated == Int32.(13:24)
     @test dataset(example, :residue_fraction).management_bands.irrigated == Int32.(1:12)
+
+    leap_dates = collect(Date(2000, 1, 1):Day(1):Date(2001, 12, 31))
+    leap_indices, calendar = AgrocosmData._normalize_calendar_indices(
+        leap_dates, collect(eachindex(leap_dates)), "standard",
+    )
+    @test length(leap_indices) == 730
+    @test calendar == "noleap"
+    @test all(leap_dates[index] != Date(2000, 2, 29) for index in leap_indices)
+    @test_throws ArgumentError AgrocosmData._normalize_calendar_indices(
+        leap_dates, collect(1:10), "standard",
+    )
+    @test_throws ArgumentError AgrocosmData._normalize_calendar_indices(
+        leap_dates, collect(eachindex(leap_dates)), "360_day",
+    )
+
+    kelvin, kelvin_units = AgrocosmData._normalize_climate_units(
+        :temp, Float32[273.15;;], "K",
+    )
+    precipitation, precipitation_units = AgrocosmData._normalize_climate_units(
+        :prec, Float32[1.0f0 / 86400;;], "kg m-2 s-1",
+    )
+    @test kelvin ≈ Float32[0;;] atol = 1.0f-5
+    @test kelvin_units == "degC"
+    @test precipitation ≈ Float32[1;;] atol = 1.0f-6
+    @test precipitation_units == "mm/day"
+    @test_throws ArgumentError AgrocosmData._normalize_climate_units(
+        :temp, Float32[273.15;;], "fahrenheit",
+    )
 end

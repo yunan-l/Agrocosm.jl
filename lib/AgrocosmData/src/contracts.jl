@@ -133,6 +133,11 @@ struct ClimateBlock{T <: AbstractFloat, TT}
     provenance::NamedTuple
 end
 
+"""Lazy model-facing view of climate blocks."""
+struct ClimateForcingReader{R} <: AbstractVector{NamedTuple}
+    source::R
+end
+
 """Fixed allocation selection and annual activity for one PFT."""
 struct CropMask{T, A <: AbstractMatrix{T}}
     selection::CellSelection

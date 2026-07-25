@@ -20,6 +20,21 @@ function _time_coordinate(spec::DatasetSpec, selector)
     end
 end
 
+function _time_metadata(spec::DatasetSpec)
+    return NCDataset(spec.path, "r") do ds
+        variable = ds[spec.variable]
+        source_names = Symbol.(dimnames(variable))
+        canonical_names = _canonical_dimension.(source_names)
+        time_position = findfirst(==(:time), canonical_names)
+        isnothing(time_position) && return (calendar = "", units = "")
+        coordinate = ds[String(source_names[time_position])]
+        calendar = haskey(coordinate.attrib, "calendar") ?
+            lowercase(String(coordinate.attrib["calendar"])) : ""
+        units = haskey(coordinate.attrib, "units") ? String(coordinate.attrib["units"]) : ""
+        return (; calendar, units)
+    end
+end
+
 function _calendar_year(value)
     value isa Integer && return Int(value)
     value isa AbstractFloat && return round(Int, value)
