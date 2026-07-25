@@ -92,3 +92,18 @@ February 29 removed, while `noleap` and `365_day` inputs are retained. A
 `360_day` calendar or an incomplete year is rejected. Climate values are
 normalized before handoff to °C, mm/day, and W/m²; provenance retains both the
 source metadata and these canonical model units.
+
+## HWSD carbon and nitrogen targets
+
+The HWSD preprocessing API converts the official seven HWSD v2.x layers to
+Agrocosm's five soil layers without assigning fast, slow, or litter pools.
+Processing is tile-based: `hwsd_tile_mapping` returns compact target indices
+and spherical pixel areas, and `accumulate_soil_cn!` adds one source tile to a
+bounded-memory accumulator. `finish_soil_cn` produces SOC and total-N targets,
+coverage and uncertainty maps, and reproducible provenance.
+
+HWSD ends at 2 m. By default, `remap_hwsd_layers` extends the stock density of
+the 1.5–2 m layer through Agrocosm's 2–3 m layer and marks every extrapolated
+value uncertain. Pass `deep_rule=:missing` when extrapolation is unsuitable.
+The generated targets are inputs to the future Agrocosm spin-up; they are not
+runtime soil pools.

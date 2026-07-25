@@ -5,6 +5,8 @@ using Test
 include("fixtures/fixture_data.jl")
 using .FixtureData
 
+include("test_hwsd.jl")
+
 @testset "AgrocosmData" begin
     mktempdir() do directory
         paths = FixtureData.write_fixture(directory)

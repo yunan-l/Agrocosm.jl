@@ -100,6 +100,15 @@ Acceptance:
 
 Implement a one-time offline HWSD 2.x conversion pipeline.
 
+Status: the versioned numerical core is implemented. It converts HWSD v2.x
+organic-carbon, total-nitrogen, bulk-density, and coarse-fragment attributes
+to layer stocks; maps the official seven layers to the five Agrocosm layers;
+and incrementally aggregates raster tiles by spherical pixel area. The
+unsupported 2–3 m interval extends the 1.5–2 m stock density by default and is
+always marked uncertain. Compact NetCDF target writing, coverage maps, and
+conservation totals are included. The production adapter for the official
+HWSD v2.01 mapping-unit database/raster and real-data validation remain.
+
 Deliverables:
 
 - area-conservative aggregation from HWSD resolution to the Agrocosm

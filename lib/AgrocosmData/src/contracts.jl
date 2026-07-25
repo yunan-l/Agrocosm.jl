@@ -171,3 +171,24 @@ struct SoilData{T <: AbstractFloat}
     layer_depth::Vector{T}
     provenance::NamedTuple
 end
+
+"""Layer-resolved HWSD-derived SOC and total-N targets on compact Agrocosm cells."""
+struct SoilCNTargets{T <: AbstractFloat}
+    selection::CellSelection
+    layer_bounds::Matrix{T}
+    soil_organic_carbon::Matrix{T}
+    total_nitrogen::Matrix{T}
+    coverage::Matrix{T}
+    uncertain::BitMatrix
+    provenance::NamedTuple
+end
+
+"""Bounded-memory area accumulator used while streaming HWSD raster tiles."""
+mutable struct SoilCNAggregator{T <: AbstractFloat}
+    carbon_sum::Matrix{T}
+    nitrogen_sum::Matrix{T}
+    carbon_area::Matrix{T}
+    nitrogen_area::Matrix{T}
+    uncertain_area::Matrix{T}
+    target_area::Vector{T}
+end

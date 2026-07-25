@@ -10,6 +10,7 @@ include("grid.jl")
 include("netcdf.jl")
 include("masks.jl")
 include("soil.jl")
+include("hwsd.jl")
 include("management.jl")
 include("climate.jl")
 
@@ -18,11 +19,18 @@ export DataProvenance, DatasetSpec, DatasetCatalog, PFTRegistry, ManagementBands
 export GridIndex, CellSelection, CompactVariable, TimeCellData, CropMask
 export CO2Series, ClimateBlock, ClimateBlockReader, ClimateForcingReader
 export SoilLookup, SoilData, DEFAULT_SOIL_LOOKUP_VERSION
+export SoilCNTargets, SoilCNAggregator
+export HWSD_LAYER_BOUNDS, AGROCOSM_SOIL_LAYER_BOUNDS, HWSD_CN_PREPROCESSING_VERSION
 export load_catalog, dataset, pft_index, pft_name
 export read_grid, all_cells, select_cells, compact_spatial, expand_to_grid
 export read_compact_variable, read_static_cell
 export build_crop_mask
 export default_soil_lookup, soil_data_from_values, read_soil_data, soilparams
+export hwsd_layer_stocks, remap_hwsd_layers
+export hwsd_tile_mapping
+export init_soil_cn_aggregator, accumulate_soil_cn!, finish_soil_cn
+export soil_cn_conservation
+export preprocess_hwsd_cn, write_soil_cn_targets, read_soil_cn_targets
 export read_management, validate_management, crop_inputs
 export read_co2_series, climate_blocks, climate_days, read_climate_block
 export climate_forcing, climate_forcings
