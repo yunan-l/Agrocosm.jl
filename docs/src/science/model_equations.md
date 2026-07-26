@@ -39,8 +39,8 @@ x_{d+1}=\mathcal{T}(x_d,u_d,m_d;\vartheta),\qquad
 y_d=\mathcal{H}(x_d,u_d,m_d;\vartheta),
 ```
 
-where `x` is the evolving state, `u` the daily forcing, `m` the management
-input, and `\vartheta` the model parameters.
+where ``x`` is the evolving state, ``u`` the daily forcing, ``m`` the
+management input, and ``\vartheta`` the model parameters.
 
 ## Daily order
 

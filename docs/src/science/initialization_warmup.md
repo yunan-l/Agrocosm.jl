@@ -1,34 +1,146 @@
 # Initialization and warm-up
 
-This page describes the assumptions behind the current input-data path and the
-finite agricultural warm-up.
+This page summarizes how source soil observations become Agrocosm state and
+how the finite agricultural warm-up changes that state before production.
+Implementation and operational details are in
+[HWSD soil initialization](../guide/hwsd_initialization.md).
 
-## Input data
+## Canonical spatial alignment
 
-Global or regional runs depend on external climate, management, and soil input
-files. The current data-preparation workflow extracts the relevant crop PFT,
-management bands, climate years, and CO₂ series from larger source datasets so
-the model can run on a practical subset without loading the full global
-archives into memory.
+Climate, management, soil type, and HWSD-derived C/N are aligned through the
+canonical `grid.nc` mapping
 
-## Soil initialization
+```math
+i_{cell}\longleftrightarrow(i_{lon},i_{lat})
+\longleftrightarrow(\lambda_{geo},\varphi_{geo}).
+```
 
-The current production setup initializes soil carbon and nitrogen from HWSD-
-based inputs rather than from a full ecosystem spin-up. That keeps Agrocosm
-decoupled from LPJmL for the input stage and avoids re-running the source model
-whenever the spatial domain changes.
+Source dimension order is not assumed. Every compact array retains canonical
+`cellid`, and outputs use that key when reconstructed to the 720 × 280 grid.
 
-## Agricultural warm-up
+## HWSD concentrations to stocks
 
-Because the model does not yet have a full equilibrium spin-up workflow, it
-uses a finite agricultural warm-up before formal production runs. The purpose
-is to give litter and fast pools some history and reduce the abruptness of the
-first simulated year. It is not a substitute for a full soil-C equilibrium
-spin-up.
+For organic-carbon concentration ``OC`` in wt%, bulk density ``\rho_b`` in
+g cm⁻³, layer thickness ``\Delta z`` in cm, and coarse-fragment percentage
+``f_{cf}``, layer SOC stock is
+
+```math
+C_{SOC}=OC\,\rho_b\,\Delta z
+\left(1-\frac{f_{cf}}{100}\right)100
+\quad[\mathrm{gC\ m^{-2}}].
+```
+
+For total nitrogen ``N_{conc}`` in g kg⁻¹,
+
+```math
+N_{tot}=N_{conc}\,\rho_b\,\Delta z
+\left(1-\frac{f_{cf}}{100}\right)10
+\quad[\mathrm{gN\ m^{-2}}].
+```
+
+Multiple HWSD soil components are combined with their original component
+shares. Missing layers below a component's declared root depth are structural
+zeros; valid deep components are not renormalized upward.
+
+## Horizontal and vertical aggregation
+
+The 30-arc-second HWSD pixels inside an Agrocosm cell are aggregated with
+spherical pixel-area weights:
+
+```math
+\bar X_g=\frac{\sum_{p\in g}A_pX_p}{\sum_{p\in g}A_p}.
+```
+
+Water, glacier, and NODATA pixels are excluded from the soil-area denominator.
+HWSD's seven layers are remapped to Agrocosm's five layers by depth overlap:
+
+```math
+X_j=\sum_i X_i
+\frac{|[z_{i,0},z_{i,1}]\cap[z_{j,0},z_{j,1}]|}
+{z_{i,1}-z_{i,0}}.
+```
+
+HWSD ends at 2 m. The default 2--3 m rule extends the 1.5--2 m stock density
+and marks the result uncertain. True unresolved gaps may use a bounded nearest
+complete profile, with donor coordinates and distance retained as provenance.
+
+## Constructing model pools
+
+HWSD supplies total SOC and total N, not Agrocosm litter, fast, and slow pools.
+The current interim initialization is
+
+```math
+C_{fast,l}=0.4C_{SOC,l},\qquad
+C_{slow,l}=0.6C_{SOC,l},\qquad
+C_{litter,l}=0,
+```
+
+with the same 40:60 split for organic nitrogen after reserving the configured
+initial mineral pools:
+
+```math
+N_{org,l}=\max(0,N_{tot,l}-N_{NO_3,l}-N_{NH_4,l}),
+```
+
+```math
+N_{fast,l}=0.4N_{org,l},\qquad
+N_{slow,l}=0.6N_{org,l},\qquad
+N_{litter,l}=0.
+```
+
+Liquid soil water begins at field capacity:
+
+```math
+W_l=W_{fc,l}.
+```
+
+The 40:60 partition approximates the mean legacy ten-cell partition but is an
+explicit initialization assumption, not an HWSD measurement.
+
+## Finite agricultural warm-up
+
+The default warm-up runs ten agricultural years before reported production
+using the same crop, fertilizer, manure, irrigation, residue, and tillage
+configuration. If ``n_f`` complete forcing years are supplied, warm-up year
+``y`` selects
+
+```math
+y_f=1+\operatorname{mod}(y-1,n_f).
+```
+
+All crop, water, heat, C, and N processes run normally. Only lifecycle state is
+retained:
+
+```math
+x_{warm}^{(y+1)}=
+\mathcal{T}_{365}\left(x_{warm}^{(y)},u^{(y_f)},m^{(y_f)};\vartheta\right).
+```
+
+Production time and output remain unchanged,
+
+```math
+d_{production}=0,\qquad Y_{production}=\varnothing,
+```
+
+until the formal run begins. Annual reports retain litter, fast, slow, total
+C/N, mineral N, and soil water. The final state should be saved as a native
+Agrocosm checkpoint.
+
+## Interpretation
+
+Ten years can populate litter and adapt fast pools to local climate and
+management. It is not an equilibrium slow-SOC spin-up. The last three warm-up
+years should be compared with the preceding three for monotonic total C/N
+drift, mineral-N drift, and large initial respiration pulses. The interim
+partition should only be replaced if these diagnostics show material
+transients.
+
+Warm-up, HWSD preprocessing, input loading, checkpoint I/O, and reporting stay
+outside the future Enzyme-differentiable one-day transition.
 
 ## Code map
 
-- `lib/AgrocosmData/scripts/prepare_global_wheat_subset.jl`
-- `docs/src/guide/global_wheat_subset.md`
-- `docs/src/guide/hwsd_initialization.md`
+- `lib/AgrocosmData/src/hwsd.jl`
+- `lib/AgrocosmData/src/soil.jl`
 - `src/simulations/agricultural_warmup.jl`
+- `docs/src/guide/hwsd_initialization.md`
