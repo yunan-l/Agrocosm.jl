@@ -4,6 +4,14 @@ using TOML
 
 const PFT_DIMENSIONS = Set(("pft", "cft", "crop", "band"))
 const TIME_DIMENSIONS = Set(("time", "year"))
+const ANNUAL_MANAGEMENT = Set((
+    "landuse",
+    "fertilizer",
+    "manure",
+    "residue_fraction",
+    "sowing_date",
+    "phu",
+))
 
 dimension_kind(name) = lowercase(String(name)) in PFT_DIMENSIONS ? :pft :
     lowercase(String(name)) in TIME_DIMENSIONS ? :time : :other
@@ -40,37 +48,12 @@ function validate_365_day_years(time, years, label)
     return nothing
 end
 
-function complete_years(path::AbstractString, variable_name::AbstractString, count::Integer)
-    count > 0 || throw(ArgumentError("climate_years must be positive"))
-    return NCDataset(path, "r") do dataset
-        variable = dataset[variable_name]
-        dimensions = String.(dimnames(variable))
-        time_position = findfirst(name -> dimension_kind(name) === :time, dimensions)
-        isnothing(time_position) && throw(ArgumentError("$variable_name has no time dimension"))
-        time_name = dimensions[time_position]
-        haskey(dataset, time_name) || throw(ArgumentError("missing time coordinate $time_name"))
-        time = collect(dataset[time_name][:])
-        years = unique(calendar_year.(time))
-        complete = Int[]
-        for year in years
-            indices = findall(==(year), calendar_year.(time))
-            length(indices) == 365 || continue
-            first_value, last_value = time[first(indices)], time[last(indices)]
-            if !(first_value isa Real) && (
-                (Dates.month(first_value), Dates.day(first_value)) != (1, 1) ||
-                (Dates.month(last_value), Dates.day(last_value)) != (12, 31) ||
-                any(index -> (Dates.month(time[index]), Dates.day(time[index])) == (2, 29), indices)
-            )
-                continue
-            end
-            push!(complete, year)
-            length(complete) == count && return complete
-        end
-        throw(ArgumentError("$path does not contain $count complete climate years"))
-    end
-end
-
-function indices_for_years(dataset, variable_name::AbstractString, years)
+function indices_for_years(
+    dataset,
+    variable_name::AbstractString,
+    years;
+    require_365_days::Bool = true,
+)
     dimensions = String.(dimnames(dataset[variable_name]))
     time_position = findfirst(name -> dimension_kind(name) === :time, dimensions)
     isnothing(time_position) && throw(ArgumentError("$variable_name has no time dimension"))
@@ -81,7 +64,7 @@ function indices_for_years(dataset, variable_name::AbstractString, years)
     found == collect(years) || throw(ArgumentError(
         "$variable_name contains years $found, expected $(collect(years))",
     ))
-    validate_365_day_years(time, years, variable_name)
+    require_365_days && validate_365_day_years(time, years, variable_name)
     return time_name, indices
 end
 
@@ -141,6 +124,7 @@ function subset_netcdf(
     variable_name::AbstractString;
     pft_index::Union{Nothing, Integer} = nothing,
     years::Union{Nothing, AbstractVector{<:Integer}} = nothing,
+    require_365_days::Bool = true,
     chunk_length::Integer = 31,
 )
     chunk_length > 0 || throw(ArgumentError("chunk_length must be positive"))
@@ -164,7 +148,9 @@ function subset_netcdf(
             selections[pft_dimension] = [Int(pft_index)]
         end
         if !isnothing(years)
-            time_dimension, time_indices = indices_for_years(source, variable_name, years)
+            time_dimension, time_indices = indices_for_years(
+                source, variable_name, years; require_365_days,
+            )
             selections[time_dimension] = time_indices
         end
 
@@ -228,7 +214,8 @@ function prepare_subset(config_path::AbstractString)
     settings = config["subset"]
     output_directory = resolve_path(config_path, settings["output_directory"])
     pft_index = Int(get(settings, "rainfed_pft_index", 1))
-    climate_year_count = Int(get(settings, "climate_years", 2))
+    management_year = Int(get(settings, "management_year", 2015))
+    climate_years = Int.(get(settings, "climate_years", [2015, 2016]))
     chunk_length = Int(get(settings, "chunk_length", 31))
 
     for name in sort!(collect(keys(config["management"])))
@@ -237,17 +224,17 @@ function prepare_subset(config_path::AbstractString)
             resolve_path(config_path, spec["input"]),
             joinpath(output_directory, spec["output"]),
             spec["variable"];
-            pft_index, chunk_length,
+            pft_index,
+            years = name in ANNUAL_MANAGEMENT ? [management_year] : nothing,
+            require_365_days = false,
+            chunk_length,
         )
     end
 
     climate_names = sort!(collect(keys(config["climate"])))
     reference = config["climate"][first(climate_names)]
     reference_path = resolve_path(config_path, reference["input"])
-    selected_years = complete_years(
-        reference_path,
-        reference["variable"], climate_year_count,
-    )
+    selected_years = climate_years
     reference_time = selected_time_values(
         reference_path, reference["variable"], selected_years,
     )
@@ -270,7 +257,10 @@ function prepare_subset(config_path::AbstractString)
             selected_years,
         )
     end
-    println("Prepared rainfed PFT $pft_index and climate years $(join(selected_years, ", ")) in $output_directory")
+    println(
+        "Prepared rainfed PFT $pft_index, management year $management_year, " *
+        "and climate years $(join(selected_years, ", ")) in $output_directory",
+    )
     return nothing
 end
 
