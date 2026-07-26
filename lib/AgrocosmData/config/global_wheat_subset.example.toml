@@ -1,0 +1,59 @@
+[subset]
+output_directory = "/path/to/agrocosm_global_wheat_fixture"
+rainfed_pft_index = 1
+climate_years = 2
+chunk_length = 31
+
+[management.landuse]
+input = "/path/to/cft_default_cft_aggregation_30min_1500-2017_fallow_to_others_64bands.nc"
+output = "landuse_wheat_rainfed.nc"
+variable = "landfrac"
+
+[management.fertilizer]
+input = "/path/to/fert_N_default_cft_aggregation_30min_1860-2017.nc"
+output = "fertilizer_wheat_rainfed.nc"
+variable = "fertilizer"
+
+[management.manure]
+input = "/path/to/manure_N_default_cft_aggregation_30min_1860-2017.nc"
+output = "manure_wheat_rainfed.nc"
+variable = "manure"
+
+[management.residue_fraction]
+input = "/path/to/residues_madrat_1850-2015_16bands.nc"
+output = "residue_wheat_rainfed.nc"
+variable = "residuefrac"
+
+[management.sowing_date]
+input = "/path/to/sdate_24_bands.nc"
+output = "sdate_wheat_rainfed.nc"
+variable = "sdate"
+
+[management.phu]
+input = "/path/to/phusum_gswp3-w5e5_obsclim_24_bands_annual_1901-2019.nc"
+output = "phu_wheat_rainfed.nc"
+variable = "phusum"
+
+[climate.temp]
+input = "/path/to/tas_gswp3-w5e5_obsclim_1901-2019.nc"
+output = "temp_first_two_years.nc"
+variable = "temp"
+
+[climate.prec]
+input = "/path/to/pr_gswp3-w5e5_obsclim_1901-2019.nc"
+output = "prec_first_two_years.nc"
+variable = "prec"
+
+[climate.lwnet]
+input = "/path/to/lwnet_gswp3-w5e5_obsclim_1901-2019.nc"
+output = "lwnet_first_two_years.nc"
+variable = "lwnet"
+
+[climate.swdown]
+input = "/path/to/rsds_gswp3-w5e5_obsclim_1901-2019.nc"
+output = "swdown_first_two_years.nc"
+variable = "swdown"
+
+[co2]
+input = "/path/to/global_co2_ann_1700_2022.txt"
+output = "co2_first_two_years.txt"

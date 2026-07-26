@@ -1,0 +1,73 @@
+using Dates
+using NCDatasets
+using Test
+
+include(joinpath(@__DIR__, "..", "scripts", "prepare_global_wheat_subset.jl"))
+
+@testset "Global wheat subset preparation" begin
+    mktempdir() do directory
+        management_path = joinpath(directory, "management.nc")
+        NCDataset(management_path, "c") do dataset
+            defDim(dataset, "longitude", 2)
+            defDim(dataset, "band", 4)
+            defDim(dataset, "latitude", 2)
+            defDim(dataset, "time", 2)
+            defVar(dataset, "longitude", Float64[0, 1], ("longitude",))
+            defVar(dataset, "band", Int32[1, 2, 17, 18], ("band",))
+            defVar(dataset, "latitude", Float64[1, 0], ("latitude",))
+            defVar(dataset, "time", Int32[2000, 2001], ("time",))
+            values = reshape(Float32.(1:32), 2, 4, 2, 2)
+            defVar(
+                dataset, "landfrac", values,
+                ("longitude", "band", "latitude", "time"),
+            )
+        end
+        management_output = joinpath(directory, "management_wheat.nc")
+        subset_netcdf(
+            management_path, management_output, "landfrac";
+            pft_index = 1, chunk_length = 1,
+        )
+        NCDataset(management_output, "r") do dataset
+            @test size(dataset["landfrac"]) == (2, 1, 2, 2)
+            @test dataset["band"][:] == Int32[1]
+            @test dataset["landfrac"][:, 1, :, :] ==
+                NCDataset(management_path, "r") do source
+                    source["landfrac"][:, 1, :, :]
+                end
+        end
+
+        climate_path = joinpath(directory, "climate.nc")
+        dates = collect(DateTime(2001, 1, 1):Day(1):DateTime(2002, 12, 31))
+        NCDataset(climate_path, "c") do dataset
+            defDim(dataset, "time", length(dates))
+            defDim(dataset, "latitude", 1)
+            defDim(dataset, "longitude", 2)
+            defVar(
+                dataset, "time", dates, ("time",);
+                attrib = Dict("units" => "days since 2001-01-01", "calendar" => "365_day"),
+            )
+            defVar(dataset, "latitude", Float64[0], ("latitude",))
+            defVar(dataset, "longitude", Float64[0, 1], ("longitude",))
+            values = reshape(Float32.(1:(length(dates) * 2)), length(dates), 1, 2)
+            defVar(dataset, "temp", values, ("time", "latitude", "longitude"))
+        end
+        @test complete_years(climate_path, "temp", 2) == [2001, 2002]
+        climate_output = joinpath(directory, "climate_two_years.nc")
+        subset_netcdf(
+            climate_path, climate_output, "temp";
+            years = [2001, 2002], chunk_length = 31,
+        )
+        NCDataset(climate_output, "r") do dataset
+            @test size(dataset["temp"]) == (730, 1, 2)
+            @test calendar_year(first(dataset["time"][:])) == 2001
+            @test calendar_year(last(dataset["time"][:])) == 2002
+        end
+
+        co2_path = joinpath(directory, "co2.txt")
+        write(co2_path, "2000 368\n2001 370\n2002 372\n2003 374\n")
+        co2_output = joinpath(directory, "co2_subset.txt")
+        subset_co2(co2_path, co2_output, [2001, 2002])
+        @test occursin("2001 370", read(co2_output, String))
+        @test !occursin("2000 368", read(co2_output, String))
+    end
+end

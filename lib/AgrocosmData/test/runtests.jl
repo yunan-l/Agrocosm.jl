@@ -6,6 +6,7 @@ include("fixtures/fixture_data.jl")
 using .FixtureData
 
 include("test_hwsd.jl")
+include("test_prepare_global_wheat_subset.jl")
 
 @testset "AgrocosmData" begin
     mktempdir() do directory
