@@ -3,6 +3,7 @@ output_directory = "/path/to/agrocosm_global_wheat_fixture"
 rainfed_pft_index = 1
 management_year = 2015
 climate_years = [2015, 2016]
+climate_source_start_year = 1901
 chunk_length = 31
 
 [management.landuse]

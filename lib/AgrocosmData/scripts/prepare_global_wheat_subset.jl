@@ -67,9 +67,42 @@ function indices_for_years(
     return time_name, indices
 end
 
-function selected_time_values(path, variable_name, years)
+function daily_indices_for_years(
+    dataset,
+    variable_name::AbstractString,
+    years,
+    source_start_year::Integer,
+)
+    dimensions = String.(dimnames(dataset[variable_name]))
+    time_position = findfirst(name -> dimension_kind(name) === :time, dimensions)
+    isnothing(time_position) && throw(ArgumentError("$variable_name has no time dimension"))
+    time_name = dimensions[time_position]
+    time_length = size(dataset[variable_name], time_position)
+    indices = Int[]
+    for year in years
+        first_index = (year - source_start_year) * 365 + 1
+        last_index = first_index + 364
+        1 <= first_index <= last_index <= time_length || throw(ArgumentError(
+            "$variable_name year $year maps to rows $first_index:$last_index, " *
+            "outside its $time_length-row time dimension",
+        ))
+        append!(indices, first_index:last_index)
+    end
+    return time_name, indices
+end
+
+function selected_time_values(
+    path,
+    variable_name,
+    years;
+    daily_source_start_year::Union{Nothing, Integer} = nothing,
+)
     return NCDataset(path, "r") do dataset
-        time_name, indices = indices_for_years(dataset, variable_name, years)
+        time_name, indices = isnothing(daily_source_start_year) ?
+            indices_for_years(dataset, variable_name, years) :
+            daily_indices_for_years(
+                dataset, variable_name, years, daily_source_start_year,
+            )
         collect(dataset[time_name][indices])
     end
 end
@@ -124,6 +157,7 @@ function subset_netcdf(
     pft_index::Union{Nothing, Integer} = nothing,
     years::Union{Nothing, AbstractVector{<:Integer}} = nothing,
     require_365_days::Bool = true,
+    daily_source_start_year::Union{Nothing, Integer} = nothing,
     chunk_length::Integer = 31,
 )
     chunk_length > 0 || throw(ArgumentError("chunk_length must be positive"))
@@ -147,9 +181,11 @@ function subset_netcdf(
             selections[pft_dimension] = [Int(pft_index)]
         end
         if !isnothing(years)
-            time_dimension, time_indices = indices_for_years(
-                source, variable_name, years; require_365_days,
-            )
+            time_dimension, time_indices = isnothing(daily_source_start_year) ?
+                indices_for_years(source, variable_name, years; require_365_days) :
+                daily_indices_for_years(
+                    source, variable_name, years, daily_source_start_year,
+                )
             selections[time_dimension] = time_indices
         end
 
@@ -214,7 +250,11 @@ function prepare_subset(config_path::AbstractString)
     output_directory = resolve_path(config_path, settings["output_directory"])
     pft_index = Int(get(settings, "rainfed_pft_index", 1))
     management_year = Int(get(settings, "management_year", 2015))
-    climate_years = Int.(get(settings, "climate_years", [2015, 2016]))
+    climate_year_setting = get(settings, "climate_years", [2015, 2016])
+    climate_years = climate_year_setting isa Integer ?
+        collect(management_year:(management_year + Int(climate_year_setting) - 1)) :
+        Int.(climate_year_setting)
+    climate_source_start_year = Int(get(settings, "climate_source_start_year", 1901))
     chunk_length = Int(get(settings, "chunk_length", 31))
 
     for name in sort!(collect(keys(config["management"])))
@@ -235,18 +275,24 @@ function prepare_subset(config_path::AbstractString)
     reference_path = resolve_path(config_path, reference["input"])
     selected_years = climate_years
     reference_time = selected_time_values(
-        reference_path, reference["variable"], selected_years,
+        reference_path, reference["variable"], selected_years;
+        daily_source_start_year = climate_source_start_year,
     )
     for name in climate_names
         spec = config["climate"][name]
         input_path = resolve_path(config_path, spec["input"])
-        selected_time_values(input_path, spec["variable"], selected_years) == reference_time ||
+        selected_time_values(
+            input_path, spec["variable"], selected_years;
+            daily_source_start_year = climate_source_start_year,
+        ) == reference_time ||
             throw(ArgumentError("climate time coordinate for $name does not match the reference"))
         subset_netcdf(
             input_path,
             joinpath(output_directory, spec["output"]),
             spec["variable"];
-            years = selected_years, chunk_length,
+            years = selected_years,
+            daily_source_start_year = climate_source_start_year,
+            chunk_length,
         )
     end
     if haskey(config, "co2")
