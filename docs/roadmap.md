@@ -19,7 +19,8 @@ public roadmap is in `docs/src/development/roadmap.md`.
   `transition_day!`, streamed selected output, memory estimation, and runtime
   benchmark.
 - Finite agricultural warm-up that leaves production time, output, and balance
-  ledgers untouched while retaining warmed state.
+  ledgers untouched while retaining warmed state; eager and streamed forcing
+  paths are numerically equivalent.
 
 This foundation remains the scientific regression baseline. Alternative
 processes must demonstrate their differences against it rather than silently
@@ -40,8 +41,8 @@ Milestones 1–5 are substantially complete at the code and fixture-test level:
   streaming; annual CO₂ alignment; 365-day normalization; block prefetch;
 - full ten-cell equivalence through `model_initial_data` and
   `climate_forcings`.
-- configuration-driven extraction of a single rainfed-wheat management band
-  and the first two 365-day climate years for a bounded global test dataset.
+- configuration-driven extraction of the 2015 rainfed-wheat management fields
+  and 2015–2016 daily climate for a bounded global test dataset.
 
 Remaining data-layer work is production hardening rather than new loader
 architecture:
@@ -51,22 +52,22 @@ architecture:
 - benchmark real server NetCDF access and add a canonical cache only if direct
   compact reads are too slow.
 
-Annual crop activation, warm-up, backend transfer, state evolution, and global
+Warm-up, backend transfer, state evolution, and global
 execution remain responsibilities of Agrocosm.jl, not AgrocosmData.jl.
 
 ## 3. Immediate production sequence
 
-### 3.1 Annual land-use activation
+### 3.1 Fixed 2015 wheat domain
 
-- Pass the fixed-union `CropMask.selection` into initialization.
-- Add annual `active` and crop-fraction inputs to runtime state.
-- Gate cultivation, fertilizer/manure, crop uptake, and crop output by annual
-  activity while continuing soil water, heat, and C/N processes in fallow
-  cells.
-- Test zero-to-positive, positive-to-zero, and continuously active sequences.
+- Select compact cells where 2015 rainfed-wheat `landfrac > 0`.
+- Use `landfrac` only for selection and provenance; do not multiply any model
+  process or reported crop quantity by fractional area.
+- Reuse the 2015 sowing date, PHU, fertilizer, manure, and residue settings in
+  every simulated production year, matching the chosen ISIMIP experiment.
 
-Acceptance: fixed allocation and dynamically active execution reproduce
-separate active-year reference runs without reallocating backend state.
+Acceptance: every selected cell runs one rainfed-wheat stand in stable compact
+ordering, and changing a positive land fraction without changing its sign does
+not alter a cell-level model trajectory.
 
 ### 3.2 Streamed agricultural warm-up
 
@@ -81,10 +82,14 @@ separate active-year reference runs without reallocating backend state.
 Acceptance: streamed and eager warm-up are numerically equal, including the
 final prognostic state and annual report.
 
+Status: the streamed/eager implementation and equivalence regression are
+complete. Writing and restoring the production warm-up checkpoint remains.
+
 ### 3.3 Global rainfed-wheat smoke test
 
-- Generate the two-year rainfed-wheat subset on the server and retain a source
-  manifest; generate the complete canonical-grid HWSD product and review its
+- The local subset contains fixed 2015 management and 2015–2016 forcing. Its
+  first ten `landfrac > 0` cells pass a 730-day CPU smoke test with HWSD state.
+- Generate the complete canonical-grid HWSD product and review its
   coverage and conservation summaries.
 - Start with one rainfed wheat PFT over all cells selected by land use.
 - Run CPU and a single GPU using identical compact cell ordering.

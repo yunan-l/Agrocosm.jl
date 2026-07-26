@@ -9,9 +9,9 @@ spin-up dynamics, and device execution in `Agrocosm.jl`.
 
 - `grid.nc` is the only canonical spatial reference. Every record is keyed by
   its `cellid`; array order and source dimension names are never assumed.
-- Global crop runs use a fixed, crop-specific allocation mask derived from
-  `landuse`: the union of cells containing the selected PFT over the requested
-  years. Annual land-use values separately control whether the crop is active.
+- The current global rainfed-wheat experiment selects cells only where 2015
+  `landfrac > 0`. The fraction is selection/provenance data, not a multiplier
+  in model processes. All management values are fixed at 2015 levels.
 - All allocated crop cells run together on one CPU or GPU when memory permits.
   Climate forcing is streamed in time blocks. Spatial batches are an explicit
   out-of-memory fallback, not the default execution model.
@@ -30,10 +30,9 @@ spin-up dynamics, and device execution in `Agrocosm.jl`.
 
 The package core is substantially complete. Milestones 1–5 have implemented
 and fixture-tested contracts. A configuration-driven utility now extracts the
-rainfed-wheat band from the 64/32/24/16-band server files and the first two
-365-day forcing years without loading the full datasets. Remaining work is
-concentrated in full-grid HWSD quality control, runtime use of annual crop
-activity, streamed warm-up, and the global smoke test. Large production files
+rainfed-wheat band for 2015 from the 64/32/24/16-band server files and the
+2015–2016 daily forcing without loading the full datasets. Remaining work is
+concentrated in full-grid HWSD quality control and the global smoke test. Large production files
 remain on the server; their mappings are explicit code contracts tested with
 small dimension-permuted fixtures.
 
@@ -63,9 +62,9 @@ Acceptance:
 
 ## Milestone 2 — canonical grid and crop masks
 
-Status: complete in AgrocosmData. `CropMask` contains the fixed union selection
-and annual activity/fraction matrices. Applying annual activity in the model
-runtime belongs to Milestone 6.
+Status: complete in AgrocosmData. For the current experiment, the 2015 positive
+fraction mask defines the fixed compact selection. Fraction and activity arrays
+remain data products but are not model process inputs.
 
 Build a reusable compact index from the `720 × 280` grid:
 
@@ -77,9 +76,7 @@ Deliverables:
 
 - exact coordinate validation for already aligned 0.5-degree inputs;
 - conversion between gridded fields and compact `cell` arrays;
-- `allocation_mask(landuse, pft, years)`, using the temporal union;
-- `crop_active(time, pft, cell)` and crop fraction for annual process control
-  and output aggregation;
+- `allocation_mask(landuse, pft, years)` and crop-fraction metadata;
 - the 12-crop PFT registry plus explicit rainfed/irrigated band maps for every
   management file.
 
@@ -87,7 +84,7 @@ Acceptance:
 
 - compact-to-grid round trips preserve every value and `cellid`;
 - masks exclude missing grid cells and include every cell with positive
-  land-use fraction in at least one selected year;
+  2015 land-use fraction for the current production experiment;
 - changing NetCDF dimension names or order does not change the result.
 
 ## Milestone 3 — current soil and management inputs
@@ -200,7 +197,7 @@ Default execution:
 
 ```text
 grid + PFT + years
-  → fixed landuse allocation mask
+  → cells with 2015 landfrac > 0
   → all active cells on one backend
   → streamed climate blocks
   → cellid-keyed output/checkpoint
@@ -210,8 +207,7 @@ Deliverables:
 
 - memory estimation and automatic selection between whole-mask execution and
   spatial fallback batches;
-- year-specific `crop_active` control while soil state continues in fallow
-  years;
+- fixed 2015 management reused across production years;
 - output reconstruction to `720 × 280` using `cellid`;
 - per-shard checkpoints and deterministic merge for fallback batching;
 - reproducibility metadata containing PFT, years, masks, source versions, and
@@ -228,9 +224,10 @@ Acceptance:
 Status: partial. `estimate_memory` reports model, diagnostic, output, scratch,
 forcing-transfer, and prefetched-host memory. Streamed selected output,
 checkpoint/restart, and asynchronous one-block prefetch are implemented.
-The global-subset preparation script supplies a bounded two-year rainfed-wheat
-input for production testing. Annual crop activity, grid reconstruction, the
-integrated global runner, and automatic spatial fallback remain.
+The global-subset preparation script supplies fixed 2015 management plus
+2015–2016 climate. The first ten selected cells pass the local HWSD-backed CPU
+smoke test. Grid reconstruction, the full selected-domain runner, and automatic
+spatial fallback remain.
 
 ## Milestone 7 — spin-up handoff and production hardening
 
@@ -247,9 +244,9 @@ compatibility path only.
 
 `agricultural_warmup!` now performs a finite ten-year crop-management warm-up
 before the reported run without advancing the production clock or retaining
-production outputs. It reports annual soil C/N and water stocks. Accepting
-streamed climate-block readers and writing the warm-up checkpoint are the
-remaining integration steps. This is not a complete slow-SOC spin-up.
+production outputs. It accepts restartable climate-block readers and reports
+annual soil C/N and water stocks. Writing the warm-up checkpoint remains. This
+is not a complete slow-SOC spin-up.
 
 Deliverables:
 

@@ -19,7 +19,7 @@ The AgrocosmData core is also substantially complete:
   one-block prefetch;
 - model-facing `model_initial_data` and `climate_forcings` adapters.
 - a configuration-driven server utility that extracts one rainfed wheat band
-  from multi-PFT management data and the first two 365-day forcing years.
+  from 2015 multi-PFT management data and the 2015–2016 daily forcing.
 
 This means new grids no longer require an LPJmL restart. It does not yet mean
 that the global production workflow is complete.
@@ -28,16 +28,15 @@ that the global production workflow is complete.
 
 Work in this phase is ordered as follows:
 
-1. Connect `CropMask.active` and annual crop fraction to the daily runtime.
-   The allocation mask remains fixed while soil state continues through fallow
-   years and crop cultivation is disabled where land use is inactive.
-2. Extend `agricultural_warmup!` to consume restartable streamed climate
-   blocks, retain its production-output isolation, and write a native warm-up
-   checkpoint.
-3. Generate the two-year global rainfed-wheat subset and the complete
-   canonical-grid HWSD product on the server, retaining source manifests and
-   HWSD coverage/conservation quality-control reports.
-4. Run a one-year global smoke test over every land-use-selected cell: CPU
+1. Use 2015 rainfed-wheat `landfrac > 0` only to select the fixed compact cell
+   set. Land fraction is not a multiplier in crop or soil process equations;
+   all other management inputs are likewise fixed at their 2015 values.
+2. The local ten-cell HWSD + 2015–2016 forcing smoke test and restartable
+   streamed `agricultural_warmup!` are complete. Add the native post-warm-up
+   checkpoint to the production workflow.
+3. Generate and quality-control the complete canonical-grid HWSD product on
+   the server, retaining source manifests and coverage/conservation reports.
+4. Run a one-year global smoke test over every 2015 land-use-selected cell: CPU
    first, then one GPU, using bounded forcing and output blocks. Use the second
    year to verify cross-year state and checkpoint/restart continuity.
 5. Validate memory, throughput, grid reconstruction, finite/non-negative state,
@@ -46,7 +45,7 @@ Work in this phase is ordered as follows:
    split. Add constrained pool allocation only if the evidence shows that the
    fixed split creates unacceptable transients.
 
-The phase is complete when a global crop mask can be initialized from native
+The phase is complete when a 2015-selected global crop domain can be initialized from native
 data, warmed, checkpointed, run across a year boundary, and reconstructed to
 the canonical grid without LPJmL-derived state.
 

@@ -25,37 +25,45 @@ include(joinpath(@__DIR__, "..", "scripts", "prepare_global_wheat_subset.jl"))
         management_output = joinpath(directory, "management_wheat.nc")
         subset_netcdf(
             management_path, management_output, "landfrac";
-            pft_index = 1, chunk_length = 1,
+            pft_index = 1,
+            years = [2001],
+            require_365_days = false,
+            chunk_length = 1,
         )
         NCDataset(management_output, "r") do dataset
-            @test size(dataset["landfrac"]) == (2, 1, 2, 2)
+            @test size(dataset["landfrac"]) == (2, 1, 2, 1)
             @test dataset["band"][:] == Int32[1]
             @test dataset["landfrac"][:, 1, :, :] ==
                 NCDataset(management_path, "r") do source
-                    source["landfrac"][:, 1, :, :]
+                    source["landfrac"][:, 1, :, 2:2]
                 end
         end
 
         climate_path = joinpath(directory, "climate.nc")
-        dates = collect(DateTime(2001, 1, 1):Day(1):DateTime(2002, 12, 31))
+        time_values = Int32.(0:729)
         NCDataset(climate_path, "c") do dataset
-            defDim(dataset, "time", length(dates))
+            defDim(dataset, "time", length(time_values))
             defDim(dataset, "latitude", 1)
             defDim(dataset, "longitude", 2)
             defVar(
-                dataset, "time", dates, ("time",);
+                dataset, "time", time_values, ("time",);
                 attrib = Dict("units" => "days since 2001-01-01", "calendar" => "365_day"),
             )
             defVar(dataset, "latitude", Float64[0], ("latitude",))
             defVar(dataset, "longitude", Float64[0, 1], ("longitude",))
-            values = reshape(Float32.(1:(length(dates) * 2)), length(dates), 1, 2)
+            values = reshape(
+                Float32.(1:(length(time_values) * 2)), length(time_values), 1, 2,
+            )
             defVar(dataset, "temp", values, ("time", "latitude", "longitude"))
         end
-        @test complete_years(climate_path, "temp", 2) == [2001, 2002]
+        NCDataset(climate_path, "r") do dataset
+            _, indices = daily_indices_for_years(dataset, "temp", [2001, 2002], 2001)
+            @test indices == collect(1:730)
+        end
         climate_output = joinpath(directory, "climate_two_years.nc")
         subset_netcdf(
             climate_path, climate_output, "temp";
-            years = [2001, 2002], chunk_length = 31,
+            years = [2001, 2002], daily_source_start_year = 2001, chunk_length = 31,
         )
         NCDataset(climate_output, "r") do dataset
             @test size(dataset["temp"]) == (730, 1, 2)

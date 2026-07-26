@@ -153,13 +153,18 @@ function _normalize_climate_units(name::Symbol, values::Matrix{T}, units::Abstra
     if name === :temp
         if normalized in ("k", "kelvin")
             return values .- T(273.15), "degC"
-        elseif normalized in ("degc", "°c", "c", "degree_celsius", "degrees_celsius")
+        elseif normalized in (
+            "degc", "°c", "c", "celsius", "degree_celsius", "degrees_celsius",
+        )
             return values, "degC"
         end
     elseif name === :prec
         if normalized in ("kgm-2s-1", "kgm^-2s^-1", "kg/m2/s", "mms-1", "mm/s")
             return values .* T(86400), "mm/day"
-        elseif normalized in ("mm/day", "mmd-1", "mmday-1", "mm")
+        elseif normalized in (
+            "mm/day", "mmd-1", "mmday-1", "mm",
+            "kg/m2/day", "kgm-2day-1", "kgm^-2day^-1",
+        )
             return values, "mm/day"
         end
     elseif name in (:lwnet, :swdown)

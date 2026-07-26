@@ -193,13 +193,24 @@ include("test_prepare_global_wheat_subset.jl")
     kelvin, kelvin_units = AgrocosmData._normalize_climate_units(
         :temp, Float32[273.15;;], "K",
     )
+    celsius, celsius_units = AgrocosmData._normalize_climate_units(
+        :temp, Float32[15;;], "celsius",
+    )
     precipitation, precipitation_units = AgrocosmData._normalize_climate_units(
         :prec, Float32[1.0f0 / 86400;;], "kg m-2 s-1",
     )
+    daily_precipitation, daily_precipitation_units =
+        AgrocosmData._normalize_climate_units(
+            :prec, Float32[2;;], "kg/m2/day",
+        )
     @test kelvin ≈ Float32[0;;] atol = 1.0f-5
     @test kelvin_units == "degC"
+    @test celsius == Float32[15;;]
+    @test celsius_units == "degC"
     @test precipitation ≈ Float32[1;;] atol = 1.0f-6
     @test precipitation_units == "mm/day"
+    @test daily_precipitation == Float32[2;;]
+    @test daily_precipitation_units == "mm/day"
     @test_throws ArgumentError AgrocosmData._normalize_climate_units(
         :temp, Float32[273.15;;], "fahrenheit",
     )
