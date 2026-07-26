@@ -26,7 +26,18 @@ spin-up dynamics, and device execution in `Agrocosm.jl`.
   returns CPU arrays plus metadata; `Agrocosm.jl` owns device transfer,
   hydraulic initialization, C/N pool partitioning, and state evolution.
 
+## Current status
+
+The package core is substantially complete. Milestones 1–5 have implemented
+and fixture-tested contracts. Remaining work is concentrated in full-grid HWSD
+quality control, runtime use of annual crop activity, streamed warm-up, and the
+one-year global smoke test. Large production management files remain on the
+server; their 64/32/24/16-band mappings are explicit code contracts tested with
+small dimension-permuted fixtures.
+
 ## Milestone 1 — package and data contracts
+
+Status: complete.
 
 Create `AgrocosmData.jl` as a sibling Julia package with its own tests and a
 small checked-in fixture dataset.
@@ -49,6 +60,10 @@ Acceptance:
 - dimension permutations and invalid/missing metadata fail with clear errors.
 
 ## Milestone 2 — canonical grid and crop masks
+
+Status: complete in AgrocosmData. `CropMask` contains the fixed union selection
+and annual activity/fraction matrices. Applying annual activity in the model
+runtime belongs to Milestone 6.
 
 Build a reusable compact index from the `720 × 280` grid:
 
@@ -74,6 +89,10 @@ Acceptance:
 - changing NetCDF dimension names or order does not change the result.
 
 ## Milestone 3 — current soil and management inputs
+
+Status: complete at the reader, mapping, and fixture-equivalence level. The
+production files do not need to be copied into the repository or materialized
+for every PFT locally.
 
 Move the existing NetCDF reading and lookup work out of the model package.
 
@@ -113,8 +132,9 @@ database/raster adapter is implemented and validated on real cells. Incomplete
 cells use a bounded nearest-complete-profile fallback with donor provenance.
 Component mixing now preserves original `SHARE`, treats layers below
 `ROOT_DEPTH` as structural zero, and excludes NODATA, water, and glacier from
-the soil-area denominator. Global missing-data and conservation summaries
-remain.
+the soil-area denominator. Generating the complete canonical-grid product and
+reviewing its global missing-data and conservation summaries remain production
+tasks.
 
 Deliverables:
 
@@ -129,8 +149,8 @@ Deliverables:
   validation.
 
 The preprocessing output contains total SOC/N targets, not `fast`/`slow` pools
-or litter. While spin-up is deferred, `hwsd_initial_state` applies the explicit
-40:60 fast/slow initialization and zero litter.
+or litter. `hwsd_initial_state` applies the explicit interim 40:60 fast/slow
+initialization and zero litter before Agrocosm's agricultural warm-up.
 
 Acceptance:
 
@@ -145,16 +165,18 @@ Acceptance:
 Replace eager whole-file reads with time-blocked access over the fixed active
 cell set.
 
-Status: streaming is implemented for daily temperature, precipitation, net
-longwave, and downward shortwave, with annual global CO₂ matched to each block.
-Gregorian leap days are normalized to the model's 365-day calendar, and forcing
-units are converted to the canonical model contract. Prefetching and
-production-scale benchmarks remain.
+Status: complete for the currently required forcing contract: daily
+temperature, precipitation, net longwave, and downward shortwave, with annual
+global CO₂ matched to each block. Gregorian leap days are normalized to the
+model's 365-day calendar, forcing units are converted to the canonical model
+contract, and one-block threaded prefetch is implemented. Real server-I/O
+benchmarking remains part of production hardening.
 
 Deliverables:
 
-- climate readers for temperature, precipitation, shortwave, longwave, wind,
-  and CO2 with calendar and unit normalization;
+- climate readers for temperature, precipitation, shortwave, longwave, and CO₂
+  with calendar and unit normalization; add wind/humidity only when a selected
+  process configuration declares them required;
 - configurable monthly, annual, or multi-year time blocks;
 - optional canonical `time × cell` caches where benchmarks show that direct
   source reads are too slow;
@@ -201,27 +223,30 @@ Acceptance:
 - a one-year global crop smoke test completes with bounded memory and closed
   model balance diagnostics.
 
-Status: `estimate_memory` now reports the projected model payload, diagnostics,
-final output, output-growth scratch space, current forcing-transfer copies, and
-an optional prefetched host block. It is advisory only; automatic spatial
-fallback and asynchronous prefetching remain future work.
+Status: partial. `estimate_memory` reports model, diagnostic, output, scratch,
+forcing-transfer, and prefetched-host memory. Streamed selected output,
+checkpoint/restart, and asynchronous one-block prefetch are implemented.
+Annual crop activity, grid reconstruction, the integrated global runner, and
+automatic spatial fallback remain.
 
 ## Milestone 7 — spin-up handoff and production hardening
 
 Connect HWSD targets and streamed forcing to the Agrocosm spin-up workflow
 without moving scientific state evolution into the data package.
 
-Interim direct-initialization status: spin-up is deferred. `hwsd_initial_state`
+Interim direct-initialization status: equilibrium spin-up is deferred.
+`hwsd_initial_state`
 conservatively partitions HWSD SOC and total N into the current fast/slow
 pools, initializes litter to zero, accounts for the default initial mineral-N
 pools, and initializes water at field capacity. New data use the neutral
 top-level `initial_state` contract; `initialLPJmL.u0` remains a legacy fixture
 compatibility path only.
 
-The interim production plan adds a ten-year crop-management warm-up before the
-reported run to establish litter and adapt fast pools. This is not considered a
-complete slow-SOC spin-up; convergence diagnostics determine whether a longer
-warm-up is required.
+`agricultural_warmup!` now performs a finite ten-year crop-management warm-up
+before the reported run without advancing the production clock or retaining
+production outputs. It reports annual soil C/N and water stocks. Accepting
+streamed climate-block readers and writing the warm-up checkpoint are the
+remaining integration steps. This is not a complete slow-SOC spin-up.
 
 Deliverables:
 

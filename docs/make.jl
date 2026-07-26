@@ -21,10 +21,12 @@ makedocs(
             "Overview" => "concepts/overview.md",
             "State variables" => "concepts/state_lifecycle.md",
             "Daily process order" => "concepts/daily_processes.md",
+            "Model equations" => "science/model_equations.md",
         ],
         "Using Agrocosm" => [
             "Inputs and outputs" => "guide/inputs_outputs.md",
             "HWSD soil initialization" => "guide/hwsd_initialization.md",
+            "Global wheat test data" => "guide/global_wheat_subset.md",
             "CPU, GPU, and precision" => "guide/backends.md",
             "Checkpoints" => "guide/checkpoints.md",
         ],

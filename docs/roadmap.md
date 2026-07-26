@@ -1,137 +1,128 @@
-# Agrocosm.jl roadmap
+# Agrocosm.jl implementation roadmap
 
-This roadmap separates the current LPJmL-informed single-crop foundation from
-the broader goal of a modular, differentiable, GPU-accelerated crop-model
-framework. Completion means that a process is implemented, audited, and has an
-appropriate CPU/GPU regression test; it does not by itself imply global
-validation.
+This document records implementation-level acceptance criteria. The shorter
+public roadmap is in `docs/src/development/roadmap.md`.
 
-## Phase 1 — single-crop process foundation
+## 1. Completed scientific and numerical baseline
 
-### Completed or substantially completed
-
-- C3/C4 photosynthesis, water-limited `lambda`, phenology, canopy growth,
-  carbon allocation, respiration, sowing, harvest, and residue routing.
-- Crop N allocation, demand, uptake, prescribed fertilizer/manure, and soil
-  mineral-N supply.
-- Five-layer soil water, snow, temperature, freeze--thaw, phase-change energy,
-  and percolation enthalpy, using the current Phase-1 approximations.
-- Non-methane soil C--N decomposition, mineralization, immobilization,
-  nitrification, denitrification, volatilization, leaching, and fixed `c_shift`
+- LPJmL-informed C3/C4 photosynthesis, water-limited `lambda`, respiration,
+  allocation, phenology, sowing, harvest, failed-crop termination, and residue
   routing.
-- LPJmL-informed full surface albedo and tillage--topsoil hydraulic coupling.
-- Audited C3/C4 daily ordering for climate history, cultivation, albedo/PET,
-  snow, soil preparation, C--N decomposition, crop processes, water removal,
-  denitrification, and NH3 volatilization.
-- Daily crop water-deficit output using LPJmL's `0--100%` definition.
-- CPU/GPU process kernels, `Float32`/`Float64` support, mass/energy balance
-  diagnostics, a high-level simulation API, and a 20-year rainfed-wheat
-  notebook with numerically closed water, C, N, and energy ledgers.
+- Five-layer soil water and temperature, snow, phase-change energy, surface
+  litter, coupled soil C/N decomposition, mineral-N transformations, gaseous
+  losses, and leaching.
+- Audited daily process order and C/N/water/energy balance diagnostics.
+- CPU/GPU process kernels and `Float32`/`Float64` support.
+- Canonical lifecycle state (`prognostic`, `fluxes`, `auxiliary`, `inputs`,
+  `events`, `workspace`, and `output`) separated from `ProcessModules`.
+- Backend-independent checkpoints, high-level simulation API, one-day
+  `transition_day!`, streamed selected output, memory estimation, and runtime
+  benchmark.
+- Finite agricultural warm-up that leaves production time, output, and balance
+  ledgers untouched while retaining warmed state.
 
-### Phase 1 acceptance status
+This foundation remains the scientific regression baseline. Alternative
+processes must demonstrate their differences against it rather than silently
+replacing it.
 
-- The 20-year rainfed-wheat notebook has been rerun after the water-deficit
-  output fix. Active-crop values are finite and physically bounded, and the
-  water, C, N, and energy ledgers remain numerically closed.
-- CPU/CUDA daily-output equivalence has been validated by the user.
-- Public `save_checkpoint`/`restore_checkpoint!` APIs now write
-  backend-independent files. An interrupted-file-restore trajectory is
-  identical to an uninterrupted CPU simulation for crop, soil, output, and all
-  four balance ledgers.
-- The NH3 equation and units have been audited and accepted; further LPJmL
-  input-parity comparison is not a Phase-1 requirement.
+## 2. AgrocosmData status
 
-Phase 1 is complete. The rainfed-wheat notebook and short end-to-end tests
-remain regression baselines rather than open implementation work.
+Milestones 1–5 are substantially complete at the code and fixture-test level:
 
-## Phase 1 → Phase 2 architecture transition
+- dataset catalog and versioned backend-neutral contracts;
+- canonical grid selection and compact/global round trips;
+- 12-PFT registry, explicit 64/32/24/16-band mappings, and crop masks;
+- soil-code properties, pH, sowing date, PHU, fertilizer, manure, residue, and
+  land-use readers;
+- HWSD SOC/total-N aggregation, vertical remapping, uncertainty/fallback
+  provenance, field-capacity water, and native initial state;
+- daily temperature, precipitation, net longwave, and downward shortwave
+  streaming; annual CO₂ alignment; 365-day normalization; block prefetch;
+- full ten-cell equivalence through `model_initial_data` and
+  `climate_forcings`.
 
-The Terrarium-style separation of process configuration from numerical-state
-lifecycle is now the Phase-2 architecture baseline:
+Remaining data-layer work is production hardening rather than new loader
+architecture:
 
-- `ProcessModules` contains process choices and global parameters, with no
-  evolving backend arrays.
-- `ModelState` is the single canonical numerical tree, partitioned into
-  `prognostic`, `fluxes`, `auxiliary`, `inputs`, `events`, `workspace`, and
-  `output`, with crop and soil namespaces inside each lifecycle group.
-- All crop, soil, climate, and balance process wrappers now select their arrays
-  directly from `ModelState`; the bottom `@kernel` interfaces remain explicit
-  array arguments.
-- Checkpoint format v2 serializes prognostic state and restart-relevant inputs
-  directly from the lifecycle tree. The temporary format-v1 compatibility
-  path was removed together with the old runtime entry point.
-- C3 and C4 old/new entry routes are exactly equal across every runtime array
-  in the three-day regression (`1032/1032` assertions), and the complete CPU
-  suite passes (`2533/2533`).
+- execute and quality-control the full canonical-grid HWSD product;
+- preserve full source/provenance manifests for server runs;
+- benchmark real server NetCDF access and add a canonical cache only if direct
+  compact reads are too slow.
 
-Next, define a one-day transition suitable for AD and select active parameters.
+Annual crop activation, warm-up, backend transfer, state evolution, and global
+execution remain responsibilities of Agrocosm.jl, not AgrocosmData.jl.
 
-## Phase 2 — modular process alternatives and multi-crop architecture
+## 3. Immediate production sequence
 
-The second phase turns the current process implementation into a framework for
-scientific comparison and model development.
+### 3.1 Annual land-use activation
 
-### Differentiable runtime foundation
+- Pass the fixed-union `CropMask.selection` into initialization.
+- Add annual `active` and crop-fraction inputs to runtime state.
+- Gate cultivation, fertilizer/manure, crop uptake, and crop output by annual
+  activity while continuing soil water, heat, and C/N processes in fallow
+  cells.
+- Test zero-to-positive, positive-to-zero, and continuously active sequences.
 
-1. Define the one-day transition boundary over `ProcessModules` and
-   `ModelState`, keeping I/O and reporting outside the differentiated region.
-2. Add an Enzyme CPU smoke test for selected active parameters and prognostic
-   state, followed by a CUDA differentiation test where supported.
-3. Audit sowing, harvest, fertilization, clamps, and iterative solvers and
-   document which gradients are intentionally piecewise or inactive.
-4. Add differentiability regressions without reintroducing domain-container
-   aliases into the active runtime state.
+Acceptance: fixed allocation and dynamically active execution reproduce
+separate active-year reference runs without reallocating backend state.
 
-### Spin-up, restart, and output completion
+### 3.2 Streamed agricultural warm-up
 
-1. Implement soil/ecosystem spin-up for consistent initial C, N, water, and
-   thermal states, including the post-spin-up `c_shift` routing configuration.
-2. Validate restart continuity across the spin-up-to-transient boundary.
-3. Complete the soil and climate time-series output chains and define stable
-   output metadata without duplicating daily process calculations.
-4. Build the independent `AgrocosmData.jl` input layer following the dedicated
-   [data roadmap](agrocosm_data_roadmap.md): canonical `cellid` indexing,
-   land-use/PFT masks, HWSD C/N preprocessing, and time-blocked global forcing.
+- Accept restartable complete-year climate-block readers without materializing
+  a global year.
+- Cycle one or more historical years for the configured warm-up duration.
+- Preserve production `simulated_days == 0`, empty production output, and
+  untouched production balance ledgers.
+- Record annual litter/fast/slow/total C/N, mineral N, and water summaries and
+  save the final native checkpoint.
 
-### Interchangeable process modules
+Acceptance: streamed and eager warm-up are numerically equal, including the
+final prognostic state and annual report.
 
-Define stable interfaces so a simulation can select among scientifically
-documented alternatives without changing the main daily driver. The first
-target is **photosynthesis**: retain the current LPJmL-informed C3/C4 pathway
-as a reference implementation and add alternative C3/C4 photosynthesis or
-stomatal-conductance formulations behind the same interface. The same pattern
-can subsequently support alternative respiration, phenology, allocation,
-soil-temperature, and decomposition schemes.
+### 3.3 One-year global smoke test
 
-Each alternative must provide its assumptions, parameters, CPU/GPU behaviour,
-numerical tests, and a comparison against the reference process. Process choice
-must be explicit in simulation configuration and output metadata.
+- Start with one rainfed wheat PFT over all cells selected by land use.
+- Run CPU and a single GPU using identical compact cell ordering.
+- Stream climate and monthly/annual output; avoid full daily global ledgers.
+- Check NaN/Inf, invalid negative pools, crop lifecycle failures, memory peak,
+  throughput, restart continuity, and sampled or online balance closure.
+- Reconstruct outputs to `720 × 280` by `cellid` and verify mask alignment.
 
-### Multi-crop stands and management
+Acceptance: the complete year finishes within estimated memory, CPU/GPU
+differences meet declared tolerances, and restart/reassembly are deterministic.
 
-1. Flatten stand × crop into the existing batch dimension, keeping each
-   crop--grid-cell instance independent and GPU-friendly.
-2. Add stand/crop indexing and aggregation back to grid-cell outputs.
-3. Introduce crop rotations, sequential crops, and later simultaneous crops
-   with shared soil resources.
-4. Extend management beyond prescribed events: irrigation, dynamic sowing, and
-   more complete fertilizer/manure strategies.
+### 3.4 HWSD pool-allocation decision
 
-## Phase 3 — differentiable, calibrated, and scalable simulations
+The current native initialization conserves HWSD layer SOC and total N using a
+documented 40:60 fast/slow split and zero litter. Do not add an elaborate
+equilibrium allocator without evidence. First inspect the ten-year warm-up for
+initial respiration pulses, litter/fast-pool stabilization, mineral-N drift,
+and total C/N trajectories. If needed, implement a constrained allocation that
+preserves every layer total and records uncertainty.
 
-- Replace or expose non-smooth numerical choices where required for robust
-  automatic differentiation, while retaining scientifically meaningful
-  reference modes.
-- Build gradient-based parameter calibration and sensitivity-analysis workflows.
-- Assimilate LAI, GPP, evapotranspiration, biomass, and yield observations.
-- Develop hybrid process--machine-learning components with explicit physical
-  constraints.
-- Add reproducible CPU/GPU performance benchmarks for increasingly large
-  spatial batches.
+## 4. Differentiable daily transition
 
-## Phase 4 — equilibrium, validation, and Earth-system coupling
+- Keep warm-up, I/O, diagnostics, and reporting outside the active path.
+- Select a small continuous parameter/state set for the first Enzyme CPU
+  smoke test.
+- Compare gradients with finite differences on smooth, event-free windows.
+- Classify bisection, min/max clamps, sowing, harvest, fertilization, and crop
+  failure as smooth, piecewise, inactive, or requiring an alternative mode.
+- Add GPU AD only after CPU primal and gradient regressions are stable.
 
-- Establish multi-site and global validation protocols.
-- Support high-resolution regional and large-domain GPU simulations.
-- Couple Agrocosm, where useful, to broader land and Earth-system frameworks
-  while retaining an independent crop-model API.
+## 5. Alternative canopy exchange
+
+The current LPJmL-informed canopy remains the default global daily pathway.
+Phase 3 may add a separately configured Farquhar–Medlyn–Penman–Monteith
+alternative. It requires humidity/VPD and pressure contracts, explicit soil
+moisture stress, new PFT parameters, and C3/C4 calibration. The first version
+should use prescribed leaf temperature equal to air temperature; iterative
+leaf-energy balance and plant hydraulics are later extensions.
+
+## 6. Later extensions
+
+- rotations, sequential and simultaneous crops, and shared soil resources;
+- broader output/observation operators and global validation;
+- gradient calibration, data assimilation, and hybrid ML processes;
+- automatic spatial fallback batches, multi-GPU, and MPI;
+- alternative soil hydraulic inputs and broader land-system coupling.
