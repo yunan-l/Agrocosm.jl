@@ -21,7 +21,12 @@ makedocs(
             "Overview" => "concepts/overview.md",
             "State variables" => "concepts/state_lifecycle.md",
             "Daily process order" => "concepts/daily_processes.md",
-            "Model equations" => "science/model_equations.md",
+            "Model equations processes" => "science/model_equations.md",
+            "Crop processes" => "science/crop.md",
+            "Soil processes" => "science/soil.md",
+            "Climate and surface processes" => "science/climate_surface.md",
+            "Numerics and conservation" => "science/numerics.md",
+            "Initialization and warm-up" => "science/initialization_warmup.md",
         ],
         "Using Agrocosm" => [
             "Inputs and outputs" => "guide/inputs_outputs.md",
