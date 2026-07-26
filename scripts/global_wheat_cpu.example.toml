@@ -1,0 +1,23 @@
+[paths]
+subset_directory = "/absolute/path/to/subset"
+grid = "/absolute/path/to/grid.nc"
+soilcode = "/absolute/path/to/soil_30arcmin_13_types.nc"
+soilph = "/absolute/path/to/soil_ph30arcmin.nc"
+hwsd_targets = "/absolute/path/to/hwsd_canonical.nc"
+output_directory = "/absolute/path/to/global_wheat_output"
+
+[management]
+fertilizer = "yes"
+manure = true
+with_tillage = true
+
+[run]
+warmup_years = 10
+diagnostic_cells = 10
+
+[validation]
+maximum_water_residual = 0.01
+maximum_carbon_relative_residual = 0.0001
+maximum_nitrogen_relative_residual = 0.0001
+maximum_thermal_relative_residual = 0.0001
+maximum_percolation_energy_residual = 5.0
