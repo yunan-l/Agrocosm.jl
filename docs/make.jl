@@ -21,7 +21,7 @@ makedocs(
             "Overview" => "concepts/overview.md",
             "State variables" => "concepts/state_lifecycle.md",
             "Daily process order" => "concepts/daily_processes.md",
-            "Model equations processes" => "science/model_equations.md",
+            "Model processes" => "science/model_equations.md",
             "Crop processes" => "science/crop.md",
             "Soil processes" => "science/soil.md",
             "Climate and surface processes" => "science/climate_surface.md",

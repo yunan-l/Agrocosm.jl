@@ -1,4 +1,4 @@
-# Model equations processes
+# Model processes
 
 This section is the entry point for Agrocosm's science documentation. The
 details now live in smaller pages grouped by process domain:
