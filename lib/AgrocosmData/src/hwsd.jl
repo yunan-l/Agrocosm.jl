@@ -1,4 +1,4 @@
-const HWSD_CN_PREPROCESSING_VERSION = v"0.1.0"
+const HWSD_CN_PREPROCESSING_VERSION = v"0.2.0"
 const HWSD_LAYER_BOUNDS = Float64[
     0.0 0.2
     0.2 0.4
@@ -151,6 +151,73 @@ function hwsd_layer_stocks(
         nitrogen[index...] = T(tn * density * thickness_cm * fine_fraction * 10)
     end
     return (; carbon, nitrogen)
+end
+
+const _HWSD_ROOT_DEPTH_LAST_LAYER = (7, 5, 2, 1)
+
+"""
+    mix_hwsd_components(carbon, nitrogen, shares, root_depth)
+
+Combine the soil components of one HWSD mapping unit without inventing deep
+soil for shallow components. `root_depth` uses the HWSD classes 1–4 (deep,
+moderately deep, shallow, and very shallow). Missing stocks below the final
+layer represented by that class contribute zero; missing stocks inside the
+represented profile remain missing. Component `SHARE` weights are never
+renormalized after structural zeros are applied.
+"""
+function mix_hwsd_components(
+    carbon::AbstractMatrix,
+    nitrogen::AbstractMatrix,
+    shares::AbstractVector,
+    root_depth::AbstractVector;
+    minimum_resolved_share::Real = 0.99,
+    T::Type{<:AbstractFloat} = Float32,
+)
+    size(carbon) == size(nitrogen) || throw(DimensionMismatch(
+        "carbon and nitrogen component stocks must have equal shape",
+    ))
+    size(carbon, 2) == length(shares) == length(root_depth) ||
+        throw(DimensionMismatch("component metadata must match stock columns"))
+    0 < minimum_resolved_share <= 1 || throw(ArgumentError(
+        "minimum_resolved_share must be in (0, 1]",
+    ))
+    weights = T.(shares)
+    all(isfinite, weights) && all(>=(zero(T)), weights) || throw(ArgumentError(
+        "component shares must be finite and nonnegative",
+    ))
+    total_share = sum(weights)
+    total_share > zero(T) || throw(ArgumentError("component shares must sum to a positive value"))
+    weights ./= total_share
+
+    mixed_carbon = fill(T(NaN), size(carbon, 1))
+    mixed_nitrogen = fill(T(NaN), size(nitrogen, 1))
+    uncertain = falses(size(carbon, 1))
+    for layer in axes(carbon, 1)
+        carbon_total = zero(T)
+        nitrogen_total = zero(T)
+        resolved_share = zero(T)
+        for component in axes(carbon, 2)
+            carbon_value = carbon[layer, component]
+            nitrogen_value = nitrogen[layer, component]
+            root_class = Int(root_depth[component])
+            structural_zero = 1 <= root_class <= length(_HWSD_ROOT_DEPTH_LAST_LAYER) &&
+                layer > _HWSD_ROOT_DEPTH_LAST_LAYER[root_class]
+            if isfinite(carbon_value) && isfinite(nitrogen_value)
+                carbon_total += weights[component] * T(carbon_value)
+                nitrogen_total += weights[component] * T(nitrogen_value)
+                resolved_share += weights[component]
+            elseif structural_zero
+                resolved_share += weights[component]
+                uncertain[layer] = true
+            end
+        end
+        if resolved_share >= T(minimum_resolved_share)
+            mixed_carbon[layer] = carbon_total
+            mixed_nitrogen[layer] = nitrogen_total
+            uncertain[layer] |= resolved_share < one(T)
+        end
+    end
+    return (; carbon = mixed_carbon, nitrogen = mixed_nitrogen, uncertain)
 end
 
 function _validate_layer_bounds(bounds::AbstractMatrix, label::AbstractString)
@@ -405,6 +472,13 @@ function write_soil_cn_targets(path::AbstractString, targets::SoilCNTargets)
         dataset.attrib["preprocessing_version"] = string(targets.provenance.preprocessing_version)
         dataset.attrib["source_version"] = targets.provenance.source_version
         dataset.attrib["deep_rule"] = string(targets.provenance.deep_rule)
+        for name in (
+            :fill_policy, :donor_longitude, :donor_latitude,
+            :fill_distance_km, :original_minimum_coverage,
+        )
+            haskey(targets.provenance, name) || continue
+            dataset.attrib[string(name)] = targets.provenance[name]
+        end
     end
     return String(path)
 end
@@ -419,6 +493,17 @@ function read_soil_cn_targets(path::AbstractString; T::Type{<:AbstractFloat} = F
             source_version = String(dataset.attrib["source_version"]),
             deep_rule = Symbol(dataset.attrib["deep_rule"]),
         )
+        for (name, convert) in (
+            (:fill_policy, String),
+            (:donor_longitude, Float64),
+            (:donor_latitude, Float64),
+            (:fill_distance_km, Float64),
+            (:original_minimum_coverage, Float64),
+        )
+            attribute = string(name)
+            haskey(dataset.attrib, attribute) || continue
+            provenance = merge(provenance, NamedTuple{(name,)}((convert(dataset.attrib[attribute]),)))
+        end
         return SoilCNTargets(
             selection,
             T.(dataset["layer_bounds"][:, :]),
@@ -429,4 +514,97 @@ function read_soil_cn_targets(path::AbstractString; T::Type{<:AbstractFloat} = F
             provenance,
         )
     end
+end
+
+"""
+    field_capacity_water(soil, soil_organic_carbon)
+
+Calculate initial liquid water storage at field capacity with the same
+Saxton–Rawls-style equations used by Agrocosm's `pedotransfer!`. Carbon stocks
+must use the five model layers in gC m⁻². The result is layer × cell in mm.
+"""
+function field_capacity_water(
+    soil::SoilData,
+    soil_organic_carbon::AbstractMatrix;
+    mineral_density::Real = 2700,
+    T::Type{<:AbstractFloat} = Float32,
+)
+    size(soil_organic_carbon) == size(soil.saturation) || throw(DimensionMismatch(
+        "soil organic carbon must match the soil layer × cell shape",
+    ))
+    sand = reshape(T.(soil.sand), 1, :)
+    clay = reshape(T.(soil.clay), 1, :)
+    depth = reshape(T.(soil.layer_depth), :, 1)
+    saturation_reference = T.(soil.saturation)
+    carbon = T.(soil_organic_carbon)
+    organic_matter = clamp.(
+        T(2) .* carbon ./
+            ((one(T) .- saturation_reference) .* T(mineral_density) .* depth) .* T(100),
+        zero(T), T(8),
+    )
+    ws33t = T(0.278) .* sand .+ T(0.034) .* clay .+
+        T(0.022) .* organic_matter .- T(0.018) .* sand .* organic_matter .-
+        T(0.027) .* clay .* organic_matter .-
+        T(0.584) .* sand .* clay .+ T(0.078)
+    ws33 = ws33t .+ (T(0.636) .* ws33t .- T(0.107))
+    wfct = -T(0.251) .* sand .+ T(0.195) .* clay .+
+        T(0.011) .* organic_matter .+ T(0.006) .* sand .* organic_matter .-
+        T(0.027) .* clay .* organic_matter .+
+        T(0.452) .* sand .* clay .+ T(0.299)
+    field = wfct .+ ((T(1.283) .* wfct) .^ 2 .- T(0.374) .* wfct .- T(0.015))
+    saturation = field .+ ws33 .- T(0.097) .* sand .+ T(0.043)
+    field = ifelse.(saturation .- field .< T(0.05), saturation .- T(0.05), field)
+    return field .* depth
+end
+
+"""
+    hwsd_initial_state(targets, soil; fast_fraction=0.4)
+
+Construct the seven model initialization arrays directly from HWSD SOC and
+total-N targets, without spin-up. Surface/incorporated/root litter starts at
+zero because HWSD describes soil stocks rather than litter. The default 40:60
+fast:slow split matches the mean partition in the existing ten-grid
+LPJmL-spun-up fixture; callers may override it for a calibrated initialization.
+
+The default Agrocosm mineral-N initialization creates NO₃ and NH₄ equal to 1%
+of slow organic N. Organic N is reduced slightly here so organic plus those two
+mineral pools exactly equals HWSD total N.
+"""
+function hwsd_initial_state(
+    targets::SoilCNTargets,
+    soil::SoilData;
+    fast_fraction::Real = 0.4,
+    mineral_fraction_of_slow::Real = 0.01,
+    T::Type{<:AbstractFloat} = Float32,
+)
+    targets.selection.cell_ids == soil.selection.cell_ids || throw(ArgumentError(
+        "HWSD targets and soil properties must use the same compact cell selection",
+    ))
+    size(targets.soil_organic_carbon) == size(soil.saturation) ||
+        throw(DimensionMismatch("HWSD targets and soil properties must have matching layers"))
+    0 <= fast_fraction <= 1 || throw(ArgumentError("fast_fraction must be in [0, 1]"))
+    mineral_fraction_of_slow >= 0 || throw(ArgumentError(
+        "mineral_fraction_of_slow must be nonnegative",
+    ))
+    carbon = T.(targets.soil_organic_carbon)
+    nitrogen = T.(targets.total_nitrogen)
+    all(isfinite, carbon) || throw(ArgumentError("HWSD SOC targets contain missing values"))
+    all(isfinite, nitrogen) || throw(ArgumentError("HWSD total-N targets contain missing values"))
+    all(>=(zero(T)), carbon) || throw(ArgumentError("HWSD SOC targets must be nonnegative"))
+    all(>=(zero(T)), nitrogen) || throw(ArgumentError("HWSD total-N targets must be nonnegative"))
+
+    fast = T(fast_fraction)
+    slow = one(T) - fast
+    mineral = T(mineral_fraction_of_slow)
+    organic_nitrogen = nitrogen ./ (one(T) + T(2) * mineral * slow)
+    cells = length(targets.selection.cell_ids)
+    return (
+        swc = field_capacity_water(soil, carbon; T),
+        litc = zeros(T, 3, cells),
+        fastc = fast .* carbon,
+        slowc = slow .* carbon,
+        litn = zeros(T, 3, cells),
+        fastn = fast .* organic_nitrogen,
+        slown = slow .* organic_nitrogen,
+    )
 end

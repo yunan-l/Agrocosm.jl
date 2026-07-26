@@ -23,7 +23,9 @@ crop_mask = build_crop_mask(grid, landuse.values)
 soil = read_soil_data(catalog, grid; selection = crop_mask.selection)
 
 # `crop` comes from crop_inputs(...) using single-time management readers.
-# `initial_state` currently comes from the pre-spin-up u0 handoff.
+hwsd_targets = read_soil_cn_targets("hwsd_cn_targets.nc")
+# Build model C/N pools and field-capacity water directly, without spin-up.
+initial_state = hwsd_initial_state(hwsd_targets, soil) # 40% fast, 60% slow
 
 reader = climate_blocks(
     catalog,
@@ -105,5 +107,27 @@ coverage and uncertainty maps, and reproducible provenance.
 HWSD ends at 2 m. By default, `remap_hwsd_layers` extends the stock density of
 the 1.5–2 m layer through Agrocosm's 2–3 m layer and marks every extrapolated
 value uncertain. Pass `deep_rule=:missing` when extrapolation is unsuitable.
-The generated targets are inputs to the future Agrocosm spin-up; they are not
-runtime soil pools.
+The generated targets remain source totals rather than runtime pools.
+`hwsd_initial_state` currently converts them to a no-spin-up initialization
+using a documented 40:60 fast/slow split and zero litter.
+
+For a real-data check after downloading the official `HWSD2.bil` and
+`HWSD2.mdb`, install `mdbtools` and run:
+
+```bash
+julia --project=. lib/AgrocosmData/scripts/extract_hwsd_cell.jl \
+  /path/to/HWSD2 /path/to/grid.nc 172 197 /path/to/hwsd_cn_test.nc 0
+```
+
+The longitude and latitude arguments are one-based indices into the canonical
+`grid.nc`; the script reads their coordinates instead of reconstructing the
+grid from an assumed origin. It reads all 3600 source pixels within that 0.5°
+cell, mixes soil components by HWSD `SHARE`, aggregates stocks by spherical
+pixel area, and writes the five-layer target file with coverage and uncertainty
+flags. Ocean, water, and glacier pixels are excluded from the soil-area mean;
+shallow components contribute zero below their HWSD `ROOT_DEPTH` class.
+If the target cell lacks a complete profile, the extractor uses the nearest
+complete 0.5° HWSD cell within the configured search radius. Filled layers are
+marked uncertain, and donor coordinates, distance, and the original minimum
+layer coverage are stored in the NetCDF provenance attributes. The command
+fails if no donor is found; it never silently accepts an incomplete profile.

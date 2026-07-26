@@ -138,6 +138,14 @@ struct ClimateForcingReader{R} <: AbstractVector{NamedTuple}
     source::R
 end
 
+"""Sequential forcing view that reads the following block on a worker thread."""
+mutable struct PrefetchedClimateForcingReader{R} <: AbstractVector{NamedTuple}
+    source::R
+    scheduled_index::Int
+    task::Union{Nothing, Task}
+    closed::Bool
+end
+
 """Fixed allocation selection and annual activity for one PFT."""
 struct CropMask{T, A <: AbstractMatrix{T}}
     selection::CellSelection

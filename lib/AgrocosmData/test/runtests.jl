@@ -55,6 +55,11 @@ include("test_hwsd.jl")
         @test length(forcings) == length(climate_reader)
         @test forcings[2].temp == climate[2].temperature
         @test forcings[2].co2 == climate[2].co2
+        prefetched = prefetch_climate_forcings(climate_reader)
+        @test prefetched[1] == forcings[1]
+        @test prefetched[2] == forcings[2]
+        close(prefetched)
+        @test_throws ArgumentError prefetched[3]
 
         eager_temp = read_compact_variable(
             dataset(catalog, :temp), grid; order = (:time, :cell), T = Float32,
@@ -142,7 +147,7 @@ include("test_hwsd.jl")
         @test initial.backend_neutral
         @test initial.coords == crop_mask.selection.cell_ids
         @test initial.latitude == Float32[11, 10, 11]
-        @test initial.initialLPJmL.u0 === initial_state
+        @test initial.initial_state === initial_state
 
         baseline_selection = CellSelection(1:10, 0:9)
         baseline_codes = Int32[6, 7, 9, 9, 9, 9, 9, 9, 9, 9]

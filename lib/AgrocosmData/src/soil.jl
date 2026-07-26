@@ -104,8 +104,8 @@ const _INITIAL_STATE_FIELDS = (:swc, :litc, :fastc, :slowc, :litn, :fastn, :slow
 """
 Build the backend-neutral initial-data tuple consumed by `initialize_simulation`.
 
-`initial_state` is the temporary pre-spin-up C/N/water handoff. It must contain
-the seven current `u0` fields and use the same compact cell ordering as `soil`.
+`initial_state` contains the seven current C/N/water initialization fields and
+must use the same compact cell ordering as `soil`.
 """
 function model_initial_data(
     grid::GridIndex,
@@ -136,7 +136,7 @@ function model_initial_data(
         latitude = latitude,
         crop = crop,
         soilparam = soilparams(soil),
-        initialLPJmL = (u0 = initial_state,),
+        initial_state = initial_state,
         backend_neutral = true,
     )
 end

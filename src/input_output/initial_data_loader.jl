@@ -3,9 +3,11 @@ InitialDataLoader(data, data_index, device;
                   load_mineral_nitrogen_restart=false,
                   load_c_shift_restart=false)
 
-Build initial model-state inputs from forcing/parameter datasets. Mineral-N
-restart pools are omitted by default because `init_states!` reconstructs NO₃
-and NH₄ from slow organic N using the LPJmL fresh-soil initialization rule.
+Build initial model-state inputs from forcing/parameter datasets. New inputs
+use the top-level `initial_state`; the legacy `initialLPJmL.u0` layout remains
+readable for existing fixtures. Mineral-N restart pools are omitted by default
+because `init_states!` reconstructs NO₃ and NH₄ from slow organic N using the
+LPJmL fresh-soil initialization rule.
 Set `load_mineral_nitrogen_restart=true` only when explicitly restoring a
 nitrogen-limited restart state.
 
@@ -23,7 +25,14 @@ function InitialDataLoader(data::NamedTuple,
 )
 
 
-    @unpack latitude, crop, soilparam, initialLPJmL = data
+    @unpack latitude, crop, soilparam = data
+    initial_state = if hasproperty(data, :initial_state)
+        data.initial_state
+    elseif hasproperty(data, :initialLPJmL)
+        data.initialLPJmL.u0
+    else
+        throw(ArgumentError("initial data require `initial_state`"))
+    end
 
     latitude_set = T.(latitude[data_index]) |> device
 
@@ -47,27 +56,36 @@ function InitialDataLoader(data::NamedTuple,
     ) |> device
 
     u0_set = (
-        swc = T.(initialLPJmL.u0.swc[:, data_index]),
-        litc = T.(initialLPJmL.u0.litc[:, data_index]),
-        fastc = T.(initialLPJmL.u0.fastc[:, data_index]),
-        slowc = T.(initialLPJmL.u0.slowc[:, data_index]),
-        litn = T.(initialLPJmL.u0.litn[:, data_index]),
-        fastn = T.(initialLPJmL.u0.fastn[:, data_index]),
-        slown = T.(initialLPJmL.u0.slown[:, data_index]),
+        swc = T.(initial_state.swc[:, data_index]),
+        litc = T.(initial_state.litc[:, data_index]),
+        fastc = T.(initial_state.fastc[:, data_index]),
+        slowc = T.(initial_state.slowc[:, data_index]),
+        litn = T.(initial_state.litn[:, data_index]),
+        fastn = T.(initial_state.fastn[:, data_index]),
+        slown = T.(initial_state.slown[:, data_index]),
     )
     if load_mineral_nitrogen_restart
         u0_set = merge(u0_set, (
-            soil_NH4 = T.(initialLPJmL.u0.soil_NH4[:, data_index]),
-            soil_NO3 = T.(initialLPJmL.u0.soil_NO3[:, data_index]),
+            soil_NH4 = T.(initial_state.soil_NH4[:, data_index]),
+            soil_NO3 = T.(initial_state.soil_NO3[:, data_index]),
         ))
     end
     u0_set = u0_set |> device
 
     model_state = (crop = crop, u0 = u0_set)
     if load_c_shift_restart
+        shift_source = if hasproperty(data, :c_shift_fast) && hasproperty(data, :c_shift_slow)
+            data
+        elseif hasproperty(data, :initialLPJmL)
+            data.initialLPJmL
+        else
+            throw(ArgumentError(
+                "load_c_shift_restart=true requires c_shift_fast and c_shift_slow",
+            ))
+        end
         model_state = merge(model_state, (
-            c_shift_fast = T.(initialLPJmL.c_shift_fast[:, data_index]),
-            c_shift_slow = T.(initialLPJmL.c_shift_slow[:, data_index]),
+            c_shift_fast = T.(shift_source.c_shift_fast[:, data_index]),
+            c_shift_slow = T.(shift_source.c_shift_slow[:, data_index]),
         ))
     end
     model_state = model_state |> device

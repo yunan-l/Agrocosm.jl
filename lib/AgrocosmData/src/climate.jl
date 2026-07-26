@@ -258,3 +258,49 @@ _climate_block(source::ClimateBlockReader, index::Int) = read_climate_block(sour
 _climate_block(source::AbstractVector{<:ClimateBlock}, index::Int) = source[index]
 Base.getindex(forcings::ClimateForcingReader, index::Int) =
     climate_forcing(_climate_block(forcings.source, index))
+
+"""
+    prefetch_climate_forcings(reader)
+
+Return a sequential forcing vector that overlaps model work on block `n` with
+reading block `n + 1`. At least two Julia threads are required for true I/O and
+compute overlap; the interface remains correct with one thread.
+"""
+function prefetch_climate_forcings(source::ClimateBlockReader)
+    return PrefetchedClimateForcingReader(source, 0, nothing, false)
+end
+
+Base.size(forcings::PrefetchedClimateForcingReader) = (length(forcings.source),)
+Base.IndexStyle(::Type{<:PrefetchedClimateForcingReader}) = IndexLinear()
+
+function _schedule_prefetch!(forcings::PrefetchedClimateForcingReader, index::Int)
+    if index <= length(forcings)
+        forcings.scheduled_index = index
+        forcings.task = Threads.@spawn climate_forcing(read_climate_block(forcings.source, index))
+    else
+        forcings.scheduled_index = 0
+        forcings.task = nothing
+    end
+    return forcings
+end
+
+function Base.getindex(forcings::PrefetchedClimateForcingReader, index::Int)
+    forcings.closed && throw(ArgumentError("prefetched climate reader is closed"))
+    checkbounds(forcings, index)
+    if isnothing(forcings.task) || forcings.scheduled_index != index
+        !isnothing(forcings.task) && fetch(forcings.task)
+        _schedule_prefetch!(forcings, index)
+    end
+    block = fetch(forcings.task)
+    _schedule_prefetch!(forcings, index + 1)
+    return block
+end
+
+function Base.close(forcings::PrefetchedClimateForcingReader)
+    if !forcings.closed
+        !isnothing(forcings.task) && fetch(forcings.task)
+        forcings.task = nothing
+        forcings.closed = true
+    end
+    return nothing
+end

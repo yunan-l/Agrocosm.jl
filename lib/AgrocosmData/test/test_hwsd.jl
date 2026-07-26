@@ -11,6 +11,37 @@
     @test stocks.nitrogen[1, 1] == 200.0f0
     @test stocks.nitrogen[6, 1] == 500.0f0
 
+    component_carbon = Float32[
+        10 20 30
+        10 20 30
+        NaN 20 NaN
+        NaN 20 NaN
+        NaN 20 NaN
+        NaN 20 NaN
+        NaN 20 NaN
+    ]
+    component_nitrogen = component_carbon ./ 10
+    mixed = mix_hwsd_components(
+        component_carbon,
+        component_nitrogen,
+        Float32[60, 20, 20],
+        Int[3, 1, 3],
+    )
+    @test mixed.carbon[1:2] == Float32[16, 16]
+    @test mixed.carbon[3:7] == fill(4.0f0, 5)
+    @test mixed.nitrogen == mixed.carbon ./ 10
+    @test mixed.uncertain == Bool[0, 0, 1, 1, 1, 1, 1]
+
+    true_missing = copy(component_carbon)
+    true_missing[2, 2] = NaN
+    unresolved = mix_hwsd_components(
+        true_missing,
+        component_nitrogen,
+        Float32[60, 20, 20],
+        Int[3, 1, 3],
+    )
+    @test isnan(unresolved.carbon[2])
+
     carbon_layers = remap_hwsd_layers(stocks.carbon)
     @test carbon_layers.values[:, 1] == Float32[2000, 3000, 5000, 10000, 10000]
     @test sum(carbon_layers.values[1:4, 1]) == sum(stocks.carbon[:, 1])
@@ -82,8 +113,38 @@
         Float32[4000, 6000, 10000, 20000, 20000]
     @test all(partial.uncertain)
 
+    soil = soil_data_from_values(Int32[9], Float32[7], selection)
+    initial_state = hwsd_initial_state(targets, soil)
+    @test initial_state.litc == zeros(Float32, 3, 1)
+    @test initial_state.litn == zeros(Float32, 3, 1)
+    @test initial_state.fastc + initial_state.slowc ≈
+        targets.soil_organic_carbon
+    @test initial_state.fastc ≈ 0.4 .* targets.soil_organic_carbon
+    @test initial_state.slowc ≈ 0.6 .* targets.soil_organic_carbon
+    mineral_nitrogen = 0.01f0 .* initial_state.slown
+    @test initial_state.fastn + initial_state.slown + 2 .* mineral_nitrogen ≈
+        targets.total_nitrogen
+    @test initial_state.fastn ≈ (2 / 3) .* initial_state.slown
+    @test all(initial_state.swc .> 0)
+    @test all(initial_state.swc .< soil.saturation .* reshape(soil.layer_depth, :, 1))
+
     mktempdir() do directory
-        path = write_soil_cn_targets(joinpath(directory, "hwsd_cn.nc"), targets)
+        filled_targets = SoilCNTargets(
+            targets.selection,
+            targets.layer_bounds,
+            targets.soil_organic_carbon,
+            targets.total_nitrogen,
+            targets.coverage,
+            targets.uncertain,
+            merge(targets.provenance, (
+                fill_policy = "nearest complete 0.5-degree HWSD cell",
+                donor_longitude = 10.25,
+                donor_latitude = 20.25,
+                fill_distance_km = 42.0,
+                original_minimum_coverage = 0.0,
+            )),
+        )
+        path = write_soil_cn_targets(joinpath(directory, "hwsd_cn.nc"), filled_targets)
         restored = read_soil_cn_targets(path)
         @test restored.selection.cell_ids == targets.selection.cell_ids
         @test restored.layer_bounds == targets.layer_bounds
@@ -92,6 +153,9 @@
         @test restored.coverage == targets.coverage
         @test restored.uncertain == targets.uncertain
         @test restored.provenance.source_version == targets.provenance.source_version
+        @test restored.provenance.fill_policy == "nearest complete 0.5-degree HWSD cell"
+        @test restored.provenance.donor_longitude == 10.25
+        @test restored.provenance.fill_distance_km == 42.0
     end
 
     @test_throws ArgumentError hwsd_layer_stocks(
