@@ -9,7 +9,6 @@ const ANNUAL_MANAGEMENT = Set((
     "fertilizer",
     "manure",
     "residue_fraction",
-    "sowing_date",
     "phu",
 ))
 
