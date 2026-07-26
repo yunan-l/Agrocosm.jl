@@ -25,7 +25,7 @@ Current limitations include:
 
 - no equilibrium soil/ecosystem spin-up workflow; the available finite
   agricultural warm-up does not equilibrate the slow SOC pool;
-- no multi-crop competition or rotation framework;
+- no multi-crop framework;
 - no production Penman–Monteith/Medlyn alternative;
 - simplified frozen-soil infiltration and heat transport;
 - incomplete soil/climate time-series output coverage;
