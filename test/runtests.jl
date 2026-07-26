@@ -52,6 +52,7 @@ using Test
     include("simulations/test_daily_process_order.jl")
     include("simulations/test_daily_crop_C3_precision.jl")
     include("simulations/test_simulation_api.jl")
+    include("simulations/test_agricultural_warmup.jl")
     include("simulations/test_agrocosm_data_equivalence.jl")
     include("simulations/test_stream_output.jl")
     include("simulations/test_cross_year_continuity.jl")

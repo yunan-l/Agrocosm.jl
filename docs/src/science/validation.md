@@ -23,7 +23,8 @@ scale, and question of interest.
 
 Current limitations include:
 
-- no completed soil/ecosystem spin-up workflow;
+- no equilibrium soil/ecosystem spin-up workflow; the available finite
+  agricultural warm-up does not equilibrate the slow SOC pool;
 - no multi-crop competition or rotation framework;
 - no production Penman–Monteith/Medlyn alternative;
 - simplified frozen-soil infiltration and heat transport;

@@ -118,12 +118,14 @@ Recommended procedure:
    fertilization, irrigation, residue, and tillage configuration as the target
    experiment.
 3. Use observed historical forcing when available. If forcing must be cycled,
-   repeat a multi-year block rather than one anomalous year.
+   pass a complete multi-year block rather than one anomalous year.
 4. Discard warm-up outputs but save the final native Agrocosm checkpoint.
-5. Verify daily C, N, water, and energy closure throughout the warm-up.
-6. Report annual litter C/N, fast C/N, mineral N, heterotrophic respiration,
-   NPP, and yield. The last three-year mean should not show strong monotonic
-   drift relative to the preceding three years.
+5. Use a separate diagnostic run when daily C, N, water, and energy closure
+   must be audited; the production warm-up deliberately does not allocate
+   daily balance ledgers.
+6. Inspect annual litter, fast, slow, and total soil C/N, mineral N, and water
+   stocks. The last three-year mean should not show strong monotonic drift
+   relative to the preceding three years.
 
 Ten years is accepted when litter and fast pools stabilize and crop behaviour
 is plausible. Failure to stabilize means the warm-up must be lengthened or the
@@ -137,3 +139,27 @@ Every generated file records the HWSD version, preprocessing version, vertical
 rule, component policy, spatial policy, coverage, uncertainty, and donor
 metadata when applicable. Production runs should retain the preprocessing
 configuration and warm-up checkpoint alongside model outputs.
+
+## Running the warm-up
+
+Initialize the production simulation normally, then warm its state before the
+first reported day:
+
+```julia
+simulation = initialize_simulation(
+    cft1,
+    initial_data;
+    days = size(production_climate.temp, 1),
+    diagnostics = false,
+)
+
+report = agricultural_warmup!(simulation, warmup_climate; years = 10)
+@assert simulation.simulated_days == 0
+run_simulation!(simulation, production_climate; spinup = false)
+```
+
+`warmup_climate` must contain one or more complete 365-day years. If fewer
+than ten years are supplied, the years cycle in their original order. The
+report stores annual host-side matrices for total soil C/N, litter, fast and
+slow C/N, mineral N, and soil water. Warm-up outputs and balance ledgers are
+not mixed with the production run.
