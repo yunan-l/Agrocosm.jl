@@ -163,3 +163,22 @@ than ten years are supplied, the years cycle in their original order. The
 report stores annual host-side matrices for total soil C/N, litter, fast and
 slow C/N, mineral N, and soil water. Warm-up outputs and balance ledgers are
 not mixed with the production run.
+
+For the complete canonical grid, run the bounded-memory HWSD raster pipeline
+on the server:
+
+```bash
+julia --project=lib/AgrocosmData \
+  lib/AgrocosmData/scripts/prepare_canonical_hwsd.jl \
+  /absolute/path/HWSD2 \
+  /absolute/path/grid.nc \
+  /absolute/path/hwsd_canonical.nc \
+  /absolute/path/hwsd_canonical_qc.toml
+```
+
+The output contains every valid canonical `cellid`, five-layer SOC and total
+N, coverage and uncertainty, fallback donor identifiers and distances, and
+soil area. The QC report records unresolved cells and layer-wise C/N
+conservation errors. The command fails if fallback cannot resolve every cell
+or conservation exceeds numerical tolerance. `mdb-sql` from MDB Tools must be
+available because HWSD v2.01 distributes its mapping-unit table as an MDB file.

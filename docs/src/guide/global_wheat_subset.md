@@ -115,3 +115,26 @@ This extraction reduces time and PFT volume, not space. It is deliberately a
 global fixture for testing the real `720 × 280` alignment, land-use mask,
 compact cell ordering, streamed forcing, CPU/GPU execution, and output
 reconstruction. It is not a scientifically complete historical experiment.
+
+## 6. CPU production workflow
+
+Copy and edit the production configuration:
+
+```bash
+cp scripts/global_wheat_cpu.example.toml global_wheat_cpu.toml
+
+julia --project=. scripts/run_global_wheat_cpu.jl \
+  /absolute/path/global_wheat_cpu.toml
+```
+
+The runner selects cells only where the fixed 2015 rainfed-wheat
+`landfrac > 0`; land fraction never scales model processes. It performs the
+configured streamed agricultural warm-up, writes and exactly restores a native
+warm-up checkpoint, runs 2015, checkpoints at the year boundary, restores, and
+continues through 2016. Annual compact outputs are streamed to NetCDF and also
+reconstructed onto the canonical longitude/latitude grid.
+
+The full domain runs with daily balance ledgers disabled. A configurable small
+canonical subset repeats the same warm-up and two-year run with diagnostics to
+produce sampled C/N/water/energy closure. The output directory also contains a
+pre-allocation memory estimate and a ten-year C/N drift report.

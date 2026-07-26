@@ -226,7 +226,8 @@ forcing-transfer, and prefetched-host memory. Streamed selected output,
 checkpoint/restart, and asynchronous one-block prefetch are implemented.
 The global-subset preparation script supplies fixed 2015 management plus
 2015–2016 climate. The first ten selected cells pass the local HWSD-backed CPU
-smoke test. Grid reconstruction, the full selected-domain runner, and automatic
+smoke test. A bounded-memory canonical HWSD preprocessing/QC script and a full
+selected-domain CPU runner now exist. Their server execution and automatic
 spatial fallback remain.
 
 ## Milestone 7 — spin-up handoff and production hardening
@@ -245,8 +246,8 @@ compatibility path only.
 `agricultural_warmup!` now performs a finite ten-year crop-management warm-up
 before the reported run without advancing the production clock or retaining
 production outputs. It accepts restartable climate-block readers and reports
-annual soil C/N and water stocks. Writing the warm-up checkpoint remains. This
-is not a complete slow-SOC spin-up.
+annual soil C/N and water stocks. The production runner writes and restores the
+warm-up checkpoint. This is not a complete slow-SOC spin-up.
 
 Deliverables:
 

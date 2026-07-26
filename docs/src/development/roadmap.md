@@ -32,18 +32,19 @@ Work in this phase is ordered as follows:
    set. Land fraction is not a multiplier in crop or soil process equations;
    all other management inputs are likewise fixed at their 2015 values.
 2. The local ten-cell HWSD + 2015–2016 forcing smoke test and restartable
-   streamed `agricultural_warmup!` are complete. Add the native post-warm-up
-   checkpoint to the production workflow.
-3. Generate and quality-control the complete canonical-grid HWSD product on
-   the server, retaining source manifests and coverage/conservation reports.
-4. Run a one-year global smoke test over every 2015 land-use-selected cell: CPU
-   first, then one GPU, using bounded forcing and output blocks. Use the second
+   streamed `agricultural_warmup!` are complete. Native post-warm-up and 2015
+   boundary checkpoint/restart are now part of the production runner.
+3. Run the canonical-grid HWSD preprocessing script on the server and review
+   its coverage, fallback, uncertainty, and conservation report.
+4. Run the bounded-memory CPU production script over every 2015
+   land-use-selected cell. It crosses into 2016 through a native restart and
+   reconstructs annual output onto the canonical grid. Then run one GPU.
    year to verify cross-year state and checkpoint/restart continuity.
 5. Validate memory, throughput, grid reconstruction, finite/non-negative state,
    CPU/GPU agreement, and sampled or online C/N/water/energy closure.
-6. Use the warm-up drift report to evaluate the interim HWSD 40:60 fast/slow
-   split. Add constrained pool allocation only if the evidence shows that the
-   fixed split creates unacceptable transients.
+6. Retain the interim HWSD 40:60 fast/slow split for the first global run. The
+   runner records initial-to-year-10 C/N and fast-pool drift and flags the split
+   for review if the transient or late-year drift exceeds declared thresholds.
 
 The phase is complete when a 2015-selected global crop domain can be initialized from native
 data, warmed, checkpointed, run across a year boundary, and reconstructed to

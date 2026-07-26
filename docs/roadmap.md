@@ -83,7 +83,8 @@ Acceptance: streamed and eager warm-up are numerically equal, including the
 final prognostic state and annual report.
 
 Status: the streamed/eager implementation and equivalence regression are
-complete. Writing and restoring the production warm-up checkpoint remains.
+complete. The production runner writes and exactly restores the warm-up state,
+then repeats checkpoint/restart at the end of 2015.
 
 ### 3.3 Global rainfed-wheat smoke test
 
@@ -112,6 +113,12 @@ equilibrium allocator without evidence. First inspect the ten-year warm-up for
 initial respiration pulses, litter/fast-pool stabilization, mineral-N drift,
 and total C/N trajectories. If needed, implement a constrained allocation that
 preserves every layer total and records uncertainty.
+
+Current decision: retain 40:60 for the first global production smoke. The
+runner writes `warmup_cn_drift.toml` and changes the recommendation to
+`review_pool_allocation` when the initial fast-pool fraction shifts by more
+than 0.10, the year-10 fast fraction changes by more than 0.01, or late total
+C/N drift exceeds 1% per year.
 
 ## 4. Differentiable daily transition
 
