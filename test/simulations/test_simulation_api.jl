@@ -98,6 +98,15 @@ end
     @test prefetched.host_peak_bytes == estimate.host_peak_bytes + 40
     @test estimate.device_peak_bytes == 0
     @test estimate.recommended_host_peak_gib == estimate.host_peak_bytes / 2.0^30
+    stream = OutputStream(
+        [OutputVariable(:crop, :npp)]; cell_ids = Int32[1],
+    )
+    streamed = estimate_memory(
+        simulation; block_days = 2, output_stream = stream, safety_factor = 1,
+    )
+    @test streamed.streaming_output
+    @test streamed.projected_output_bytes < estimate.projected_output_bytes
+    @test streamed.output_growth_bytes == 0
     reader = (block_days = 2, selection = (compact_indices = [1],))
     @test estimate_memory(simulation, reader; safety_factor = 1) == estimate
     mismatched = (block_days = 2, selection = (compact_indices = [1, 2],))
@@ -152,6 +161,40 @@ end
     @test simulation.simulated_days == 3
     @test size(simulation.output.crop.npp) == (3, 1)
     @test all(isfinite, simulation.output.crop.npp)
+end
+
+@testset "One-day transition matches the range runner" begin
+    initial, climate = simulation_api_fixture(Float32)
+    baseline = initialize_simulation(
+        cft1, initial; indices = [1], T = Float32, days = 3, fertilizer = :no,
+    )
+    stepped = initialize_simulation(
+        cft1, initial; indices = [1], T = Float32, days = 3, fertilizer = :no,
+    )
+    run_simulation!(baseline, climate; spinup = false)
+    for day in 1:3
+        transition_day!(stepped, climate; climate_day = day)
+    end
+    @test stepped.simulated_days == 3
+    @test stepped.output.crop.npp == baseline.output.crop.npp
+    @test stepped.output.crop.biomass == baseline.output.crop.biomass
+    @test stepped.state.prognostic.soil.water.storage ==
+        baseline.state.prognostic.soil.water.storage
+end
+
+@testset "Runtime contracts describe active state and outputs" begin
+    initial, _ = simulation_api_fixture(Float32)
+    simulation = initialize_simulation(
+        cft1, initial; indices = [1], T = Float32, days = 1, fertilizer = :no,
+    )
+    @test architecture_name(simulation.config.execution) == :cpu
+    @test float_type(simulation.config.execution) === Float32
+    @test simulation.config.execution.domain.cell_ids == Int32[1]
+    @test !isempty(state_schema(simulation.state))
+    @test validate_state_schema(simulation.state, 1) === simulation.state
+    spec, frequency = output_variable_spec(:crop, :npp)
+    @test spec.units == "gC m-2 day-1"
+    @test frequency == :daily
 end
 
 @testset "Backend-neutral climate blocks use the simulation precision" begin

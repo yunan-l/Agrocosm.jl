@@ -32,6 +32,32 @@ function _projected_output_bytes(cells::Int, days::Int, ::Type{T}) where {T}
     ) + accumulator_bytes
 end
 
+function _stream_output_bytes(
+    cells::Int,
+    block_days::Int,
+    ::Type{T},
+    stream::OutputStream,
+) where {T}
+    daily_bytes = 0
+    annual_bytes = 0
+    accumulator_bytes = 0
+    annual_rows = cld(block_days, 365)
+    for variable in stream.variables
+        bytes = variable.field in (
+            _DAILY_CROP_INTEGER_OUTPUT_FIELDS...,
+            _DAILY_CALENDAR_INTEGER_OUTPUT_FIELDS...,
+            _ANNUAL_CALENDAR_INTEGER_OUTPUT_FIELDS...,
+        ) ? sizeof(Int32) : sizeof(T)
+        if _is_annual(variable)
+            annual_bytes += annual_rows * cells * bytes
+        else
+            daily_bytes += block_days * cells * bytes
+            stream.frequency !== :daily && (accumulator_bytes += cells * bytes)
+        end
+    end
+    return daily_bytes + annual_bytes + accumulator_bytes
+end
+
 const _PERSISTENT_FLOAT_VALUES_PER_CELL = 855
 const _PERSISTENT_NONFLOAT_BYTES_PER_CELL = 26
 const _PERSISTENT_FIXED_FLOAT_VALUES = 26
@@ -61,6 +87,7 @@ function _memory_estimate(
     prefetch::Bool,
     safety_factor::Real,
     backend::Symbol,
+    output_stream::Union{Nothing, OutputStream} = nothing,
 ) where {T}
     block_days > 0 || throw(ArgumentError("block_days must be positive"))
     safety_factor >= 1 || throw(ArgumentError("safety_factor must be at least one"))
@@ -68,16 +95,20 @@ function _memory_estimate(
         "backend must be :cpu or :accelerator",
     ))
 
-    output_bytes = _projected_output_bytes(cells, days, T)
-    output_growth_bytes = days * cells * max(sizeof(T), sizeof(Int32))
+    output_bytes = isnothing(output_stream) ?
+        _projected_output_bytes(cells, days, T) :
+        _stream_output_bytes(cells, Int(block_days), T, output_stream)
+    output_growth_bytes = isnothing(output_stream) ?
+        days * cells * max(sizeof(T), sizeof(Int32)) : 0
+    host_output_chunk_bytes = isnothing(output_stream) ? 0 : output_bytes
     # Four time×cell forcing fields plus one daily global CO₂ vector.
     forcing_block_bytes = (4 * block_days * cells + block_days) * sizeof(T)
     host_forcing_bytes = forcing_block_bytes * (2 + Int(prefetch))
     model_payload_bytes = persistent_state_bytes + diagnostics_bytes + output_bytes
     backend_peak_bytes = model_payload_bytes + output_growth_bytes + forcing_block_bytes
     host_peak_bytes = backend === :cpu ?
-        model_payload_bytes + output_growth_bytes + host_forcing_bytes :
-        host_forcing_bytes
+        model_payload_bytes + output_growth_bytes + host_forcing_bytes + host_output_chunk_bytes :
+        host_forcing_bytes + host_output_chunk_bytes
     device_peak_bytes = backend === :cpu ? 0 : backend_peak_bytes
 
     recommended(value) = ceil(Int, value * safety_factor)
@@ -92,6 +123,7 @@ function _memory_estimate(
         diagnostics_bytes,
         projected_output_bytes = output_bytes,
         output_growth_bytes,
+        host_output_chunk_bytes,
         forcing_block_bytes,
         host_forcing_bytes,
         model_payload_bytes,
@@ -102,6 +134,7 @@ function _memory_estimate(
         recommended_host_peak_gib = gib(recommended(host_peak_bytes)),
         recommended_device_peak_gib = gib(recommended(device_peak_bytes)),
         safety_factor = float(safety_factor),
+        streaming_output = !isnothing(output_stream),
     )
 end
 
@@ -121,6 +154,7 @@ function estimate_memory(
     backend::Symbol = :accelerator,
     prefetch::Bool = false,
     safety_factor::Real = 1.2,
+    output_stream::Union{Nothing, OutputStream} = nothing,
 )
     cells > 0 || throw(ArgumentError("cells must be positive"))
     days > 0 || throw(ArgumentError("days must be positive"))
@@ -131,7 +165,7 @@ function estimate_memory(
         _estimated_diagnostics_bytes(cell_count, day_count, T) : 0
     return _memory_estimate(
         cell_count, day_count, T, persistent_state_bytes, diagnostics_bytes;
-        block_days, prefetch, safety_factor, backend,
+        block_days, prefetch, safety_factor, backend, output_stream,
     )
 end
 
@@ -139,9 +173,10 @@ end
     estimate_memory(simulation; block_days, prefetch=false, safety_factor=1.2)
 
 Estimate model payload memory before running a configured simulation. The
-estimate includes final time-series output, diagnostics, the temporary array
-used while output matrices grow, and climate-transfer buffers. `prefetch=true`
-reserves one additional host forcing block; it does not enable asynchronous I/O.
+estimate includes output, diagnostics, and climate-transfer buffers.
+`prefetch=true` reserves one additional host forcing block. Pass the same
+`OutputStream` used by the runner to estimate selected reusable output buffers
+instead of retained full time series.
 
 The returned values are bytes. `recommended_*_peak_bytes` apply `safety_factor`
 to account for allocator, library, and kernel overhead that cannot be inferred
@@ -152,6 +187,7 @@ function estimate_memory(
     block_days::Integer,
     prefetch::Bool = false,
     safety_factor::Real = 1.2,
+    output_stream::Union{Nothing, OutputStream} = nothing,
 )
     cells = length(simulation.state.inputs.weather.temp)
     days = simulation.config.days
@@ -172,6 +208,7 @@ function estimate_memory(
         cells, days, T, persistent_state_bytes, diagnostics_bytes;
         block_days, prefetch, safety_factor,
         backend = backend_is_host ? :cpu : :accelerator,
+        output_stream,
     )
 end
 

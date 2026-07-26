@@ -230,23 +230,32 @@ end
         lai_npp_deficit[cell] = zero(T)
         actual_lai[cell] = zero(T)
     end
-    output_biomass[output_row, cell] = biomass[cell]
-    output_lai[output_row, cell] = actual_lai[cell]
-    output_storage_carbon[output_row, cell] = storage_carbon[cell]
-    output_growing_mask[output_row, cell] = is_growing[cell]
-    output_harvesting_mask[output_row, cell] = max(
-        output_harvesting_mask[output_row, cell], failed ? one(S) : zero(S),
-    )
-    output_harvest_event[output_row, cell] = max(
-        output_harvest_event[output_row, cell], failed ? one(S) : zero(S),
-    )
+    size(output_biomass, 1) != 0 && (output_biomass[output_row, cell] = biomass[cell])
+    size(output_lai, 1) != 0 && (output_lai[output_row, cell] = actual_lai[cell])
+    size(output_storage_carbon, 1) != 0 &&
+        (output_storage_carbon[output_row, cell] = storage_carbon[cell])
+    size(output_growing_mask, 1) != 0 &&
+        (output_growing_mask[output_row, cell] = is_growing[cell])
+    if size(output_harvesting_mask, 1) != 0
+        output_harvesting_mask[output_row, cell] = max(
+            output_harvesting_mask[output_row, cell], failed ? one(S) : zero(S),
+        )
+    end
+    if size(output_harvest_event, 1) != 0
+        output_harvest_event[output_row, cell] = max(
+            output_harvest_event[output_row, cell], failed ? one(S) : zero(S),
+        )
+    end
 
     # The regular harvest kernel has already emitted and cleared day 365.
     if day == 365
         if failed
-            output_yield[annual_output_row, cell] += crop_yield[cell]
-            output_harvest_date[annual_output_row, cell] = S(day)
-            output_harvesting_year[annual_output_row, cell] = one(S)
+            size(output_yield, 1) != 0 &&
+                (output_yield[annual_output_row, cell] += crop_yield[cell])
+            size(output_harvest_date, 1) != 0 &&
+                (output_harvest_date[annual_output_row, cell] = S(day))
+            size(output_harvesting_year, 1) != 0 &&
+                (output_harvesting_year[annual_output_row, cell] = one(S))
         end
         annual_yield[cell] = zero(T)
         harvest_date[cell] = zero(S)
@@ -319,10 +328,13 @@ end
     nitrogen_input[INCORPORATED_LITTER, cell] = zero(T)
     if day == 365 && annual_output_row != 0
         emitted_yield = max(annual_yield[cell], zero(T))
-        output_yield[annual_output_row, cell] = emitted_yield
-        output_harvest_date[annual_output_row, cell] = harvest_date[cell]
-        output_harvesting_year[annual_output_row, cell] =
-            emitted_yield != zero(T) ? one(S) : zero(S)
+        size(output_yield, 1) != 0 &&
+            (output_yield[annual_output_row, cell] = emitted_yield)
+        size(output_harvest_date, 1) != 0 &&
+            (output_harvest_date[annual_output_row, cell] = harvest_date[cell])
+        size(output_harvesting_year, 1) != 0 &&
+            (output_harvesting_year[annual_output_row, cell] =
+                emitted_yield != zero(T) ? one(S) : zero(S))
         annual_yield[cell] = zero(T)
         harvest_date[cell] = zero(S)
     end

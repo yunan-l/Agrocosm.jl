@@ -24,6 +24,8 @@ function _daily_crop!(
     thermal_balance = nothing,
     simulation_day_offset::Integer = 0,
     diagnostic_offset::Integer = 0,
+    reuse_output::Bool = false,
+    selected_output::Union{Nothing, Set{Tuple{Symbol, Symbol}}} = nothing,
 )
     pftparameters = processes.crop
     model_parameters = processes.global_parameters
@@ -54,7 +56,10 @@ function _daily_crop!(
         climate_day -> (climate_day + simulation_day_offset) % 365 == 0,
         start_day:end_day,
     )
-    output_rows = prepare_output_block!(output, end_day - start_day + 1, annual_rows)
+    output_rows = prepare_output_block!(
+        output, end_day - start_day + 1, annual_rows;
+        reuse = reuse_output, selected = selected_output,
+    )
     annual_output_offset = 0
 
     for climate_day in start_day:end_day

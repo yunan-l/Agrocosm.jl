@@ -130,6 +130,17 @@ function _extend_output_rows(array::AbstractMatrix, additional_rows::Integer)
     return extended
 end
 
+function _reuse_output_rows(array::AbstractMatrix, rows::Integer)
+    rows >= 0 || throw(ArgumentError("output rows must be non-negative"))
+    if size(array, 1) == rows
+        fill!(array, zero(eltype(array)))
+        return array
+    end
+    resized = similar(array, rows, size(array, 2))
+    fill!(resized, zero(eltype(resized)))
+    return resized
+end
+
 """
     prepare_output_block!(output, daily_rows, annual_rows)
 
@@ -138,30 +149,41 @@ The returned indices point to the first newly allocated daily and annual rows.
 """
 function prepare_output_block!(output::Output,
                                daily_rows::Integer,
-                               annual_rows::Integer)
-    first_daily_row = size(output.crop.gpp, 1) + 1
-    first_annual_row = size(output.crop.yield, 1) + 1
+                               annual_rows::Integer;
+                               reuse::Bool = false,
+                               selected::Union{Nothing, Set{Tuple{Symbol, Symbol}}} = nothing)
+    !isnothing(selected) && !reuse && throw(ArgumentError(
+        "selected output allocation requires reuse=true",
+    ))
+    first_daily_row = reuse ? 1 : size(output.crop.gpp, 1) + 1
+    first_annual_row = reuse ? 1 : size(output.crop.yield, 1) + 1
+    resize_rows = reuse ? _reuse_output_rows : _extend_output_rows
 
     for field in (_DAILY_CROP_FLOAT_OUTPUT_FIELDS..., _DAILY_CROP_INTEGER_OUTPUT_FIELDS...)
+        rows = isnothing(selected) || (:crop, field) in selected ? daily_rows : 0
         setproperty!(
             output.crop,
             field,
-            _extend_output_rows(getproperty(output.crop, field), daily_rows),
+            resize_rows(getproperty(output.crop, field), rows),
         )
     end
     for field in _DAILY_CALENDAR_INTEGER_OUTPUT_FIELDS
+        rows = isnothing(selected) || (:calendar, field) in selected ? daily_rows : 0
         setproperty!(
             output.calendar,
             field,
-            _extend_output_rows(getproperty(output.calendar, field), daily_rows),
+            resize_rows(getproperty(output.calendar, field), rows),
         )
     end
 
-    output.crop.yield = _extend_output_rows(output.crop.yield, annual_rows)
+    yield_rows = isnothing(selected) || (:crop, :yield) in selected ? annual_rows : 0
+    date_rows = isnothing(selected) || (:calendar, :harvest_date) in selected ? annual_rows : 0
+    year_rows = isnothing(selected) || (:calendar, :harvesting_year) in selected ? annual_rows : 0
+    output.crop.yield = resize_rows(output.crop.yield, yield_rows)
     output.calendar.harvest_date =
-        _extend_output_rows(output.calendar.harvest_date, annual_rows)
+        resize_rows(output.calendar.harvest_date, date_rows)
     output.calendar.harvesting_year =
-        _extend_output_rows(output.calendar.harvesting_year, annual_rows)
+        resize_rows(output.calendar.harvesting_year, year_rows)
 
     return (; first_daily_row, first_annual_row)
 end
@@ -169,6 +191,7 @@ end
 @inline function _write_output_row!(destination::AbstractMatrix,
                                     row::Integer,
                                     source::AbstractVector)
+    size(destination, 1) == 0 && return nothing
     @views destination[row:row, :] .= reshape(source, 1, :)
     return nothing
 end

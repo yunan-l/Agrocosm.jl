@@ -7,7 +7,7 @@ using Statistics
 # GPU PARALLEL
 # import KernelAbstractions: @kernel, @index, @inbounds # get_backend, synchronize
 using KernelAbstractions # GPU/CPU parallelization
-using CUDA, Adapt
+using Adapt
 
 # INPUT OUTPUT
 using DataFrames, NCDatasets, Random, Dates
@@ -27,6 +27,10 @@ export CropCalendarAuxiliary, CropCanopyState, CropCanopyAuxiliary, CropPhotosyn
 export CropCarbonFluxes, CropNitrogenFluxes, CropWaterFluxes, CropEvents
 export CropStressAuxiliary, CropRootAuxiliary, ManagedLand
 export ProcessModules, ModelState, model_state
+export AbstractPhotosynthesisPathway, C3Pathway, C4Pathway
+export ActiveLandDomain, ExecutionContext, HostArchitecture, AcceleratorArchitecture
+export VariableSpec, state_schema, validate_state_schema, output_variable_spec
+export float_type, array_device, architecture_name
 export SoilParams, SoilDecompParams, SoilThermalParams, SnowParams, Soil
 export SoilProperties, SoilWater, SoilThermal, SoilCarbon, SoilNitrogen
 export SoilDecomposition, SoilManagement, SoilSurfaceLitter, SoilSnow
@@ -86,7 +90,7 @@ export consume_output!, finish_output_stream!, clear_output_timeseries!
 
 # DAILY CROP SIMULATIONS
 export daily_crop_C3!, daily_crop_C4!
-export CropSimulation, initialize_simulation, run_simulation!, simulation_summary
+export CropSimulation, initialize_simulation, transition_day!, run_simulation!, simulation_summary
 export save_checkpoint, restore_checkpoint!
 export estimate_memory
 
@@ -123,6 +127,7 @@ include("processes/initialization/soil/snow.jl")
 include("processes/initialization/soil/soil.jl")
 include("processes/initialization/init_states.jl")
 include("simulations/model_runtime.jl")
+include("simulations/runtime_contracts.jl")
 
 # Diagnostics
 include("diagnostics/water_balance.jl")

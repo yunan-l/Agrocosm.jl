@@ -13,6 +13,18 @@ mutable struct CropSimulation{P, S, D, C}
     simulated_days::Int # Number of completed daily time steps in this simulation.
 end
 
+function Base.show(io::IO, simulation::CropSimulation)
+    diagnostics_enabled = any(!isnothing, values(simulation.diagnostics))
+    print(
+        io,
+        "CropSimulation(", CROP_PFT_NAMES[simulation.pft.id], ", ",
+        architecture_name(simulation.config.execution), ", ", simulation.config.T,
+        ", cells=", length(simulation.config.execution.domain.indices),
+        ", days=", simulation.simulated_days, "/", simulation.config.days,
+        ", diagnostics=", diagnostics_enabled, ")",
+    )
+end
+
 const _SIMULATION_STATE_PROPERTIES = (
     :climbuf, :pet, :managed_land, :daily_weather, :output,
 )
@@ -99,6 +111,9 @@ function initialize_simulation(
     )
     climbuf, crop, pet, soil, managed_land, daily_weather, output = states
     state = model_state(climbuf, crop, pet, soil, managed_land, daily_weather, output)
+    active_indices = indices === nothing ? collect(1:cells) : collect(Int, indices)
+    execution = ExecutionContext(T, device, active_indices)
+    validate_state_schema(state, cells)
     balances = diagnostics ? (
         water_balance = init_water_balance(days, cells, device; T = T),
         nitrogen_balance = init_nitrogen_balance(days, cells, device; T = T),
@@ -120,6 +135,7 @@ function initialize_simulation(
         fertilizer = fertilizer,
         with_tillage = with_tillage,
         nitrogen_limit_vcmax = nitrogen_limit_vcmax,
+        execution = execution,
     )
     processes = ProcessModules(convert_precision(T, pft), ModelParameters(T))
     return CropSimulation(
@@ -155,6 +171,65 @@ function _prepare_climate(simulation::CropSimulation, climate::NamedTuple)
     return climate
 end
 
+function _transition_range!(
+    simulation::CropSimulation,
+    prepared_climate::NamedTuple,
+    start_day::Integer,
+    end_day::Integer,
+    ; reuse_output::Bool = false,
+    simulation_day_offset::Integer = simulation.simulated_days,
+    selected_output::Union{Nothing, Set{Tuple{Symbol, Symbol}}} = nothing,
+)
+    common = (
+        irrigation = simulation.config.irrigation,
+        manure = simulation.config.manure,
+        fertilizer = simulation.config.fertilizer,
+        with_tillage = simulation.config.with_tillage,
+        nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
+        water_balance = simulation.water_balance,
+        nitrogen_balance = simulation.nitrogen_balance,
+        carbon_balance = simulation.carbon_balance,
+        thermal_balance = simulation.thermal_balance,
+        simulation_day_offset = simulation_day_offset,
+        diagnostic_offset = simulation.simulated_days,
+        reuse_output = reuse_output,
+        selected_output = selected_output,
+    )
+    _daily_crop!(
+        pathway_value(simulation.processes.pathway),
+        start_day, end_day, simulation.processes, prepared_climate,
+        simulation.state;
+        common...,
+    )
+    return simulation
+end
+
+"""
+    transition_day!(simulation, climate; climate_day=1)
+
+Advance exactly one daily transition. This is the narrow numerical lifecycle
+boundary used by the high-level runner and the future differentiable path.
+"""
+function transition_day!(
+    simulation::CropSimulation,
+    climate::NamedTuple;
+    climate_day::Integer = 1,
+)
+    simulation.simulated_days < simulation.config.days || throw(ArgumentError(
+        "simulation already contains all $(simulation.config.days) configured days",
+    ))
+    prepared_climate = _prepare_climate(simulation, climate)
+    1 <= climate_day <= size(prepared_climate.temp, 1) || throw(BoundsError(
+        prepared_climate.temp, (climate_day, :),
+    ))
+    _transition_range!(
+        simulation, prepared_climate, climate_day, climate_day;
+        simulation_day_offset = simulation.simulated_days + 1 - climate_day,
+    )
+    simulation.simulated_days += 1
+    return simulation
+end
+
 """
     run_simulation!(simulation, climate; start_day=1, end_day=nothing, spinup=true)
 
@@ -169,6 +244,8 @@ function run_simulation!(
     end_day::Union{Nothing, Integer} = nothing,
     spinup::Bool = true,
     spinup_years::Integer = 1,
+    reuse_output::Bool = false,
+    selected_output::Union{Nothing, Set{Tuple{Symbol, Symbol}}} = nothing,
 )
     prepared_climate = _prepare_climate(simulation, climate)
     climate_days = size(prepared_climate.temp, 1)
@@ -211,34 +288,10 @@ function run_simulation!(
         )
     end
 
-    common = (
-        irrigation = simulation.config.irrigation,
-        manure = simulation.config.manure,
-        fertilizer = simulation.config.fertilizer,
-        with_tillage = simulation.config.with_tillage,
-        nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
-        water_balance = simulation.water_balance,
-        nitrogen_balance = simulation.nitrogen_balance,
-        carbon_balance = simulation.carbon_balance,
-        thermal_balance = simulation.thermal_balance,
-        simulation_day_offset = simulation.simulated_days,
-        diagnostic_offset = simulation.simulated_days,
+    _transition_range!(
+        simulation, prepared_climate, start_day, local_end_day;
+        reuse_output, selected_output,
     )
-    if simulation.pft.path == 1
-        daily_crop_C3!(
-            start_day, local_end_day, simulation.processes, prepared_climate,
-            simulation.state;
-            common...,
-        )
-    elseif simulation.pft.path == 2
-        daily_crop_C4!(
-            start_day, local_end_day, simulation.processes, prepared_climate,
-            simulation.state;
-            common...,
-        )
-    else
-        throw(ArgumentError("unsupported photosynthetic pathway $(simulation.pft.path)"))
-    end
     simulation.simulated_days += run_days
     return simulation
 end
@@ -280,21 +333,33 @@ function run_simulation!(
             "streaming must start with empty output time series",
         ))
     end
-    for (block_index, block) in pairs(climate_blocks)
-        first_day = simulation.simulated_days + 1
-        run_simulation!(
-            simulation, block;
-            spinup = spinup && block_index == firstindex(climate_blocks),
-            spinup_years = spinup_years,
-        )
-        if output_stream !== nothing
-            consume_output!(output_stream, simulation.output, first_day)
-            clear_output_timeseries!(simulation.output)
+    selected_output = output_stream === nothing ? nothing : Set(
+        (variable.group, variable.field) for variable in output_stream.variables
+    )
+    try
+        for (block_index, block) in pairs(climate_blocks)
+            first_day = simulation.simulated_days + 1
+            run_simulation!(
+                simulation, block;
+                spinup = spinup && block_index == firstindex(climate_blocks),
+                spinup_years = spinup_years,
+                reuse_output = output_stream !== nothing,
+                selected_output = selected_output,
+            )
+            if output_stream !== nothing
+                consume_output!(
+                    output_stream, simulation.output, first_day;
+                    rows = simulation.simulated_days - first_day + 1,
+                )
+            end
         end
+    finally
+        applicable(close, climate_blocks) && close(climate_blocks)
     end
     if output_stream !== nothing && simulation.simulated_days == simulation.config.days
         finish_output_stream!(output_stream, simulation.simulated_days)
     end
+    output_stream !== nothing && clear_output_timeseries!(simulation.output)
     return simulation
 end
 

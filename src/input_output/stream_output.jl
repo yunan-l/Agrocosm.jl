@@ -18,6 +18,7 @@ function OutputVariable(group::Symbol, field::Symbol; reduction::Union{Nothing, 
     daily = group in keys(_STREAM_DAILY_FIELDS) && field in getproperty(_STREAM_DAILY_FIELDS, group)
     annual = group in keys(_STREAM_ANNUAL_FIELDS) && field in getproperty(_STREAM_ANNUAL_FIELDS, group)
     (daily || annual) || throw(ArgumentError("unsupported output variable $group.$field"))
+    output_variable_spec(group, field)
     default_reduction = field in (:gpp, :npp, :respiration, :sowing_event, :harvest_event) ?
         :sum : field in (:biomass, :storage_carbon, :growing_mask, :harvesting_mask) ?
         :last : :mean
@@ -114,6 +115,12 @@ function (writer::NetCDFBlockWriter)(chunk::OutputChunk)
         defVar(dataset, "cell_id", Int32, ("cell",))[:] = chunk.cell_ids
         for (name, values) in chunk.values
             variable = defVar(dataset, String(name), eltype(values), ("time", "cell"))
+            parts = split(String(name), '_'; limit = 2)
+            if length(parts) == 2
+                spec, _ = output_variable_spec(Symbol(parts[1]), Symbol(parts[2]))
+                variable.attrib["units"] = spec.units
+                variable.attrib["long_name"] = spec.description
+            end
             variable[:, :] = values
         end
     end
@@ -210,15 +217,24 @@ function _host_selected_values(stream::OutputStream, output::Output)
 end
 
 """Copy selected output to the host and pass completed chunks to the configured writer."""
-function consume_output!(stream::OutputStream, output::Output, first_day::Integer)
+function consume_output!(
+    stream::OutputStream,
+    output::Output,
+    first_day::Integer;
+    rows::Union{Nothing, Integer} = nothing,
+)
     daily, annual = _host_selected_values(stream, output)
-    rows = isempty(daily) ? size(output.crop.gpp, 1) : size(first(values(daily)), 1)
+    output_rows = isnothing(rows) ?
+        (isempty(daily) ? size(output.crop.gpp, 1) : size(first(values(daily)), 1)) : Int(rows)
     length(stream.cell_ids) == size(output.crop.gpp, 2) || throw(DimensionMismatch(
         "stream has $(length(stream.cell_ids)) cell ids, output has $(size(output.crop.gpp, 2)) cells",
     ))
 
     annual_rows = isempty(annual) ? 0 : size(first(values(annual)), 1)
-    annual_end_days = filter(day -> day % 365 == 0, Int(first_day):(Int(first_day) + rows - 1))
+    annual_end_days = filter(
+        day -> day % 365 == 0,
+        Int(first_day):(Int(first_day) + output_rows - 1),
+    )
     annual_rows == length(annual_end_days) || throw(DimensionMismatch(
         "found $annual_rows annual rows for $(length(annual_end_days)) year boundaries",
     ))
@@ -229,14 +245,14 @@ function consume_output!(stream::OutputStream, output::Output, first_day::Intege
     end
 
     if stream.frequency === :daily
-        _emit_daily_chunk!(stream, Int(first_day), rows, daily)
+        _emit_daily_chunk!(stream, Int(first_day), output_rows, daily)
         for day in annual_end_days
             _emit_chunk!(stream, :annual, day, pop!(stream.pending_annual, day))
         end
         return stream
     end
 
-    for row in 1:rows
+    for row in 1:output_rows
         day = Int(first_day) + row - 1
         period_end = _period_end(day, stream.frequency)
         if stream.period_end_day != 0 && stream.period_end_day != period_end

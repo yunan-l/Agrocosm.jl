@@ -1,8 +1,23 @@
+abstract type AbstractPhotosynthesisPathway end
+struct C3Pathway <: AbstractPhotosynthesisPathway end
+struct C4Pathway <: AbstractPhotosynthesisPathway end
+
 """Immutable process configuration. Numerical arrays live in `ModelState`."""
-struct ProcessModules{C, G}
+struct ProcessModules{C, G, P <: AbstractPhotosynthesisPathway}
     crop::C
     global_parameters::G
+    pathway::P
 end
+
+function ProcessModules(crop, global_parameters)
+    pathway = crop.path == 1 ? C3Pathway() : crop.path == 2 ? C4Pathway() : throw(
+        ArgumentError("unsupported photosynthetic pathway $(crop.path)"),
+    )
+    return ProcessModules(crop, global_parameters, pathway)
+end
+
+pathway_value(::C3Pathway) = Val(:C3)
+pathway_value(::C4Pathway) = Val(:C4)
 
 """
 Numerical variables grouped by lifecycle, independently of the crop and soil

@@ -146,6 +146,22 @@ end
             @test dataset["time"][:] == Int32[1, 2]
             @test dataset["cell_id"][:] == Int32[7, 9]
             @test dataset["crop_npp"][:, :] == chunk.values[:crop_npp]
+            @test dataset["crop_npp"].attrib["units"] == "gC m-2 day-1"
+            @test dataset["crop_npp"].attrib["long_name"] == "Net primary production"
         end
     end
+end
+
+
+@testset "stream output reuses equal-sized block buffers" begin
+    output = init_output(Float32, 2, identity)
+    Agrocosm.prepare_output_block!(output, 31, 0; reuse = true)
+    gpp = output.crop.gpp
+    output.crop.gpp .= 3
+    rows = Agrocosm.prepare_output_block!(output, 31, 0; reuse = true)
+    @test rows.first_daily_row == 1
+    @test output.crop.gpp === gpp
+    @test all(iszero, output.crop.gpp)
+    Agrocosm.prepare_output_block!(output, 30, 0; reuse = true)
+    @test size(output.crop.gpp) == (30, 2)
 end
