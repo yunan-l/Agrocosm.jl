@@ -29,10 +29,12 @@ spin-up dynamics, and device execution in `Agrocosm.jl`.
 ## Current status
 
 The package core is substantially complete. Milestones 1–5 have implemented
-and fixture-tested contracts. Remaining work is concentrated in full-grid HWSD
-quality control, runtime use of annual crop activity, streamed warm-up, and the
-one-year global smoke test. Large production management files remain on the
-server; their 64/32/24/16-band mappings are explicit code contracts tested with
+and fixture-tested contracts. A configuration-driven utility now extracts the
+rainfed-wheat band from the 64/32/24/16-band server files and the first two
+365-day forcing years without loading the full datasets. Remaining work is
+concentrated in full-grid HWSD quality control, runtime use of annual crop
+activity, streamed warm-up, and the global smoke test. Large production files
+remain on the server; their mappings are explicit code contracts tested with
 small dimension-permuted fixtures.
 
 ## Milestone 1 — package and data contracts
@@ -226,8 +228,9 @@ Acceptance:
 Status: partial. `estimate_memory` reports model, diagnostic, output, scratch,
 forcing-transfer, and prefetched-host memory. Streamed selected output,
 checkpoint/restart, and asynchronous one-block prefetch are implemented.
-Annual crop activity, grid reconstruction, the integrated global runner, and
-automatic spatial fallback remain.
+The global-subset preparation script supplies a bounded two-year rainfed-wheat
+input for production testing. Annual crop activity, grid reconstruction, the
+integrated global runner, and automatic spatial fallback remain.
 
 ## Milestone 7 — spin-up handoff and production hardening
 

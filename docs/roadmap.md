@@ -40,6 +40,8 @@ Milestones 1–5 are substantially complete at the code and fixture-test level:
   streaming; annual CO₂ alignment; 365-day normalization; block prefetch;
 - full ten-cell equivalence through `model_initial_data` and
   `climate_forcings`.
+- configuration-driven extraction of a single rainfed-wheat management band
+  and the first two 365-day climate years for a bounded global test dataset.
 
 Remaining data-layer work is production hardening rather than new loader
 architecture:
@@ -79,17 +81,23 @@ separate active-year reference runs without reallocating backend state.
 Acceptance: streamed and eager warm-up are numerically equal, including the
 final prognostic state and annual report.
 
-### 3.3 One-year global smoke test
+### 3.3 Global rainfed-wheat smoke test
 
+- Generate the two-year rainfed-wheat subset on the server and retain a source
+  manifest; generate the complete canonical-grid HWSD product and review its
+  coverage and conservation summaries.
 - Start with one rainfed wheat PFT over all cells selected by land use.
 - Run CPU and a single GPU using identical compact cell ordering.
 - Stream climate and monthly/annual output; avoid full daily global ledgers.
 - Check NaN/Inf, invalid negative pools, crop lifecycle failures, memory peak,
   throughput, restart continuity, and sampled or online balance closure.
 - Reconstruct outputs to `720 × 280` by `cellid` and verify mask alignment.
+- Continue through the second forcing year to test cross-year state and
+  checkpoint/restart continuity after the first-year smoke test passes.
 
 Acceptance: the complete year finishes within estimated memory, CPU/GPU
-differences meet declared tolerances, and restart/reassembly are deterministic.
+differences meet declared tolerances, and the second-year restart/reassembly is
+deterministic.
 
 ### 3.4 HWSD pool-allocation decision
 
