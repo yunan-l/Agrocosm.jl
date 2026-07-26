@@ -24,6 +24,7 @@ makedocs(
         ],
         "Using Agrocosm" => [
             "Inputs and outputs" => "guide/inputs_outputs.md",
+            "HWSD soil initialization" => "guide/hwsd_initialization.md",
             "CPU, GPU, and precision" => "guide/backends.md",
             "Checkpoints" => "guide/checkpoints.md",
         ],

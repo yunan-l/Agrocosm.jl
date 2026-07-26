@@ -20,7 +20,18 @@ KernelAbstractions.jl. `Float32` is generally preferable for GPU throughput;
 Grid cells are independent batch members. Increasing the selected `indices`
 expands the batch; it does not add lateral exchange among cells.
 
-CUDA is loaded by the package but a working NVIDIA device is required only
-when constructing GPU arrays or running GPU tests. Always validate a new GPU,
-driver, Julia, or CUDA.jl combination with the end-to-end CPU/GPU equivalence
-test before production runs.
+CUDA is an optional dependency: CPU users do not load it with Agrocosm.
+Install and load CUDA.jl only when constructing CUDA arrays. Always validate a
+new accelerator backend, driver, Julia, or package combination with the
+end-to-end backend-equivalence test before production runs.
+
+Every initialized simulation also exposes a typed execution contract:
+
+```julia
+simulation.config.execution.domain
+architecture_name(simulation.config.execution)
+float_type(simulation.config.execution)
+```
+
+The domain contains the stable active-cell order used by state, forcing,
+output, and checkpoints.

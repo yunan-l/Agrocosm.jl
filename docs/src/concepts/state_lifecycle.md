@@ -47,3 +47,8 @@ checkpoint. Fluxes, recomputable auxiliaries, and workspaces do not.
 
 The exhaustive field inventory, including units, is maintained in the source
 repository's `docs/variable_inventory.md`.
+
+`state_schema(simulation.state)` exposes the same lifecycle partition as
+machine-readable `VariableSpec` records. `validate_state_schema` runs during
+initialization so active-cell arrays and the execution domain cannot silently
+diverge.

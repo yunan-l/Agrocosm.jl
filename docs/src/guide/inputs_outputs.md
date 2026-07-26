@@ -28,6 +28,10 @@ Raw climate uses daily matrices `(day, cell)`:
 Climate blocks may be passed as `NamedTuple`s, JLD2 paths, or an ordered
 vector of blocks. Output time remains continuous across blocks.
 
+`AgrocosmData.prefetch_climate_forcings(reader)` reads the following climate
+block on a worker thread while the current block is simulated. Start Julia
+with at least two threads for actual overlap.
+
 ## Output groups
 
 - `simulation.output.crop`: GPP, NPP, LAI, biomass, yield, Vcmax, respiration,
@@ -40,3 +44,11 @@ vector of blocks. Output time remains continuous across blocks.
 Soil and climate output coverage is still being expanded. For scientific
 state inspection, use the lifecycle tree rather than assuming every internal
 field has a time-series output.
+
+For global runs, attach an `OutputStream`. Equal-sized output blocks reuse the
+same backend buffers; emitted rows are reduced or written before the next
+block and are not retained in model memory. NetCDF stream variables include
+their units and long names from the output-variable schema.
+
+The numerical state inventory is available through `state_schema`, whose
+entries identify the lifecycle role and dimensions of each array.

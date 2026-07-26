@@ -10,12 +10,16 @@ state architecture, and v2 checkpoints are implemented.
 
 Near-term work includes:
 
-1. a one-day transition over `ProcessModules` and `ModelState`;
-2. explicit active/inactive parameter boundaries and Enzyme CPU tests;
-3. soil/ecosystem spin-up and spin-up-to-transient continuity;
+1. explicit active/inactive parameter boundaries and Enzyme CPU tests;
+2. soil-carbon pool allocation and soil/ecosystem spin-up;
+3. spin-up-to-transient continuity;
 4. stable interfaces for alternative photosynthesis and stomatal models;
 5. complete soil/climate output metadata;
 6. multi-crop stands, rotations, and broader management.
+
+The typed execution context, active-domain contract, one-day transition,
+state/output metadata, reusable streamed output blocks, climate prefetch, and
+runtime benchmark are complete runtime foundations for this phase.
 
 ## Later phases
 
