@@ -96,6 +96,27 @@ end
     @test streamed_simulation.simulated_days == 0
     @test size(streamed_simulation.output.crop.npp, 1) == 0
     @test all(iszero, Array(streamed_simulation.carbon_balance.residual))
+
+    mktempdir() do directory
+        checkpoint_path = joinpath(directory, "warmup_checkpoint.jld2")
+        @test save_checkpoint(checkpoint_path, streamed_simulation) == checkpoint_path
+        restored = initialize_simulation(
+            cft1, initial;
+            indices = [1], T = Float32, days = 3,
+            diagnostics = true, fertilizer = :no,
+        )
+        @test restore_checkpoint!(restored, checkpoint_path) === restored
+        @test restored.simulated_days == 0
+        @test warmup_array_snapshot(restored.state.prognostic) ==
+            warmup_array_snapshot(streamed_simulation.state.prognostic)
+
+        run_simulation!(streamed_simulation, streamed_climate[1]; end_day = 3, spinup = false)
+        run_simulation!(restored, streamed_climate[1]; end_day = 3, spinup = false)
+        @test restored.output.crop.npp == streamed_simulation.output.crop.npp
+        @test warmup_array_snapshot(restored.state.prognostic) ==
+            warmup_array_snapshot(streamed_simulation.state.prognostic)
+    end
+
     @test_throws ArgumentError agricultural_warmup!(
         initialize_simulation(
             cft1, initial;

@@ -73,7 +73,8 @@ function agricultural_warmup!(
         "warm-up climate has $(size(prepared_climate.temp, 2)) cells; simulation has $cells",
     ))
 
-    snapshots = Vector{typeof(_warmup_soil_snapshot(simulation.state))}(undef, years)
+    initial_soil = _warmup_soil_snapshot(simulation.state)
+    snapshots = Vector{typeof(initial_soil)}(undef, years)
     no_output = Set{Tuple{Symbol, Symbol}}()
     common = (
         irrigation = simulation.config.irrigation,
@@ -108,6 +109,7 @@ function agricultural_warmup!(
         years = Int(years),
         days = 365 * Int(years),
         forcing_years = forcing_years,
+        initial_soil = initial_soil,
         soil = _warmup_history(snapshots),
     )
 end
@@ -147,7 +149,8 @@ function agricultural_warmup!(
         "agricultural warm-up requires complete 365-day climate years, got $climate_days rows",
     ))
 
-    snapshots = Vector{typeof(_warmup_soil_snapshot(simulation.state))}(undef, years)
+    initial_soil = _warmup_soil_snapshot(simulation.state)
+    snapshots = Vector{typeof(initial_soil)}(undef, years)
     no_output = Set{Tuple{Symbol, Symbol}}()
     common = (
         irrigation = simulation.config.irrigation,
@@ -199,6 +202,7 @@ function agricultural_warmup!(
         years = Int(years),
         days = 365 * Int(years),
         forcing_years = forcing_years,
+        initial_soil = initial_soil,
         soil = _warmup_history(snapshots),
     )
 end
