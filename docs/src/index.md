@@ -1,7 +1,7 @@
 # Agrocosm.jl
 
-**Agrocosm.jl is a process-based, GPU-capable Julia model of crop–soil water,
-carbon, nitrogen, and energy dynamics.** It is designed for transparent daily
+**Agrocosm.jl is a process-based, GPU-capable Julia model of crop–soil carbon,
+water, nitrogen, and energy dynamics.** It is designed for transparent daily
 simulation from individual sites to batches of independent grid cells.
 
 The current model provides C3 and C4 crop pathways, phenology and management,
