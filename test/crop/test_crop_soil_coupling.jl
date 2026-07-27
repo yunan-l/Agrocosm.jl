@@ -34,6 +34,7 @@ using Test
     set!(state.crop_nitrogen_uptake, 0.0)
     Terrarium.compute_tendencies!(state, grid, bgc)
     base_litter = column(dtend.litter_carbon)
+    base_litter_nitrogen = column(dtend.litter_nitrogen)
     base_ammonium = column(dtend.soil_ammonium)
     base_nitrate = column(dtend.soil_nitrate)
 
@@ -47,14 +48,19 @@ using Test
         set!(state.crop_litterfall_carbon, 0.0)
     end
 
-    @testset "litterfall nitrogen mineralizes to ammonium (mass-conserving)" begin
+    @testset "litterfall nitrogen enters the litter pool (mass-conserving)" begin
         litterfall_nitrogen = 3.0e-8   # kgN/m²/s
         set!(state.crop_litterfall_nitrogen, litterfall_nitrogen)
         Terrarium.compute_tendencies!(state, grid, bgc)
+        Δlitter_nitrogen = column(dtend.litter_nitrogen) .- base_litter_nitrogen
         Δammonium = column(dtend.soil_ammonium) .- base_ammonium
         Δnitrate = column(dtend.soil_nitrate) .- base_nitrate
-        @test integral(Δammonium) ≈ litterfall_nitrogen rtol = 1e-10   # all of it to ammonium
-        @test all(≈(0.0), Δnitrate)                                    # nitrate is untouched
+        # Litterfall N enters the (organic) litter nitrogen pool — it mineralizes to ammonium only as
+        # the litter carbon decomposes (a separate, slower pathway), so the mineral pools are untouched.
+        @test integral(Δlitter_nitrogen) ≈ litterfall_nitrogen rtol = 1e-10   # column integral recovers the flux
+        @test all(≥(0.0), Δlitter_nitrogen)                                   # every rooted layer receives litter N
+        @test all(≈(0.0), Δammonium)                                          # ammonium is untouched
+        @test all(≈(0.0), Δnitrate)                                           # nitrate is untouched
         set!(state.crop_litterfall_nitrogen, 0.0)
     end
 

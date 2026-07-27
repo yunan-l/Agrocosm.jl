@@ -41,10 +41,16 @@ using Test
         storage_c = scalar(state.storage_carbon)
         leaf_n = scalar(state.leaf_nitrogen)
         root_n = scalar(state.root_nitrogen)
+        storage_n = scalar(state.storage_nitrogen)
         biomass_before = leaf_c + root_c + storage_c
         litter_before = integral(state.litter_carbon)
-        ammonium_before = integral(state.soil_ammonium)
-        r = calendar.residue_fraction
+        litter_nitrogen_before = integral(state.litter_nitrogen)
+
+        # Harvest index (grain fraction of aboveground) from the phenology + water status.
+        fphu = clamp(scalar(state.phenology_heat_unit_fraction), 0.0, 1.0)
+        hi = crop_harvest_index(calendar.harvest_index, fphu, 100.0 * scalar(state.soil_moisture_limiting_factor))
+        aboveground_c = storage_c + leaf_c
+        aboveground_n = storage_n + leaf_n
 
         yield = harvest!(integrator, calendar)
 
@@ -53,15 +59,16 @@ using Test
         @test scalar(state.crop_nitrogen) == 0.0
         @test scalar(state.phenological_heat_units) == 0.0
 
-        # Grain export and soil residue return.
-        expected_yield = storage_c + (1 - r) * leaf_c
-        residue_carbon = r * leaf_c + root_c
-        residue_nitrogen = r * leaf_n + root_n
+        # Grain export (HI × aboveground) and non-grain residue return ((1−HI)×aboveground + root).
+        # The residue nitrogen enters the litter nitrogen pool (organic N), not the mineral pool.
+        expected_yield = hi * aboveground_c
+        residue_carbon = (1 - hi) * aboveground_c + root_c
+        residue_nitrogen = (1 - hi) * aboveground_n + root_n
         @test yield ≈ expected_yield rtol = 1e-10
         @test integral(state.litter_carbon) - litter_before ≈ residue_carbon rtol = 1e-8
-        @test integral(state.soil_ammonium) - ammonium_before ≈ residue_nitrogen rtol = 1e-8
+        @test integral(state.litter_nitrogen) - litter_nitrogen_before ≈ residue_nitrogen rtol = 1e-8
 
-        # Carbon closes: everything removed from the crop is either exported or in the soil.
+        # Carbon closes: everything removed from the crop is either exported (grain) or in the soil.
         @test yield + (integral(state.litter_carbon) - litter_before) ≈ biomass_before rtol = 1e-8
     end
 

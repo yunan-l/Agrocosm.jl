@@ -46,3 +46,24 @@ limited and the retained fraction is zero.
     fraction = ifelse(potential > zero(NF), clamp(limited / max(potential, eps(NF)), zero(NF), one(NF)), zero(NF))
     return limited, fraction
 end
+
+"""
+    $(TYPEDSIGNATURES)
+
+Nitrogen-supported maximum carboxylation rate (gC/m²/s, matching the photosynthesis `Vc_max`) from the
+leaf nitrogen and carbon pools (kgN/m², kgC/m²) and air temperature (°C). This is the Rubisco capacity
+the available leaf nitrogen can sustain; capping the light-derived potential `Vc_max` at it applies the
+LPJmL leaf-nitrogen Rubisco limitation. Returns a large value when there is no leaf carbon yet (early
+growth is not nitrogen-limited). The `1000` converts the revised kg pools to the LPJmL g pools, and the
+`1/86400` converts the LPJmL per-day rate to the per-second `Vc_max`.
+"""
+@inline function nitrogen_supported_vcmax(
+        limit::CropNitrogenVcmaxLimit{NF}, leaf_nitrogen::NF, leaf_carbon::NF, temperature::NF,
+    ) where {NF}
+    leaf_carbon > zero(NF) || return NF(Inf)
+    rubisco_nitrogen = max(zero(NF), (leaf_nitrogen - limit.ncleaf_min * leaf_carbon) * NF(1000))
+    capacity_per_day = rubisco_nitrogen /
+        exp(-limit.k_temp * (temperature - NF(25))) /
+        (limit.pressure_scale * NF(1.0e-3)) * (NF(86400) * NF(12) * NF(1.0e-6))
+    return capacity_per_day / NF(86400)
+end

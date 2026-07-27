@@ -29,6 +29,8 @@ $(TYPEDFIELDS)
     seed_nitrogen::NF = 0.02 / 29
     "Fraction of aboveground residue left on the field at harvest (the rest is exported with the grain)"
     residue_fraction::NF = 0.25
+    "Harvest-index parameters mapping phenology + water status to the grain fraction of aboveground carbon"
+    harvest_index::CropHarvestIndex{NF} = CropHarvestIndex(NF)
 end
 
 CropCalendar(::Type{NF}; kwargs...) where {NF} = CropCalendar{NF}(; kwargs...)
@@ -72,20 +74,32 @@ function harvest!(integrator, calendar::CropCalendar)
     state = integrator.state
     grid = get_grid(integrator.model)
     NF = eltype(state.crop_biomass)
-    residue_fraction = NF(calendar.residue_fraction)
 
-    # Yield diagnostic (read before the pools are cleared): grain = storage organ + exported leaf.
-    grain_carbon = sum(interior(state.storage_carbon)) +
-        (one(NF) - residue_fraction) * sum(interior(state.leaf_carbon))
-
-    # Return the residue to the soil litter / mineral nitrogen over the root zone.
-    out = (litter_carbon = state.litter_carbon, soil_ammonium = state.soil_ammonium)
-    fields = (
-        leaf_carbon = state.leaf_carbon, root_carbon = state.root_carbon,
-        leaf_nitrogen = state.leaf_nitrogen, root_nitrogen = state.root_nitrogen,
-        root_fraction = state.root_fraction,
+    # Yield diagnostic (read before the pools are cleared): grain = harvest-index × aboveground carbon,
+    # where the LPJmL harvest index maps the phenological heat-unit fraction and the water-status
+    # sufficiency (here 100·β) to the grain fraction of the storage + leaf pools. The non-grain
+    # aboveground and all of the root carbon/nitrogen are returned to the litter (below), so the grain
+    # (exported) plus the litter increment conserves the removed biomass.
+    fphu = interior(state.phenology_heat_unit_fraction)
+    β = interior(state.soil_moisture_limiting_factor)
+    storage = interior(state.storage_carbon)
+    leaf = interior(state.leaf_carbon)
+    grain_carbon = sum(
+        crop_harvest_index(calendar.harvest_index, clamp(fphu[i], zero(NF), one(NF)), NF(100) * β[i]) *
+            (storage[i] + leaf[i]) for i in eachindex(storage)
     )
-    launch!(grid, XYZ, harvest_residue_kernel!, out, fields, residue_fraction)
+
+    # Return the non-grain residue (the (1−HI) fraction of the aboveground pools + all of the root
+    # pools) to the soil litter carbon and litter nitrogen pools over the root zone.
+    out = (litter_carbon = state.litter_carbon, litter_nitrogen = state.litter_nitrogen)
+    fields = (
+        storage_carbon = state.storage_carbon, leaf_carbon = state.leaf_carbon, root_carbon = state.root_carbon,
+        storage_nitrogen = state.storage_nitrogen, leaf_nitrogen = state.leaf_nitrogen, root_nitrogen = state.root_nitrogen,
+        root_fraction = state.root_fraction,
+        phenology_heat_unit_fraction = state.phenology_heat_unit_fraction,
+        soil_moisture_limiting_factor = state.soil_moisture_limiting_factor,
+    )
+    launch!(grid, XYZ, harvest_residue_kernel!, out, fields, calendar.harvest_index)
 
     # Clear the stand.
     set!(state.crop_biomass, zero(NF))
@@ -94,17 +108,23 @@ function harvest!(integrator, calendar::CropCalendar)
     return grain_carbon
 end
 
-@kernel inbounds = true function harvest_residue_kernel!(out, grid, fields, residue_fraction)
+@kernel inbounds = true function harvest_residue_kernel!(out, grid, fields, harvest_index::CropHarvestIndex)
     i, j, k = @index(Global, NTuple)
+    NF = eltype(out.litter_carbon)
     field_grid = get_field_grid(grid)
-    # Distribute the per-area residue over the root zone as a per-volume increment (÷ layer thickness);
-    # the aboveground residue (leaf·residue_fraction) is root-weighted alongside the root residue — an
-    # approximation that concentrates it near the surface where the roots are densest.
+    # Grain fraction from the harvest index; the rest of the aboveground pools (plus all of the root
+    # pools) is residue. Distribute the per-area residue over the root zone as a per-volume increment
+    # (÷ layer thickness) — the aboveground residue is root-weighted, concentrating it near the surface.
+    fphu = clamp(fields.phenology_heat_unit_fraction[i, j], zero(NF), one(NF))
+    hi = crop_harvest_index(harvest_index, fphu, NF(100) * fields.soil_moisture_limiting_factor[i, j])
+    non_grain = one(NF) - hi
     per_volume = fields.root_fraction[i, j, k] / Δzᵃᵃᶜ(i, j, k, field_grid)
-    residue_carbon = (fields.leaf_carbon[i, j] * residue_fraction + fields.root_carbon[i, j]) * per_volume
-    residue_nitrogen = (fields.leaf_nitrogen[i, j] * residue_fraction + fields.root_nitrogen[i, j]) * per_volume
+    aboveground_carbon = fields.storage_carbon[i, j] + fields.leaf_carbon[i, j]
+    aboveground_nitrogen = fields.storage_nitrogen[i, j] + fields.leaf_nitrogen[i, j]
+    residue_carbon = (non_grain * aboveground_carbon + fields.root_carbon[i, j]) * per_volume
+    residue_nitrogen = (non_grain * aboveground_nitrogen + fields.root_nitrogen[i, j]) * per_volume
     out.litter_carbon[i, j, k] += residue_carbon
-    out.soil_ammonium[i, j, k] += residue_nitrogen
+    out.litter_nitrogen[i, j, k] += residue_nitrogen
 end
 
 # ---- Oceananigans callback glue -----------------------------------------------------------

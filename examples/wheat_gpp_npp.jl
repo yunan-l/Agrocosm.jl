@@ -61,6 +61,12 @@ set!(state.windspeed, 2.0)
 set!(state.surface_longwave_down, 300.0)
 set!(state.CO2, 400.0)
 
+# Fertilizer: a continuous mineral-N application (the original ran with `fertilizer = :yes`), so the
+# crop can meet its nitrogen demand rather than being nitrogen-supply-limited.
+fertilizer_rate = 1.0e-9   # kgN/m²/s total (~30 kgN/ha/yr), split evenly between ammonium and nitrate
+set!(state.fertilizer_ammonium_flux, 0.5 * fertilizer_rate)
+set!(state.fertilizer_nitrate_flux, 0.5 * fertilizer_rate)
+
 calendar = CropCalendar(NF; sowing_day, harvest_day, residue_fraction = ic.residue_fraction[cell])
 println("site: sowing day ", sowing_day, ", harvest day ", harvest_day,
     ", PHU ", ic.heat_unit_requirement[cell], " °C·days, residue ", round(ic.residue_fraction[cell], digits = 2))

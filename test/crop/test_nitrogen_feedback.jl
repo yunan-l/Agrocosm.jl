@@ -21,13 +21,22 @@ using Test
         @test nlim(0.0, 0.0) == 1.0                      # avoids the early-growth deadlock
     end
 
-    @testset "photosynthesis honours the limitation factor" begin
-        # With nitrogen_limitation < 1, net assimilation is reduced vs the unlimited case.
+    @testset "photosynthesis honours the nitrogen capacity" begin
+        # Capping the Rubisco capacity below the light-derived Vc_max reduces net assimilation.
         photo = CropPhotosynthesis(Float64)
         args = (12.0, 22.0, 400.0, 1.0e5, 380.0, 3.0, 0.7, 1.0)   # cmass, T, sw, pres, co2, LAI, λc, β
-        _, An_full = Agrocosm.compute_respiration_assimilation(photo, args...)          # default nlim = 1
-        _, An_half = Agrocosm.compute_respiration_assimilation(photo, args..., 0.5)     # nlim = 0.5
-        @test An_half < An_full
+        _, An_full = Agrocosm.compute_respiration_assimilation(photo, args...)          # default capacity = Inf (no cap)
+        _, An_capped = Agrocosm.compute_respiration_assimilation(photo, args..., 0.0)   # zero capacity → Vc_max capped to 0
+        @test An_capped < An_full
         @test An_full > 0
+    end
+
+    @testset "nitrogen-supported Vc_max capacity" begin
+        limit = CropNitrogenVcmaxLimit(Float64)
+        # More leaf nitrogen (at fixed leaf carbon) supports a larger Rubisco capacity; with no leaf
+        # carbon yet the capacity is Inf, so early growth is not nitrogen-deadlocked.
+        cap(leaf_n, leaf_c) = Agrocosm.nitrogen_supported_vcmax(limit, leaf_n, leaf_c, 25.0)
+        @test cap(0.003, 0.1) > cap(0.002, 0.1) > 0
+        @test cap(0.003, 0.0) == Inf
     end
 end

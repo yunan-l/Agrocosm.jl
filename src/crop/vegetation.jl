@@ -92,12 +92,14 @@ end
 """
     $(TYPEDSIGNATURES)
 
-Initialize the crop vegetation. The `nitrogen_limitation` factor is a lagged auxiliary consumed by
-photosynthesis before the nitrogen pool has run, so it is seeded to 1 (no limitation) to avoid
+Initialize the crop vegetation. The nitrogen-supported Rubisco capacity is a lagged auxiliary consumed
+by photosynthesis before the nitrogen pool has run, so it is seeded large (no limitation) to avoid
 zeroing the first assimilation step.
 """
 function Terrarium.initialize!(state, grid, veg::CropVegetation, args...)
-    set!(state.nitrogen_limitation, one(eltype(state.nitrogen_limitation)))
+    # Seed the (lagged) nitrogen-supported Rubisco capacity large so the first photosynthesis step is
+    # unlimited, before the nitrogen process fills it from the leaf pools.
+    set!(state.nitrogen_capacity, eltype(state.nitrogen_capacity)(1000))
     return nothing
 end
 

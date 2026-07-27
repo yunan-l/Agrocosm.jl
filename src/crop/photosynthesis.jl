@@ -81,9 +81,10 @@ Terrarium.variables(::CropPhotosynthesis{NF}) where {NF} = (
     Terrarium.auxiliary(:net_assimilation, XY(), units = u"g/m^2/s"),
     Terrarium.auxiliary(:leaf_respiration, XY(), units = u"g/m^2/s"),
     Terrarium.auxiliary(:gross_primary_production, XY(), units = u"kg/m^2/s"),
+    Terrarium.auxiliary(:potential_vcmax, XY(), units = u"g/m^2/s"),  # light-derived Vc_max before N-limitation
     Terrarium.input(:soil_moisture_limiting_factor, XY(), default = NF(1)),
     Terrarium.input(:leaf_area_index, XY()),
-    Terrarium.input(:nitrogen_limitation, XY(), default = NF(1)),  # leaf-N Rubisco limitation ∈ [0,1]
+    Terrarium.input(:nitrogen_capacity, XY(), default = NF(Inf), units = u"g/m^2/s"),  # leaf-N-supported Rubisco capacity
 )
 
 # ---- scalar primitives (Level III) --------------------------------------------------------
@@ -172,7 +173,7 @@ ratio `λc`, and soil-moisture limiting factor `β`.
 function compute_respiration_assimilation(
         photo::CropPhotosynthesis{NF}, cmass::NF,
         T_air::NF, swdown::NF, pres::NF, co2::NF, LAI::NF, λc::NF, β::NF,
-        nitrogen_limitation::NF = one(NF),
+        nitrogen_capacity::NF = NF(Inf),
     ) where {NF}
     path = photo.pathway
     pres_O2 = Terrarium.partial_pressure_O2(pres)
@@ -182,19 +183,20 @@ function compute_respiration_assimilation(
         apar = compute_apar(photo, par, LAI)
         pres_i = λc * pres_a
         T_stress = compute_temperature_stress(photo, path, T_air)
-        c_1, c_2, Vc_max = compute_assimilation_terms(photo, path, cmass, T_air, T_stress, apar, pres_i, pres_O2, λc)
-        # Leaf nitrogen limits the Rubisco capacity: scale Vc_max (and hence JC and Rd) by the
-        # nitrogen-limitation factor ∈ [0,1]. Default 1 (no limitation) reproduces the light/Rubisco
-        # coordination scheme exactly.
-        Vc_max = Vc_max * nitrogen_limitation
+        c_1, c_2, Vc_max_potential = compute_assimilation_terms(photo, path, cmass, T_air, T_stress, apar, pres_i, pres_O2, λc)
+        # Leaf nitrogen limits the Rubisco capacity: cap the light-derived (potential) Vc_max (and hence
+        # JC and Rd) at the nitrogen-supported capacity (LPJmL leaf-N Rubisco limitation). Default Inf
+        # (no cap) reproduces the light/Rubisco coordination scheme exactly. The potential Vc_max is
+        # returned so the nitrogen process can size the crop's nitrogen demand from it.
+        Vc_max = min(Vc_max_potential, nitrogen_capacity)
         Rd = respiration_coefficient(photo, path) * Vc_max * β
         JE = c_1 * apar
         JC = c_2 * Vc_max
         Ag = co_limit(photo, JE, JC) * β
         An = Ag - Rd
-        return Rd, An
+        return Rd, An, Vc_max_potential
     else
-        return zero(NF), zero(NF)
+        return zero(NF), zero(NF), zero(NF)
     end
 end
 
@@ -216,11 +218,11 @@ Base.@propagate_inbounds function compute_photosynthesis(
     β = clamp(fields.soil_moisture_limiting_factor[i, j], zero(T_air), one(T_air))
     LAI = fields.leaf_area_index[i, j]
     λc = fields.leaf_to_air_co2_ratio[i, j]
-    nitrogen_limitation = fields.nitrogen_limitation[i, j]
+    nitrogen_capacity = fields.nitrogen_capacity[i, j]
     cmass = constants.material.atomic_weight_carbon
-    Rd, An = compute_respiration_assimilation(photo, cmass, T_air, swdown, pres, co2, LAI, λc, β, nitrogen_limitation)
+    Rd, An, Vc_max_potential = compute_respiration_assimilation(photo, cmass, T_air, swdown, pres, co2, LAI, λc, β, nitrogen_capacity)
     GPP = compute_gpp(photo, An)
-    return Rd, An, GPP
+    return Rd, An, GPP, Vc_max_potential
 end
 
 """$(TYPEDSIGNATURES) Store [`compute_photosynthesis`](@ref) outputs in `out`."""
@@ -228,10 +230,11 @@ Base.@propagate_inbounds function compute_photosynthesis!(
         out, i, j, grid, fields, photo::CropPhotosynthesis,
         constants::Terrarium.PhysicalConstants, atmos::Terrarium.AbstractAtmosphere,
     )
-    Rd, An, GPP = compute_photosynthesis(i, j, grid, fields, photo, constants, atmos)
+    Rd, An, GPP, Vc_max_potential = compute_photosynthesis(i, j, grid, fields, photo, constants, atmos)
     out.leaf_respiration[i, j, 1] = Rd
     out.net_assimilation[i, j, 1] = An
     out.gross_primary_production[i, j, 1] = GPP
+    out.potential_vcmax[i, j, 1] = Vc_max_potential
     return out
 end
 

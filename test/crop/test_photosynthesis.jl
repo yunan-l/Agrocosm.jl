@@ -26,12 +26,13 @@ ra(photo, T, sw, pres, co2, LAI, λc, β; cmass = 12.0) =
     @testset "gating invariants (C3 and C4)" begin
         for path in (C3Pathway(), C4Pathway())
             photo = CropPhotosynthesis(Float64; pathway = path)
+            # A gated cell returns zero respiration, assimilation AND potential Vc_max.
             # No light → no assimilation or respiration.
-            @test ra(photo, 20.0, 0.0, 1.0e5, 380.0, 3.0, 0.7, 1.0) == (0.0, 0.0)
+            @test ra(photo, 20.0, 0.0, 1.0e5, 380.0, 3.0, 0.7, 1.0) == (0.0, 0.0, 0.0)
             # No leaves → nothing.
-            @test ra(photo, 20.0, 400.0, 1.0e5, 380.0, 0.0, 0.7, 1.0) == (0.0, 0.0)
+            @test ra(photo, 20.0, 400.0, 1.0e5, 380.0, 0.0, 0.7, 1.0) == (0.0, 0.0, 0.0)
             # Too cold → nothing.
-            @test ra(photo, -5.0, 400.0, 1.0e5, 380.0, 3.0, 0.7, 1.0) == (0.0, 0.0)
+            @test ra(photo, -5.0, 400.0, 1.0e5, 380.0, 3.0, 0.7, 1.0) == (0.0, 0.0, 0.0)
             # Active conditions → net assimilation is finite and non-negative.
             Rd, An = ra(photo, 22.0, 400.0, 1.0e5, 380.0, 3.0, 0.7, 1.0)
             @test isfinite(Rd) && isfinite(An)
@@ -54,6 +55,6 @@ ra(photo, T, sw, pres, co2, LAI, λc, β; cmass = 12.0) =
         _, An_hot = ra(c4, 50.0, 400.0, 1.0e5, 380.0, 3.0, 0.7, 1.0)
         @test An_hot ≥ 0
         c3 = CropPhotosynthesis(Float64; pathway = C3Pathway())
-        @test ra(c3, 50.0, 400.0, 1.0e5, 380.0, 3.0, 0.7, 1.0) == (0.0, 0.0)   # C3 cut off at 45
+        @test ra(c3, 50.0, 400.0, 1.0e5, 380.0, 3.0, 0.7, 1.0) == (0.0, 0.0, 0.0)   # C3 cut off at 45
     end
 end
