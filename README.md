@@ -3,10 +3,9 @@
 [![Build Status](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![Documentation](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/Documentation.yml/badge.svg)](https://yunan-l.github.io/Agrocosm.jl/dev/)
 
-<!-- **🧑‍🌾 💧 ☀️ 🌾 🚀 A Julia-based crop model supporting differentiation and GPU acceleration.** -->
+<!-- **🧑‍🌾 💧 ☀️ 🌾 🚀 A Julia-based crop model supporting automatic differentiation and GPU acceleration.** -->
 
-Agrocosm.jl is a process-based crop model that simulates coupled carbon, nitrogen, water, and energy processes with a numerical design for CPUs and GPUs. It is easy to use and easy to extend. It is written in Julia to make physically based simulation, differentiable programming, high-performance computing, and machine-learning workflows available within one modelling environment. Agrocosm takes the crop module of [LPJmL](https://github.com/PIK-LPJmL/LPJmL) as an scientific reference. Agrocosm is **not** a line-by-line port of LPJmL. 
-It maintains relevant process logic of LPJmL while implementing a GPU-aware architecture and enhancing its differentiability. 
+Agrocosm.jl is a process-based crop model that simulates coupled carbon, nitrogen, water, and energy processes with a numerical design for CPUs and GPUs. It is easy to use and easy to extend. It is written in Julia to make physically based simulation, differentiable programming, high-performance computing, and machine-learning workflows available within one modelling environment. Agrocosm takes the crop module of [LPJmL](https://github.com/PIK-LPJmL/LPJmL) as an scientific reference. Agrocosm is **not** a line-by-line port of LPJmL. It maintains relevant process logic of LPJmL while inheriting and extending the overall architecture of [NeuralCrop.jl](https://github.com/yunan-l/NeuralCrop.jl) to support automatic differentiation and GPU acceleration. 
 
 <!-- > [!WARNING]
 > Agrocosm.jl is under active development with assistance from Codex 🤖, but almost done as a crop model. -->
