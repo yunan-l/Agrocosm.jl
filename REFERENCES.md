@@ -1,7 +1,6 @@
-# Citations
+# References
 
-Agrocosm is scientifically informed by LPJmL. If you use Agrocosm.jl, please
-cite the publications relevant to the processes used in your study.
+Agrocosm is scientifically informed by LPJmL and built on NeuralCrop.jl.
 
 ## Core LPJmL publications
 
