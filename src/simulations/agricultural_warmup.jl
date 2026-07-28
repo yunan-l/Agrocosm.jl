@@ -195,12 +195,14 @@ function agricultural_warmup_drift(
     fast_carbon = series(:fast_carbon)
     slow_carbon = series(:slow_carbon)
     fast_fraction = fast_carbon ./ (fast_carbon .+ slow_carbon)
-    relative_change(values, index) = (values[index] - values[index - 1]) /
-        max(abs(values[index - 1]), eps(eltype(values)))
     initial_fast_shift = fast_fraction[2] - fast_fraction[1]
-    late_fast_shift = fast_fraction[end] - fast_fraction[end - 1]
-    late_carbon = relative_change(total_carbon, length(total_carbon))
-    late_nitrogen = relative_change(total_nitrogen, length(total_nitrogen))
+    forcing_years = hasproperty(report, :forcing_years) ? report.forcing_years : 1
+    comparison_index = max(1, length(total_carbon) - forcing_years)
+    late_fast_shift = fast_fraction[end] - fast_fraction[comparison_index]
+    late_carbon = (total_carbon[end] - total_carbon[comparison_index]) /
+        max(abs(total_carbon[comparison_index]), eps(eltype(total_carbon)))
+    late_nitrogen = (total_nitrogen[end] - total_nitrogen[comparison_index]) /
+        max(abs(total_nitrogen[comparison_index]), eps(eltype(total_nitrogen)))
     relative_values(current, previous) = (current .- previous) ./
         max.(abs.(previous), eps(eltype(previous)))
     distribution(values) = (
@@ -216,14 +218,21 @@ function agricultural_warmup_drift(
     initial_nitrogen = report.initial_soil.total_nitrogen
     final_carbon = vec(report.soil.total_carbon[end, :])
     final_nitrogen = vec(report.soil.total_nitrogen[end, :])
-    previous_carbon = vec(report.soil.total_carbon[end - 1, :])
-    previous_nitrogen = vec(report.soil.total_nitrogen[end - 1, :])
+    comparison_year = max(0, report.years - forcing_years)
+    previous_carbon = comparison_year == 0 ? initial_carbon :
+        vec(report.soil.total_carbon[comparison_year, :])
+    previous_nitrogen = comparison_year == 0 ? initial_nitrogen :
+        vec(report.soil.total_nitrogen[comparison_year, :])
     initial_cell_fast_fraction = report.initial_soil.fast_carbon ./
         (report.initial_soil.fast_carbon .+ report.initial_soil.slow_carbon)
     final_cell_fast_fraction = vec(report.soil.fast_carbon[end, :]) ./
         (vec(report.soil.fast_carbon[end, :]) .+ vec(report.soil.slow_carbon[end, :]))
-    previous_cell_fast_fraction = vec(report.soil.fast_carbon[end - 1, :]) ./
-        (vec(report.soil.fast_carbon[end - 1, :]) .+ vec(report.soil.slow_carbon[end - 1, :]))
+    previous_fast_carbon = comparison_year == 0 ? report.initial_soil.fast_carbon :
+        vec(report.soil.fast_carbon[comparison_year, :])
+    previous_slow_carbon = comparison_year == 0 ? report.initial_soil.slow_carbon :
+        vec(report.soil.slow_carbon[comparison_year, :])
+    previous_cell_fast_fraction = previous_fast_carbon ./
+        (previous_fast_carbon .+ previous_slow_carbon)
     cell_initial_carbon = relative_values(final_carbon, initial_carbon)
     cell_initial_nitrogen = relative_values(final_nitrogen, initial_nitrogen)
     cell_late_carbon = relative_values(final_carbon, previous_carbon)
@@ -264,6 +273,7 @@ function agricultural_warmup_drift(
         late_nitrogen_relative_change = late_nitrogen,
         convergence = (
             target_constrained,
+            comparison_lag_years = forcing_years,
             converged = hasproperty(report, :converged) ? report.converged : false,
             actual_years = report.years,
             converged_cell_fraction = hasproperty(report, :converged_cell_fraction) ?
@@ -280,10 +290,10 @@ function agricultural_warmup_drift(
         spatial = (
             initial_to_final_carbon = distribution(cell_initial_carbon),
             initial_to_final_nitrogen = distribution(cell_initial_nitrogen),
-            previous_to_final_carbon = distribution(cell_late_carbon),
-            previous_to_final_nitrogen = distribution(cell_late_nitrogen),
+            same_phase_to_final_carbon = distribution(cell_late_carbon),
+            same_phase_to_final_nitrogen = distribution(cell_late_nitrogen),
             initial_to_final_fast_fraction = distribution(cell_initial_fast_shift),
-            previous_to_final_fast_fraction = distribution(cell_late_fast_shift),
+            same_phase_to_final_fast_fraction = distribution(cell_late_fast_shift),
             review_cell_fraction = count(cell_review) / length(cell_review),
             cell_count = length(cell_review),
         ),
@@ -303,9 +313,10 @@ production outputs, balance ledgers, and `simulation.simulated_days` are left
 untouched. The warmed prognostic state is retained.
 
 When `target_constrained=true`, the initial mineral-soil C and total-N stocks
-are restored after each year while litter remains unconstrained. After the
-minimum `years`, annual cycling continues until the requested fraction of cells
-has met the C/N, pool-fraction, and target-correction tolerances for
+are restored after each year while litter remains unconstrained. Convergence
+compares states at the same phase of the forcing cycle. After the minimum
+`years`, annual cycling continues until the requested fraction of cells has met
+the C/N, pool-fraction, and target-correction tolerances for
 `consecutive_years`, or `maximum_years` is reached.
 
 The returned report contains one host-side row per completed warm-up year and
@@ -351,7 +362,6 @@ function agricultural_warmup!(
     converged_fraction = zeros(Float64, maximum_years)
     targets = target_constrained ? _warmup_targets(simulation.state) : nothing
     consecutive = zeros(Int, cells)
-    previous_soil = initial_soil
     actual_years = 0
     converged = false
     no_output = Set{Tuple{Symbol, Symbol}}()
@@ -384,11 +394,14 @@ function agricultural_warmup!(
         carbon_correction[year, :] .= correction.carbon
         nitrogen_correction[year, :] .= correction.nitrogen
         snapshots[year] = _warmup_soil_snapshot(simulation.state)
-        converged_fraction[year] = _warmup_convergence!(
-            consecutive, initial_soil, previous_soil, snapshots[year], correction;
-            relative_tolerance, pool_fraction_tolerance, consecutive_years,
-        )
-        previous_soil = snapshots[year]
+        if year >= forcing_years
+            previous_soil = year == forcing_years ? initial_soil :
+                snapshots[year - forcing_years]
+            converged_fraction[year] = _warmup_convergence!(
+                consecutive, initial_soil, previous_soil, snapshots[year], correction;
+                relative_tolerance, pool_fraction_tolerance, consecutive_years,
+            )
+        end
         actual_years = year
         if year >= years && converged_fraction[year] >= required_converged_fraction
             converged = true
@@ -480,7 +493,6 @@ function agricultural_warmup!(
     converged_fraction = zeros(Float64, maximum_years)
     targets = target_constrained ? _warmup_targets(simulation.state) : nothing
     consecutive = zeros(Int, cells)
-    previous_soil = initial_soil
     actual_years = 0
     converged = false
     no_output = Set{Tuple{Symbol, Symbol}}()
@@ -542,11 +554,14 @@ function agricultural_warmup!(
         carbon_correction[year, :] .= correction.carbon
         nitrogen_correction[year, :] .= correction.nitrogen
         snapshots[year] = _warmup_soil_snapshot(simulation.state)
-        converged_fraction[year] = _warmup_convergence!(
-            consecutive, initial_soil, previous_soil, snapshots[year], correction;
-            relative_tolerance, pool_fraction_tolerance, consecutive_years,
-        )
-        previous_soil = snapshots[year]
+        if year >= forcing_years
+            previous_soil = year == forcing_years ? initial_soil :
+                snapshots[year - forcing_years]
+            converged_fraction[year] = _warmup_convergence!(
+                consecutive, initial_soil, previous_soil, snapshots[year], correction;
+                relative_tolerance, pool_fraction_tolerance, consecutive_years,
+            )
+        end
         actual_years = year
         if year >= years && converged_fraction[year] >= required_converged_fraction
             converged = true

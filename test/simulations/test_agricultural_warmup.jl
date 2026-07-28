@@ -106,6 +106,42 @@ end
     @test agricultural_warmup_drift(capped_report).recommendation ==
         :target_constrained_maximum_years
 
+    two_year_climate = climate_block(Float32, 730, 15, 1)
+    incomplete_cycle = initialize_simulation(
+        cft1, initial;
+        indices = [1], T = Float32, days = 3,
+        diagnostics = false, fertilizer = :no,
+    )
+    incomplete_report = agricultural_warmup!(
+        incomplete_cycle, two_year_climate;
+        years = 1,
+        maximum_years = 1,
+        target_constrained = true,
+        consecutive_years = 1,
+        relative_tolerance = 1.0e6,
+        pool_fraction_tolerance = 1.0e6,
+    )
+    @test incomplete_report.forcing_years == 2
+    @test !incomplete_report.converged
+    @test incomplete_report.converged_cell_fraction == 0
+
+    complete_cycle = initialize_simulation(
+        cft1, initial;
+        indices = [1], T = Float32, days = 3,
+        diagnostics = false, fertilizer = :no,
+    )
+    complete_report = agricultural_warmup!(
+        complete_cycle, two_year_climate;
+        years = 1,
+        maximum_years = 2,
+        target_constrained = true,
+        consecutive_years = 1,
+        relative_tolerance = 1.0e6,
+        pool_fraction_tolerance = 1.0e6,
+    )
+    @test complete_report.years == 2
+    @test complete_report.converged
+
     run_simulation!(simulation, climate; end_day = 3, spinup = false)
     @test simulation.simulated_days == 3
     @test size(simulation.output.crop.npp) == (3, 1)
