@@ -127,14 +127,49 @@ julia --project=. examples/scripts/run_global_wheat_cpu.jl \
   /absolute/path/global_wheat_cpu.toml
 ```
 
-The runner selects cells only where the fixed 2015 rainfed-wheat
-`landfrac > 0`; land fraction never scales model processes. It performs the
-configured streamed agricultural warm-up, writes and exactly restores a native
-warm-up checkpoint, runs 2015, checkpoints at the year boundary, restores, and
-continues through 2016. Annual compact outputs are streamed to NetCDF and also
-reconstructed onto the canonical longitude/latitude grid.
+The default `management.mode = "fixed"` repeats `fixed_year = 2015` throughout
+the run. With `management.mode = "transient"`, each simulation year reads its
+corresponding management row. Years before the file begins repeat its first
+row, and years after it ends repeat its last row, matching LPJmL's boundary
+behavior. Annual PHU is installed only when a new crop is sown, so a winter
+crop already growing across 1 January retains the PHU assigned in its sowing
+year. `landfrac > 0` selects crop cells but never scales single-cell processes.
+
+The runner performs the configured streamed agricultural warm-up, writes and
+exactly restores a native warm-up checkpoint, checkpoints after the first
+production year, restores, and continues through `simulation_end_year`.
+Annual compact outputs are streamed to NetCDF and reconstructed onto the
+canonical longitude/latitude grid.
 
 The full domain runs with daily balance ledgers disabled. A configurable small
-canonical subset repeats the same warm-up and two-year run with diagnostics to
+canonical subset repeats the same warm-up and production run with diagnostics to
 produce sampled C/N/water/energy closure. The output directory also contains a
 pre-allocation memory estimate and a ten-year C/N drift report.
+
+## 7. CUDA production workflow
+
+The CUDA entry uses the same backend-neutral AgrocosmData inputs and production
+contract. HWSD C/N, crop management, soil properties, and each bounded climate
+block are transferred during initialization or immediately before execution;
+checkpoint and streamed output arrays are copied back to the host.
+
+First validate the node and the backend-neutral initialization path:
+
+```bash
+julia --project=. -e 'using CUDA; @assert CUDA.functional(); CUDA.versioninfo()'
+julia --project=. test/simulations/test_global_initialization_gpu.jl
+julia --project=. test/simulations/test_daily_crop_C3_gpu.jl
+```
+
+Use a separate output directory from the CPU baseline, then run:
+
+```bash
+JULIA_NUM_THREADS=4 julia --project=. \
+  examples/scripts/run_global_wheat_gpu.jl \
+  /absolute/path/global_wheat_gpu.toml
+```
+
+Set `run.device_id = 0` unless the scheduler exposes a different CUDA device.
+Review `recommended_device_peak_gib` in `memory_preflight.toml` before the full
+run. Validate 10 cells and then a bounded 1000-cell run before setting
+`cell_limit = 0`.
