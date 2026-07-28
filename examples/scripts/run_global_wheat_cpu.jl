@@ -31,7 +31,7 @@ function catalog_from_config(config)
         path = String(get(climate, name, default))
         isabspath(path) ? path : joinpath(climate_directory, path)
     end
-    registry = PFTRegistry(1:12, CROP_PFT_NAMES)
+    registry = PFTRegistry(collect(1:12), collect(CROP_PFT_NAMES))
     management_bands = (rainfed = Int32.(1:12), irrigated = Int32.(13:24))
     multi_pft(filename, variable; units = "", residue = false) = DatasetSpec(
         joinpath(management_directory, filename), variable; units,
