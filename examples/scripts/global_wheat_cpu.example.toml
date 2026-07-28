@@ -9,7 +9,15 @@ manure = true
 with_tillage = true
 
 [run]
-warmup_years = 10
+# Target-constrained warm-up runs for at least 10 years, then continues until
+# all cells satisfy the convergence criteria or the 100-year cap is reached.
+warmup_target_constrained = true
+warmup_minimum_years = 10
+warmup_maximum_years = 100
+warmup_consecutive_years = 3
+warmup_relative_tolerance = 0.01
+warmup_pool_fraction_tolerance = 0.01
+warmup_required_converged_fraction = 1.0
 diagnostic_cells = 10
 # 0 runs every 2015 landfrac-selected cell; use a positive value only for smoke tests.
 cell_limit = 0

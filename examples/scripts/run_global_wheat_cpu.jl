@@ -272,15 +272,33 @@ function run_global_wheat(config_path)
     forcings = climate_forcings(reader)
     length(forcings) == 2 || error("365-day blocks must produce exactly two forcing blocks")
 
-    warmup_simulation = create_simulation(initial_data, selection, config; diagnostics = false)
-    warmup = agricultural_warmup!(
-        warmup_simulation, forcings; years = Int(run["warmup_years"]),
+    minimum_warmup_years = Int(get(run, "warmup_minimum_years", get(run, "warmup_years", 10)))
+    maximum_warmup_years = Int(get(run, "warmup_maximum_years", minimum_warmup_years))
+    warmup_options = (
+        years = minimum_warmup_years,
+        maximum_years = maximum_warmup_years,
+        target_constrained = Bool(get(run, "warmup_target_constrained", true)),
+        consecutive_years = Int(get(run, "warmup_consecutive_years", 3)),
+        relative_tolerance = Float64(get(run, "warmup_relative_tolerance", 0.01)),
+        pool_fraction_tolerance = Float64(get(
+            run, "warmup_pool_fraction_tolerance", 0.01,
+        )),
+        required_converged_fraction = Float64(get(
+            run, "warmup_required_converged_fraction", 1.0,
+        )),
     )
+    warmup_simulation = create_simulation(initial_data, selection, config; diagnostics = false)
+    warmup = agricultural_warmup!(warmup_simulation, forcings; warmup_options...)
     warmup_checkpoint = joinpath(output_directory, "warmup_checkpoint.jld2")
     save_checkpoint(warmup_checkpoint, warmup_simulation)
+    warmup_drift = agricultural_warmup_drift(warmup)
     write_report(
         joinpath(output_directory, "warmup_cn_drift.toml"),
-        agricultural_warmup_drift(warmup),
+        warmup_drift,
+    )
+    println(
+        "warm-up completed: years=$(warmup.years), converged=$(warmup.converged), " *
+        "converged_cell_fraction=$(warmup.converged_cell_fraction)",
     )
 
     production = create_simulation(initial_data, selection, config; diagnostics = false)
@@ -359,13 +377,26 @@ function run_global_wheat(config_path)
         diagnostic_initial, diagnostic_selection, config; diagnostics = true,
     )
     agricultural_warmup!(
-        diagnostic, climate_forcings(diagnostic_reader); years = Int(run["warmup_years"]),
+        diagnostic, climate_forcings(diagnostic_reader);
+        years = warmup.years,
+        maximum_years = warmup.years,
+        target_constrained = warmup.target_constrained,
+        consecutive_years = warmup.consecutive_years,
+        relative_tolerance = warmup.relative_tolerance,
+        pool_fraction_tolerance = warmup.pool_fraction_tolerance,
+        required_converged_fraction = warmup.required_converged_fraction,
     )
     run_simulation!(diagnostic, climate_forcings(diagnostic_reader); spinup = false)
     balance = balance_report(diagnostic, config["validation"])
     balance["simulation_summary"] = simulation_summary(diagnostic)
     write_report(joinpath(output_directory, "sampled_balance_summary.toml"), balance)
-    return (; cells = length(selection.cell_ids), memory, output_directory)
+    return (;
+        cells = length(selection.cell_ids),
+        warmup_years = warmup.years,
+        warmup_converged = warmup.converged,
+        memory,
+        output_directory,
+    )
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

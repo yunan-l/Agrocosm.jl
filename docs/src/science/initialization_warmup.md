@@ -97,19 +97,30 @@ W_l=W_{fc,l}.
 The 40:60 partition approximates the mean legacy ten-cell partition but is an
 explicit initialization assumption, not an HWSD measurement.
 
-## Finite agricultural warm-up
+## Adaptive target-constrained agricultural warm-up
 
-The default warm-up runs ten agricultural years before reported production
-using the same crop, fertilizer, manure, irrigation, residue, and tillage
-configuration. If ``n_f`` complete forcing years are supplied, warm-up year
-``y`` selects
+The 40:60 partition is a starting condition. Before reported production,
+Agrocosm runs at least ten agricultural years using the same crop, fertilizer,
+manure, irrigation, residue, and tillage configuration. If ``n_f`` complete
+forcing years are supplied, warm-up year ``y`` selects
 
 ```math
 y_f=1+\operatorname{mod}(y-1,n_f).
 ```
 
-All crop, water, heat, C, and N processes run normally. Only lifecycle state is
-retained:
+All crop, water, heat, C, and N processes run normally. At each year end, the
+mineral-soil pools are returned to the initial HWSD layer targets while their
+internal fractions remain process-determined:
+
+```math
+C_{fast,l}+C_{slow,l}=C_{SOC,l},
+```
+
+```math
+N_{fast,l}+N_{slow,l}+N_{NO_3,l}+N_{NH_4,l}=N_{tot,l}.
+```
+
+Litter is not constrained. Only lifecycle state is retained:
 
 ```math
 x_{warm}^{(y+1)}=
@@ -122,18 +133,20 @@ Production time and output remain unchanged,
 d_{production}=0,\qquad Y_{production}=\varnothing,
 ```
 
-until the formal run begins. Annual reports retain litter, fast, slow, total
-C/N, mineral N, and soil water. The final state should be saved as a native
-Agrocosm checkpoint.
+until the formal run begins. After the ten-year minimum, annual total-C/N
+changes, fast-pool fraction changes, and target corrections must remain below
+their thresholds for the configured consecutive years. Otherwise warm-up
+continues to its maximum duration. Annual reports retain convergence status,
+target corrections, litter, fast, slow, total C/N, mineral N, and soil water.
+The final state is saved as a native Agrocosm checkpoint.
 
 ## Interpretation
 
-Ten years can populate litter and adapt fast pools to local climate and
-management. It is not an equilibrium slow-SOC spin-up. The last three warm-up
-years should be compared with the preceding three for monotonic total C/N
-drift, mineral-N drift, and large initial respiration pulses. The interim
-partition should only be replaced if these diagnostics show material
-transients.
+Ten years is the minimum, not an equilibrium claim. A run that reaches its
+maximum duration without satisfying the per-cell criteria is reported as
+`target_constrained_maximum_years` and remains a baseline rather than an
+accepted equilibrium initialization. The annual correction itself is an
+initialization diagnostic and is never introduced as a production flux.
 
 Warm-up, HWSD preprocessing, input loading, checkpoint I/O, and reporting stay
 outside the future Enzyme-differentiable one-day transition.

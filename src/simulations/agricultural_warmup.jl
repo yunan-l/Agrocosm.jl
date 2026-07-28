@@ -36,6 +36,148 @@ function _warmup_history(snapshots)
     ))
 end
 
+function _warmup_targets(state::ModelState)
+    carbon = soil_carbon_prognostic(state)
+    nitrogen = soil_nitrogen_prognostic(state)
+    return (
+        carbon = (fast = copy(carbon.fast), slow = copy(carbon.slow)),
+        nitrogen = (
+            fast = copy(nitrogen.fast),
+            slow = copy(nitrogen.slow),
+            nitrate = copy(nitrogen.nitrate),
+            ammonium = copy(nitrogen.ammonium),
+        ),
+    )
+end
+
+@kernel inbounds = true function constrain_warmup_carbon_kernel!(
+    fast::AbstractMatrix{T},
+    slow::AbstractMatrix{T},
+    target_fast::AbstractMatrix{T},
+    target_slow::AbstractMatrix{T},
+    correction::AbstractMatrix{T},
+) where {T <: AbstractFloat}
+    layer, cell = @index(Global, NTuple)
+    target = target_fast[layer, cell] + target_slow[layer, cell]
+    current = fast[layer, cell] + slow[layer, cell]
+    correction[layer, cell] = target - current
+    if current > eps(T)
+        scale = target / current
+        fast[layer, cell] *= scale
+        slow[layer, cell] *= scale
+    else
+        fast[layer, cell] = target_fast[layer, cell]
+        slow[layer, cell] = target_slow[layer, cell]
+    end
+end
+
+@kernel inbounds = true function constrain_warmup_nitrogen_kernel!(
+    fast::AbstractMatrix{T},
+    slow::AbstractMatrix{T},
+    nitrate::AbstractMatrix{T},
+    ammonium::AbstractMatrix{T},
+    target_fast::AbstractMatrix{T},
+    target_slow::AbstractMatrix{T},
+    target_nitrate::AbstractMatrix{T},
+    target_ammonium::AbstractMatrix{T},
+    correction::AbstractMatrix{T},
+) where {T <: AbstractFloat}
+    layer, cell = @index(Global, NTuple)
+    target = target_fast[layer, cell] + target_slow[layer, cell] +
+        target_nitrate[layer, cell] + target_ammonium[layer, cell]
+    current = fast[layer, cell] + slow[layer, cell] +
+        nitrate[layer, cell] + ammonium[layer, cell]
+    correction[layer, cell] = target - current
+    if current > eps(T)
+        scale = target / current
+        fast[layer, cell] *= scale
+        slow[layer, cell] *= scale
+        nitrate[layer, cell] *= scale
+        ammonium[layer, cell] *= scale
+    else
+        fast[layer, cell] = target_fast[layer, cell]
+        slow[layer, cell] = target_slow[layer, cell]
+        nitrate[layer, cell] = target_nitrate[layer, cell]
+        ammonium[layer, cell] = target_ammonium[layer, cell]
+    end
+end
+
+function _apply_warmup_targets!(state::ModelState, targets)
+    carbon = soil_carbon_prognostic(state)
+    nitrogen = soil_nitrogen_prognostic(state)
+    carbon_correction = similar(carbon.fast)
+    nitrogen_correction = similar(nitrogen.fast)
+    launch_2D!(
+        constrain_warmup_carbon_kernel!, carbon.fast, carbon.slow,
+        targets.carbon.fast, targets.carbon.slow, carbon_correction,
+    )
+    launch_2D!(
+        constrain_warmup_nitrogen_kernel!, nitrogen.fast, nitrogen.slow,
+        nitrogen.nitrate, nitrogen.ammonium, targets.nitrogen.fast,
+        targets.nitrogen.slow, targets.nitrogen.nitrate,
+        targets.nitrogen.ammonium, nitrogen_correction,
+    )
+    return (
+        carbon = vec(sum(Array(carbon_correction); dims = 1)),
+        nitrogen = vec(sum(Array(nitrogen_correction); dims = 1)),
+    )
+end
+
+function _warmup_convergence!(
+    consecutive::AbstractVector{<:Integer},
+    initial,
+    previous,
+    current,
+    correction;
+    relative_tolerance::Real,
+    pool_fraction_tolerance::Real,
+    consecutive_years::Integer,
+)
+    relative_change(now, before) = (now .- before) ./ max.(abs.(before), one(eltype(now)))
+    pool_fraction(fast, slow) = fast ./ max.(fast .+ slow, eps(eltype(fast)))
+    stable = abs.(relative_change(current.total_carbon, previous.total_carbon)) .<=
+        relative_tolerance
+    stable .&= abs.(relative_change(current.total_nitrogen, previous.total_nitrogen)) .<=
+        relative_tolerance
+    stable .&= abs.(
+        pool_fraction(current.fast_carbon, current.slow_carbon) .-
+        pool_fraction(previous.fast_carbon, previous.slow_carbon)
+    ) .<= pool_fraction_tolerance
+    stable .&= abs.(
+        pool_fraction(current.fast_nitrogen, current.slow_nitrogen) .-
+        pool_fraction(previous.fast_nitrogen, previous.slow_nitrogen)
+    ) .<= pool_fraction_tolerance
+    stable .&= abs.(correction.carbon) ./
+        max.(abs.(initial.total_carbon), one(eltype(correction.carbon))) .<= relative_tolerance
+    stable .&= abs.(correction.nitrogen) ./
+        max.(abs.(initial.total_nitrogen), one(eltype(correction.nitrogen))) .<= relative_tolerance
+    consecutive .= ifelse.(stable, consecutive .+ 1, 0)
+    return count(>=(consecutive_years), consecutive) / length(consecutive)
+end
+
+function _warmup_options(
+    years,
+    maximum_years,
+    consecutive_years,
+    relative_tolerance,
+    pool_fraction_tolerance,
+    required_converged_fraction,
+)
+    years > 0 || throw(ArgumentError("warm-up years must be positive"))
+    maximum_years >= years || throw(ArgumentError(
+        "maximum warm-up years must be at least the minimum years",
+    ))
+    consecutive_years > 0 || throw(ArgumentError("consecutive warm-up years must be positive"))
+    relative_tolerance > 0 || throw(ArgumentError("warm-up relative tolerance must be positive"))
+    pool_fraction_tolerance > 0 || throw(ArgumentError(
+        "warm-up pool-fraction tolerance must be positive",
+    ))
+    0 < required_converged_fraction <= 1 || throw(ArgumentError(
+        "required converged fraction must be in (0, 1]",
+    ))
+    return nothing
+end
+
 """Summarize initial, transient, and late-year C/N drift from a warm-up report."""
 function agricultural_warmup_drift(
     report;
@@ -88,6 +230,16 @@ function agricultural_warmup_drift(
     cell_late_nitrogen = relative_values(final_nitrogen, previous_nitrogen)
     cell_initial_fast_shift = final_cell_fast_fraction .- initial_cell_fast_fraction
     cell_late_fast_shift = final_cell_fast_fraction .- previous_cell_fast_fraction
+    carbon_correction = hasproperty(report, :target_correction) ?
+        report.target_correction.carbon : zeros(eltype(final_carbon), report.years, length(final_carbon))
+    nitrogen_correction = hasproperty(report, :target_correction) ?
+        report.target_correction.nitrogen : zeros(eltype(final_nitrogen), report.years, length(final_nitrogen))
+    final_carbon_correction = vec(carbon_correction[end, :])
+    final_nitrogen_correction = vec(nitrogen_correction[end, :])
+    relative_carbon_correction = final_carbon_correction ./
+        max.(abs.(initial_carbon), one(eltype(final_carbon_correction)))
+    relative_nitrogen_correction = final_nitrogen_correction ./
+        max.(abs.(initial_nitrogen), one(eltype(final_nitrogen_correction)))
     cell_review = (abs.(cell_initial_fast_shift) .> initial_fast_fraction_threshold) .|
         (abs.(cell_late_fast_shift) .> late_fast_fraction_threshold) .|
         (abs.(cell_late_carbon) .> late_total_threshold) .|
@@ -96,6 +248,12 @@ function agricultural_warmup_drift(
         abs(late_fast_shift) > late_fast_fraction_threshold ||
         abs(late_carbon) > late_total_threshold ||
         abs(late_nitrogen) > late_total_threshold
+    target_constrained = hasproperty(report, :target_constrained) && report.target_constrained
+    recommendation = if target_constrained
+        report.converged ? :target_constrained_converged : :target_constrained_maximum_years
+    else
+        review ? :review_pool_allocation : :retain_40_60
+    end
     return (
         total_carbon,
         total_nitrogen,
@@ -104,22 +262,38 @@ function agricultural_warmup_drift(
         late_fast_fraction_shift = late_fast_shift,
         late_carbon_relative_change = late_carbon,
         late_nitrogen_relative_change = late_nitrogen,
+        convergence = (
+            target_constrained,
+            converged = hasproperty(report, :converged) ? report.converged : false,
+            actual_years = report.years,
+            converged_cell_fraction = hasproperty(report, :converged_cell_fraction) ?
+                report.converged_cell_fraction : 0.0,
+            unconverged_cells = hasproperty(report, :unconverged_cells) ?
+                report.unconverged_cells : length(cell_review),
+        ),
+        target_correction = (
+            annual_carbon = vec(sum(carbon_correction; dims = 2)),
+            annual_nitrogen = vec(sum(nitrogen_correction; dims = 2)),
+            final_carbon_relative = distribution(relative_carbon_correction),
+            final_nitrogen_relative = distribution(relative_nitrogen_correction),
+        ),
         spatial = (
-            initial_to_year10_carbon = distribution(cell_initial_carbon),
-            initial_to_year10_nitrogen = distribution(cell_initial_nitrogen),
-            year9_to_year10_carbon = distribution(cell_late_carbon),
-            year9_to_year10_nitrogen = distribution(cell_late_nitrogen),
-            initial_to_year10_fast_fraction = distribution(cell_initial_fast_shift),
-            year9_to_year10_fast_fraction = distribution(cell_late_fast_shift),
+            initial_to_final_carbon = distribution(cell_initial_carbon),
+            initial_to_final_nitrogen = distribution(cell_initial_nitrogen),
+            previous_to_final_carbon = distribution(cell_late_carbon),
+            previous_to_final_nitrogen = distribution(cell_late_nitrogen),
+            initial_to_final_fast_fraction = distribution(cell_initial_fast_shift),
+            previous_to_final_fast_fraction = distribution(cell_late_fast_shift),
             review_cell_fraction = count(cell_review) / length(cell_review),
             cell_count = length(cell_review),
         ),
-        recommendation = review ? :review_pool_allocation : :retain_40_60,
+        recommendation,
     )
 end
 
 """
-    agricultural_warmup!(simulation, climate; years=10)
+    agricultural_warmup!(simulation, climate; years=10, maximum_years=years,
+                         target_constrained=false)
 
 Cycle complete agricultural forcing years before the production run. The
 forcing must contain one or more whole 365-day years; multi-year blocks cycle
@@ -128,16 +302,30 @@ thermal, carbon, and nitrogen processes are active, but
 production outputs, balance ledgers, and `simulation.simulated_days` are left
 untouched. The warmed prognostic state is retained.
 
-The returned report contains one host-side row per warm-up year and one column
-per active cell. This is a finite transient warm-up, not an equilibrium soil
-organic-carbon spin-up.
+When `target_constrained=true`, the initial mineral-soil C and total-N stocks
+are restored after each year while litter remains unconstrained. After the
+minimum `years`, annual cycling continues until the requested fraction of cells
+has met the C/N, pool-fraction, and target-correction tolerances for
+`consecutive_years`, or `maximum_years` is reached.
+
+The returned report contains one host-side row per completed warm-up year and
+one column per active cell.
 """
 function agricultural_warmup!(
     simulation::CropSimulation,
     climate::NamedTuple;
     years::Integer = 10,
+    maximum_years::Integer = years,
+    target_constrained::Bool = false,
+    consecutive_years::Integer = 3,
+    relative_tolerance::Real = 0.01,
+    pool_fraction_tolerance::Real = 0.01,
+    required_converged_fraction::Real = 1.0,
 )
-    years > 0 || throw(ArgumentError("warm-up years must be positive"))
+    _warmup_options(
+        years, maximum_years, consecutive_years, relative_tolerance,
+        pool_fraction_tolerance, required_converged_fraction,
+    )
     simulation.simulated_days == 0 || throw(ArgumentError(
         "agricultural warm-up must run before the production simulation",
     ))
@@ -156,7 +344,16 @@ function agricultural_warmup!(
     ))
 
     initial_soil = _warmup_soil_snapshot(simulation.state)
-    snapshots = Vector{typeof(initial_soil)}(undef, years)
+    snapshots = Vector{typeof(initial_soil)}(undef, maximum_years)
+    correction_type = eltype(initial_soil.total_carbon)
+    carbon_correction = zeros(correction_type, maximum_years, cells)
+    nitrogen_correction = zeros(correction_type, maximum_years, cells)
+    converged_fraction = zeros(Float64, maximum_years)
+    targets = target_constrained ? _warmup_targets(simulation.state) : nothing
+    consecutive = zeros(Int, cells)
+    previous_soil = initial_soil
+    actual_years = 0
+    converged = false
     no_output = Set{Tuple{Symbol, Symbol}}()
     common = (
         irrigation = simulation.config.irrigation,
@@ -169,7 +366,7 @@ function agricultural_warmup!(
     )
 
     forcing_years = div(climate_days, 365)
-    for year in 1:years
+    for year in 1:maximum_years
         forcing_year = mod(year - 1, forcing_years)
         start_day = 365 * forcing_year + 1
         end_day = start_day + 364
@@ -179,7 +376,24 @@ function agricultural_warmup!(
             simulation_day_offset = 365 * (year - 1) + 1 - start_day,
             common...,
         )
+        correction = if target_constrained
+            _apply_warmup_targets!(simulation.state, targets)
+        else
+            (carbon = zeros(correction_type, cells), nitrogen = zeros(correction_type, cells))
+        end
+        carbon_correction[year, :] .= correction.carbon
+        nitrogen_correction[year, :] .= correction.nitrogen
         snapshots[year] = _warmup_soil_snapshot(simulation.state)
+        converged_fraction[year] = _warmup_convergence!(
+            consecutive, initial_soil, previous_soil, snapshots[year], correction;
+            relative_tolerance, pool_fraction_tolerance, consecutive_years,
+        )
+        previous_soil = snapshots[year]
+        actual_years = year
+        if year >= years && converged_fraction[year] >= required_converged_fraction
+            converged = true
+            break
+        end
     end
 
     # `update_climbuf!` normally closes a year on the following day 1. The
@@ -188,16 +402,32 @@ function agricultural_warmup!(
     annual_climbuf!(simulation.climbuf.atemp, simulation.climbuf, simulation.pft)
     clear_output_timeseries!(simulation.output)
     return (
-        years = Int(years),
-        days = 365 * Int(years),
+        years = actual_years,
+        days = 365 * actual_years,
         forcing_years = forcing_years,
+        minimum_years = Int(years),
+        maximum_years = Int(maximum_years),
+        target_constrained,
+        consecutive_years = Int(consecutive_years),
+        relative_tolerance = Float64(relative_tolerance),
+        pool_fraction_tolerance = Float64(pool_fraction_tolerance),
+        required_converged_fraction = Float64(required_converged_fraction),
+        converged,
+        converged_cell_fraction = converged_fraction[actual_years],
+        unconverged_cells = count(<(consecutive_years), consecutive),
         initial_soil = initial_soil,
-        soil = _warmup_history(snapshots),
+        soil = _warmup_history(snapshots[1:actual_years]),
+        target_correction = (
+            carbon = carbon_correction[1:actual_years, :],
+            nitrogen = nitrogen_correction[1:actual_years, :],
+        ),
+        converged_fraction = converged_fraction[1:actual_years],
     )
 end
 
 """
-    agricultural_warmup!(simulation, climate_blocks; years=10)
+    agricultural_warmup!(simulation, climate_blocks; years=10,
+                         maximum_years=years, target_constrained=false)
 
 Run the agricultural warm-up from restartable climate blocks without joining
 the forcing into one in-memory array. Block boundaries may occur anywhere
@@ -207,8 +437,17 @@ function agricultural_warmup!(
     simulation::CropSimulation,
     climate_blocks::AbstractVector;
     years::Integer = 10,
+    maximum_years::Integer = years,
+    target_constrained::Bool = false,
+    consecutive_years::Integer = 3,
+    relative_tolerance::Real = 0.01,
+    pool_fraction_tolerance::Real = 0.01,
+    required_converged_fraction::Real = 1.0,
 )
-    years > 0 || throw(ArgumentError("warm-up years must be positive"))
+    _warmup_options(
+        years, maximum_years, consecutive_years, relative_tolerance,
+        pool_fraction_tolerance, required_converged_fraction,
+    )
     simulation.simulated_days == 0 || throw(ArgumentError(
         "agricultural warm-up must run before the production simulation",
     ))
@@ -231,8 +470,18 @@ function agricultural_warmup!(
         "agricultural warm-up requires complete 365-day climate years, got $climate_days rows",
     ))
 
+    cells = length(simulation.config.execution.domain.indices)
     initial_soil = _warmup_soil_snapshot(simulation.state)
-    snapshots = Vector{typeof(initial_soil)}(undef, years)
+    snapshots = Vector{typeof(initial_soil)}(undef, maximum_years)
+    correction_type = eltype(initial_soil.total_carbon)
+    carbon_correction = zeros(correction_type, maximum_years, cells)
+    nitrogen_correction = zeros(correction_type, maximum_years, cells)
+    converged_fraction = zeros(Float64, maximum_years)
+    targets = target_constrained ? _warmup_targets(simulation.state) : nothing
+    consecutive = zeros(Int, cells)
+    previous_soil = initial_soil
+    actual_years = 0
+    converged = false
     no_output = Set{Tuple{Symbol, Symbol}}()
     common = (
         irrigation = simulation.config.irrigation,
@@ -244,11 +493,10 @@ function agricultural_warmup!(
         selected_output = no_output,
     )
 
-    cells = length(simulation.config.execution.domain.indices)
     forcing_years = div(climate_days, 365)
     block_ends = cumsum(block_days)
     warmup_day = 0
-    for year in 1:years
+    for year in 1:maximum_years
         forcing_year = mod(year - 1, forcing_years)
         forcing_start = 365 * forcing_year + 1
         forcing_end = forcing_start + 364
@@ -275,16 +523,48 @@ function agricultural_warmup!(
             )
             warmup_day += local_end - local_start + 1
         end
+        correction = if target_constrained
+            _apply_warmup_targets!(simulation.state, targets)
+        else
+            (carbon = zeros(correction_type, cells), nitrogen = zeros(correction_type, cells))
+        end
+        carbon_correction[year, :] .= correction.carbon
+        nitrogen_correction[year, :] .= correction.nitrogen
         snapshots[year] = _warmup_soil_snapshot(simulation.state)
+        converged_fraction[year] = _warmup_convergence!(
+            consecutive, initial_soil, previous_soil, snapshots[year], correction;
+            relative_tolerance, pool_fraction_tolerance, consecutive_years,
+        )
+        previous_soil = snapshots[year]
+        actual_years = year
+        if year >= years && converged_fraction[year] >= required_converged_fraction
+            converged = true
+            break
+        end
     end
 
     annual_climbuf!(simulation.climbuf.atemp, simulation.climbuf, simulation.pft)
     clear_output_timeseries!(simulation.output)
     return (
-        years = Int(years),
-        days = 365 * Int(years),
+        years = actual_years,
+        days = 365 * actual_years,
         forcing_years = forcing_years,
+        minimum_years = Int(years),
+        maximum_years = Int(maximum_years),
+        target_constrained,
+        consecutive_years = Int(consecutive_years),
+        relative_tolerance = Float64(relative_tolerance),
+        pool_fraction_tolerance = Float64(pool_fraction_tolerance),
+        required_converged_fraction = Float64(required_converged_fraction),
+        converged,
+        converged_cell_fraction = converged_fraction[actual_years],
+        unconverged_cells = count(<(consecutive_years), consecutive),
         initial_soil = initial_soil,
-        soil = _warmup_history(snapshots),
+        soil = _warmup_history(snapshots[1:actual_years]),
+        target_correction = (
+            carbon = carbon_correction[1:actual_years, :],
+            nitrogen = nitrogen_correction[1:actual_years, :],
+        ),
+        converged_fraction = converged_fraction[1:actual_years],
     )
 end

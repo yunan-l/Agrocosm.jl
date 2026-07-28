@@ -44,6 +44,59 @@ end
     @test size(simulation.output.crop.npp, 1) == 0
     @test all(iszero, Array(simulation.carbon_balance.residual))
 
+    constrained = initialize_simulation(
+        cft1, initial;
+        indices = [1], T = Float32, days = 3,
+        diagnostics = false, fertilizer = :no,
+    )
+    constrained_carbon = Agrocosm.soil_carbon_prognostic(constrained.state)
+    constrained_nitrogen = Agrocosm.soil_nitrogen_prognostic(constrained.state)
+    target_carbon = Array(constrained_carbon.fast + constrained_carbon.slow)
+    target_nitrogen = Array(
+        constrained_nitrogen.fast + constrained_nitrogen.slow +
+        constrained_nitrogen.nitrate + constrained_nitrogen.ammonium,
+    )
+    constrained_report = agricultural_warmup!(
+        constrained, [climate];
+        years = 2,
+        maximum_years = 4,
+        target_constrained = true,
+        consecutive_years = 1,
+        relative_tolerance = 1.0e6,
+        pool_fraction_tolerance = 1.0e6,
+    )
+    @test constrained_report.years == 2
+    @test constrained_report.converged
+    @test constrained_report.target_constrained
+    @test constrained_report.converged_cell_fraction == 1
+    @test size(constrained_report.target_correction.carbon) == (2, 1)
+    constrained_drift = agricultural_warmup_drift(constrained_report)
+    @test constrained_drift.recommendation == :target_constrained_converged
+    @test constrained_drift.convergence.actual_years == 2
+    @test Array(constrained_carbon.fast + constrained_carbon.slow) ≈ target_carbon
+    @test Array(
+        constrained_nitrogen.fast + constrained_nitrogen.slow +
+        constrained_nitrogen.nitrate + constrained_nitrogen.ammonium,
+    ) ≈ target_nitrogen
+
+    capped = initialize_simulation(
+        cft1, initial;
+        indices = [1], T = Float32, days = 3,
+        diagnostics = false, fertilizer = :no,
+    )
+    capped_report = agricultural_warmup!(
+        capped, [climate];
+        years = 2,
+        maximum_years = 3,
+        target_constrained = true,
+        consecutive_years = 4,
+    )
+    @test capped_report.years == 3
+    @test !capped_report.converged
+    @test capped_report.unconverged_cells == 1
+    @test agricultural_warmup_drift(capped_report).recommendation ==
+        :target_constrained_maximum_years
+
     run_simulation!(simulation, climate; end_day = 3, spinup = false)
     @test simulation.simulated_days == 3
     @test size(simulation.output.crop.npp) == (3, 1)

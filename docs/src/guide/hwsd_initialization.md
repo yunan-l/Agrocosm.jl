@@ -91,47 +91,119 @@ targets = read_soil_cn_targets("hwsd_cn_targets.nc")
 initial_state = hwsd_initial_state(targets, soil)
 ```
 
-The current no-spin-up defaults are:
+The initialization defaults are:
 
 - `fastc = 0.4 × SOC` and `slowc = 0.6 × SOC`;
-- organic N uses the same 40:60 split;
-- organic N is reduced slightly so organic plus the default initial nitrate and
-  ammonium pools conserve the HWSD total-N target;
+- organic N uses the same 40:60 split after reserving the initial mineral N;
 - surface, incorporated, and root litter C/N start at zero;
 - soil liquid water starts at field capacity using Agrocosm's pedotransfer
   equations and the HWSD SOC stock.
 
+For layer ``l``, let ``f=0.4``, ``s=0.6``, and let ``m=0.01`` be the LPJmL
+fresh-soil mineral-N fraction. The initialized pools are
+
+```math
+C_{fast,l}=fC_{SOC,l},\qquad C_{slow,l}=sC_{SOC,l}.
+```
+
+Each of the nitrate and ammonium pools is initialized to ``m`` times slow
+organic N. To conserve the HWSD total-N target exactly, Agrocosm first computes
+
+```math
+N_{org,l}=\frac{N_{HWSD,l}}{1+2ms},
+```
+
+and then assigns
+
+```math
+N_{fast,l}=fN_{org,l},\qquad
+N_{slow,l}=sN_{org,l},\qquad
+N_{NO_3,l}=N_{NH_4,l}=mN_{slow,l}.
+```
+
+Consequently,
+
+```math
+N_{fast,l}+N_{slow,l}+N_{NO_3,l}+N_{NH_4,l}=N_{HWSD,l}.
+```
+
 The 40:60 split matches the mean partition of the legacy ten-cell spun-up
-fixture. It is an initialization assumption, not an HWSD observation.
+fixture. It is only a reproducible starting guess, not an HWSD observation or
+an equilibrium claim.
 
-## Recommended ten-year warm-up
+## Target-constrained agricultural warm-up
 
-A ten-year pre-run is reasonable for generating crop residue and allowing
-litter and faster soil pools to adapt to local climate and management. It
-should be called a **warm-up**, not a complete soil-carbon spin-up: ten years is
-too short for the slow SOC pool to reach equilibrium.
+Production initialization does not use the raw 40:60 state directly. Agrocosm
+runs an adaptive agricultural warm-up before the first reported day. Ten years
+is the minimum duration; cells that have not stabilized cause the complete
+batch to continue, up to a configured maximum.
+
+The initial HWSD stocks define fixed layer targets:
+
+```math
+C^*_{l}=C_{fast,l}^{(0)}+C_{slow,l}^{(0)}=C_{SOC,l},
+```
+
+```math
+N^*_{l}=N_{fast,l}^{(0)}+N_{slow,l}^{(0)}+
+N_{NO_3,l}^{(0)}+N_{NH_4,l}^{(0)}=N_{HWSD,l}.
+```
+
+After each warm-up year, fast and slow C are scaled proportionally so their
+sum returns to ``C^*_l``. Fast and slow organic N plus nitrate and ammonium are
+scaled proportionally so their sum returns to ``N^*_l``. If a current layer
+sum is numerically zero, the original initialized partition is restored.
+
+Fresh litter is deliberately excluded from these constraints because HWSD SOC
+and total N describe mineral-soil stocks rather than an above-soil litter
+layer. Litter therefore develops from crop residues, roots, decomposition,
+tillage, and management without being reset. The annual target correction
+
+```math
+\Delta C_{target,l}=C^*_l-C_{l}^{pre},\qquad
+\Delta N_{target,l}=N^*_l-N_{l}^{pre}
+```
+
+is an initialization diagnostic, not a production carbon or nitrogen flux.
+It measures how strongly the unconstrained annual processes would move the
+HWSD target pools.
+
+For each cell, convergence requires all of the following for a configured
+number of consecutive years:
+
+- annual relative change in total soil C and N, including litter, is below the
+  relative tolerance;
+- annual change in fast-C and fast-N fractions is below the pool-fraction
+  tolerance;
+- the absolute annual target correction, relative to the initial cell total,
+  is below the relative tolerance.
+
+The global CPU workflow currently requires every selected cell to pass for
+three consecutive years, with a 10-year minimum and 100-year maximum. All
+cells continue on the same cycling calendar until the batch stops; this keeps
+the checkpoint deterministic and also requires previously stable cells to
+remain stable.
 
 Recommended procedure:
 
 1. Build the HWSD state and initialize water at field capacity.
-2. Run ten years before the reported simulation, using the same crop,
-   fertilization, irrigation, residue, and tillage configuration as the target
-   experiment.
+2. Run target-constrained agricultural warm-up for at least ten years, using
+   the same crop, fertilization, irrigation, residue, and tillage configuration
+   as the target experiment.
 3. Use observed historical forcing when available. If forcing must be cycled,
    pass a complete multi-year block rather than one anomalous year.
-4. Discard warm-up outputs but save the final native Agrocosm checkpoint.
-5. Use a separate diagnostic run when daily C, N, water, and energy closure
+4. Continue until the convergence rule passes or the maximum year is reached.
+5. Discard warm-up outputs but save the final native Agrocosm checkpoint.
+6. Use a separate diagnostic run when daily C, N, water, and energy closure
    must be audited; the production warm-up deliberately does not allocate
    daily balance ledgers.
-6. Inspect annual litter, fast, slow, and total soil C/N, mineral N, and water
-   stocks. The last three-year mean should not show strong monotonic drift
-   relative to the preceding three years.
+7. Inspect annual target corrections, litter, fast/slow fractions, mineral N,
+   total C/N, the converged-cell fraction, and unresolved cells.
 
-Ten years is accepted when litter and fast pools stabilize and crop behaviour
-is plausible. Failure to stabilize means the warm-up must be lengthened or the
-initial partition reconsidered. Slow-pool convergence is deliberately not an
-acceptance criterion for this interim workflow; a future full spin-up may need
-many decades or longer and should be treated as a separate offline stage.
+Reaching the maximum without convergence does not silently accept the state.
+The report uses `target_constrained_maximum_years`, and production output from
+that checkpoint is treated as a baseline pending review of fallback soils,
+forcing, management, thresholds, or genuinely slow pool dynamics.
 
 ## Provenance and reproducibility
 
@@ -153,16 +225,40 @@ simulation = initialize_simulation(
     diagnostics = false,
 )
 
-report = agricultural_warmup!(simulation, warmup_climate; years = 10)
+report = agricultural_warmup!(
+    simulation,
+    warmup_climate;
+    years = 10,
+    maximum_years = 100,
+    target_constrained = true,
+    consecutive_years = 3,
+    relative_tolerance = 0.01,
+    pool_fraction_tolerance = 0.01,
+    required_converged_fraction = 1.0,
+)
 @assert simulation.simulated_days == 0
 run_simulation!(simulation, production_climate; spinup = false)
 ```
 
 `warmup_climate` must contain one or more complete 365-day years. If fewer
-than ten years are supplied, the years cycle in their original order. The
-report stores annual host-side matrices for total soil C/N, litter, fast and
-slow C/N, mineral N, and soil water. Warm-up outputs and balance ledgers are
-not mixed with the production run.
+years are supplied than the warm-up needs, the years cycle in their original
+order. The report stores the actual duration, convergence status, annual target
+corrections, converged-cell fractions, and host-side matrices for total soil
+C/N, litter, fast and slow C/N, mineral N, and soil water. Warm-up outputs and
+balance ledgers are not mixed with the production run.
+
+The server production script exposes the same controls:
+
+```toml
+[run]
+warmup_target_constrained = true
+warmup_minimum_years = 10
+warmup_maximum_years = 100
+warmup_consecutive_years = 3
+warmup_relative_tolerance = 0.01
+warmup_pool_fraction_tolerance = 0.01
+warmup_required_converged_fraction = 1.0
+```
 
 For the complete canonical grid, run the bounded-memory HWSD raster pipeline
 on the server:
