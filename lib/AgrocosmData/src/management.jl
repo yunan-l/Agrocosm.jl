@@ -76,7 +76,9 @@ function validate_management(name::Symbol, values::AbstractMatrix; active::Union
     elseif name in (:sowing_date, :sdate)
         all(value -> 1 <= value <= 366, checked) || throw(ArgumentError("active sowing dates must be in 1:366"))
     elseif name in (:phu, :phusum)
-        all(>(0), checked) || throw(ArgumentError("active PHU values must be positive"))
+        all(value -> value != 0, checked) || throw(ArgumentError(
+            "active PHU values must be non-zero; negative values denote winter crops",
+        ))
     elseif name in (:fertilizer, :manure)
         all(>=(0), checked) || throw(ArgumentError("$name must be non-negative"))
     end

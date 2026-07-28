@@ -159,6 +159,8 @@ include("test_prepare_global_wheat_subset.jl")
 
         @test_throws ArgumentError validate_management(:landuse, Float32[1.1 0.0])
         @test_throws ArgumentError validate_management(:sowing_date, Float32[0 100]; active = Bool[1 1])
+        @test validate_management(:phu, Float32[-1200 1200]) == Float32[-1200 1200]
+        @test_throws ArgumentError validate_management(:phu, Float32[0 1200]; active = Bool[1 1])
         @test_throws DimensionMismatch read_management(
             DatasetSpec(paths.management_path, "landfrac"; units = "%"),
             :landuse,
