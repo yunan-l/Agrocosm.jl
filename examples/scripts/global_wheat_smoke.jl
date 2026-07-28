@@ -105,6 +105,7 @@ simulation = initialize_simulation(
     cft1,
     initial_data;
     days = climate_days(reader),
+    cell_ids = selection.cell_ids,
     T = Float32,
     diagnostics = true,
     irrigation = false,

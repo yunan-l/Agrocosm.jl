@@ -17,7 +17,7 @@ function Base.show(io::IO, simulation::CropSimulation)
     diagnostics_enabled = any(!isnothing, values(simulation.diagnostics))
     print(
         io,
-        "CropSimulation(", CROP_PFT_NAMES[simulation.pft.id], ", ",
+        "CropSimulation(", CROP_PFT_NAMES[simulation.pft.name], ", ",
         architecture_name(simulation.config.execution), ", ", simulation.config.T,
         ", cells=", length(simulation.config.execution.domain.indices),
         ", days=", simulation.simulated_days, "/", simulation.config.days,
@@ -87,6 +87,7 @@ function initialize_simulation(
     pft::PftParameters,
     initial_data::NamedTuple;
     indices = nothing,
+    cell_ids = nothing,
     device = identity,
     T::Type{<:AbstractFloat} = Float32,
     days::Integer,
@@ -112,7 +113,8 @@ function initialize_simulation(
     climbuf, crop, pet, soil, managed_land, daily_weather, output = states
     state = model_state(climbuf, crop, pet, soil, managed_land, daily_weather, output)
     active_indices = indices === nothing ? collect(1:cells) : collect(Int, indices)
-    execution = ExecutionContext(T, device, active_indices)
+    active_cell_ids = cell_ids === nothing ? active_indices : collect(Int, cell_ids)
+    execution = ExecutionContext(T, device, active_indices; cell_ids = active_cell_ids)
     validate_state_schema(state, cells)
     balances = diagnostics ? (
         water_balance = init_water_balance(days, cells, device; T = T),
@@ -407,7 +409,7 @@ function run_simulation!(
     return simulation
 end
 
-const _CHECKPOINT_FORMAT_VERSION = 3
+const _CHECKPOINT_FORMAT_VERSION = 4
 
 _checkpoint_snapshot(values::AbstractArray) = Array(values)
 _checkpoint_snapshot(values::NamedTuple) = map(_checkpoint_snapshot, values)
@@ -462,7 +464,9 @@ function _simulation_checkpoint(simulation::CropSimulation)
         metadata = (
             precision = string(simulation.config.T),
             cells = cells,
+            cell_ids = copy(simulation.config.execution.domain.cell_ids),
             configured_days = simulation.config.days,
+            pft_id = simulation.pft.name,
             photosynthetic_pathway = simulation.pft.path,
             irrigation = simulation.config.irrigation,
             manure = simulation.config.manure,
@@ -510,7 +514,9 @@ function _validate_checkpoint_target(simulation::CropSimulation, checkpoint)
     checks = (
         ("precision", metadata.precision, string(simulation.config.T)),
         ("cell count", metadata.cells, length(simulation.managed_land.latitude)),
+        ("cell ids", metadata.cell_ids, simulation.config.execution.domain.cell_ids),
         ("configured days", metadata.configured_days, simulation.config.days),
+        ("PFT id", metadata.pft_id, simulation.pft.name),
         ("photosynthetic pathway", metadata.photosynthetic_pathway, simulation.pft.path),
         ("irrigation", metadata.irrigation, simulation.config.irrigation),
         ("manure", metadata.manure, simulation.config.manure),

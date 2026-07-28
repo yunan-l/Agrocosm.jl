@@ -47,6 +47,7 @@ function simulation_api_fixture(::Type{T}) where {T <: AbstractFloat}
 end
 
 function climate_block(::Type{T}, days, temperature, precipitation) where {T <: AbstractFloat}
+    annual_co2 = fill(T(400), cld(days, 365))
     return (
         temp_spinup = fill(T(10), 365, 1),
         temp = fill(T(temperature), days, 1),
@@ -54,7 +55,7 @@ function climate_block(::Type{T}, days, temperature, precipitation) where {T <: 
         swdown = fill(T(180), days, 1),
         lwnet = fill(T(-40), days, 1),
         windspeed = fill(T(2), days, 1),
-        co2 = T[400],
+        co2 = annual_co2,
     )
 end
 
@@ -96,6 +97,18 @@ end
     @test estimate.forcing_block_bytes == 40
     @test prefetched.host_forcing_bytes == estimate.host_forcing_bytes + 40
     @test prefetched.host_peak_bytes == estimate.host_peak_bytes + 40
+    warmup_estimate = estimate_memory(
+        simulation; block_days = 2, warmup_years = 10, safety_factor = 1,
+    )
+    @test warmup_estimate.warmup_history_bytes == 10 * 12 * sizeof(Float32)
+    @test warmup_estimate.host_peak_bytes ==
+        estimate.host_peak_bytes + warmup_estimate.warmup_history_bytes
+    cached_estimate = estimate_memory(
+        simulation; block_days = 2, cached_forcing_blocks = 3, safety_factor = 1,
+    )
+    @test cached_estimate.cached_forcing_bytes == 3 * estimate.forcing_block_bytes
+    @test cached_estimate.host_peak_bytes ==
+        estimate.host_peak_bytes + cached_estimate.cached_forcing_bytes
     @test estimate.device_peak_bytes == 0
     @test estimate.recommended_host_peak_gib == estimate.host_peak_bytes / 2.0^30
     stream = OutputStream(
@@ -116,6 +129,9 @@ end
     @test_throws ArgumentError estimate_memory(1, 4; block_days = 2, backend = :gpu)
     @test_throws ArgumentError estimate_memory(
         simulation; block_days = 2, safety_factor = 0.9,
+    )
+    @test_throws ArgumentError estimate_memory(
+        simulation; block_days = 2, warmup_years = -1,
     )
 
     with_diagnostics = initialize_simulation(
@@ -267,7 +283,7 @@ end
         cft1, initial;
         indices = [1], T = Float32, days = 366, fertilizer = :yes,
     )
-    incomplete = climate_block(Float32, 366, 15, 1)
+    incomplete = merge(climate_block(Float32, 366, 15, 1), (co2 = Float32[400],))
     @test_throws DimensionMismatch run_simulation!(
         simulation, incomplete; spinup = false,
     )
@@ -383,9 +399,9 @@ end
         windspeed = vcat(first_block.windspeed, second_block.windspeed),
         co2 = Float32[400],
     )
-    create(days = 4) = initialize_simulation(
+    create(days = 4; cell_ids = [101]) = initialize_simulation(
         cft1, initial;
-        indices = [1], T = Float32, days = days, fertilizer = :yes,
+        indices = [1], cell_ids, T = Float32, days = days, fertilizer = :yes,
     )
 
     reference = create()
@@ -423,5 +439,8 @@ end
 
         incompatible = create(5)
         @test_throws ArgumentError restore_checkpoint!(incompatible, path)
+
+        wrong_domain = create(; cell_ids = [202])
+        @test_throws ArgumentError restore_checkpoint!(wrong_domain, path)
     end
 end

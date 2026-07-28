@@ -87,10 +87,16 @@ function _memory_estimate(
     prefetch::Bool,
     safety_factor::Real,
     backend::Symbol,
+    warmup_years::Integer = 0,
+    cached_forcing_blocks::Integer = 0,
     output_stream::Union{Nothing, OutputStream} = nothing,
 ) where {T}
     block_days > 0 || throw(ArgumentError("block_days must be positive"))
     safety_factor >= 1 || throw(ArgumentError("safety_factor must be at least one"))
+    warmup_years >= 0 || throw(ArgumentError("warmup_years must be non-negative"))
+    cached_forcing_blocks >= 0 || throw(ArgumentError(
+        "cached_forcing_blocks must be non-negative",
+    ))
     backend in (:cpu, :accelerator) || throw(ArgumentError(
         "backend must be :cpu or :accelerator",
     ))
@@ -104,11 +110,16 @@ function _memory_estimate(
     # Four time×cell forcing fields plus one daily global CO₂ vector.
     forcing_block_bytes = (4 * block_days * cells + block_days) * sizeof(T)
     host_forcing_bytes = forcing_block_bytes * (2 + Int(prefetch))
+    # Ten annual soil summaries plus carbon/nitrogen target corrections.
+    warmup_history_bytes = warmup_years * cells * 12 * sizeof(T)
+    cached_forcing_bytes = cached_forcing_blocks * forcing_block_bytes
     model_payload_bytes = persistent_state_bytes + diagnostics_bytes + output_bytes
     backend_peak_bytes = model_payload_bytes + output_growth_bytes + forcing_block_bytes
     host_peak_bytes = backend === :cpu ?
-        model_payload_bytes + output_growth_bytes + host_forcing_bytes + host_output_chunk_bytes :
-        host_forcing_bytes + host_output_chunk_bytes
+        model_payload_bytes + output_growth_bytes + host_forcing_bytes +
+            host_output_chunk_bytes + warmup_history_bytes + cached_forcing_bytes :
+        host_forcing_bytes + host_output_chunk_bytes + warmup_history_bytes +
+            cached_forcing_bytes
     device_peak_bytes = backend === :cpu ? 0 : backend_peak_bytes
 
     recommended(value) = ceil(Int, value * safety_factor)
@@ -126,6 +137,8 @@ function _memory_estimate(
         host_output_chunk_bytes,
         forcing_block_bytes,
         host_forcing_bytes,
+        warmup_history_bytes,
+        cached_forcing_bytes,
         model_payload_bytes,
         host_peak_bytes,
         device_peak_bytes,
@@ -154,6 +167,8 @@ function estimate_memory(
     backend::Symbol = :accelerator,
     prefetch::Bool = false,
     safety_factor::Real = 1.2,
+    warmup_years::Integer = 0,
+    cached_forcing_blocks::Integer = 0,
     output_stream::Union{Nothing, OutputStream} = nothing,
 )
     cells > 0 || throw(ArgumentError("cells must be positive"))
@@ -165,7 +180,8 @@ function estimate_memory(
         _estimated_diagnostics_bytes(cell_count, day_count, T) : 0
     return _memory_estimate(
         cell_count, day_count, T, persistent_state_bytes, diagnostics_bytes;
-        block_days, prefetch, safety_factor, backend, output_stream,
+        block_days, prefetch, safety_factor, backend, warmup_years,
+        cached_forcing_blocks, output_stream,
     )
 end
 
@@ -187,6 +203,8 @@ function estimate_memory(
     block_days::Integer,
     prefetch::Bool = false,
     safety_factor::Real = 1.2,
+    warmup_years::Integer = 0,
+    cached_forcing_blocks::Integer = 0,
     output_stream::Union{Nothing, OutputStream} = nothing,
 )
     cells = length(simulation.state.inputs.weather.temp)
@@ -206,7 +224,7 @@ function estimate_memory(
     backend_is_host = simulation.config.device === identity
     return _memory_estimate(
         cells, days, T, persistent_state_bytes, diagnostics_bytes;
-        block_days, prefetch, safety_factor,
+        block_days, prefetch, safety_factor, warmup_years, cached_forcing_blocks,
         backend = backend_is_host ? :cpu : :accelerator,
         output_stream,
     )

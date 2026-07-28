@@ -164,6 +164,7 @@ function create_simulation(initial_data, selection, config, days, device; diagno
         cft1, initial_data;
         days,
         indices = collect(1:length(selection.cell_ids)),
+        cell_ids = selection.cell_ids,
         device,
         T = Float32,
         diagnostics,
@@ -363,7 +364,12 @@ function run_global_wheat(config_path; backend_override = nothing)
     climate_days(warmup_reader) == 365 * length(warmup_years) || error(
         "warm-up climate must contain complete 365-day years",
     )
+    warmup_cache_climate = Bool(get(run, "warmup_cache_climate", false))
     warmup_forcings = climate_forcings(warmup_reader)
+    if warmup_cache_climate
+        println("caching $(length(warmup_forcings)) warm-up climate blocks in host memory")
+        warmup_forcings = collect(warmup_forcings)
+    end
 
     reader = climate_blocks(
         catalog, grid;
@@ -396,6 +402,8 @@ function run_global_wheat(config_path; backend_override = nothing)
         block_days = 365,
         backend = backend.name === :cpu ? :cpu : :accelerator,
         safety_factor = memory_safety_factor,
+        warmup_years = Int(get(run, "warmup_maximum_years", get(run, "warmup_years", 10))),
+        cached_forcing_blocks = warmup_cache_climate ? length(warmup_years) : 0,
         output_stream = preflight_stream,
     )
     write_report(joinpath(output_directory, "memory_preflight.toml"), Dict(
@@ -432,8 +440,6 @@ function run_global_wheat(config_path; backend_override = nothing)
         warmup_simulation, warmup_forcings;
         warmup_options..., management_blocks = warmup_management_blocks,
     )
-    warmup_checkpoint = joinpath(output_directory, "warmup_checkpoint.jld2")
-    save_checkpoint(warmup_checkpoint, warmup_simulation)
     warmup_drift = agricultural_warmup_drift(warmup)
     write_report(
         joinpath(output_directory, "warmup_cn_drift.toml"),
@@ -443,6 +449,27 @@ function run_global_wheat(config_path; backend_override = nothing)
         "warm-up completed: years=$(warmup.years), converged=$(warmup.converged), " *
         "converged_cell_fraction=$(warmup.converged_cell_fraction)",
     )
+    require_warmup_convergence = Bool(get(run, "require_warmup_convergence", true))
+    require_warmup_convergence && !warmup.converged && error(
+        "warm-up did not reach the configured convergence requirement; " *
+        "review warmup_cn_drift.toml or set require_warmup_convergence=false " *
+        "for an explicitly non-production diagnostic run",
+    )
+    warmup_contract = (
+        years = warmup.years,
+        target_constrained = warmup.target_constrained,
+        consecutive_years = warmup.consecutive_years,
+        relative_tolerance = warmup.relative_tolerance,
+        pool_fraction_tolerance = warmup.pool_fraction_tolerance,
+        required_converged_fraction = warmup.required_converged_fraction,
+        converged = warmup.converged,
+    )
+    warmup_checkpoint = joinpath(output_directory, "warmup_checkpoint.jld2")
+    save_checkpoint(warmup_checkpoint, warmup_simulation)
+    warmup = nothing
+    warmup_drift = nothing
+    GC.gc(true)
+    backend.name === :cuda && CUDA.reclaim()
 
     production = create_simulation(
         initial_data, selection, config, expected_days, backend.device;
@@ -451,6 +478,9 @@ function run_global_wheat(config_path; backend_override = nothing)
     restore_checkpoint!(production, warmup_checkpoint)
     state_equal(production.state.prognostic, warmup_simulation.state.prognostic) ||
         error("warm-up checkpoint did not restore the prognostic state exactly")
+    warmup_simulation = nothing
+    GC.gc(true)
+    backend.name === :cuda && CUDA.reclaim()
 
     annual_chunks = OutputChunk[]
     compact_writer = NetCDFBlockWriter(joinpath(output_directory, "compact"); prefix = "wheat")
@@ -567,13 +597,13 @@ function run_global_wheat(config_path; backend_override = nothing)
     ]
     agricultural_warmup!(
         diagnostic, climate_forcings(diagnostic_warmup_reader);
-        years = warmup.years,
-        maximum_years = warmup.years,
-        target_constrained = warmup.target_constrained,
-        consecutive_years = warmup.consecutive_years,
-        relative_tolerance = warmup.relative_tolerance,
-        pool_fraction_tolerance = warmup.pool_fraction_tolerance,
-        required_converged_fraction = warmup.required_converged_fraction,
+        years = warmup_contract.years,
+        maximum_years = warmup_contract.years,
+        target_constrained = warmup_contract.target_constrained,
+        consecutive_years = warmup_contract.consecutive_years,
+        relative_tolerance = warmup_contract.relative_tolerance,
+        pool_fraction_tolerance = warmup_contract.pool_fraction_tolerance,
+        required_converged_fraction = warmup_contract.required_converged_fraction,
         management_blocks = diagnostic_warmup_management_blocks,
     )
     run_simulation!(
@@ -586,8 +616,8 @@ function run_global_wheat(config_path; backend_override = nothing)
     return (;
         cells = length(selection.cell_ids),
         backend = backend.name,
-        warmup_years = warmup.years,
-        warmup_converged = warmup.converged,
+        warmup_years = warmup_contract.years,
+        warmup_converged = warmup_contract.converged,
         memory,
         output_directory,
     )

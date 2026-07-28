@@ -41,6 +41,12 @@ warmup_consecutive_years = 3
 warmup_relative_tolerance = 0.01
 warmup_pool_fraction_tolerance = 0.01
 warmup_required_converged_fraction = 1.0
+# Cache the ten forcing years once to avoid repeated NetCDF reads. Enable only
+# after memory_preflight.toml confirms sufficient host memory.
+warmup_cache_climate = false
+# Production runs stop before writing a warm-up checkpoint when convergence
+# is not reached. Set false only for an explicitly diagnostic experiment.
+require_warmup_convergence = true
 diagnostic_cells = 10
 # 0 runs every landfrac-selected cell; use a positive value only for smoke tests.
 cell_limit = 0

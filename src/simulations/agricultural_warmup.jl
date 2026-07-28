@@ -28,13 +28,29 @@ function _warmup_soil_snapshot(state::ModelState)
     )
 end
 
-function _warmup_history(snapshots)
-    names = keys(first(snapshots))
+function _warmup_history_storage(initial, maximum_years::Integer)
+    names = keys(initial)
+    cells = length(first(initial))
     return NamedTuple{names}(map(
-        name -> reduce(vcat, (permutedims(getproperty(snapshot, name)) for snapshot in snapshots)),
+        name -> Matrix{eltype(getproperty(initial, name))}(undef, maximum_years, cells),
         names,
     ))
 end
+
+function _store_warmup_snapshot!(history, year::Integer, snapshot)
+    for name in keys(history)
+        getproperty(history, name)[year, :] .= getproperty(snapshot, name)
+    end
+    return history
+end
+
+_warmup_history_row(history, year::Integer) = map(
+    values -> view(values, year, :), history,
+)
+
+_warmup_history_view(history, years::Integer) = map(
+    values -> view(values, 1:years, :), history,
+)
 
 function _warmup_targets(state::ModelState)
     carbon = soil_carbon_prognostic(state)
@@ -355,7 +371,7 @@ function agricultural_warmup!(
     ))
 
     initial_soil = _warmup_soil_snapshot(simulation.state)
-    snapshots = Vector{typeof(initial_soil)}(undef, maximum_years)
+    history = _warmup_history_storage(initial_soil, maximum_years)
     correction_type = eltype(initial_soil.total_carbon)
     carbon_correction = zeros(correction_type, maximum_years, cells)
     nitrogen_correction = zeros(correction_type, maximum_years, cells)
@@ -393,12 +409,13 @@ function agricultural_warmup!(
         end
         carbon_correction[year, :] .= correction.carbon
         nitrogen_correction[year, :] .= correction.nitrogen
-        snapshots[year] = _warmup_soil_snapshot(simulation.state)
+        current_soil = _warmup_soil_snapshot(simulation.state)
+        _store_warmup_snapshot!(history, year, current_soil)
         if year >= forcing_years
             previous_soil = year == forcing_years ? initial_soil :
-                snapshots[year - forcing_years]
+                _warmup_history_row(history, year - forcing_years)
             converged_fraction[year] = _warmup_convergence!(
-                consecutive, initial_soil, previous_soil, snapshots[year], correction;
+                consecutive, initial_soil, previous_soil, current_soil, correction;
                 relative_tolerance, pool_fraction_tolerance, consecutive_years,
             )
         end
@@ -429,7 +446,7 @@ function agricultural_warmup!(
         converged_cell_fraction = converged_fraction[actual_years],
         unconverged_cells = count(<(consecutive_years), consecutive),
         initial_soil = initial_soil,
-        soil = _warmup_history(snapshots[1:actual_years]),
+        soil = _warmup_history_view(history, actual_years),
         target_correction = (
             carbon = carbon_correction[1:actual_years, :],
             nitrogen = nitrogen_correction[1:actual_years, :],
@@ -486,7 +503,7 @@ function agricultural_warmup!(
 
     cells = length(simulation.config.execution.domain.indices)
     initial_soil = _warmup_soil_snapshot(simulation.state)
-    snapshots = Vector{typeof(initial_soil)}(undef, maximum_years)
+    history = _warmup_history_storage(initial_soil, maximum_years)
     correction_type = eltype(initial_soil.total_carbon)
     carbon_correction = zeros(correction_type, maximum_years, cells)
     nitrogen_correction = zeros(correction_type, maximum_years, cells)
@@ -553,12 +570,13 @@ function agricultural_warmup!(
         end
         carbon_correction[year, :] .= correction.carbon
         nitrogen_correction[year, :] .= correction.nitrogen
-        snapshots[year] = _warmup_soil_snapshot(simulation.state)
+        current_soil = _warmup_soil_snapshot(simulation.state)
+        _store_warmup_snapshot!(history, year, current_soil)
         if year >= forcing_years
             previous_soil = year == forcing_years ? initial_soil :
-                snapshots[year - forcing_years]
+                _warmup_history_row(history, year - forcing_years)
             converged_fraction[year] = _warmup_convergence!(
-                consecutive, initial_soil, previous_soil, snapshots[year], correction;
+                consecutive, initial_soil, previous_soil, current_soil, correction;
                 relative_tolerance, pool_fraction_tolerance, consecutive_years,
             )
         end
@@ -586,7 +604,7 @@ function agricultural_warmup!(
         converged_cell_fraction = converged_fraction[actual_years],
         unconverged_cells = count(<(consecutive_years), consecutive),
         initial_soil = initial_soil,
-        soil = _warmup_history(snapshots[1:actual_years]),
+        soil = _warmup_history_view(history, actual_years),
         target_correction = (
             carbon = carbon_correction[1:actual_years, :],
             nitrogen = nitrogen_correction[1:actual_years, :],
