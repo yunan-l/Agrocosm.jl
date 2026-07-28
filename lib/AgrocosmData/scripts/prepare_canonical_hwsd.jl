@@ -6,13 +6,27 @@ using TOML
 
 include(joinpath(@__DIR__, "extract_hwsd_cell.jl"))
 
-function query_all_layer_rows(database_path)
+function query_all_layer_rows(data_directory)
+    csv_path = joinpath(data_directory, "HWSD2_LAYERS.csv")
+    if isfile(csv_path)
+        lines = filter(!isempty, strip.(readlines(csv_path)))
+        isempty(lines) && error("HWSD layer CSV contains no rows: $csv_path")
+        return [split(line, ','; keepempty = true) for line in lines]
+    end
+
+    database_path = joinpath(data_directory, "HWSD2.mdb")
+    mdb_sql = Sys.which("mdb-sql")
+    isnothing(mdb_sql) && error(
+        "mdb-sql is unavailable and $csv_path was not found. " *
+        "Export HWSD2_LAYERS.csv on a machine with MDB Tools and copy it " *
+        "into the HWSD directory.",
+    )
     sql = """
         SELECT HWSD2_SMU_ID,SEQUENCE,SHARE,ROOT_DEPTH,WRB4,LAYER,COARSE,BULK,ORG_CARBON,TOTAL_N
         FROM HWSD2_LAYERS;
         """
     command = pipeline(
-        `mdb-sql -P -H -F -d , $database_path`,
+        `$mdb_sql -P -H -F -d , $database_path`,
         stdin = IOBuffer(sql),
     )
     lines = filter(!isempty, strip.(readlines(command)))
@@ -213,7 +227,7 @@ function prepare_canonical_hwsd(
     grid = read_grid(grid_path; T = Float64)
     mkpath(dirname(output_path))
     mkpath(dirname(qc_path))
-    rows = query_all_layer_rows(joinpath(data_directory, "HWSD2.mdb"))
+    rows = query_all_layer_rows(data_directory)
     lookup = indexed_mapping_units(mapping_unit_targets(rows))
     accumulator = init_soil_cn_aggregator(Float64, 5, length(grid.cell_ids))
     accumulate_canonical_grid!(
