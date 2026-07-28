@@ -52,6 +52,29 @@ function _indices_for_years(spec::DatasetSpec, years)
     return indices
 end
 
+function _indices_for_simulation_years(spec::DatasetSpec, simulation_years)
+    requested = Int.(collect(simulation_years))
+    isempty(requested) && throw(ArgumentError("simulation_years must not be empty"))
+    coordinate = _time_coordinate(spec, Colon())
+    available = _calendar_year.(coordinate)
+    length(unique(available)) == length(available) || throw(ArgumentError(
+        "management time coordinate in $(spec.path) contains duplicate years",
+    ))
+    issorted(available) || throw(ArgumentError(
+        "management years in $(spec.path) must be sorted",
+    ))
+    first_year, last_year = extrema(available)
+    source_years = clamp.(requested, first_year, last_year)
+    positions = Dict(year => index for (index, year) in pairs(available))
+    all(haskey(positions, year) for year in source_years) || throw(ArgumentError(
+        "management years in $(spec.path) are not continuous between $first_year and $last_year",
+    ))
+    indices = [positions[year] for year in source_years]
+    unique_indices = unique(indices)
+    lookup = Dict(index => position for (position, index) in pairs(unique_indices))
+    return unique_indices, [lookup[index] for index in indices], requested
+end
+
 function _materialize_management(values, ::Type{T}; missing_value::Real = 0) where {T <: AbstractFloat}
     output = Matrix{T}(undef, size(values))
     for index in eachindex(values)
@@ -100,12 +123,17 @@ function read_management(
     pft_id::Integer;
     selection::CellSelection = all_cells(grid),
     years = nothing,
+    simulation_years = nothing,
     time_indices = nothing,
     active::Union{Nothing, AbstractMatrix{Bool}} = nothing,
     missing_value::Real = 0,
     T::Type{<:AbstractFloat} = Float32,
     irrigated::Bool = false,
 )
+    specified_time_selectors = count(!isnothing, (years, simulation_years, time_indices))
+    specified_time_selectors <= 1 || throw(ArgumentError(
+        "specify only one of years, simulation_years, or time_indices",
+    ))
     source_names, canonical_names, variable_size = _variable_dimension_info(spec)
     time_position = findfirst(==(:time), canonical_names)
     pft_position = findfirst(==(:pft), canonical_names)
@@ -115,7 +143,18 @@ function read_management(
         throw(DimensionMismatch("PFT dimension has $(variable_size[pft_position]) entries but its configured mapping has $(length(file_pft_ids))"))
     end
 
-    selected_time = isnothing(time_indices) ? _indices_for_years(spec, years) : time_indices
+    mapped_rows = nothing
+    requested_years = nothing
+    selected_time = if !isnothing(time_indices)
+        time_indices
+    elseif !isnothing(simulation_years) && !isnothing(time_position)
+        indices, mapped_rows, requested_years = _indices_for_simulation_years(
+            spec, simulation_years,
+        )
+        indices
+    else
+        _indices_for_years(spec, years)
+    end
     selector_pairs = Pair{Symbol, Any}[]
     !isnothing(time_position) && push!(selector_pairs, :time => selected_time)
     if !isnothing(pft_position)
@@ -141,9 +180,23 @@ function read_management(
     values = compact.values
     !isnothing(pft_position) && (values = dropdims(values; dims = findfirst(==(:pft), order)))
     isnothing(time_position) && (values = reshape(values, 1, :))
+    if !isnothing(simulation_years)
+        requested_years = Int.(collect(simulation_years))
+        if isnothing(time_position)
+            values = repeat(values; outer = (length(requested_years), 1))
+        else
+            values = values[mapped_rows, :]
+        end
+    end
     matrix = _materialize_management(values, T; missing_value)
     validate_management(name, matrix; active)
-    time = isnothing(time_position) ? [0] : _time_coordinate(spec, selected_time)
+    time = if !isnothing(simulation_years)
+        requested_years
+    elseif isnothing(time_position)
+        [0]
+    else
+        _time_coordinate(spec, selected_time)
+    end
     return TimeCellData(time, matrix, selection, Int32(pft_id), irrigated, compact.provenance)
 end
 
@@ -155,6 +208,55 @@ function read_management(
     kwargs...,
 )
     return read_management(dataset(catalog, name), name, grid, catalog.pfts, pft_id; kwargs...)
+end
+
+function _aligned_management_values(name::Symbol, data::TimeCellData, reference::TimeCellData)
+    data.selection.cell_ids == reference.selection.cell_ids ||
+        throw(ArgumentError("$name uses a different cell selection"))
+    data.pft_id == reference.pft_id || throw(ArgumentError("$name uses a different PFT"))
+    data.irrigated == reference.irrigated ||
+        throw(ArgumentError("$name uses a different rainfed/irrigated system"))
+    data.time == reference.time || throw(ArgumentError("$name uses different management years"))
+    return data.values
+end
+
+"""Build annual model-facing management rows aligned to simulation years."""
+function management_schedule(;
+    sowing_date::TimeCellData,
+    phu::TimeCellData,
+    manure::Union{Nothing, TimeCellData} = nothing,
+    fertilizer::Union{Nothing, TimeCellData} = nothing,
+    residue_fraction::TimeCellData,
+    fertilizer_mode = :yes,
+    manure_enabled::Bool = true,
+)
+    fertilizer_mode = fertilizer_mode isa Symbol ? fertilizer_mode :
+        Symbol(lowercase(String(fertilizer_mode)))
+    fertilizer_mode in (:no, :yes, :auto) ||
+        throw(ArgumentError("fertilizer_mode must be :no, :yes, or :auto"))
+    fertilizer_mode === :yes && fertilizer === nothing &&
+        throw(ArgumentError("prescribed fertilization requires fertilizer data"))
+    manure_enabled && manure === nothing &&
+        throw(ArgumentError("prescribed manure requires manure data"))
+
+    reference = sowing_date
+    phu_values = _aligned_management_values(:phu, phu, reference)
+    residue_values = _aligned_management_values(
+        :residue_fraction, residue_fraction, reference,
+    )
+    zero_values = zeros(eltype(phu_values), size(phu_values))
+    fertilizer_values = fertilizer_mode === :yes ?
+        _aligned_management_values(:fertilizer, fertilizer, reference) : zero_values
+    manure_values = manure_enabled ?
+        _aligned_management_values(:manure, manure, reference) : zero_values
+    return (
+        years = Int32.(_calendar_year.(reference.time)),
+        sdate = Int32.(round.(reference.values)),
+        phu = phu_values,
+        manure = manure_values,
+        fertilizer = fertilizer_values,
+        residuefrac = residue_values,
+    )
 end
 
 function _single_management_row(name::Symbol, data::TimeCellData, selection, pft_id, irrigated)

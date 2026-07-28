@@ -443,6 +443,7 @@ function agricultural_warmup!(
     relative_tolerance::Real = 0.01,
     pool_fraction_tolerance::Real = 0.01,
     required_converged_fraction::Real = 1.0,
+    management_blocks::Union{Nothing, AbstractVector} = nothing,
 )
     _warmup_options(
         years, maximum_years, consecutive_years, relative_tolerance,
@@ -494,12 +495,21 @@ function agricultural_warmup!(
     )
 
     forcing_years = div(climate_days, 365)
+    management_blocks === nothing || length(management_blocks) == forcing_years ||
+        throw(DimensionMismatch(
+            "management_blocks must contain one row for each of the $forcing_years forcing years",
+        ))
     block_ends = cumsum(block_days)
     warmup_day = 0
     for year in 1:maximum_years
         forcing_year = mod(year - 1, forcing_years)
         forcing_start = 365 * forcing_year + 1
         forcing_end = forcing_start + 364
+        prescribed = management_blocks === nothing ?
+            (prescribed_phu = nothing, prescribed_winter_type = nothing) :
+            _prepare_annual_management!(
+                simulation, management_blocks[forcing_year + 1],
+            )
 
         for index in eachindex(climate_blocks)
             block_start = block_ends[index] - block_days[index] + 1
@@ -519,6 +529,7 @@ function agricultural_warmup!(
                 local_start, local_end, simulation.processes, prepared_climate,
                 simulation.state;
                 simulation_day_offset = warmup_day + 1 - local_start,
+                prescribed...,
                 common...,
             )
             warmup_day += local_end - local_start + 1

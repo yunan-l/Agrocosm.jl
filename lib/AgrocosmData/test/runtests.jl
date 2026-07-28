@@ -82,6 +82,11 @@ include("test_prepare_global_wheat_subset.jl")
         @test landuse.values == Float32[0 0.2 0 0.3; 0.4 0 0 0.1]
         irrigated_landuse = read_management(catalog, :landuse, grid, 20; years = 2000:2001, irrigated = true)
         @test irrigated_landuse.values == landuse.values .+ 0.1f0
+        extended_landuse = read_management(
+            catalog, :landuse, grid, 20; simulation_years = 1998:2003,
+        )
+        @test extended_landuse.time == collect(1998:2003)
+        @test extended_landuse.values == landuse.values[[1, 1, 1, 2, 2, 2], :]
         crop_mask = build_crop_mask(grid, landuse.values)
         @test crop_mask.selection.cell_ids == Int32[0, 1, 3]
         @test crop_mask.fraction == Float32[0 0.2 0.3; 0.4 0 0.1]
@@ -122,6 +127,27 @@ include("test_prepare_global_wheat_subset.jl")
         )
         @test automatic_crop.fertilizer == zeros(Float32, 3)
         @test automatic_crop.manure == zeros(Float32, 3)
+
+        transient_active = read_management(
+            catalog, :landuse, grid, 20;
+            simulation_years = 1999:2002, selection = crop_mask.selection,
+        ).values .> 0
+        transient = (; (
+            name => read_management(
+                catalog,
+                name,
+                grid,
+                20;
+                simulation_years = 1999:2002,
+                selection = crop_mask.selection,
+                active = transient_active,
+            ) for name in (:sowing_date, :phu, :manure, :fertilizer, :residue_fraction)
+        )...)
+        schedule = management_schedule(; transient...)
+        @test schedule.years == Int32.(1999:2002)
+        @test schedule.phu == transient.phu.values
+        @test schedule.sdate == Int32.(transient.sowing_date.values)
+        @test schedule.fertilizer == transient.fertilizer.values
 
         soil = read_soil_data(catalog, grid)
         @test soil.soilcode == Int32[1, 6, 9, 14]

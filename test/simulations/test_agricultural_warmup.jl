@@ -64,10 +64,19 @@ end
         consecutive_years = 1,
         relative_tolerance = 1.0e6,
         pool_fraction_tolerance = 1.0e6,
+        management_blocks = [(
+            sdate = Int32[1],
+            phu = Float32[-700],
+            manure = Float32[0],
+            fertilizer = Float32[0],
+            residuefrac = Float32[0.5],
+        )],
     )
     @test constrained_report.years == 2
     @test constrained_report.converged
     @test constrained_report.target_constrained
+    @test constrained.state.inputs.crop.phenology.phu == Float32[700]
+    @test constrained.state.inputs.crop.phenology.winter_type == Bool[true]
     @test constrained_report.converged_cell_fraction == 1
     @test size(constrained_report.target_correction.carbon) == (2, 1)
     constrained_drift = agricultural_warmup_drift(constrained_report)

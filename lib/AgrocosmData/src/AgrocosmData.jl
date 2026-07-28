@@ -33,7 +33,7 @@ export init_soil_cn_aggregator, accumulate_soil_cn!, finish_soil_cn
 export soil_cn_conservation
 export preprocess_hwsd_cn, write_soil_cn_targets, read_soil_cn_targets
 export hwsd_initial_state, field_capacity_water
-export read_management, validate_management, crop_inputs
+export read_management, validate_management, crop_inputs, management_schedule
 export read_co2_series, climate_blocks, climate_days, read_climate_block
 export climate_forcing, climate_forcings
 export prefetch_climate_forcings

@@ -163,6 +163,27 @@ end
     @test all(isfinite, simulation.output.crop.npp)
 end
 
+@testset "Annual management is applied at sowing" begin
+    initial, climate = simulation_api_fixture(Float32)
+    simulation = initialize_simulation(
+        cft1, initial;
+        indices = [1], T = Float32, days = 1, fertilizer = :no,
+    )
+    management = (
+        sdate = Int32[1],
+        phu = Float32[-700],
+        manure = Float32[2],
+        fertilizer = Float32[3],
+        residuefrac = Float32[0.5],
+    )
+    run_simulation!(simulation, climate; end_day = 1, spinup = false, management)
+    @test simulation.state.inputs.crop.phenology.phu == Float32[700]
+    @test simulation.state.inputs.crop.phenology.winter_type == Bool[true]
+    @test simulation.managed_land.manure == Float32[2]
+    @test simulation.managed_land.fertilizer == Float32[3]
+    @test simulation.managed_land.residue_fraction == Float32[0.5]
+end
+
 @testset "One-day transition matches the range runner" begin
     initial, climate = simulation_api_fixture(Float32)
     baseline = initialize_simulation(

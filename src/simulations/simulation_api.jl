@@ -171,6 +171,32 @@ function _prepare_climate(simulation::CropSimulation, climate::NamedTuple)
     return climate
 end
 
+function _prepare_annual_management!(simulation::CropSimulation, management::NamedTuple)
+    required = (:sdate, :phu, :manure, :fertilizer, :residuefrac)
+    all(hasproperty(management, name) for name in required) || throw(ArgumentError(
+        "annual management requires fields $(join(string.(required), ", "))",
+    ))
+    cells = length(simulation.config.execution.domain.indices)
+    all(length(getproperty(management, name)) == cells for name in required) ||
+        throw(DimensionMismatch("every annual management field must contain $cells cells"))
+    T = simulation.config.T
+    device = simulation.config.device
+    to_float(values) = device(T.(vec(values)))
+    to_integer(values) = device(Int32.(round.(vec(values))))
+
+    signed_phu = to_float(management.phu)
+    prescribed_phu = abs.(signed_phu)
+    prescribed_winter_type = signed_phu .< zero(T)
+    all(isfinite, prescribed_phu) || throw(ArgumentError(
+        "annual PHU contains non-finite values",
+    ))
+    crop_calendar_input(simulation.state).sowing_date .= to_integer(management.sdate)
+    simulation.managed_land.manure .= to_float(management.manure)
+    simulation.managed_land.fertilizer .= to_float(management.fertilizer)
+    simulation.managed_land.residue_fraction .= to_float(management.residuefrac)
+    return (; prescribed_phu, prescribed_winter_type)
+end
+
 function _transition_range!(
     simulation::CropSimulation,
     prepared_climate::NamedTuple,
@@ -179,6 +205,8 @@ function _transition_range!(
     ; reuse_output::Bool = false,
     simulation_day_offset::Integer = simulation.simulated_days,
     selected_output::Union{Nothing, Set{Tuple{Symbol, Symbol}}} = nothing,
+    prescribed_phu = nothing,
+    prescribed_winter_type = nothing,
 )
     common = (
         irrigation = simulation.config.irrigation,
@@ -194,6 +222,8 @@ function _transition_range!(
         diagnostic_offset = simulation.simulated_days,
         reuse_output = reuse_output,
         selected_output = selected_output,
+        prescribed_phu = prescribed_phu,
+        prescribed_winter_type = prescribed_winter_type,
     )
     _daily_crop!(
         pathway_value(simulation.processes.pathway),
@@ -214,6 +244,7 @@ function transition_day!(
     simulation::CropSimulation,
     climate::NamedTuple;
     climate_day::Integer = 1,
+    management::Union{Nothing, NamedTuple} = nothing,
 )
     simulation.simulated_days < simulation.config.days || throw(ArgumentError(
         "simulation already contains all $(simulation.config.days) configured days",
@@ -222,9 +253,13 @@ function transition_day!(
     1 <= climate_day <= size(prepared_climate.temp, 1) || throw(BoundsError(
         prepared_climate.temp, (climate_day, :),
     ))
+    prescribed = isnothing(management) ?
+        (prescribed_phu = nothing, prescribed_winter_type = nothing) :
+        _prepare_annual_management!(simulation, management)
     _transition_range!(
         simulation, prepared_climate, climate_day, climate_day;
         simulation_day_offset = simulation.simulated_days + 1 - climate_day,
+        prescribed...,
     )
     simulation.simulated_days += 1
     return simulation
@@ -246,6 +281,7 @@ function run_simulation!(
     spinup_years::Integer = 1,
     reuse_output::Bool = false,
     selected_output::Union{Nothing, Set{Tuple{Symbol, Symbol}}} = nothing,
+    management::Union{Nothing, NamedTuple} = nothing,
 )
     prepared_climate = _prepare_climate(simulation, climate)
     climate_days = size(prepared_climate.temp, 1)
@@ -288,9 +324,12 @@ function run_simulation!(
         )
     end
 
+    prescribed = isnothing(management) ?
+        (prescribed_phu = nothing, prescribed_winter_type = nothing) :
+        _prepare_annual_management!(simulation, management)
     _transition_range!(
         simulation, prepared_climate, start_day, local_end_day;
-        reuse_output, selected_output,
+        reuse_output, selected_output, prescribed...,
     )
     simulation.simulated_days += run_days
     return simulation
@@ -323,8 +362,11 @@ function run_simulation!(
     spinup::Bool = true,
     spinup_years::Integer = 1,
     output_stream::Union{Nothing, OutputStream} = nothing,
+    management_blocks::Union{Nothing, AbstractVector} = nothing,
 )
     isempty(climate_blocks) && throw(ArgumentError("climate_blocks must not be empty"))
+    management_blocks === nothing || length(management_blocks) == length(climate_blocks) ||
+        throw(DimensionMismatch("management_blocks must match climate_blocks"))
     if output_stream !== nothing
         all(isnothing, values(simulation.diagnostics)) || throw(ArgumentError(
             "streamed global runs require initialize_simulation(...; diagnostics=false)",
@@ -345,6 +387,8 @@ function run_simulation!(
                 spinup_years = spinup_years,
                 reuse_output = output_stream !== nothing,
                 selected_output = selected_output,
+                management = management_blocks === nothing ? nothing :
+                    management_blocks[block_index],
             )
             if output_stream !== nothing
                 consume_output!(

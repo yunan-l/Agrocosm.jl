@@ -26,6 +26,8 @@ function _daily_crop!(
     diagnostic_offset::Integer = 0,
     reuse_output::Bool = false,
     selected_output::Union{Nothing, Set{Tuple{Symbol, Symbol}}} = nothing,
+    prescribed_phu = nothing,
+    prescribed_winter_type = nothing,
 )
     pftparameters = processes.crop
     model_parameters = processes.global_parameters
@@ -88,6 +90,8 @@ function _daily_crop!(
             crop, managed_land, soil, day_of_year;
             manure,
             apply_prescribed_fertilizer = fertilizer === :yes,
+            prescribed_phu,
+            prescribed_winter_type,
             lpjmlparams = global_params,
             laimax = pftparameters.laimax,
         )

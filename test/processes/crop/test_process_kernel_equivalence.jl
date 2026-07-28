@@ -69,13 +69,21 @@ end
     kernel.state.carbon.biomass .= 3.0f0
     reference.state.nitrogen.total .= 0.2f0
     kernel.state.nitrogen.total .= 0.2f0
+    reference.auxiliary.phenology.phu .= 500.0f0
+    kernel.auxiliary.phenology.phu .= 500.0f0
+    prescribed_phu = Float32[700, 710, 720, 730, 740, 750]
+    prescribed_winter = Bool[1, 0, 1, 0, 1, 0]
     Agrocosm.cultivate_reference!(
         reference, reference_land, reference_soil, 100;
         apply_prescribed_fertilizer = false,
+        prescribed_phu,
+        prescribed_winter_type = prescribed_winter,
     )
     cultivate!(
         kernel, kernel_land, kernel_soil, 100;
         apply_prescribed_fertilizer = false,
+        prescribed_phu,
+        prescribed_winter_type = prescribed_winter,
     )
     for (reference_container, kernel_container, fields) in (
         (reference.state.phenology, kernel.state.phenology, (:harvesting, :is_growing)),
@@ -89,6 +97,8 @@ end
             @test getproperty(kernel_container, field) ≈ getproperty(reference_container, field)
         end
     end
+    @test kernel.auxiliary.phenology.phu == Float32[700, 500, 720, 500, 740, 500]
+    @test kernel.auxiliary.phenology.winter_type == Bool[1, 0, 1, 0, 1, 0]
 end
 
 @testset "Respiration kernel matches vector reference" begin

@@ -10,6 +10,8 @@ function cultivate_reference!(crop,
                               lpjmlparams::LPJmLParams = lpjmlparams,
                               manure = false,
                               apply_prescribed_fertilizer::Bool = true,
+                              prescribed_phu = nothing,
+                              prescribed_winter_type = nothing,
                               laimax = cft1.laimax,
 )
 
@@ -35,6 +37,13 @@ function cultivate_reference!(crop,
     crop_prognostic(crop).phenology.senescence_previous .= ifelse.(sowing, false, crop_prognostic(crop).phenology.senescence_previous)
     crop_prognostic(crop).phenology.harvesting_previous .= ifelse.(sowing, false, crop_prognostic(crop).phenology.harvesting_previous)
     crop_prognostic(crop).phenology.growing_days .= ifelse.(sowing, 0, crop_prognostic(crop).phenology.growing_days)
+    phu = crop_phenology_input(crop).phu
+    winter_type = crop_phenology_input(crop).winter_type
+    prescribed_phu = isnothing(prescribed_phu) ? phu : prescribed_phu
+    prescribed_winter_type = isnothing(prescribed_winter_type) ?
+        winter_type : prescribed_winter_type
+    phu .= ifelse.(sowing, prescribed_phu, phu)
+    winter_type .= ifelse.(sowing, prescribed_winter_type, winter_type)
 
     crop_prognostic(crop).canopy.lai .= ifelse.(sowing, seed_lai, crop_prognostic(crop).canopy.lai)
     crop_canopy_auxiliary(crop).flaimax .= ifelse.(sowing, seed_flaimax, crop_canopy_auxiliary(crop).flaimax)
@@ -89,8 +98,15 @@ function cultivate!(crop,
                     lpjmlparams::LPJmLParams = lpjmlparams,
                     manure = false,
                     apply_prescribed_fertilizer::Bool = true,
+                    prescribed_phu = nothing,
+                    prescribed_winter_type = nothing,
                     laimax = cft1.laimax)
     T = eltype(crop_prognostic(crop).canopy.lai)
+    current_phu = crop_phenology_input(crop).phu
+    current_winter_type = crop_phenology_input(crop).winter_type
+    prescribed_phu = isnothing(prescribed_phu) ? current_phu : prescribed_phu
+    prescribed_winter_type = isnothing(prescribed_winter_type) ?
+        current_winter_type : prescribed_winter_type
     launch_1D!(
         cultivate_kernel!,
         crop_calendar_input(crop).sowing_date,
@@ -104,6 +120,10 @@ function cultivate!(crop,
         crop_prognostic(crop).phenology.senescence,
         crop_prognostic(crop).phenology.senescence_previous,
         crop_prognostic(crop).phenology.growing_days,
+        current_phu,
+        current_winter_type,
+        prescribed_phu,
+        prescribed_winter_type,
         crop_prognostic(crop).canopy.lai,
         crop_canopy_auxiliary(crop).flaimax,
         crop_prognostic(crop).canopy.laimax_adjusted,
@@ -153,6 +173,10 @@ end
     senescence::AbstractVector{B},
     senescence_previous::AbstractVector{B},
     growing_days::AbstractVector{S},
+    phu::AbstractVector{T},
+    winter_type::AbstractVector{B},
+    prescribed_phu::AbstractVector{T},
+    prescribed_winter_type::AbstractVector{B},
     lai::AbstractVector{T},
     flaimax::AbstractVector{T},
     laimax_adjusted::AbstractVector{T},
@@ -194,6 +218,8 @@ end
         senescence[cell] = false
         senescence_previous[cell] = false
         growing_days[cell] = zero(S)
+        phu[cell] = prescribed_phu[cell]
+        winter_type[cell] = prescribed_winter_type[cell]
         lai[cell] = seed_lai
         flaimax[cell] = seed_flaimax
         laimax_adjusted[cell] = one(T)
