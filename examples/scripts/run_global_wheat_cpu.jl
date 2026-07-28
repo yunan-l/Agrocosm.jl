@@ -215,7 +215,24 @@ function run_global_wheat(config_path)
     grid = read_grid(dataset(catalog, :grid); T = Float32)
     landuse = read_management(catalog, :landuse, grid, 1; T = Float32)
     size(landuse.values, 1) == 1 || error("landuse must contain only fixed 2015 management")
-    selection = build_crop_mask(grid, landuse.values).selection
+    crop_mask = build_crop_mask(grid, landuse.values)
+    raw_phu = read_compact_variable(
+        dataset(catalog, :phu), grid;
+        selection = crop_mask.selection,
+        selectors = (time = 1, pft = 1),
+        order = (:time, :pft, :cell),
+    )
+    phu_values = vec(raw_phu.values)
+    valid_phu = map(
+        value -> !ismissing(value) && isfinite(value) && value != 0,
+        phu_values,
+    )
+    any(valid_phu) || error("no landfrac-selected cells have valid PHU")
+    excluded = .!valid_phu
+    landfrac = vec(crop_mask.fraction)
+    selection = select_cells(
+        grid, crop_mask.selection.compact_indices[valid_phu],
+    )
     cell_limit = Int(get(run, "cell_limit", 0))
     cell_limit >= 0 || error("cell_limit must be non-negative")
     if cell_limit > 0
@@ -223,6 +240,22 @@ function run_global_wheat(config_path)
             grid, selection.compact_indices[1:min(cell_limit, length(selection.cell_ids))],
         )
     end
+    excluded_landfrac = sum(landfrac[excluded])
+    write_report(joinpath(output_directory, "selection_qc.toml"), Dict(
+        "landfrac_positive_cells" => length(crop_mask.selection.cell_ids),
+        "valid_phu_cells" => count(valid_phu),
+        "excluded_phu_cells" => count(excluded),
+        "excluded_zero_phu_cells" => count(
+            value -> !ismissing(value) && isfinite(value) && value == 0,
+            phu_values,
+        ),
+        "excluded_missing_or_nonfinite_phu_cells" => count(
+            value -> ismissing(value) || !isfinite(value), phu_values,
+        ),
+        "excluded_landfrac_sum" => excluded_landfrac,
+        "excluded_landfrac_fraction" => excluded_landfrac / sum(landfrac),
+        "run_cells" => length(selection.cell_ids),
+    ))
     hwsd = load_hwsd_targets(paths, selection)
     initial_data = model_inputs(catalog, grid, selection, hwsd, config)
 
