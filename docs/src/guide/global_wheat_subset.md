@@ -121,9 +121,9 @@ reconstruction. It is not a scientifically complete historical experiment.
 Copy and edit the production configuration:
 
 ```bash
-cp scripts/global_wheat_cpu.example.toml global_wheat_cpu.toml
+cp examples/scripts/global_wheat_cpu.example.toml global_wheat_cpu.toml
 
-julia --project=. scripts/run_global_wheat_cpu.jl \
+julia --project=. examples/scripts/run_global_wheat_cpu.jl \
   /absolute/path/global_wheat_cpu.toml
 ```
 

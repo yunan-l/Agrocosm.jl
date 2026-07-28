@@ -114,11 +114,13 @@ initial respiration pulses, litter/fast-pool stabilization, mineral-N drift,
 and total C/N trajectories. If needed, implement a constrained allocation that
 preserves every layer total and records uncertainty.
 
-Current decision: retain 40:60 for the first global production smoke. The
-runner writes `warmup_cn_drift.toml` and changes the recommendation to
-`review_pool_allocation` when the initial fast-pool fraction shifts by more
-than 0.10, the year-10 fast fraction changes by more than 0.01, or late total
-C/N drift exceeds 1% per year.
+Current decision: retain 40:60 as the first global production baseline, not as
+an equilibrium claim. In the real ten-cell ten-year warm-up, total C fell
+13.3%, total N fell 11.1%, and the fast-C fraction moved from 0.400 to 0.314.
+Year 10 still lost 1.27% C and 0.97% N, so the report correctly returns
+`review_pool_allocation`. Because the total pools are still drifting, changing
+only the initial fast/slow ratio is not a defensible fix; reconsider it together
+with a longer or target-constrained spin-up after the global baseline run.
 
 ## 4. Differentiable daily transition
 

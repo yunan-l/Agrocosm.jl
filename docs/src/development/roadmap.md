@@ -42,9 +42,10 @@ Work in this phase is ordered as follows:
    year to verify cross-year state and checkpoint/restart continuity.
 5. Validate memory, throughput, grid reconstruction, finite/non-negative state,
    CPU/GPU agreement, and sampled or online C/N/water/energy closure.
-6. Retain the interim HWSD 40:60 fast/slow split for the first global run. The
-   runner records initial-to-year-10 C/N and fast-pool drift and flags the split
-   for review if the transient or late-year drift exceeds declared thresholds.
+6. Retain the interim HWSD 40:60 fast/slow split as the reproducible first-run
+   baseline, but keep it under review. The real ten-cell warm-up remains
+   transient after ten years; changing only the initial ratio would not resolve
+   the continuing total C/N decline.
 
 The phase is complete when a 2015-selected global crop domain can be initialized from native
 data, warmed, checkpointed, run across a year boundary, and reconstructed to
