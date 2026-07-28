@@ -324,11 +324,25 @@ function run_global_wheat(config_path)
     continued.simulated_days == 730 || error("production run did not reach the end of 2016")
     all(isfinite, continued.state.prognostic.soil.water.storage) || error("non-finite soil water")
     all(>=(0), continued.state.prognostic.soil.water.storage) || error("negative soil water")
-    for pool in values(continued.state.prognostic.soil.carbon)
-        all(isfinite, pool) && all(>=(0), pool) || error("invalid soil carbon pool")
+    for (name, pool) in pairs(continued.state.prognostic.soil.carbon)
+        invalid = findfirst(value -> !isfinite(value) || value < 0, pool)
+        if invalid !== nothing
+            compact_cell = Tuple(invalid)[end]
+            error(
+                "invalid soil carbon pool: pool=$(name), index=$(invalid), " *
+                "cell_id=$(selection.cell_ids[compact_cell]), value=$(pool[invalid])",
+            )
+        end
     end
-    for pool in values(continued.state.prognostic.soil.nitrogen)
-        all(isfinite, pool) && all(>=(0), pool) || error("invalid soil nitrogen pool")
+    for (name, pool) in pairs(continued.state.prognostic.soil.nitrogen)
+        invalid = findfirst(value -> !isfinite(value) || value < 0, pool)
+        if invalid !== nothing
+            compact_cell = Tuple(invalid)[end]
+            error(
+                "invalid soil nitrogen pool: pool=$(name), index=$(invalid), " *
+                "cell_id=$(selection.cell_ids[compact_cell]), value=$(pool[invalid])",
+            )
+        end
     end
     write_reconstructed_output(
         joinpath(output_directory, "global_wheat_2015_2016.nc"),

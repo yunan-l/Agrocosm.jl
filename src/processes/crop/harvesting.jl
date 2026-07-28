@@ -193,20 +193,24 @@ end
     cell = @index(Global)
     failed = harvest_event[cell] != 0 && is_growing[cell] != 0
     if failed
+        aboveground_carbon = leaf_carbon[cell] + pool_carbon[cell]
+        carbon_residue = max(aboveground_carbon, zero(T)) * residue_fraction[cell]
+        aboveground_nitrogen = leaf_nitrogen[cell] + pool_nitrogen[cell]
+        nitrogen_residue = max(aboveground_nitrogen, zero(T)) * residue_fraction[cell]
         crop_yield[cell] = storage_carbon[cell]
         annual_yield[cell] += crop_yield[cell]
         harvest_date[cell] = S(day)
+        # A failed stand can have a negative mobile pool after respiration.
+        # Keep that deficit in the net crop-removal term instead of routing a
+        # negative residue into the physical soil pools. The two terms still
+        # sum exactly to the crop amount removed here.
         carbon_harvest_export[cell] = crop_yield[cell] +
-            (leaf_carbon[cell] + pool_carbon[cell]) *
-            (one(T) - residue_fraction[cell])
+            aboveground_carbon - carbon_residue
         nitrogen_harvest_export[cell] = storage_nitrogen[cell] +
-            (leaf_nitrogen[cell] + pool_nitrogen[cell]) *
-            (one(T) - residue_fraction[cell])
-        carbon_input[SURFACE_LITTER, cell] =
-            (leaf_carbon[cell] + pool_carbon[cell]) * residue_fraction[cell]
+            aboveground_nitrogen - nitrogen_residue
+        carbon_input[SURFACE_LITTER, cell] = carbon_residue
         carbon_input[ROOT_LITTER, cell] = root_carbon[cell]
-        nitrogen_input[SURFACE_LITTER, cell] =
-            (leaf_nitrogen[cell] + pool_nitrogen[cell]) * residue_fraction[cell]
+        nitrogen_input[SURFACE_LITTER, cell] = nitrogen_residue
         nitrogen_input[ROOT_LITTER, cell] = root_nitrogen[cell]
         carbon_input[INCORPORATED_LITTER, cell] = zero(T)
         nitrogen_input[INCORPORATED_LITTER, cell] = zero(T)
@@ -299,21 +303,21 @@ end
     event = harvested ? one(S) : zero(S)
     harvest_event[cell] = event
     if harvested
+        aboveground_carbon = leaf_carbon[cell] + pool_carbon[cell]
+        carbon_residue = max(aboveground_carbon, zero(T)) * residue_fraction[cell]
+        aboveground_nitrogen = leaf_nitrogen[cell] + pool_nitrogen[cell]
+        nitrogen_residue = max(aboveground_nitrogen, zero(T)) * residue_fraction[cell]
         harvest_date[cell] = S(day)
         is_growing[cell] = zero(S)
         crop_yield[cell] = storage_carbon[cell]
         annual_yield[cell] += crop_yield[cell]
         carbon_harvest_export[cell] = crop_yield[cell] +
-            (leaf_carbon[cell] + pool_carbon[cell]) *
-            (one(T) - residue_fraction[cell])
+            aboveground_carbon - carbon_residue
         harvest_nitrogen[cell] = storage_nitrogen[cell] +
-            (leaf_nitrogen[cell] + pool_nitrogen[cell]) *
-            (one(T) - residue_fraction[cell])
-        carbon_input[SURFACE_LITTER, cell] =
-            (leaf_carbon[cell] + pool_carbon[cell]) * residue_fraction[cell]
+            aboveground_nitrogen - nitrogen_residue
+        carbon_input[SURFACE_LITTER, cell] = carbon_residue
         carbon_input[ROOT_LITTER, cell] = root_carbon[cell]
-        nitrogen_input[SURFACE_LITTER, cell] =
-            (leaf_nitrogen[cell] + pool_nitrogen[cell]) * residue_fraction[cell]
+        nitrogen_input[SURFACE_LITTER, cell] = nitrogen_residue
         nitrogen_input[ROOT_LITTER, cell] = root_nitrogen[cell]
     else
         crop_yield[cell] = zero(T)

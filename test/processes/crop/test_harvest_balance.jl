@@ -86,6 +86,9 @@ end
     @test crop.state.nitrogen.total[1] == 0.0f0
     @test output.crop.growing_mask[1, 1] == 0
     @test output.calendar.harvest_event[1, 1] == 1
+    @test crop.fluxes.carbon.harvest_export[1] ≈ -1.3f0
+    @test all(>=(0), soil.carbon.input)
+    @test all(>=(0), soil.carbon.litter)
     @test crop.fluxes.carbon.harvest_export[1] + sum(soil.carbon.input) ≈ -1.0f0
     @test crop.fluxes.nitrogen.harvest_export[1] + sum(soil.nitrogen.input) ≈ 0.4f0
 
