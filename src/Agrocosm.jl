@@ -104,6 +104,9 @@ include("parameters/pft.jl")
 # Numerics
 include("numerics/lpj_bisect.jl")
 
+# Backend adaptation
+include("utils/device.jl")
+
 # Initialization
 include("processes/initialization/climate/climate.jl")
 include("processes/initialization/management/managed_land.jl")

@@ -4,11 +4,21 @@ hwsd_targets = "/absolute/path/to/hwsd_canonical.nc"
 output_directory = "/absolute/path/to/global_wheat_output"
 
 [management]
+# "fixed" repeats fixed_year; "transient" aligns each simulation year and
+# repeats the first/last available management year outside the file range.
+mode = "fixed"
+fixed_year = 2015
 fertilizer = "yes"
 manure = true
 with_tillage = true
 
 [run]
+backend = "cpu"
+# Used by run_global_wheat_gpu.jl; Julia/CUDA device numbering starts at 0.
+device_id = 0
+memory_safety_factor = 1.2
+simulation_start_year = 2015
+simulation_end_year = 2016
 # Target-constrained warm-up runs for at least 10 years, then continues until
 # all cells satisfy the convergence criteria or the 100-year cap is reached.
 warmup_target_constrained = true
@@ -19,7 +29,7 @@ warmup_relative_tolerance = 0.01
 warmup_pool_fraction_tolerance = 0.01
 warmup_required_converged_fraction = 1.0
 diagnostic_cells = 10
-# 0 runs every 2015 landfrac-selected cell; use a positive value only for smoke tests.
+# 0 runs every landfrac-selected cell; use a positive value only for smoke tests.
 cell_limit = 0
 
 [validation]

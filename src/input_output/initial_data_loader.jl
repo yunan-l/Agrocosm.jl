@@ -36,15 +36,15 @@ function InitialDataLoader(data::NamedTuple,
 
     latitude_set = T.(latitude[data_index]) |> device
 
-    crop = (
+    crop = _adapt_to_device(device, (
         sdate = Int32.(crop.sdate[data_index]),
         phu = T.(crop.phu[data_index]),
         manure = T.(crop.manure[data_index]),
         fertilizer = T.(crop.fertilizer[data_index]),
-        residuefrac = T.(crop.residuefrac[data_index])
-    ) |> device
+        residuefrac = T.(crop.residuefrac[data_index]),
+    ))
 
-    soilparam_set = (
+    soilparam_set = _adapt_to_device(device, (
         ph = T.(soilparam.soilph[data_index]),
         w_sat = T.(soilparam.w_sat[:, data_index]),
         sand = reshape(T.(soilparam.sand[data_index]), (1, :)),
@@ -53,7 +53,7 @@ function InitialDataLoader(data::NamedTuple,
         tdiff_0 = T.(soilparam.tdiff_0[data_index]),
         tdiff_15 = T.(soilparam.tdiff_15[data_index]),
         soildepth = T.(soilparam.soildepth),
-    ) |> device
+    ))
 
     u0_set = (
         swc = T.(initial_state.swc[:, data_index]),
@@ -70,7 +70,7 @@ function InitialDataLoader(data::NamedTuple,
             soil_NO3 = T.(initial_state.soil_NO3[:, data_index]),
         ))
     end
-    u0_set = u0_set |> device
+    u0_set = _adapt_to_device(device, u0_set)
 
     model_state = (crop = crop, u0 = u0_set)
     if load_c_shift_restart
@@ -88,7 +88,7 @@ function InitialDataLoader(data::NamedTuple,
             c_shift_slow = T.(shift_source.c_shift_slow[:, data_index]),
         ))
     end
-    model_state = model_state |> device
+    model_state = _adapt_to_device(device, model_state)
 
     InitialData = (
         latitude = latitude_set,

@@ -6,6 +6,20 @@ using TOML
 include(joinpath(@__DIR__, "..", "..", "lib", "AgrocosmData", "src", "AgrocosmData.jl"))
 using .AgrocosmData
 
+function execution_backend(config; override = nothing)
+    configured = Symbol(lowercase(String(get(config["run"], "backend", "cpu"))))
+    backend = isnothing(override) ? configured : Symbol(override)
+    backend in (:cpu, :cuda) || error("run.backend must be cpu or cuda")
+    backend === :cpu && return (name = :cpu, device = identity, device_id = nothing)
+
+    @eval import CUDA
+    CUDA.functional() || error("CUDA backend requested, but CUDA.functional() is false")
+    device_id = Int(get(config["run"], "device_id", 0))
+    CUDA.device!(device_id)
+    CUDA.allowscalar(false)
+    return (name = :cuda, device = CUDA.CuArray, device_id)
+end
+
 function catalog_from_config(config)
     paths = config["paths"]
     input_directory = abspath(paths["input_directory"])
@@ -80,37 +94,72 @@ function load_hwsd_targets(paths, selection)
     )
 end
 
-function model_inputs(catalog, grid, selection, hwsd_targets, config)
-    active = trues(1, length(selection.cell_ids))
+function management_source_years(config, simulation_years)
+    management = config["management"]
+    mode = Symbol(lowercase(String(get(management, "mode", "fixed"))))
+    mode in (:fixed, :transient) || error("management mode must be fixed or transient")
+    if mode === :fixed
+        fixed_year = Int(get(management, "fixed_year", 2015))
+        return fill(fixed_year, length(simulation_years))
+    end
+    return collect(Int, simulation_years)
+end
+
+function read_management_schedule(
+    catalog, grid, selection, active, source_years, simulation_years, config,
+)
     sowing_date = read_management(
-        catalog, :sowing_date, grid, 1; selection, active, T = Float32,
+        catalog, :sowing_date, grid, 1;
+        selection, active, simulation_years = source_years, T = Float32,
     )
-    phu = read_management(catalog, :phu, grid, 1; selection, active, T = Float32)
+    phu = read_management(
+        catalog, :phu, grid, 1;
+        selection, active, simulation_years = source_years, T = Float32,
+    )
     fertilizer = read_management(
-        catalog, :fertilizer, grid, 1; selection, T = Float32,
+        catalog, :fertilizer, grid, 1;
+        selection, simulation_years = source_years, T = Float32,
     )
-    manure = read_management(catalog, :manure, grid, 1; selection, T = Float32)
+    manure = read_management(
+        catalog, :manure, grid, 1;
+        selection, simulation_years = source_years, T = Float32,
+    )
     residue = read_management(
-        catalog, :residue_fraction, grid, 1; selection, T = Float32,
+        catalog, :residue_fraction, grid, 1;
+        selection, simulation_years = source_years, T = Float32,
     )
     management = config["management"]
-    crop = crop_inputs(
+    schedule = management_schedule(
         ; sowing_date, phu, fertilizer, manure, residue_fraction = residue,
         fertilizer_mode = Symbol(management["fertilizer"]),
         manure_enabled = management["manure"],
     )
+    return merge(schedule, (years = Int32.(simulation_years),))
+end
+
+annual_management(schedule, index) = (
+    sdate = vec(schedule.sdate[index, :]),
+    phu = vec(schedule.phu[index, :]),
+    manure = vec(schedule.manure[index, :]),
+    fertilizer = vec(schedule.fertilizer[index, :]),
+    residuefrac = vec(schedule.residuefrac[index, :]),
+)
+
+function model_inputs(grid, selection, hwsd_targets, catalog, management)
+    crop = annual_management(management, 1)
     soil = read_soil_data(catalog, grid; selection)
     targets = selected_targets(hwsd_targets, selection)
     initial_state = hwsd_initial_state(targets, soil)
     return model_initial_data(grid, soil, crop, initial_state)
 end
 
-function create_simulation(initial_data, selection, config; diagnostics)
+function create_simulation(initial_data, selection, config, days, device; diagnostics)
     management = config["management"]
     return initialize_simulation(
         cft1, initial_data;
-        days = 730,
+        days,
         indices = collect(1:length(selection.cell_ids)),
+        device,
         T = Float32,
         diagnostics,
         irrigation = false,
@@ -128,12 +177,12 @@ function state_equal(left, right)
     return all(name -> state_equal(getfield(left, name), getfield(right, name)), fields)
 end
 
-function run_output_block!(simulation, forcing, stream)
+function run_output_block!(simulation, forcing, management, stream)
     first_day = simulation.simulated_days + 1
     selected = Set((variable.group, variable.field) for variable in stream.variables)
     run_simulation!(
         simulation, forcing;
-        spinup = false, reuse_output = true, selected_output = selected,
+        spinup = false, reuse_output = true, selected_output = selected, management,
     )
     rows = simulation.simulated_days - first_day + 1
     consume_output!(stream, simulation.output, first_day; rows)
@@ -141,22 +190,32 @@ function run_output_block!(simulation, forcing, stream)
     return simulation
 end
 
-function write_reconstructed_output(path, grid, selection, chunks)
-    years = Int32[2015, 2016]
-    length(chunks) == 2 || error("expected two annual output chunks, got $(length(chunks))")
+production_output_variables() = [
+    OutputVariable(:crop, :gpp; reduction = :sum),
+    OutputVariable(:crop, :npp; reduction = :sum),
+    OutputVariable(:crop, :lai; reduction = :mean),
+    OutputVariable(:crop, :yield),
+]
+
+function write_reconstructed_output(path, grid, selection, chunks, years)
+    length(chunks) == length(years) || error(
+        "expected $(length(years)) annual output chunks, got $(length(chunks))",
+    )
     names = sort!(collect(keys(chunks[1].values)); by = string)
     isfile(path) && rm(path; force = true)
     NCDataset(path, "c") do dataset
         defDim(dataset, "longitude", length(grid.longitude))
         defDim(dataset, "latitude", length(grid.latitude))
-        defDim(dataset, "time", 2)
+        defDim(dataset, "time", length(years))
         defVar(dataset, "longitude", Float32, ("longitude",))[:] = grid.longitude
         defVar(dataset, "latitude", Float32, ("latitude",))[:] = grid.latitude
-        defVar(dataset, "time", Int32, ("time",))[:] = years
+        defVar(dataset, "time", Int32, ("time",))[:] = Int32.(years)
         defVar(dataset, "cellid", Int32, ("longitude", "latitude"))[:, :] = grid.cellid
         for name in names
-            values = Array{Float32}(undef, length(grid.longitude), length(grid.latitude), 2)
-            for year_index in 1:2
+            values = Array{Float32}(
+                undef, length(grid.longitude), length(grid.latitude), length(years),
+            )
+            for year_index in eachindex(years)
                 values[:, :, year_index] = expand_to_grid(
                     vec(chunks[year_index].values[name]), grid; selection,
                 )
@@ -205,31 +264,43 @@ function balance_report(simulation, validation)
     )
 end
 
-function run_global_wheat(config_path)
+function run_global_wheat(config_path; backend_override = nothing)
     config = TOML.parsefile(config_path)
     paths = config["paths"]
     run = config["run"]
+    backend = execution_backend(config; override = backend_override)
+    println(
+        "execution backend: $(backend.name)" *
+        (isnothing(backend.device_id) ? "" : ", device=$(backend.device_id)"),
+    )
     output_directory = abspath(paths["output_directory"])
     mkpath(output_directory)
     catalog = catalog_from_config(config)
     grid = read_grid(dataset(catalog, :grid); T = Float32)
-    landuse = read_management(catalog, :landuse, grid, 1; T = Float32)
-    size(landuse.values, 1) == 1 || error("landuse must contain only fixed 2015 management")
+    start_year = Int(get(run, "simulation_start_year", 2015))
+    end_year = Int(get(run, "simulation_end_year", 2016))
+    start_year <= end_year || error("simulation_start_year must not exceed simulation_end_year")
+    simulation_years = collect(start_year:end_year)
+    source_years = management_source_years(config, simulation_years)
+    landuse = read_management(
+        catalog, :landuse, grid, 1; simulation_years = source_years, T = Float32,
+    )
     crop_mask = build_crop_mask(grid, landuse.values)
-    raw_phu = read_compact_variable(
-        dataset(catalog, :phu), grid;
+    phu_probe = read_management(
+        catalog, :phu, grid, 1;
         selection = crop_mask.selection,
-        selectors = (time = 1, pft = 1),
-        order = (:time, :pft, :cell),
+        simulation_years = source_years,
+        active = falses(size(crop_mask.active)),
+        T = Float32,
     )
-    phu_values = vec(raw_phu.values)
-    valid_phu = map(
-        value -> !ismissing(value) && isfinite(value) && value != 0,
-        phu_values,
-    )
+    valid_phu = map(axes(phu_probe.values, 2)) do cell
+        active_years = view(crop_mask.active, :, cell)
+        values = view(phu_probe.values, :, cell)
+        all(!active || (isfinite(value) && value != 0) for (active, value) in zip(active_years, values))
+    end
     any(valid_phu) || error("no landfrac-selected cells have valid PHU")
     excluded = .!valid_phu
-    landfrac = vec(crop_mask.fraction)
+    landfrac = vec(maximum(crop_mask.fraction; dims = 1))
     selection = select_cells(
         grid, crop_mask.selection.compact_indices[valid_phu],
     )
@@ -245,32 +316,65 @@ function run_global_wheat(config_path)
         "landfrac_positive_cells" => length(crop_mask.selection.cell_ids),
         "valid_phu_cells" => count(valid_phu),
         "excluded_phu_cells" => count(excluded),
-        "excluded_zero_phu_cells" => count(
-            value -> !ismissing(value) && isfinite(value) && value == 0,
-            phu_values,
-        ),
-        "excluded_missing_or_nonfinite_phu_cells" => count(
-            value -> ismissing(value) || !isfinite(value), phu_values,
-        ),
         "excluded_landfrac_sum" => excluded_landfrac,
         "excluded_landfrac_fraction" => excluded_landfrac / sum(landfrac),
         "run_cells" => length(selection.cell_ids),
     ))
     hwsd = load_hwsd_targets(paths, selection)
-    initial_data = model_inputs(catalog, grid, selection, hwsd, config)
+    selected_landuse = read_management(
+        catalog, :landuse, grid, 1;
+        selection, simulation_years = source_years, T = Float32,
+    )
+    active = selected_landuse.values .> 0
+    management = read_management_schedule(
+        catalog, grid, selection, active, source_years, simulation_years, config,
+    )
+    management_blocks = [annual_management(management, index) for index in eachindex(simulation_years)]
+    initial_data = model_inputs(grid, selection, hwsd, catalog, management)
 
-    reader = climate_blocks(catalog, grid; selection, block_days = 365, T = Float32)
-    climate_days(reader) == 730 || error("expected exactly 730 forcing days")
+    reader = climate_blocks(
+        catalog, grid;
+        selection, start_year, end_year, block_days = 365, T = Float32,
+    )
+    expected_days = 365 * length(simulation_years)
+    climate_days(reader) == expected_days || error("expected exactly $expected_days forcing days")
     first_block = read_climate_block(reader, 1)
     last_block = read_climate_block(reader, length(reader))
     start_date = first(first_block.time)
     end_date = last(last_block.time)
-    (year(start_date), month(start_date), day(start_date)) == (2015, 1, 1) ||
-        error("forcing must start on 2015-01-01, got $start_date")
-    (year(end_date), month(end_date), day(end_date)) == (2016, 12, 31) ||
-        error("forcing must end on 2016-12-31, got $end_date")
+    (year(start_date), month(start_date), day(start_date)) == (start_year, 1, 1) ||
+        error("forcing must start on $start_year-01-01, got $start_date")
+    (year(end_date), month(end_date), day(end_date)) == (end_year, 12, 31) ||
+        error("forcing must end on $end_year-12-31, got $end_date")
     forcings = climate_forcings(reader)
-    length(forcings) == 2 || error("365-day blocks must produce exactly two forcing blocks")
+    length(forcings) == length(simulation_years) || error(
+        "365-day blocks must produce one forcing block per simulation year",
+    )
+
+    preflight_stream = OutputStream(
+        production_output_variables();
+        frequency = :annual, cell_ids = selection.cell_ids,
+    )
+    memory_safety_factor = Float64(get(run, "memory_safety_factor", 1.2))
+    preflight_memory = estimate_memory(
+        length(selection.cell_ids), expected_days;
+        T = Float32,
+        diagnostics = false,
+        block_days = 365,
+        backend = backend.name === :cpu ? :cpu : :accelerator,
+        safety_factor = memory_safety_factor,
+        output_stream = preflight_stream,
+    )
+    write_report(joinpath(output_directory, "memory_preflight.toml"), Dict(
+        string(name) => value for (name, value) in pairs(preflight_memory)
+    ))
+    if backend.name === :cuda
+        available_device_bytes = CUDA.available_memory()
+        preflight_memory.recommended_device_peak_bytes <= available_device_bytes || error(
+            "estimated CUDA peak $(preflight_memory.recommended_device_peak_gib) GiB " *
+            "exceeds available device memory $(available_device_bytes / 2.0^30) GiB",
+        )
+    end
 
     minimum_warmup_years = Int(get(run, "warmup_minimum_years", get(run, "warmup_years", 10)))
     maximum_warmup_years = Int(get(run, "warmup_maximum_years", minimum_warmup_years))
@@ -287,8 +391,13 @@ function run_global_wheat(config_path)
             run, "warmup_required_converged_fraction", 1.0,
         )),
     )
-    warmup_simulation = create_simulation(initial_data, selection, config; diagnostics = false)
-    warmup = agricultural_warmup!(warmup_simulation, forcings; warmup_options...)
+    warmup_simulation = create_simulation(
+        initial_data, selection, config, expected_days, backend.device;
+        diagnostics = false,
+    )
+    warmup = agricultural_warmup!(
+        warmup_simulation, forcings; warmup_options..., management_blocks,
+    )
     warmup_checkpoint = joinpath(output_directory, "warmup_checkpoint.jld2")
     save_checkpoint(warmup_checkpoint, warmup_simulation)
     warmup_drift = agricultural_warmup_drift(warmup)
@@ -301,7 +410,10 @@ function run_global_wheat(config_path)
         "converged_cell_fraction=$(warmup.converged_cell_fraction)",
     )
 
-    production = create_simulation(initial_data, selection, config; diagnostics = false)
+    production = create_simulation(
+        initial_data, selection, config, expected_days, backend.device;
+        diagnostics = false,
+    )
     restore_checkpoint!(production, warmup_checkpoint)
     state_equal(production.state.prognostic, warmup_simulation.state.prognostic) ||
         error("warm-up checkpoint did not restore the prognostic state exactly")
@@ -313,12 +425,7 @@ function run_global_wheat(config_path)
         compact_writer(chunk)
     end
     stream = OutputStream(
-        [
-            OutputVariable(:crop, :gpp; reduction = :sum),
-            OutputVariable(:crop, :npp; reduction = :sum),
-            OutputVariable(:crop, :lai; reduction = :mean),
-            OutputVariable(:crop, :yield),
-        ];
+        production_output_variables();
         frequency = :annual, writer, cell_ids = selection.cell_ids,
     )
     memory = estimate_memory(
@@ -328,53 +435,80 @@ function run_global_wheat(config_path)
         string(name) => value for (name, value) in pairs(memory)
     ))
 
-    run_output_block!(production, forcings[1], stream)
-    production.simulated_days == 365 || error("2015 run did not stop at day 365")
-    year2015_checkpoint = joinpath(output_directory, "end_2015_checkpoint.jld2")
-    save_checkpoint(year2015_checkpoint, production)
+    run_output_block!(production, forcings[1], management_blocks[1], stream)
+    production.simulated_days == 365 || error("$start_year run did not stop at day 365")
+    first_year_checkpoint = joinpath(output_directory, "end_$(start_year)_checkpoint.jld2")
+    save_checkpoint(first_year_checkpoint, production)
 
-    continued = create_simulation(initial_data, selection, config; diagnostics = false)
-    restore_checkpoint!(continued, year2015_checkpoint)
+    continued = create_simulation(
+        initial_data, selection, config, expected_days, backend.device;
+        diagnostics = false,
+    )
+    restore_checkpoint!(continued, first_year_checkpoint)
     state_equal(continued.state.prognostic, production.state.prognostic) ||
-        error("2015 checkpoint did not restore the prognostic state exactly")
-    run_output_block!(continued, forcings[2], stream)
+        error("$start_year checkpoint did not restore the prognostic state exactly")
+    for index in 2:length(forcings)
+        run_output_block!(continued, forcings[index], management_blocks[index], stream)
+    end
     finish_output_stream!(stream, continued.simulated_days)
-    continued.simulated_days == 730 || error("production run did not reach the end of 2016")
-    all(isfinite, continued.state.prognostic.soil.water.storage) || error("non-finite soil water")
-    all(>=(0), continued.state.prognostic.soil.water.storage) || error("negative soil water")
+    continued.simulated_days == expected_days ||
+        error("production run did not reach the end of $end_year")
+    soil_water = Array(continued.state.prognostic.soil.water.storage)
+    all(isfinite, soil_water) || error("non-finite soil water")
+    all(>=(0), soil_water) || error("negative soil water")
     for (name, pool) in pairs(continued.state.prognostic.soil.carbon)
-        invalid = findfirst(value -> !isfinite(value) || value < 0, pool)
+        host_pool = Array(pool)
+        invalid = findfirst(value -> !isfinite(value) || value < 0, host_pool)
         if invalid !== nothing
             compact_cell = Tuple(invalid)[end]
             error(
                 "invalid soil carbon pool: pool=$(name), index=$(invalid), " *
-                "cell_id=$(selection.cell_ids[compact_cell]), value=$(pool[invalid])",
+                "cell_id=$(selection.cell_ids[compact_cell]), value=$(host_pool[invalid])",
             )
         end
     end
     for (name, pool) in pairs(continued.state.prognostic.soil.nitrogen)
-        invalid = findfirst(value -> !isfinite(value) || value < 0, pool)
+        host_pool = Array(pool)
+        invalid = findfirst(value -> !isfinite(value) || value < 0, host_pool)
         if invalid !== nothing
             compact_cell = Tuple(invalid)[end]
             error(
                 "invalid soil nitrogen pool: pool=$(name), index=$(invalid), " *
-                "cell_id=$(selection.cell_ids[compact_cell]), value=$(pool[invalid])",
+                "cell_id=$(selection.cell_ids[compact_cell]), value=$(host_pool[invalid])",
             )
         end
     end
     write_reconstructed_output(
-        joinpath(output_directory, "global_wheat_2015_2016.nc"),
-        grid, selection, annual_chunks,
+        joinpath(output_directory, "global_wheat_$(start_year)_$(end_year).nc"),
+        grid, selection, annual_chunks, simulation_years,
     )
 
     diagnostic_count = min(Int(run["diagnostic_cells"]), length(selection.cell_ids))
     diagnostic_selection = select_cells(grid, selection.compact_indices[1:diagnostic_count])
-    diagnostic_initial = model_inputs(catalog, grid, diagnostic_selection, hwsd, config)
+    diagnostic_landuse = read_management(
+        catalog, :landuse, grid, 1;
+        selection = diagnostic_selection,
+        simulation_years = source_years,
+        T = Float32,
+    )
+    diagnostic_management = read_management_schedule(
+        catalog, grid, diagnostic_selection, diagnostic_landuse.values .> 0,
+        source_years, simulation_years, config,
+    )
+    diagnostic_management_blocks = [
+        annual_management(diagnostic_management, index) for index in eachindex(simulation_years)
+    ]
+    diagnostic_initial = model_inputs(
+        grid, diagnostic_selection, hwsd, catalog, diagnostic_management,
+    )
     diagnostic_reader = climate_blocks(
-        catalog, grid; selection = diagnostic_selection, block_days = 365, T = Float32,
+        catalog, grid;
+        selection = diagnostic_selection, start_year, end_year,
+        block_days = 365, T = Float32,
     )
     diagnostic = create_simulation(
-        diagnostic_initial, diagnostic_selection, config; diagnostics = true,
+        diagnostic_initial, diagnostic_selection, config, expected_days, backend.device;
+        diagnostics = true,
     )
     agricultural_warmup!(
         diagnostic, climate_forcings(diagnostic_reader);
@@ -385,13 +519,18 @@ function run_global_wheat(config_path)
         relative_tolerance = warmup.relative_tolerance,
         pool_fraction_tolerance = warmup.pool_fraction_tolerance,
         required_converged_fraction = warmup.required_converged_fraction,
+        management_blocks = diagnostic_management_blocks,
     )
-    run_simulation!(diagnostic, climate_forcings(diagnostic_reader); spinup = false)
+    run_simulation!(
+        diagnostic, climate_forcings(diagnostic_reader);
+        spinup = false, management_blocks = diagnostic_management_blocks,
+    )
     balance = balance_report(diagnostic, config["validation"])
     balance["simulation_summary"] = simulation_summary(diagnostic)
     write_report(joinpath(output_directory, "sampled_balance_summary.toml"), balance)
     return (;
         cells = length(selection.cell_ids),
+        backend = backend.name,
         warmup_years = warmup.years,
         warmup_converged = warmup.converged,
         memory,
@@ -401,5 +540,5 @@ end
 
 if abspath(PROGRAM_FILE) == @__FILE__
     length(ARGS) == 1 || error("usage: run_global_wheat_cpu.jl CONFIG_TOML")
-    println(run_global_wheat(abspath(ARGS[1])))
+    println(run_global_wheat(abspath(ARGS[1]); backend_override = :cpu))
 end

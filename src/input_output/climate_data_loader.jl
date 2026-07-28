@@ -31,5 +31,5 @@ function ClimateDataLoader(climate::NamedTuple,
         loaded_climate = merge(loaded_climate, (co2_daily = climate.co2_daily,))
     end
 
-    return device(loaded_climate)
+    return _adapt_to_device(device, loaded_climate)
 end

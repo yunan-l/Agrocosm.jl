@@ -157,7 +157,7 @@ function _prepare_climate(simulation::CropSimulation, climate::NamedTuple)
         if hasproperty(climate, :wind)
             prepared = merge(prepared, (wind = T.(climate.wind),))
         end
-        return simulation.config.device(prepared)
+        return _adapt_to_device(simulation.config.device, prepared)
     end
     if hasproperty(climate, :swdown) && hasproperty(climate, :lwnet)
         indices = simulation.config.indices
