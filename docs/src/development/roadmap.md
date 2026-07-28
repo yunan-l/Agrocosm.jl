@@ -9,6 +9,13 @@ public one-day transition. The scientific documentation is organized as a
 Model processes overview with dedicated crop, soil, climate/surface,
 numerics, and initialization/warm-up pages.
 
+Launch hardening is also complete at the CPU regression level. Checkpoints now
+bind compact cell identity and PFT identity; production warm-up has a strict
+convergence gate and explicit memory accounting; process, initialization, and
+output updates use backend kernels with synchronization at lifecycle
+boundaries rather than after every kernel. Legacy `_reference!` paths have
+been removed. The current CPU suite passes 2092 tests.
+
 The AgrocosmData core is also substantially complete:
 
 - canonical `cellid` indexing on the `720 × 280` grid;
@@ -34,22 +41,30 @@ Work in this phase is ordered as follows:
 2. The local ten-cell HWSD + 2015–2016 forcing smoke test and restartable
    streamed `agricultural_warmup!` are complete. Native post-warm-up and 2015
    boundary checkpoint/restart are now part of the production runner.
-3. Run the canonical-grid HWSD preprocessing script on the server and review
-   its coverage, fallback, uncertainty, and conservation report.
-4. Run the bounded-memory CPU production script over every 2015
-   land-use-selected cell. It crosses into 2016 through a native restart and
-   reconstructs annual output onto the canonical grid. Then run one GPU.
-   year to verify cross-year state and checkpoint/restart continuity.
+3. The canonical-grid HWSD pipeline and QC/fallback contracts are implemented;
+   retain the server product and its QC report with every production run.
+4. Submit the current bounded-memory CPU and single-GPU workflows through
+   Slurm rather than interactive nodes. Both jobs run their complete backend
+   regression suite before entering production. CPU and GPU outputs and
+   checkpoints must use separate directories.
 5. Validate memory, throughput, grid reconstruction, finite/non-negative state,
-   CPU/GPU agreement, and sampled or online C/N/water/energy closure.
-6. Retain the interim HWSD 40:60 fast/slow split as the reproducible first-run
+   CPU/GPU agreement, sampled C/N/water/energy closure, and 2015→2016 native
+   checkpoint continuity. The latest unified GPU suite still requires a fresh
+   server run after its isolated-test entry point was repaired.
+6. Use target-constrained warm-up with a strict production gate. A previous
+   100-year global diagnostic reached about 96.15% converged cells, so the
+   current code must identify and review the remaining cells rather than
+   silently writing a production checkpoint.
+7. Retain the interim HWSD 40:60 fast/slow split as the reproducible first-run
    baseline, but keep it under review. The real ten-cell warm-up remains
    transient after ten years; changing only the initial ratio would not resolve
    the continuing total C/N decline.
 
-The phase is complete when a 2015-selected global crop domain can be initialized from native
-data, warmed, checkpointed, run across a year boundary, and reconstructed to
-the canonical grid without LPJmL-derived state.
+The phase is complete when the current commit passes both full backend suites
+and a 2015-selected global crop domain can be initialized from native data,
+warmed under the declared convergence contract, checkpointed, run across a
+year boundary, and reconstructed to the canonical grid without LPJmL-derived
+state.
 
 ## Phase 2: differentiable transition
 

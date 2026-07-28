@@ -21,6 +21,13 @@ public roadmap is in `docs/src/development/roadmap.md`.
 - Finite agricultural warm-up that leaves production time, output, and balance
   ledgers untouched while retaining warmed state; eager and streamed forcing
   paths are numerically equivalent.
+- Checkpoint schema validation for compact `cell_ids` and PFT identity, strict
+  warm-up convergence gating, and explicit warm-up/cached-forcing memory
+  accounting.
+- Backend kernels throughout daily processes and initialization/output state
+  copies, with synchronization at initialization and daily lifecycle
+  boundaries instead of after each kernel. Legacy `_reference!` paths are
+  removed.
 
 This foundation remains the scientific regression baseline. Alternative
 processes must demonstrate their differences against it rather than silently
@@ -104,6 +111,14 @@ then repeats checkpoint/restart at the end of 2015.
 Acceptance: the complete year finishes within estimated memory, CPU/GPU
 differences meet declared tolerances, and the second-year restart/reassembly is
 deterministic.
+
+Current launch status: the latest CPU suite passes 2092/2092. A unified GPU
+suite exists and its isolated-module loading has been repaired; it still needs
+a fresh server run. Non-interactive Slurm CPU/GPU templates are maintained in
+the workspace `outputs` directory. A previous global diagnostic reached the
+100-year warm-up limit with approximately 96.15% of cells converged. With the
+current strict gate this is diagnostic evidence, not an accepted production
+checkpoint; the remaining cells must be characterized.
 
 ### 3.4 HWSD pool-allocation decision
 

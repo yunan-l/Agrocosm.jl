@@ -221,14 +221,15 @@ Acceptance:
 - a one-year global crop smoke test completes with bounded memory and closed
   model balance diagnostics.
 
-Status: partial. `estimate_memory` reports model, diagnostic, output, scratch,
-forcing-transfer, and prefetched-host memory. Streamed selected output,
-checkpoint/restart, and asynchronous one-block prefetch are implemented.
-The global-subset preparation script supplies fixed 2015 management plus
-2015–2016 climate. The first ten selected cells pass the local HWSD-backed CPU
-smoke test. A bounded-memory canonical HWSD preprocessing/QC script and a full
-selected-domain CPU runner now exist. Their server execution and automatic
-spatial fallback remain.
+Status: production validation. `estimate_memory` reports model, diagnostic,
+output, scratch, forcing-transfer, warm-up history, cached forcing, and
+prefetched-host memory. Streamed selected output, identity-checked
+checkpoint/restart, asynchronous one-block prefetch, canonical HWSD
+preprocessing/QC, and full selected-domain CPU/GPU runners are implemented.
+The first ten selected cells pass the HWSD-backed CPU workflow. Non-interactive
+Slurm templates now submit full CPU and single-GPU jobs. Current remaining work
+is server backend validation and, only if whole-mask device memory is
+insufficient, deterministic spatial fallback batching.
 
 ## Milestone 7 — spin-up handoff and production hardening
 
@@ -243,11 +244,13 @@ pools, and initializes water at field capacity. New data use the neutral
 top-level `initial_state` contract; `initialLPJmL.u0` remains a legacy fixture
 compatibility path only.
 
-`agricultural_warmup!` now performs a finite ten-year crop-management warm-up
-before the reported run without advancing the production clock or retaining
-production outputs. It accepts restartable climate-block readers and reports
-annual soil C/N and water stocks. The production runner writes and restores the
-warm-up checkpoint. This is not a complete slow-SOC spin-up.
+`agricultural_warmup!` now cycles the configured 1901–1910 forcing for at least
+ten years and up to the configured maximum without advancing the production
+clock or retaining production outputs. It supports target-constrained annual
+corrections, same-climate-phase convergence, a strict production checkpoint
+gate, restartable climate-block readers, and annual C/N/water diagnostics. A
+previous global 100-year diagnostic converged about 96.15% of cells; this is
+not yet evidence of universal slow-pool equilibrium.
 
 Deliverables:
 
