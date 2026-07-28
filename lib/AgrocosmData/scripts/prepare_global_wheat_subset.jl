@@ -4,14 +4,6 @@ using TOML
 
 const PFT_DIMENSIONS = Set(("pft", "cft", "crop", "band"))
 const TIME_DIMENSIONS = Set(("time", "year"))
-const ANNUAL_MANAGEMENT = Set((
-    "landuse",
-    "fertilizer",
-    "manure",
-    "residue_fraction",
-    "phu",
-))
-
 dimension_kind(name) = lowercase(String(name)) in PFT_DIMENSIONS ? :pft :
     lowercase(String(name)) in TIME_DIMENSIONS ? :time : :other
 
@@ -155,12 +147,16 @@ function subset_netcdf(
     output_path::AbstractString,
     variable_name::AbstractString;
     pft_index::Union{Nothing, Integer} = nothing,
+    pft_indices::Union{Nothing, AbstractVector{<:Integer}} = nothing,
     years::Union{Nothing, AbstractVector{<:Integer}} = nothing,
     require_365_days::Bool = true,
     daily_source_start_year::Union{Nothing, Integer} = nothing,
     chunk_length::Integer = 31,
 )
     chunk_length > 0 || throw(ArgumentError("chunk_length must be positive"))
+    isnothing(pft_index) || isnothing(pft_indices) || throw(ArgumentError(
+        "specify only one of pft_index or pft_indices",
+    ))
     mkpath(dirname(output_path))
     NCDataset(input_path, "r") do source
         haskey(source, variable_name) || throw(ArgumentError(
@@ -171,14 +167,19 @@ function subset_netcdf(
         for (position, dimension) in pairs(dimensions)
             selections[dimension] = collect(1:size(source[variable_name], position))
         end
-        if !isnothing(pft_index)
+        selected_pft_indices = isnothing(pft_indices) ?
+            (isnothing(pft_index) ? nothing : [Int(pft_index)]) : Int.(pft_indices)
+        pft_dimension = nothing
+        if !isnothing(selected_pft_indices)
             pft_dimensions = filter(dimension -> dimension_kind(dimension) === :pft, dimensions)
             length(pft_dimensions) == 1 || throw(ArgumentError(
                 "$variable_name must contain exactly one pft/cft/crop/band dimension",
             ))
             pft_dimension = only(pft_dimensions)
-            1 <= pft_index <= length(selections[pft_dimension]) || throw(BoundsError())
-            selections[pft_dimension] = [Int(pft_index)]
+            isempty(selected_pft_indices) && throw(ArgumentError("pft_indices must not be empty"))
+            all(index -> 1 <= index <= length(selections[pft_dimension]), selected_pft_indices) ||
+                throw(BoundsError(selections[pft_dimension], selected_pft_indices))
+            selections[pft_dimension] = selected_pft_indices
         end
         if !isnothing(years)
             time_dimension, time_indices = isnothing(daily_source_start_year) ?
@@ -194,8 +195,8 @@ function subset_netcdf(
             copy_attributes!(destination, source)
             destination.attrib["agrocosm_subset_source"] = abspath(input_path)
             destination.attrib["agrocosm_subset_variable"] = variable_name
-            !isnothing(pft_index) &&
-                (destination.attrib["agrocosm_rainfed_pft_index"] = Int32(pft_index))
+            !isnothing(selected_pft_indices) &&
+                (destination.attrib["agrocosm_source_pft_indices"] = join(selected_pft_indices, ","))
             !isnothing(years) &&
                 (destination.attrib["agrocosm_selected_years"] = join(years, ","))
 
@@ -207,6 +208,8 @@ function subset_netcdf(
                 coordinate_dimensions = String.(dimnames(source[dimension]))
                 all(haskey(selections, name) for name in coordinate_dimensions) || continue
                 define_subset_variable!(destination, source, dimension, selections)
+                dimension == pft_dimension &&
+                    (destination[dimension][:] = collect(1:length(selected_pft_indices)))
             end
             copy_main_variable!(
                 destination, source, variable_name, selections; chunk_length,
@@ -214,6 +217,13 @@ function subset_netcdf(
         end
     end
     return output_path
+end
+
+function has_time_dimension(path, variable_name)
+    return NCDataset(path, "r") do dataset
+        dimensions = String.(dimnames(dataset[variable_name]))
+        any(dimension -> dimension_kind(dimension) === :time, dimensions)
+    end
 end
 
 function subset_co2(input_path, output_path, years)
@@ -248,7 +258,6 @@ function prepare_subset(config_path::AbstractString)
     config = TOML.parsefile(config_path)
     settings = config["subset"]
     output_directory = resolve_path(config_path, settings["output_directory"])
-    pft_index = Int(get(settings, "rainfed_pft_index", 1))
     management_year = Int(get(settings, "management_year", 2015))
     climate_year_setting = get(settings, "climate_years", [2015, 2016])
     climate_years = climate_year_setting isa Integer ?
@@ -259,12 +268,18 @@ function prepare_subset(config_path::AbstractString)
 
     for name in sort!(collect(keys(config["management"])))
         spec = config["management"][name]
+        source_pft_indices = Int.(spec["pft_indices"])
+        expected_count = name == "residue_fraction" ? 12 : 24
+        length(source_pft_indices) == expected_count || throw(ArgumentError(
+            "management.$name pft_indices must contain $expected_count entries",
+        ))
+        input_path = resolve_path(config_path, spec["input"])
         subset_netcdf(
-            resolve_path(config_path, spec["input"]),
+            input_path,
             joinpath(output_directory, spec["output"]),
             spec["variable"];
-            pft_index,
-            years = name in ANNUAL_MANAGEMENT ? [management_year] : nothing,
+            pft_indices = source_pft_indices,
+            years = has_time_dimension(input_path, spec["variable"]) ? [management_year] : nothing,
             require_365_days = false,
             chunk_length,
         )
@@ -303,7 +318,8 @@ function prepare_subset(config_path::AbstractString)
         )
     end
     println(
-        "Prepared rainfed PFT $pft_index, management year $management_year, " *
+        "Prepared 12 CFTs × rainfed/irrigated management for $management_year " *
+        "(12 shared residue bands), " *
         "and climate years $(join(selected_years, ", ")) in $output_directory",
     )
     return nothing

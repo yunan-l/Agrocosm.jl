@@ -39,6 +39,22 @@ include(joinpath(@__DIR__, "..", "scripts", "prepare_global_wheat_subset.jl"))
                 end
         end
 
+        management_24_output = joinpath(directory, "management_24.nc")
+        subset_netcdf(
+            management_path, management_24_output, "landfrac";
+            pft_indices = [1, 2, 1, 2],
+            years = [2001],
+            require_365_days = false,
+            chunk_length = 1,
+        )
+        NCDataset(management_24_output, "r") do dataset
+            @test size(dataset["landfrac"]) == (2, 4, 2, 1)
+            @test dataset["band"][:] == Int32[1, 2, 3, 4]
+            @test dataset.attrib["agrocosm_source_pft_indices"] == "1,2,1,2"
+            @test dataset["landfrac"][:, 1, :, :] == dataset["landfrac"][:, 3, :, :]
+            @test dataset["landfrac"][:, 2, :, :] == dataset["landfrac"][:, 4, :, :]
+        end
+
         climate_path = joinpath(directory, "climate.nc")
         time_values = Int32.(0:729)
         NCDataset(climate_path, "c") do dataset
