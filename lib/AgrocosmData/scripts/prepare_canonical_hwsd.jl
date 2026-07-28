@@ -135,12 +135,14 @@ function nearest_complete_cell(grid, complete, cell, max_radius_cells)
     return nothing
 end
 
-function apply_fallback(targets, grid; max_radius_cells)
+function apply_fallback(targets, grid; max_radius_cells, production_active)
     carbon = copy(targets.soil_organic_carbon)
     nitrogen = copy(targets.total_nitrogen)
     coverage = copy(targets.coverage)
     uncertain = copy(targets.uncertain)
     complete = vec(all(isfinite.(carbon) .& isfinite.(nitrogen); dims = 1))
+    length(production_active) == length(complete) ||
+        throw(DimensionMismatch("production mask must match canonical cells"))
     fallback_used = falses(length(complete))
     donor_cell_id = fill(Int32(-1), length(complete))
     fill_distance_km = fill(Float32(NaN), length(complete))
@@ -170,6 +172,10 @@ function apply_fallback(targets, grid; max_radius_cells)
         complete_before_fallback = count(complete),
         fallback_cells = count(fallback_used),
         unresolved_cells = count(unresolved),
+        production_active_cells = count(production_active),
+        active_fallback_cells = count(fallback_used .& production_active),
+        active_unresolved_cells = count(unresolved .& production_active),
+        inactive_unresolved_cells = count(unresolved .& .!production_active),
         fallback_used,
         donor_cell_id,
         fill_distance_km,
@@ -180,7 +186,9 @@ end
 
 relative_error(actual, reference) = reference == 0 ? abs(actual) : abs(actual - reference) / abs(reference)
 
-function write_qc(path, output_path, grid, accumulator, targets, fallback)
+function write_qc(
+    path, output_path, grid, accumulator, targets, fallback, production_mask_source,
+)
     complete = .!fallback.fallback_used .& vec(all(isfinite.(
         targets.soil_organic_carbon,
     ) .& isfinite.(targets.total_nitrogen); dims = 1))
@@ -199,10 +207,15 @@ function write_qc(path, output_path, grid, accumulator, targets, fallback)
         "schema_version" => string(DATA_SCHEMA_VERSION),
         "source_version" => "HWSD v2.01",
         "output" => abspath(output_path),
+        "production_mask_source" => production_mask_source,
         "canonical_cells" => length(grid.cell_ids),
         "complete_before_fallback" => fallback.complete_before_fallback,
         "fallback_cells" => fallback.fallback_cells,
         "unresolved_cells" => fallback.unresolved_cells,
+        "production_active_cells" => fallback.production_active_cells,
+        "active_fallback_cells" => fallback.active_fallback_cells,
+        "active_unresolved_cells" => fallback.active_unresolved_cells,
+        "inactive_unresolved_cells" => fallback.inactive_unresolved_cells,
         "minimum_coverage" => minimum(targets.coverage),
         "uncertain_layer_cells" => count(targets.uncertain),
         "maximum_fallback_distance_km" =>
@@ -223,8 +236,22 @@ end
 function prepare_canonical_hwsd(
     data_directory, grid_path, output_path, qc_path;
     max_fill_radius_cells = 8,
+    landuse_path = nothing,
 )
     grid = read_grid(grid_path; T = Float64)
+    production_mask_source = isnothing(landuse_path) ?
+        "all canonical cells" : abspath(landuse_path)
+    production_active = if isnothing(landuse_path)
+        trues(length(grid.cell_ids))
+    else
+        spec = DatasetSpec(landuse_path, "landfrac"; pft_ids = [1])
+        registry = PFTRegistry([1], ["rainfed wheat"])
+        landuse = read_management(spec, :landuse, grid, registry, 1; T = Float32)
+        size(landuse.values, 1) == 1 || error(
+            "production land-use file must contain exactly one selected year",
+        )
+        BitVector(vec(landuse.values .> 0))
+    end
     mkpath(dirname(output_path))
     mkpath(dirname(qc_path))
     rows = query_all_layer_rows(data_directory)
@@ -245,7 +272,7 @@ function prepare_canonical_hwsd(
         accumulator, all_cells(grid); minimum_coverage = 0.99, provenance,
     )
     targets, fallback = apply_fallback(
-        raw_targets, grid; max_radius_cells = max_fill_radius_cells,
+        raw_targets, grid; max_radius_cells = max_fill_radius_cells, production_active,
     )
     write_soil_cn_targets(output_path, targets)
     NCDataset(output_path, "a") do dataset
@@ -257,10 +284,16 @@ function prepare_canonical_hwsd(
         defVar(dataset, "original_minimum_coverage", Float32, ("cell",))[:] =
             fallback.original_minimum_coverage
         defVar(dataset, "soil_area_m2", Float64, ("cell",))[:] = accumulator.target_area
+        defVar(dataset, "production_active", Int8, ("cell",))[:] = Int8.(production_active)
+        dataset.attrib["production_mask_source"] = production_mask_source
     end
-    report = write_qc(qc_path, output_path, grid, accumulator, targets, fallback)
-    report["unresolved_cells"] == 0 || error(
-        "$(report["unresolved_cells"]) cells remain unresolved; increase MAX_FILL_RADIUS_CELLS",
+    report = write_qc(
+        qc_path, output_path, grid, accumulator, targets, fallback,
+        production_mask_source,
+    )
+    report["active_unresolved_cells"] == 0 || error(
+        "$(report["active_unresolved_cells"]) production-active cells remain unresolved; " *
+        "increase MAX_FILL_RADIUS_CELLS after reviewing fallback distance QC",
     )
     maximum(report["carbon_relative_error"]) <= 1e-12 || error("carbon conservation QC failed")
     maximum(report["nitrogen_relative_error"]) <= 1e-12 || error("nitrogen conservation QC failed")
@@ -268,13 +301,14 @@ function prepare_canonical_hwsd(
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    length(ARGS) in (4, 5) || error(
+    length(ARGS) in (4, 5, 6) || error(
         "usage: prepare_canonical_hwsd.jl HWSD_DIR GRID_NC OUTPUT_NC QC_TOML " *
-        "[MAX_FILL_RADIUS_CELLS]",
+        "[MAX_FILL_RADIUS_CELLS [LANDUSE_NC]]",
     )
     report = prepare_canonical_hwsd(
         abspath(ARGS[1]), abspath(ARGS[2]), abspath(ARGS[3]), abspath(ARGS[4]);
-        max_fill_radius_cells = length(ARGS) == 5 ? parse(Int, ARGS[5]) : 8,
+        max_fill_radius_cells = length(ARGS) >= 5 ? parse(Int, ARGS[5]) : 8,
+        landuse_path = length(ARGS) == 6 ? abspath(ARGS[6]) : nothing,
     )
     println("HWSD canonical-grid preprocessing complete: ", report)
 end
