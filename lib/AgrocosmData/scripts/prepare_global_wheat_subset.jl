@@ -226,6 +226,10 @@ function has_time_dimension(path, variable_name)
     end
 end
 
+management_years(path, variable_name, management_year) =
+    lowercase(String(variable_name)) == "sdate" ? nothing :
+    (has_time_dimension(path, variable_name) ? [management_year] : nothing)
+
 function subset_co2(input_path, output_path, years)
     isfile(output_path) && throw(ArgumentError("output already exists: $output_path"))
     mkpath(dirname(output_path))
@@ -279,7 +283,7 @@ function prepare_subset(config_path::AbstractString)
             joinpath(output_directory, spec["output"]),
             spec["variable"];
             pft_indices = source_pft_indices,
-            years = has_time_dimension(input_path, spec["variable"]) ? [management_year] : nothing,
+            years = management_years(input_path, spec["variable"], management_year),
             require_365_days = false,
             chunk_length,
         )
