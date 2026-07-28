@@ -1,5 +1,5 @@
 [paths]
-input_directory = "/Users/linyunan/Desktop/Agrocosm/work/data/input_data"
+input_directory = "/absolute/path/to/input_data"
 hwsd_targets = "/absolute/path/to/hwsd_canonical.nc"
 output_directory = "/absolute/path/to/global_wheat_output"
 
