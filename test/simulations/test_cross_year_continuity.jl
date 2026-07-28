@@ -1,8 +1,6 @@
 using Agrocosm
 using Test
 
-include("../helpers/crop_lifecycle_fixture.jl")
-
 function lifecycle_simulation(days)
     return initialize_simulation(
         cft1,

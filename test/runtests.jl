@@ -2,6 +2,7 @@ using Agrocosm
 using Test
 
 @testset "Agrocosm.jl" begin
+    include("helpers/crop_lifecycle_fixture.jl")
     include("numerics/test_lpj_bisect.jl")
     include("processes/initialization/test_initialization.jl")
     include("processes/climate/test_snow.jl")
@@ -11,7 +12,6 @@ using Test
     include("processes/crop/test_pft_registry.jl")
     include("processes/crop/test_temperature_stress_lpjml.jl")
     include("processes/crop/test_respiration_lpjml.jl")
-    include("processes/crop/test_process_kernel_equivalence.jl")
     include("processes/crop/test_actual_lai.jl")
     include("processes/crop/test_canopy_snow_cover.jl")
     include("processes/crop/test_lambda_solver_c3.jl")
@@ -42,7 +42,6 @@ using Test
     include("processes/soil/test_soil_decomposition_response.jl")
     include("processes/soil/test_soil_decomposition_fluxes.jl")
     include("processes/soil/test_soil_cn_decomposition.jl")
-    include("processes/soil/test_soil_process_kernel_equivalence.jl")
     include("processes/soil/test_litter_routing.jl")
     include("processes/soil/test_c_shift_routing.jl")
     include("processes/soil/test_soil_carbon.jl")

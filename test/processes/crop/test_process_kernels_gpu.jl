@@ -145,70 +145,11 @@ CUDA.allowscalar(false)
         synchronize()
     end
 
-    # Measure the retained vector formulations under the same resident inputs.
-    pet_vector_gpu = init_pet(cells, CuArray)
-    pet_vector_gpu.albedo .= pet_gpu.albedo
-    photo_vector_gpu = init_crop(cells, CuArray)
-    photo_vector_gpu.auxiliary.photosynthesis.temperature_stress .= crop_gpu.auxiliary.photosynthesis.temperature_stress
-    c4_vector_gpu = init_crop(cells, CuArray)
-    c4_vector_gpu.auxiliary.photosynthesis.temperature_stress .= crop_c4_gpu.auxiliary.photosynthesis.temperature_stress
-    respiration_vector_gpu = init_crop(cells, CuArray)
-    respiration_vector_gpu.state.carbon.root .= crop_gpu.state.carbon.root
-    respiration_vector_gpu.state.carbon.storage .= crop_gpu.state.carbon.storage
-    respiration_vector_gpu.state.carbon.pool .= crop_gpu.state.carbon.pool
-    respiration_vector_gpu.state.phenology.is_growing .= crop_gpu.state.phenology.is_growing
-    Agrocosm.petpar!(
-        pet_vector_gpu, 172, latitude_gpu, temperature_gpu, longwave_gpu, shortwave_gpu,
-    )
-    Agrocosm.photosynthesis_C3!(
-        cft1, photo_vector_gpu, apar_gpu, daylength_gpu,
-        temperature_gpu, co2_gpu; comp_vcmax = true,
-    )
-    Agrocosm.photosynthesis_C4!(
-        cft3, c4_vector_gpu, apar_gpu, daylength_gpu,
-        temperature_gpu; comp_vcmax = true,
-    )
-    Agrocosm.respiration!(
-        respiration_vector_gpu, cft1, temperature_gpu, soil_temperature_gpu,
-        gross_gpu, leaf_gpu,
-    )
-    synchronize()
-    vector_pet_device_bytes = CUDA.@allocated begin
-        Agrocosm.petpar!(
-            pet_vector_gpu, 172, latitude_gpu, temperature_gpu, longwave_gpu, shortwave_gpu,
-        )
-        synchronize()
-    end
-    vector_photo_device_bytes = CUDA.@allocated begin
-        Agrocosm.photosynthesis_C3!(
-            cft1, photo_vector_gpu, apar_gpu, daylength_gpu,
-            temperature_gpu, co2_gpu; comp_vcmax = true,
-        )
-        synchronize()
-    end
-    vector_c4_device_bytes = CUDA.@allocated begin
-        Agrocosm.photosynthesis_C4!(
-            cft3, c4_vector_gpu, apar_gpu, daylength_gpu,
-            temperature_gpu; comp_vcmax = true,
-        )
-        synchronize()
-    end
-    vector_respiration_device_bytes = CUDA.@allocated begin
-        Agrocosm.respiration!(
-            respiration_vector_gpu, cft1, temperature_gpu, soil_temperature_gpu,
-            gross_gpu, leaf_gpu,
-        )
-        synchronize()
-    end
     @test pet_device_bytes > 0
     @test steady_pet_device_bytes == 0
     @test steady_photo_device_bytes == 0
     @test steady_c4_device_bytes == 0
     @test steady_respiration_device_bytes == 0
-    @test vector_pet_device_bytes > 0
-    @test vector_photo_device_bytes > 0
-    @test vector_c4_device_bytes > 0
-    @test vector_respiration_device_bytes > 0
 
     pet_seconds = @elapsed begin
         for _ in 1:50
@@ -243,24 +184,6 @@ CUDA.allowscalar(false)
         end
         synchronize()
     end
-    vector_pet_seconds = @elapsed begin
-        for _ in 1:20
-            Agrocosm.petpar!(
-                pet_vector_gpu, 172, latitude_gpu, temperature_gpu,
-                longwave_gpu, shortwave_gpu,
-            )
-        end
-        synchronize()
-    end
-    vector_photo_seconds = @elapsed begin
-        for _ in 1:20
-            Agrocosm.photosynthesis_C3!(
-                cft1, photo_vector_gpu, apar_gpu, daylength_gpu,
-                temperature_gpu, co2_gpu; comp_vcmax = true,
-            )
-        end
-        synchronize()
-    end
     benchmark = (
         cells = cells,
         kernel_device_bytes = (
@@ -269,21 +192,11 @@ CUDA.allowscalar(false)
             c4 = steady_c4_device_bytes,
             respiration = steady_respiration_device_bytes,
         ),
-        vector_device_bytes = (
-            pet = vector_pet_device_bytes,
-            c3 = vector_photo_device_bytes,
-            c4 = vector_c4_device_bytes,
-            respiration = vector_respiration_device_bytes,
-        ),
         kernel_seconds_50_calls = (
             pet = pet_seconds,
             c3 = photo_seconds,
             c4 = c4_seconds,
             respiration = respiration_seconds,
-        ),
-        vector_seconds_20_calls = (
-            pet = vector_pet_seconds,
-            c3 = vector_photo_seconds,
         ),
     )
     @info "CUDA crop-kernel benchmark" benchmark

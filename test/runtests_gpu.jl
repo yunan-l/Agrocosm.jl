@@ -14,7 +14,12 @@ sort!(gpu_tests)
     for path in gpu_tests
         @testset "$(relpath(path, @__DIR__))" begin
             # Isolate helpers and constants declared by standalone GPU tests.
-            Base.include(Module(gensym(:AgrocosmGPUTest)), path)
+            test_module = Module(gensym(:AgrocosmGPUTest), true, true)
+            Core.eval(
+                test_module,
+                :(include(path::AbstractString) = Base.include(@__MODULE__, path)),
+            )
+            Base.include(test_module, path)
         end
     end
 end

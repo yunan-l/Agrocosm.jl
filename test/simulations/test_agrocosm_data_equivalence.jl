@@ -3,7 +3,7 @@ using JLD2
 using Test
 
 include(joinpath(@__DIR__, "..", "..", "lib", "AgrocosmData", "src", "AgrocosmData.jl"))
-using .AgrocosmData
+import .AgrocosmData
 
 function fixture_array_snapshot(value, path = "")
     arrays = Dict{String, Any}()
@@ -41,8 +41,8 @@ end
     )
     run_simulation!(legacy, climate; end_day = days, spinup = false)
 
-    selection = CellSelection(indices, Int32.(0:(cells - 1)))
-    grid = GridIndex(
+    selection = AgrocosmData.CellSelection(indices, Int32.(0:(cells - 1)))
+    grid = AgrocosmData.GridIndex(
         Float32[0],
         copy(initial.latitude),
         reshape(copy(selection.cell_ids), 1, :),
@@ -50,7 +50,7 @@ end
         ones(Int32, cells),
         Int32.(indices),
     )
-    soil = SoilData(
+    soil = AgrocosmData.SoilData(
         selection,
         Int32.(initial.soilparam.soilcode),
         copy(initial.soilparam.soilph),
@@ -67,18 +67,18 @@ end
     initial_state = NamedTuple{state_fields}(map(
         name -> copy(getproperty(initial.initialLPJmL.u0, name)), state_fields,
     ))
-    prepared = model_initial_data(grid, soil, initial.crop, initial_state)
+    prepared = AgrocosmData.model_initial_data(grid, soil, initial.crop, initial_state)
     adapted = initialize_simulation(
         cft1, prepared;
         T = Float32, days, fertilizer = :yes,
     )
 
     block_size = 73
-    blocks = ClimateBlock[]
+    blocks = AgrocosmData.ClimateBlock[]
     for first_day in 1:block_size:days
         last_day = min(days, first_day + block_size - 1)
         rows = first_day:last_day
-        push!(blocks, ClimateBlock(
+        push!(blocks, AgrocosmData.ClimateBlock(
             collect(rows),
             copy(climate.temp[rows, :]),
             copy(climate.prec[rows, :]),
@@ -89,7 +89,7 @@ end
             (fixture = "examples/climate_2000_2009.jld2",),
         ))
     end
-    run_simulation!(adapted, climate_forcings(blocks); spinup = false)
+    run_simulation!(adapted, AgrocosmData.climate_forcings(blocks); spinup = false)
 
     @test adapted.simulated_days == legacy.simulated_days == days
     test_fixture_arrays_equal(adapted.state.prognostic, legacy.state.prognostic)

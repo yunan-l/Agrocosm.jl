@@ -1,8 +1,6 @@
 using Agrocosm
 using Test
 
-include("../../helpers/crop_lifecycle_fixture.jl")
-
 @testset "LPJmL-style seasonal state is rebuilt at cultivation" begin
     for T in (Float32, Float64)
         crop = init_crop(T, 2, identity)

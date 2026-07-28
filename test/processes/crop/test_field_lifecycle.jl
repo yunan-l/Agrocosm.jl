@@ -1,8 +1,6 @@
 using Agrocosm
 using Test
 
-include("../../helpers/crop_lifecycle_fixture.jl")
-
 field_arrays(container) =
     [getproperty(container, field) for field in fieldnames(typeof(container))]
 
