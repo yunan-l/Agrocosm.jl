@@ -1,8 +1,5 @@
 [paths]
-subset_directory = "/absolute/path/to/subset"
-grid = "/absolute/path/to/grid.nc"
-soilcode = "/absolute/path/to/soil_30arcmin_13_types.nc"
-soilph = "/absolute/path/to/soil_ph30arcmin.nc"
+input_directory = "/Users/linyunan/Desktop/Agrocosm/work/data/input_data"
 hwsd_targets = "/absolute/path/to/hwsd_canonical.nc"
 output_directory = "/absolute/path/to/global_wheat_output"
 
@@ -14,6 +11,8 @@ with_tillage = true
 [run]
 warmup_years = 10
 diagnostic_cells = 10
+# 0 runs every 2015 landfrac-selected cell; use a positive value only for smoke tests.
+cell_limit = 0
 
 [validation]
 maximum_water_residual = 0.01

@@ -36,6 +36,88 @@ function _warmup_history(snapshots)
     ))
 end
 
+"""Summarize initial, transient, and late-year C/N drift from a warm-up report."""
+function agricultural_warmup_drift(
+    report;
+    initial_fast_fraction_threshold::Real = 0.10,
+    late_fast_fraction_threshold::Real = 0.01,
+    late_total_threshold::Real = 0.01,
+)
+    report.years >= 2 || throw(ArgumentError("C/N drift requires at least two warm-up years"))
+    series(name) = vcat(
+        sum(getproperty(report.initial_soil, name)),
+        vec(sum(getproperty(report.soil, name); dims = 2)),
+    )
+    total_carbon = series(:total_carbon)
+    total_nitrogen = series(:total_nitrogen)
+    fast_carbon = series(:fast_carbon)
+    slow_carbon = series(:slow_carbon)
+    fast_fraction = fast_carbon ./ (fast_carbon .+ slow_carbon)
+    relative_change(values, index) = (values[index] - values[index - 1]) /
+        max(abs(values[index - 1]), eps(eltype(values)))
+    initial_fast_shift = fast_fraction[2] - fast_fraction[1]
+    late_fast_shift = fast_fraction[end] - fast_fraction[end - 1]
+    late_carbon = relative_change(total_carbon, length(total_carbon))
+    late_nitrogen = relative_change(total_nitrogen, length(total_nitrogen))
+    relative_values(current, previous) = (current .- previous) ./
+        max.(abs.(previous), eps(eltype(previous)))
+    distribution(values) = (
+        minimum = minimum(values),
+        p05 = quantile(values, 0.05),
+        p25 = quantile(values, 0.25),
+        median = median(values),
+        p75 = quantile(values, 0.75),
+        p95 = quantile(values, 0.95),
+        maximum = maximum(values),
+    )
+    initial_carbon = report.initial_soil.total_carbon
+    initial_nitrogen = report.initial_soil.total_nitrogen
+    final_carbon = vec(report.soil.total_carbon[end, :])
+    final_nitrogen = vec(report.soil.total_nitrogen[end, :])
+    previous_carbon = vec(report.soil.total_carbon[end - 1, :])
+    previous_nitrogen = vec(report.soil.total_nitrogen[end - 1, :])
+    initial_cell_fast_fraction = report.initial_soil.fast_carbon ./
+        (report.initial_soil.fast_carbon .+ report.initial_soil.slow_carbon)
+    final_cell_fast_fraction = vec(report.soil.fast_carbon[end, :]) ./
+        (vec(report.soil.fast_carbon[end, :]) .+ vec(report.soil.slow_carbon[end, :]))
+    previous_cell_fast_fraction = vec(report.soil.fast_carbon[end - 1, :]) ./
+        (vec(report.soil.fast_carbon[end - 1, :]) .+ vec(report.soil.slow_carbon[end - 1, :]))
+    cell_initial_carbon = relative_values(final_carbon, initial_carbon)
+    cell_initial_nitrogen = relative_values(final_nitrogen, initial_nitrogen)
+    cell_late_carbon = relative_values(final_carbon, previous_carbon)
+    cell_late_nitrogen = relative_values(final_nitrogen, previous_nitrogen)
+    cell_initial_fast_shift = final_cell_fast_fraction .- initial_cell_fast_fraction
+    cell_late_fast_shift = final_cell_fast_fraction .- previous_cell_fast_fraction
+    cell_review = (abs.(cell_initial_fast_shift) .> initial_fast_fraction_threshold) .|
+        (abs.(cell_late_fast_shift) .> late_fast_fraction_threshold) .|
+        (abs.(cell_late_carbon) .> late_total_threshold) .|
+        (abs.(cell_late_nitrogen) .> late_total_threshold)
+    review = abs(initial_fast_shift) > initial_fast_fraction_threshold ||
+        abs(late_fast_shift) > late_fast_fraction_threshold ||
+        abs(late_carbon) > late_total_threshold ||
+        abs(late_nitrogen) > late_total_threshold
+    return (
+        total_carbon,
+        total_nitrogen,
+        fast_carbon_fraction = fast_fraction,
+        initial_fast_fraction_shift = initial_fast_shift,
+        late_fast_fraction_shift = late_fast_shift,
+        late_carbon_relative_change = late_carbon,
+        late_nitrogen_relative_change = late_nitrogen,
+        spatial = (
+            initial_to_year10_carbon = distribution(cell_initial_carbon),
+            initial_to_year10_nitrogen = distribution(cell_initial_nitrogen),
+            year9_to_year10_carbon = distribution(cell_late_carbon),
+            year9_to_year10_nitrogen = distribution(cell_late_nitrogen),
+            initial_to_year10_fast_fraction = distribution(cell_initial_fast_shift),
+            year9_to_year10_fast_fraction = distribution(cell_late_fast_shift),
+            review_cell_fraction = count(cell_review) / length(cell_review),
+            cell_count = length(cell_review),
+        ),
+        recommendation = review ? :review_pool_allocation : :retain_40_60,
+    )
+end
+
 """
     agricultural_warmup!(simulation, climate; years=10)
 

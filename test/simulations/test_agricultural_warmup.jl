@@ -33,6 +33,12 @@ end
     @test all(report.soil.total_carbon .>= 0)
     @test all(report.soil.total_nitrogen .>= 0)
     @test all(report.soil.mineral_nitrogen .>= 0)
+    drift = agricultural_warmup_drift(report)
+    @test length(drift.total_carbon) == 11
+    @test length(drift.total_nitrogen) == 11
+    @test drift.spatial.cell_count == 1
+    @test 0 <= drift.spatial.review_cell_fraction <= 1
+    @test drift.recommendation in (:retain_40_60, :review_pool_allocation)
     @test report.soil.litter_carbon[end] != initial_carbon
     @test simulation.simulated_days == 0
     @test size(simulation.output.crop.npp, 1) == 0

@@ -3,32 +3,35 @@ using Dates
 using NCDatasets
 using TOML
 
-include(joinpath(@__DIR__, "..", "lib", "AgrocosmData", "src", "AgrocosmData.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "AgrocosmData", "src", "AgrocosmData.jl"))
 using .AgrocosmData
 
 function catalog_from_config(config)
     paths = config["paths"]
-    subset = abspath(paths["subset_directory"])
+    input_directory = abspath(paths["input_directory"])
+    management_directory = joinpath(input_directory, "management")
+    climate_directory = joinpath(input_directory, "climate")
+    soil_directory = joinpath(input_directory, "soil")
     registry = PFTRegistry([1], ["temperate cereals"])
     single_pft(filename, variable; units = "") = DatasetSpec(
-        joinpath(subset, filename), variable; units, pft_ids = [1],
+        joinpath(management_directory, filename), variable; units, pft_ids = [1],
     )
     return DatasetCatalog(
         Dict{Symbol, DatasetSpec}(
-            :grid => DatasetSpec(abspath(paths["grid"]), "cellid"),
-            :soilcode => DatasetSpec(abspath(paths["soilcode"]), "soilcode"),
-            :soilph => DatasetSpec(abspath(paths["soilph"]), "soilph"),
+            :grid => DatasetSpec(joinpath(soil_directory, "grid.nc"), "cellid"),
+            :soilcode => DatasetSpec(joinpath(soil_directory, "soil_30arcmin_13_types.nc"), "soilcode"),
+            :soilph => DatasetSpec(joinpath(soil_directory, "soil_pH30arcmin.nc"), "soilph"),
             :landuse => single_pft("landuse_wheat_rainfed.nc", "landfrac"),
             :sowing_date => single_pft("sdate_wheat_rainfed.nc", "sdate"),
             :phu => single_pft("phu_wheat_rainfed.nc", "phusum"),
             :fertilizer => single_pft("fertilizer_wheat_rainfed.nc", "fertilizer"),
             :manure => single_pft("manure_wheat_rainfed.nc", "manure"),
             :residue_fraction => single_pft("residue_wheat_rainfed.nc", "residuefrac"),
-            :temp => DatasetSpec(joinpath(subset, "temp_2015_2016.nc"), "temp"),
-            :prec => DatasetSpec(joinpath(subset, "prec_2015_2016.nc"), "prec"),
-            :lwnet => DatasetSpec(joinpath(subset, "lwnet_2015_2016.nc"), "lwnet"),
-            :swdown => DatasetSpec(joinpath(subset, "swdown_2015_2016.nc"), "swdown"),
-            :co2 => DatasetSpec(joinpath(subset, "co2_2015_2016.txt"), "co2"),
+            :temp => DatasetSpec(joinpath(climate_directory, "temp_2015_2016.nc"), "temp"),
+            :prec => DatasetSpec(joinpath(climate_directory, "prec_2015_2016.nc"), "prec"),
+            :lwnet => DatasetSpec(joinpath(climate_directory, "lwnet_2015_2016.nc"), "lwnet"),
+            :swdown => DatasetSpec(joinpath(climate_directory, "swdown_2015_2016.nc"), "swdown"),
+            :co2 => DatasetSpec(joinpath(climate_directory, "co2_2015_2016.txt"), "co2"),
         ),
         registry,
     )
@@ -46,6 +49,34 @@ function selected_targets(targets, selection)
         targets.coverage[:, indices],
         targets.uncertain[:, indices],
         targets.provenance,
+    )
+end
+
+function load_hwsd_targets(paths, selection)
+    if haskey(paths, "hwsd_targets") && isfile(abspath(paths["hwsd_targets"]))
+        return read_soil_cn_targets(abspath(paths["hwsd_targets"]); T = Float32)
+    end
+    haskey(paths, "hwsd_profile_directory") || error(
+        "provide an existing hwsd_targets file or hwsd_profile_directory",
+    )
+    directory = abspath(paths["hwsd_profile_directory"])
+    profiles = [
+        read_soil_cn_targets(joinpath(directory, "cell_$(cell_id).nc"); T = Float32)
+        for cell_id in selection.cell_ids
+    ]
+    return SoilCNTargets(
+        selection,
+        first(profiles).layer_bounds,
+        reduce(hcat, (profile.soil_organic_carbon for profile in profiles)),
+        reduce(hcat, (profile.total_nitrogen for profile in profiles)),
+        reduce(hcat, (profile.coverage for profile in profiles)),
+        BitMatrix(reduce(hcat, (profile.uncertain for profile in profiles))),
+        (
+            schema_version = DATA_SCHEMA_VERSION,
+            preprocessing_version = HWSD_CN_PREPROCESSING_VERSION,
+            source_version = "HWSD v2.01 per-cell profiles",
+            deep_rule = :extend_deepest_density,
+        ),
     )
 end
 
@@ -151,36 +182,6 @@ function write_report(path, report)
     return path
 end
 
-function drift_report(warmup)
-    series(name) = vcat(
-        sum(getproperty(warmup.initial_soil, name)),
-        vec(sum(getproperty(warmup.soil, name); dims = 2)),
-    )
-    carbon = series(:total_carbon)
-    nitrogen = series(:total_nitrogen)
-    fast = series(:fast_carbon)
-    slow = series(:slow_carbon)
-    fast_fraction = fast ./ (fast .+ slow)
-    relative_change(values, index) = (values[index] - values[index - 1]) /
-        max(abs(values[index - 1]), eps(eltype(values)))
-    initial_fast_shift = fast_fraction[2] - fast_fraction[1]
-    late_fast_shift = fast_fraction[end] - fast_fraction[end - 1]
-    late_carbon = relative_change(carbon, length(carbon))
-    late_nitrogen = relative_change(nitrogen, length(nitrogen))
-    replace_split = abs(initial_fast_shift) > 0.10 || abs(late_fast_shift) > 0.01 ||
-        abs(late_carbon) > 0.01 || abs(late_nitrogen) > 0.01
-    return Dict(
-        "total_carbon_gC_m2" => carbon,
-        "total_nitrogen_gN_m2" => nitrogen,
-        "fast_carbon_fraction" => fast_fraction,
-        "initial_fast_fraction_shift" => initial_fast_shift,
-        "year10_fast_fraction_shift" => late_fast_shift,
-        "year10_carbon_relative_change" => late_carbon,
-        "year10_nitrogen_relative_change" => late_nitrogen,
-        "recommendation" => replace_split ? "review_pool_allocation" : "retain_40_60",
-    )
-end
-
 function balance_report(simulation, validation)
     water = maximum(abs, Array(simulation.water_balance.residual))
     carbon = maximum(abs, Array(simulation.carbon_balance.relative_residual))
@@ -195,7 +196,7 @@ function balance_report(simulation, validation)
     thermal <= validation["maximum_thermal_relative_residual"] || error("sampled thermal closure failed")
     percolation <= validation["maximum_percolation_energy_residual"] ||
         error("sampled percolation-energy closure failed")
-    return Dict(
+    return Dict{String, Any}(
         "maximum_water_residual" => water,
         "maximum_carbon_relative_residual" => carbon,
         "maximum_nitrogen_relative_residual" => nitrogen,
@@ -215,7 +216,14 @@ function run_global_wheat(config_path)
     landuse = read_management(catalog, :landuse, grid, 1; T = Float32)
     size(landuse.values, 1) == 1 || error("landuse must contain only fixed 2015 management")
     selection = build_crop_mask(grid, landuse.values).selection
-    hwsd = read_soil_cn_targets(abspath(paths["hwsd_targets"]); T = Float32)
+    cell_limit = Int(get(run, "cell_limit", 0))
+    cell_limit >= 0 || error("cell_limit must be non-negative")
+    if cell_limit > 0
+        selection = select_cells(
+            grid, selection.compact_indices[1:min(cell_limit, length(selection.cell_ids))],
+        )
+    end
+    hwsd = load_hwsd_targets(paths, selection)
     initial_data = model_inputs(catalog, grid, selection, hwsd, config)
 
     reader = climate_blocks(catalog, grid; selection, block_days = 365, T = Float32)
@@ -237,7 +245,10 @@ function run_global_wheat(config_path)
     )
     warmup_checkpoint = joinpath(output_directory, "warmup_checkpoint.jld2")
     save_checkpoint(warmup_checkpoint, warmup_simulation)
-    write_report(joinpath(output_directory, "warmup_cn_drift.toml"), drift_report(warmup))
+    write_report(
+        joinpath(output_directory, "warmup_cn_drift.toml"),
+        agricultural_warmup_drift(warmup),
+    )
 
     production = create_simulation(initial_data, selection, config; diagnostics = false)
     restore_checkpoint!(production, warmup_checkpoint)

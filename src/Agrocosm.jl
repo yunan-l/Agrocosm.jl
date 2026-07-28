@@ -90,7 +90,7 @@ export consume_output!, finish_output_stream!, clear_output_timeseries!
 
 # DAILY CROP SIMULATIONS
 export daily_crop_C3!, daily_crop_C4!
-export CropSimulation, initialize_simulation, agricultural_warmup!
+export CropSimulation, initialize_simulation, agricultural_warmup!, agricultural_warmup_drift
 export transition_day!, run_simulation!, simulation_summary
 export save_checkpoint, restore_checkpoint!
 export estimate_memory

@@ -1,19 +1,24 @@
 using Agrocosm
 
-include(joinpath(@__DIR__, "..", "lib", "AgrocosmData", "src", "AgrocosmData.jl"))
+include(joinpath(@__DIR__, "..", "..", "lib", "AgrocosmData", "src", "AgrocosmData.jl"))
 using .AgrocosmData
 
-length(ARGS) == 5 || error(
-    "usage: julia --project=. examples/global_wheat_smoke.jl " *
-    "SUBSET_DIR GRID_NC SOILCODE_NC SOILPH_NC HWSD_PROFILE_DIR",
+length(ARGS) == 2 || error(
+    "usage: julia --project=. examples/scripts/global_wheat_smoke.jl " *
+    "INPUT_DATA_DIR HWSD_PROFILE_DIR",
 )
 
-subset_directory, grid_path, soilcode_path, soilph_path, hwsd_directory =
-    abspath.(ARGS)
+input_directory, hwsd_directory = abspath.(ARGS)
+management_directory = joinpath(input_directory, "management")
+climate_directory = joinpath(input_directory, "climate")
+soil_directory = joinpath(input_directory, "soil")
+grid_path = joinpath(soil_directory, "grid.nc")
+soilcode_path = joinpath(soil_directory, "soil_30arcmin_13_types.nc")
+soilph_path = joinpath(soil_directory, "soil_pH30arcmin.nc")
 
 registry = PFTRegistry([1], ["temperate cereals"])
 single_pft(path, variable; units = "") = DatasetSpec(
-    joinpath(subset_directory, path), variable; units, pft_ids = [1],
+    joinpath(management_directory, path), variable; units, pft_ids = [1],
 )
 catalog = DatasetCatalog(
     Dict{Symbol, DatasetSpec}(
@@ -28,11 +33,11 @@ catalog = DatasetCatalog(
         :residue_fraction => single_pft(
             "residue_wheat_rainfed.nc", "residuefrac",
         ),
-        :temp => DatasetSpec(joinpath(subset_directory, "temp_2015_2016.nc"), "temp"),
-        :prec => DatasetSpec(joinpath(subset_directory, "prec_2015_2016.nc"), "prec"),
-        :lwnet => DatasetSpec(joinpath(subset_directory, "lwnet_2015_2016.nc"), "lwnet"),
-        :swdown => DatasetSpec(joinpath(subset_directory, "swdown_2015_2016.nc"), "swdown"),
-        :co2 => DatasetSpec(joinpath(subset_directory, "co2_2015_2016.txt"), "co2"),
+        :temp => DatasetSpec(joinpath(climate_directory, "temp_2015_2016.nc"), "temp"),
+        :prec => DatasetSpec(joinpath(climate_directory, "prec_2015_2016.nc"), "prec"),
+        :lwnet => DatasetSpec(joinpath(climate_directory, "lwnet_2015_2016.nc"), "lwnet"),
+        :swdown => DatasetSpec(joinpath(climate_directory, "swdown_2015_2016.nc"), "swdown"),
+        :co2 => DatasetSpec(joinpath(climate_directory, "co2_2015_2016.txt"), "co2"),
     ),
     registry,
 )
@@ -94,7 +99,7 @@ initial_state = hwsd_initial_state(targets, soil)
 initial_data = model_initial_data(grid, soil, crop, initial_state)
 
 reader = climate_blocks(
-    catalog, grid; selection, block_days = 31, T = Float32,
+    catalog, grid; selection, block_days = 365, T = Float32,
 )
 simulation = initialize_simulation(
     cft1,
@@ -108,6 +113,7 @@ simulation = initialize_simulation(
     with_tillage = true,
 )
 warmup_report = agricultural_warmup!(simulation, climate_forcings(reader))
+warmup_drift = agricultural_warmup_drift(warmup_report)
 run_simulation!(simulation, climate_forcings(reader); spinup = false)
 
 summary = simulation_summary(simulation)
@@ -127,4 +133,5 @@ println("cell_ids = ", selection.cell_ids)
 println("landfrac = ", crop_mask.fraction[1, 1:10])
 println("climate_days = ", climate_days(reader))
 println("warmup_years = ", warmup_report.years)
+println("warmup_drift = ", warmup_drift)
 println("summary = ", summary)
