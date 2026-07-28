@@ -26,6 +26,11 @@ function catalog_from_config(config)
     management_directory = joinpath(input_directory, "management")
     climate_directory = joinpath(input_directory, "climate")
     soil_directory = joinpath(input_directory, "soil")
+    climate = get(config, "climate", Dict{String, Any}())
+    climate_path(name, default) = begin
+        path = String(get(climate, name, default))
+        isabspath(path) ? path : joinpath(climate_directory, path)
+    end
     registry = PFTRegistry([1], ["temperate cereals"])
     single_pft(filename, variable; units = "") = DatasetSpec(
         joinpath(management_directory, filename), variable; units, pft_ids = [1],
@@ -41,11 +46,11 @@ function catalog_from_config(config)
             :fertilizer => single_pft("fertilizer_wheat_rainfed.nc", "fertilizer"),
             :manure => single_pft("manure_wheat_rainfed.nc", "manure"),
             :residue_fraction => single_pft("residue_wheat_rainfed.nc", "residuefrac"),
-            :temp => DatasetSpec(joinpath(climate_directory, "temp_2015_2016.nc"), "temp"),
-            :prec => DatasetSpec(joinpath(climate_directory, "prec_2015_2016.nc"), "prec"),
-            :lwnet => DatasetSpec(joinpath(climate_directory, "lwnet_2015_2016.nc"), "lwnet"),
-            :swdown => DatasetSpec(joinpath(climate_directory, "swdown_2015_2016.nc"), "swdown"),
-            :co2 => DatasetSpec(joinpath(climate_directory, "co2_2015_2016.txt"), "co2"),
+            :temp => DatasetSpec(climate_path("temperature_file", "temp_2015_2016.nc"), "temp"),
+            :prec => DatasetSpec(climate_path("precipitation_file", "prec_2015_2016.nc"), "prec"),
+            :lwnet => DatasetSpec(climate_path("longwave_file", "lwnet_2015_2016.nc"), "lwnet"),
+            :swdown => DatasetSpec(climate_path("shortwave_file", "swdown_2015_2016.nc"), "swdown"),
+            :co2 => DatasetSpec(climate_path("co2_file", "co2_2015_2016.txt"), "co2"),
         ),
         registry,
     )
@@ -332,6 +337,34 @@ function run_global_wheat(config_path; backend_override = nothing)
     management_blocks = [annual_management(management, index) for index in eachindex(simulation_years)]
     initial_data = model_inputs(grid, selection, hwsd, catalog, management)
 
+    warmup_start_year = Int(get(run, "warmup_climate_start_year", start_year))
+    warmup_end_year = Int(get(run, "warmup_climate_end_year", end_year))
+    warmup_start_year <= warmup_end_year || error(
+        "warmup_climate_start_year must not exceed warmup_climate_end_year",
+    )
+    warmup_years = collect(warmup_start_year:warmup_end_year)
+    warmup_source_years = management_source_years(config, warmup_years)
+    warmup_landuse = read_management(
+        catalog, :landuse, grid, 1;
+        selection, simulation_years = warmup_source_years, T = Float32,
+    )
+    warmup_management = read_management_schedule(
+        catalog, grid, selection, warmup_landuse.values .> 0,
+        warmup_source_years, warmup_years, config,
+    )
+    warmup_management_blocks = [
+        annual_management(warmup_management, index) for index in eachindex(warmup_years)
+    ]
+    warmup_reader = climate_blocks(
+        catalog, grid;
+        selection, start_year = warmup_start_year, end_year = warmup_end_year,
+        block_days = 365, T = Float32,
+    )
+    climate_days(warmup_reader) == 365 * length(warmup_years) || error(
+        "warm-up climate must contain complete 365-day years",
+    )
+    warmup_forcings = climate_forcings(warmup_reader)
+
     reader = climate_blocks(
         catalog, grid;
         selection, start_year, end_year, block_days = 365, T = Float32,
@@ -396,7 +429,8 @@ function run_global_wheat(config_path; backend_override = nothing)
         diagnostics = false,
     )
     warmup = agricultural_warmup!(
-        warmup_simulation, forcings; warmup_options..., management_blocks,
+        warmup_simulation, warmup_forcings;
+        warmup_options..., management_blocks = warmup_management_blocks,
     )
     warmup_checkpoint = joinpath(output_directory, "warmup_checkpoint.jld2")
     save_checkpoint(warmup_checkpoint, warmup_simulation)
@@ -510,8 +544,29 @@ function run_global_wheat(config_path; backend_override = nothing)
         diagnostic_initial, diagnostic_selection, config, expected_days, backend.device;
         diagnostics = true,
     )
+    diagnostic_warmup_reader = climate_blocks(
+        catalog, grid;
+        selection = diagnostic_selection,
+        start_year = warmup_start_year, end_year = warmup_end_year,
+        block_days = 365, T = Float32,
+    )
+    diagnostic_warmup_landuse = read_management(
+        catalog, :landuse, grid, 1;
+        selection = diagnostic_selection,
+        simulation_years = warmup_source_years,
+        T = Float32,
+    )
+    diagnostic_warmup_management = read_management_schedule(
+        catalog, grid, diagnostic_selection,
+        diagnostic_warmup_landuse.values .> 0,
+        warmup_source_years, warmup_years, config,
+    )
+    diagnostic_warmup_management_blocks = [
+        annual_management(diagnostic_warmup_management, index)
+        for index in eachindex(warmup_years)
+    ]
     agricultural_warmup!(
-        diagnostic, climate_forcings(diagnostic_reader);
+        diagnostic, climate_forcings(diagnostic_warmup_reader);
         years = warmup.years,
         maximum_years = warmup.years,
         target_constrained = warmup.target_constrained,
@@ -519,7 +574,7 @@ function run_global_wheat(config_path; backend_override = nothing)
         relative_tolerance = warmup.relative_tolerance,
         pool_fraction_tolerance = warmup.pool_fraction_tolerance,
         required_converged_fraction = warmup.required_converged_fraction,
-        management_blocks = diagnostic_management_blocks,
+        management_blocks = diagnostic_warmup_management_blocks,
     )
     run_simulation!(
         diagnostic, climate_forcings(diagnostic_reader);

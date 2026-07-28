@@ -135,6 +135,14 @@ behavior. Annual PHU is installed only when a new crop is sown, so a winter
 crop already growing across 1 January retains the PHU assigned in its sowing
 year. `landfrac > 0` selects crop cells but never scales single-cell processes.
 
+For the global production experiment, point the `[climate]` file entries at
+the complete 1901--2019 forcing files. Warm-up repeatedly uses
+`warmup_climate_start_year = 1901` through `warmup_climate_end_year = 1910`,
+while production still reads 2015--2016. Convergence compares soil state at
+the same position in the ten-year forcing cycle (`t` versus `t-10`); it is not
+evaluated from unlike adjacent climate years. Management remains fixed at the
+2015 level during warm-up.
+
 The runner performs the configured streamed agricultural warm-up, writes and
 exactly restores a native warm-up checkpoint, checkpoints after the first
 production year, restores, and continues through `simulation_end_year`.

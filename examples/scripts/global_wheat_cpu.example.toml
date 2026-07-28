@@ -3,6 +3,16 @@ input_directory = "/absolute/path/to/input_data"
 hwsd_targets = "/absolute/path/to/hwsd_canonical.nc"
 output_directory = "/absolute/path/to/global_wheat_output"
 
+[climate]
+# Relative paths are resolved below paths.input_directory/climate. Absolute
+# paths are also accepted. These files provide both the 1901-1910 warm-up
+# cycle and the 2015-2016 production forcing.
+temperature_file = "tas_gswp3-w5e5_obsclim_1901-2019.nc"
+precipitation_file = "pr_gswp3-w5e5_obsclim_1901-2019.nc"
+longwave_file = "lwnet_gswp3-w5e5_obsclim_1901-2019.nc"
+shortwave_file = "rsds_gswp3-w5e5_obsclim_1901-2019.nc"
+co2_file = "global_co2_ann_1700_2022.txt"
+
 [management]
 # "fixed" repeats fixed_year; "transient" aligns each simulation year and
 # repeats the first/last available management year outside the file range.
@@ -19,8 +29,11 @@ device_id = 0
 memory_safety_factor = 1.2
 simulation_start_year = 2015
 simulation_end_year = 2016
-# Target-constrained warm-up runs for at least 10 years, then continues until
-# all cells satisfy the convergence criteria or the 100-year cap is reached.
+# Repeat the first ten climate years while keeping management fixed at 2015.
+warmup_climate_start_year = 1901
+warmup_climate_end_year = 1910
+# Same-phase convergence compares year t with t-10. The first convergence
+# decision therefore occurs only after one complete ten-year forcing cycle.
 warmup_target_constrained = true
 warmup_minimum_years = 10
 warmup_maximum_years = 100
