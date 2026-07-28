@@ -22,6 +22,47 @@ function root_distribution(beta_root::AbstractFloat)
     return rootdist
 end
 
+@kernel inbounds = true function initialize_mineral_nitrogen_kernel!(
+    nitrate, ammonium, slow, nitrate_restart, ammonium_restart,
+    slow_fraction, restart::Bool,
+)
+    layer, cell = @index(Global, NTuple)
+    if restart
+        nitrate[layer, cell] = nitrate_restart[layer, cell]
+        ammonium[layer, cell] = ammonium_restart[layer, cell]
+    else
+        value = slow[layer, cell] * slow_fraction
+        nitrate[layer, cell] = value
+        ammonium[layer, cell] = value
+    end
+end
+
+@kernel inbounds = true function initialize_crop_phenology_kernel!(
+    root_distribution_state, phu, winter_type, root_distribution_values,
+)
+    layer, cell = @index(Global, NTuple)
+    root_distribution_state[layer, cell] = root_distribution_values[layer]
+    if layer == 1 && phu[cell] < zero(eltype(phu))
+        phu[cell] = -phu[cell]
+        winter_type[cell] = true
+    end
+end
+
+@kernel inbounds = true function initialize_c_shift_kernel!(
+    shift_fast, shift_slow, restart_fast, restart_slow,
+    top_fraction, lower_fraction, restart::Bool,
+)
+    layer, cell = @index(Global, NTuple)
+    if restart
+        shift_fast[layer, cell] = restart_fast[layer, cell]
+        shift_slow[layer, cell] = restart_slow[layer, cell]
+    else
+        value = layer == 1 ? top_fraction : lower_fraction
+        shift_fast[layer, cell] = value
+        shift_slow[layer, cell] = value
+    end
+end
+
 """
 initialize_soil_mineral_nitrogen!(soil, u0, strategy)
 
@@ -32,6 +73,7 @@ each layer is initialized to one percent of that layer's slow organic-N pool.
 function initialize_soil_mineral_nitrogen!(soil::Soil,
                                            u0::NamedTuple,
                                            strategy::Symbol)
+    restart = strategy === :restart
     if strategy === :restart
         if !hasproperty(u0, :soil_NO3) || !hasproperty(u0, :soil_NH4)
             throw(ArgumentError(
@@ -39,18 +81,21 @@ function initialize_soil_mineral_nitrogen!(soil::Soil,
                 "with load_mineral_nitrogen_restart=true",
             ))
         end
-        soil.nitrogen.nitrate .= u0.soil_NO3
-        soil.nitrogen.ammonium .= u0.soil_NH4
     elseif strategy === :lpjml_initsoil
-        slow_n_fraction = convert(eltype(soil.nitrogen.slow), 0.01)
-        soil.nitrogen.nitrate .= soil.nitrogen.slow .* slow_n_fraction
-        soil.nitrogen.ammonium .= soil.nitrogen.slow .* slow_n_fraction
     else
         throw(ArgumentError(
             "unknown mineral nitrogen initialization strategy: $strategy; " *
             "use :restart or :lpjml_initsoil",
         ))
     end
+    slow_n_fraction = convert(eltype(soil.nitrogen.slow), 0.01)
+    nitrate_restart = restart ? u0.soil_NO3 : soil.nitrogen.nitrate
+    ammonium_restart = restart ? u0.soil_NH4 : soil.nitrogen.ammonium
+    launch_2D!(
+        initialize_mineral_nitrogen_kernel!, soil.nitrogen.nitrate,
+        soil.nitrogen.ammonium, soil.nitrogen.slow,
+        nitrate_restart, ammonium_restart, slow_n_fraction, restart,
+    )
     return nothing
 end
 
@@ -97,12 +142,11 @@ function init_states!(PFT::PftParameters,
     managed_land = init_managed_land(T, cell_size, device)
     crop.auxiliary.phenology.phu = to_float(phu)
     rootdist = root_distribution(T(beta_root))
-    # idx = crop.auxiliary.phenology.phu .< 0
-    # crop.auxiliary.phenology.winter_type[idx] .= true
-    # crop.auxiliary.phenology.phu[idx] .= -crop.auxiliary.phenology.phu[idx]
-    crop.auxiliary.phenology.winter_type .= ifelse.(crop.auxiliary.phenology.phu .< 0, true, crop.auxiliary.phenology.winter_type)
-    crop.auxiliary.phenology.phu .= ifelse.(crop.auxiliary.phenology.phu .< 0, -crop.auxiliary.phenology.phu, crop.auxiliary.phenology.phu)
-    crop.auxiliary.root.distribution .= device(rootdist)
+    launch_2D!(
+        initialize_crop_phenology_kernel!, crop.auxiliary.root.distribution,
+        crop.auxiliary.phenology.phu, crop.auxiliary.phenology.winter_type,
+        device(rootdist),
+    )
 
     crop.auxiliary.calendar.sowing_date = to_integer(sdate)
     managed_land.manure = to_float(manure)
@@ -118,9 +162,13 @@ function init_states!(PFT::PftParameters,
     soil.nitrogen.fast = to_float(u0.fastn)
     soil.nitrogen.slow = to_float(u0.slown)
     soil.water.storage = to_float(u0.swc)
+    mineral_u0 = mineral_nitrogen_initialization === :restart ? merge(u0, (
+        soil_NO3 = to_float(u0.soil_NO3),
+        soil_NH4 = to_float(u0.soil_NH4),
+    )) : u0
     initialize_soil_mineral_nitrogen!(
         soil,
-        u0,
+        mineral_u0,
         mineral_nitrogen_initialization,
     )
     soil.water.saturation_fraction = to_float(soilparams.w_sat)
@@ -135,7 +183,11 @@ function init_states!(PFT::PftParameters,
         residue_frac 1 0
         0 0 1
     ])
-    initialize_soil_c_shift!(soil, ModelState, c_shift_initialization)
+    c_shift_state = c_shift_initialization === :restart ? merge(ModelState, (
+        c_shift_fast = to_float(ModelState.c_shift_fast),
+        c_shift_slow = to_float(ModelState.c_shift_slow),
+    )) : ModelState
+    initialize_soil_c_shift!(soil, c_shift_state, c_shift_initialization)
     days_per_year = T(365)
     soil.carbon.litter_response = device(
         T[k_litter10.leaf, k_litter10.leaf, k_litter10.root] ./ days_per_year,
@@ -146,6 +198,8 @@ function init_states!(PFT::PftParameters,
     )
 
     output = init_output(T, cell_size, device)
+
+    synchronize_backend!(crop.auxiliary.phenology.phu)
 
     return climbuf, crop, pet, soil, managed_land, dailyWeather, output
 end
@@ -169,10 +223,9 @@ function initialize_soil_c_shift!(soil::Soil,
         T = eltype(soil.decomposition.shift_fast)
         lower_layer_fraction = T(0.45) / T(layers - 1)
 
-        fill!(soil.decomposition.shift_fast, lower_layer_fraction)
-        fill!(soil.decomposition.shift_slow, lower_layer_fraction)
-        soil.decomposition.shift_fast[1:1, :] .= T(0.55)
-        soil.decomposition.shift_slow[1:1, :] .= T(0.55)
+        restart_fast = soil.decomposition.shift_fast
+        restart_slow = soil.decomposition.shift_slow
+        restart = false
     elseif strategy === :restart
         hasproperty(model_state, :c_shift_fast) ||
             throw(ArgumentError("c_shift_initialization=:restart requires ModelState.c_shift_fast"))
@@ -182,11 +235,20 @@ function initialize_soil_c_shift!(soil::Soil,
             throw(DimensionMismatch("c_shift_fast must match the soil layer-by-cell shape"))
         size(model_state.c_shift_slow) == size(soil.decomposition.shift_slow) ||
             throw(DimensionMismatch("c_shift_slow must match the soil layer-by-cell shape"))
-        soil.decomposition.shift_fast .= model_state.c_shift_fast
-        soil.decomposition.shift_slow .= model_state.c_shift_slow
+        T = eltype(soil.decomposition.shift_fast)
+        lower_layer_fraction = zero(T)
+        restart_fast = model_state.c_shift_fast
+        restart_slow = model_state.c_shift_slow
+        restart = true
     else
         throw(ArgumentError("unknown c_shift initialization strategy: $strategy"))
     end
+
+    launch_2D!(
+        initialize_c_shift_kernel!, soil.decomposition.shift_fast,
+        soil.decomposition.shift_slow, restart_fast, restart_slow,
+        T(0.55), lower_layer_fraction, restart,
+    )
 
     return nothing
 end

@@ -8,7 +8,7 @@ function compare_fields(reference, kernel, fields; rtol = 2.0f-6, atol = 2.0f-7)
 end
 
 
-@testset "Canopy radiation kernels match vector references" begin
+@testset "Canopy radiation kernels are deterministic" begin
     cells = 8
     for pft in (cft1, cft3)
         reference = init_crop(cells, identity)
@@ -35,7 +35,7 @@ end
             soil.snow.fraction .= snow_fraction
         end
         maize = pft === cft3
-        Agrocosm.albedo_reference!(
+        Agrocosm.albedo!(
             pft, reference, soil_reference, pet_reference; maize = maize,
         )
         albedo!(pft, kernel, soil_kernel, pet_kernel; maize = maize)
@@ -43,10 +43,10 @@ end
         @test pet_kernel.albedo ≈ pet_reference.albedo rtol = 2.0f-6
 
         if pft === cft3
-            Agrocosm.apar_crop_maize_reference!(pft, reference, pet_reference)
+            Agrocosm.apar_crop_maize!(pft, reference, pet_reference)
             apar_crop_maize!(pft, kernel, pet_kernel)
         else
-            Agrocosm.apar_crop_reference!(pft, reference, pet_reference)
+            Agrocosm.apar_crop!(pft, reference, pet_reference)
             apar_crop!(pft, kernel, pet_kernel)
         end
         @test kernel.auxiliary.canopy.fpar ≈ reference.auxiliary.canopy.fpar rtol = 2.0f-6
@@ -54,7 +54,7 @@ end
     end
 end
 
-@testset "Cultivation kernel matches vector reference" begin
+@testset "Cultivation kernel is deterministic" begin
     cells = 6
     reference = init_crop(cells, identity)
     kernel = init_crop(cells, identity)
@@ -73,7 +73,7 @@ end
     kernel.auxiliary.phenology.phu .= 500.0f0
     prescribed_phu = Float32[700, 710, 720, 730, 740, 750]
     prescribed_winter = Bool[1, 0, 1, 0, 1, 0]
-    Agrocosm.cultivate_reference!(
+    Agrocosm.cultivate!(
         reference, reference_land, reference_soil, 100;
         apply_prescribed_fertilizer = false,
         prescribed_phu,
@@ -101,7 +101,7 @@ end
     @test kernel.auxiliary.phenology.winter_type == Bool[1, 0, 1, 0, 1, 0]
 end
 
-@testset "Respiration kernel matches vector reference" begin
+@testset "Respiration kernel is deterministic" begin
     cells = 8
     reference = init_crop(cells, identity)
     kernel = init_crop(cells, identity)
@@ -120,15 +120,15 @@ end
         crop.state.phenology.is_growing .= growing
     end
     destination = kernel.fluxes.carbon.respiration
-    Agrocosm.respiration_reference!(
-        reference, cft1, temperature, soil_temperature, gross .- leaf_respiration,
+    Agrocosm.respiration!(
+        reference, cft1, temperature, soil_temperature, gross, leaf_respiration,
     )
     respiration!(kernel, cft1, temperature, soil_temperature, gross, leaf_respiration)
     @test kernel.fluxes.carbon.respiration === destination
     @test kernel.fluxes.carbon.respiration ≈ reference.fluxes.carbon.respiration rtol = 2.0f-6 atol = 2.0f-7
 end
 
-@testset "PET/PAR kernel matches vector reference" begin
+@testset "PET/PAR kernel is deterministic" begin
     cells = 8
     for T in (Float32, Float64)
         reference = init_pet(T, cells, identity)
@@ -141,7 +141,7 @@ end
         longwave = T.(range(-120, 40; length = cells))
         shortwave = T.(range(0, 350; length = cells))
         daylength_destination = kernel.daylength
-        Agrocosm.petpar_reference!(
+        Agrocosm.petpar!(
             reference, 172, latitude, temperature, longwave, shortwave,
         )
         petpar!(kernel, 172, latitude, temperature, longwave, shortwave)
@@ -150,7 +150,7 @@ end
     end
 end
 
-@testset "C3/C4 kernels match vector references" begin
+@testset "C3/C4 kernels are deterministic" begin
     cells = 8
     apar = Float32[0, 2, 5, 10, 15, 20, 25, 30]
     daylength = Float32[6, 8, 10, 12, 14, 16, 18, 20]
@@ -158,8 +158,8 @@ end
     co2 = Float32[40]
     stress = Float32[0, 0.005, 0.2, 0.5, 0.8, 1, 0.7, 0.3]
     for (pft, reference_function, kernel_function) in (
-        (cft1, Agrocosm.photosynthesis_C3_reference!, photosynthesis_C3!),
-        (cft3, Agrocosm.photosynthesis_C4_reference!, photosynthesis_C4!),
+        (cft1, Agrocosm.photosynthesis_C3!, photosynthesis_C3!),
+        (cft3, Agrocosm.photosynthesis_C4!, photosynthesis_C4!),
     )
         reference = init_crop(cells, identity)
         kernel = init_crop(cells, identity)

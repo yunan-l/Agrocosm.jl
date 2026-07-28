@@ -5,23 +5,6 @@ On sowing days, transfer the configured fraction of existing surface litter
 to the incorporated litter pool. This follows LPJmL's `cultivate.c` ->
 `tillage.c` order.
 """
-function litter_tillage_reference!(soil, crop)
-    event = reshape(crop_events(crop).sowing, (1, :))
-
-    surface_carbon_before = copy(@view soil_carbon_prognostic(soil).litter[SURFACE_LITTER, :])
-    surface_nitrogen_before = copy(@view soil_nitrogen_prognostic(soil).litter[SURFACE_LITTER, :])
-
-    tilled_carbon = soil_management_input(soil).tillage_fraction * soil_carbon_prognostic(soil).litter
-    tilled_nitrogen = soil_management_input(soil).tillage_fraction * soil_nitrogen_prognostic(soil).litter
-    soil_carbon_prognostic(soil).litter .= soil_carbon_prognostic(soil).litter .* (1 .- event) .+ tilled_carbon .* event
-    soil_nitrogen_prognostic(soil).litter .= soil_nitrogen_prognostic(soil).litter .* (1 .- event) .+ tilled_nitrogen .* event
-
-    soil_management_fluxes(soil).tillage_carbon .=
-        max.(surface_carbon_before .- @view(soil_carbon_prognostic(soil).litter[SURFACE_LITTER, :]), zero(eltype(surface_carbon_before)))
-    soil_management_fluxes(soil).tillage_nitrogen .=
-        max.(surface_nitrogen_before .- @view(soil_nitrogen_prognostic(soil).litter[SURFACE_LITTER, :]), zero(eltype(surface_nitrogen_before)))
-    return nothing
-end
 
 function litter_tillage!(soil, crop)
     launch_custom!(
@@ -79,19 +62,6 @@ Apply LPJmL's daily bioturbation transfer from surface (`agtop`) to
 incorporated (`agsub`) litter. Carbon and nitrogen are moved together and the
 operation is conservative for each cell.
 """
-function litter_bioturbation_reference!(soil;
-                                        lpjmlparams::LPJmLParams = lpjmlparams)
-    fraction = lpjmlparams.bioturbate
-
-    soil_management_fluxes(soil).bioturbation_carbon .= @view(soil_carbon_prognostic(soil).litter[SURFACE_LITTER, :]) .* fraction
-    soil_management_fluxes(soil).bioturbation_nitrogen .= @view(soil_nitrogen_prognostic(soil).litter[SURFACE_LITTER, :]) .* fraction
-
-    @views soil_carbon_prognostic(soil).litter[INCORPORATED_LITTER, :] .+= soil_management_fluxes(soil).bioturbation_carbon
-    @views soil_carbon_prognostic(soil).litter[SURFACE_LITTER, :] .-= soil_management_fluxes(soil).bioturbation_carbon
-    @views soil_nitrogen_prognostic(soil).litter[INCORPORATED_LITTER, :] .+= soil_management_fluxes(soil).bioturbation_nitrogen
-    @views soil_nitrogen_prognostic(soil).litter[SURFACE_LITTER, :] .-= soil_management_fluxes(soil).bioturbation_nitrogen
-    return nothing
-end
 
 function litter_bioturbation!(soil;
                               lpjmlparams::LPJmLParams = lpjmlparams)
@@ -133,19 +103,6 @@ The harvested stand is then marked `KILL`; the same day's `killstand()` calls
 `setaside()`, which calls `tillage()` when tillage is enabled. The root pool is
 unchanged by the tillage matrix.
 """
-function route_harvest_carbon_input_reference!(soil, crop)
-    event = reshape(crop_events(crop).harvest, (1, :))
-    litter_with_input = soil_carbon_prognostic(soil).litter .+
-                        soil_carbon_fluxes(soil).input
-    routed_litter = soil_management_input(soil).tillage_fraction * litter_with_input
-    soil_management_fluxes(soil).tillage_carbon .+=
-        max.((@view litter_with_input[SURFACE_LITTER, :]) .-
-             (@view routed_litter[SURFACE_LITTER, :]),
-             zero(eltype(litter_with_input))) .* vec(crop_events(crop).harvest)
-    soil_carbon_prognostic(soil).litter .= soil_carbon_prognostic(soil).litter .* (1 .- event) .+
-                          routed_litter .* event
-    return nothing
-end
 
 function route_harvest_carbon_input!(soil, crop)
     launch_custom!(
@@ -161,19 +118,6 @@ function route_harvest_carbon_input!(soil, crop)
 end
 
 """Route today's harvested nitrogen residues through post-harvest tillage."""
-function route_harvest_nitrogen_input_reference!(soil, crop)
-    event = reshape(crop_events(crop).harvest, (1, :))
-    litter_with_input = soil_nitrogen_prognostic(soil).litter .+
-                        soil_nitrogen_fluxes(soil).input
-    routed_litter = soil_management_input(soil).tillage_fraction * litter_with_input
-    soil_management_fluxes(soil).tillage_nitrogen .+=
-        max.((@view litter_with_input[SURFACE_LITTER, :]) .-
-             (@view routed_litter[SURFACE_LITTER, :]),
-             zero(eltype(litter_with_input))) .* vec(crop_events(crop).harvest)
-    soil_nitrogen_prognostic(soil).litter .= soil_nitrogen_prognostic(soil).litter .* (1 .- event) .+
-                            routed_litter .* event
-    return nothing
-end
 
 
 function route_harvest_nitrogen_input!(soil, crop)

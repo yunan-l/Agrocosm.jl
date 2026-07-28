@@ -24,7 +24,7 @@ CUDA.allowscalar(false)
     )
     weather_reference = init_weather(cells, identity)
     weather_gpu = init_weather(cells, CuArray)
-    Agrocosm.readclimate_reference!(climate_cpu, weather_reference, 2)
+    Agrocosm.readclimate!(climate_cpu, weather_reference, 2)
     readclimate!(climate_gpu, weather_gpu, 2)
     synchronize()
     @test Array(weather_gpu.temp) == weather_reference.temp
@@ -33,7 +33,7 @@ CUDA.allowscalar(false)
     daily_co2 = reshape(Float32.(range(390, 430; length = days * cells)), days, cells)
     daily_climate_cpu = merge(climate_cpu, (co2 = daily_co2,))
     daily_climate_gpu = merge(climate_gpu, (co2 = CuArray(daily_co2),))
-    reference_co2 = Agrocosm.readclimate_reference!(
+    reference_co2 = Agrocosm.readclimate!(
         daily_climate_cpu, weather_reference, 2,
     )
     gpu_co2 = readclimate!(daily_climate_gpu, weather_gpu, 2)
@@ -72,8 +72,8 @@ CUDA.allowscalar(false)
     soil_gpu.carbon.litter[1, :] .= CuArray(litter_carbon)
     soil_gpu.snow.height .= CuArray(snow_height)
     soil_gpu.snow.fraction .= CuArray(snow_fraction)
-    Agrocosm.albedo_reference!(cft1, crop_reference, soil_reference, pet_reference)
-    Agrocosm.apar_crop_reference!(cft1, crop_reference, pet_reference)
+    Agrocosm.albedo!(cft1, crop_reference, soil_reference, pet_reference)
+    Agrocosm.apar_crop!(cft1, crop_reference, pet_reference)
     albedo!(cft1, crop_gpu, soil_gpu, pet_gpu)
     apar_crop!(cft1, crop_gpu, pet_gpu)
     synchronize()
@@ -91,7 +91,7 @@ CUDA.allowscalar(false)
     sowing_dates[1:2:end] .= Int32(100)
     crop_reference.auxiliary.calendar.sowing_date .= sowing_dates
     crop_gpu.auxiliary.calendar.sowing_date .= CuArray(sowing_dates)
-    Agrocosm.cultivate_reference!(
+    Agrocosm.cultivate!(
         crop_reference, land_reference, soil_reference, 100;
         apply_prescribed_fertilizer = false,
     )

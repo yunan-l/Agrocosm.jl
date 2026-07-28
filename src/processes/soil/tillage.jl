@@ -1,13 +1,4 @@
 """Apply the sowing-day reduction in topsoil bulk density caused by tillage."""
-function tillage_hydraulics_reference!(soil, crop;
-                                       lpjmlparams::LPJmLParams = lpjmlparams)
-    event = reshape(crop_events(crop).sowing .!= 0, (1, :))
-    density_factor = soil_management_prognostic(soil).tillage_density_factor
-    tilled_factor = density_factor .-
-        (density_factor .- eltype(density_factor)(0.667)) .* lpjmlparams.mixing_efficiency
-    density_factor .= ifelse.(event, tilled_factor, density_factor)
-    return nothing
-end
 
 function tillage_hydraulics!(soil, crop;
                              lpjmlparams::LPJmLParams = lpjmlparams)

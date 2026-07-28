@@ -39,13 +39,13 @@ CUDA.allowscalar(false)
 
     crop_reference.events.sowing .= Int32.(isodd.(1:cells))
     crop_gpu.events.sowing .= CuArray(Int32.(isodd.(1:cells)))
-    Agrocosm.tillage_hydraulics_reference!(reference, crop_reference)
+    Agrocosm.tillage_hydraulics!(reference, crop_reference)
     tillage_hydraulics!(gpu, crop_gpu)
     synchronize()
     @test Array(gpu.management.tillage_density_factor) ≈
         reference.management.tillage_density_factor
 
-    Agrocosm.pedotransfer_reference!(reference)
+    Agrocosm.pedotransfer!(reference)
     pedotransfer!(gpu)
     synchronize()
     for field in (:field_capacity, :saturation_fraction, :beta, :saturated_conductivity)
@@ -107,11 +107,11 @@ CUDA.allowscalar(false)
     gpu.nitrogen.nitrate .= 0.8f0
     gpu.properties.ph .= 6.5f0
 
-    Agrocosm.soil_carbon_reference!(crop_reference, reference)
+    Agrocosm.soil_carbon!(crop_reference, reference)
     soil_carbon!(crop_gpu, gpu)
     air = fill(15.0f0, cells)
     wind = fill(2.0f0, cells)
-    Agrocosm.soil_nitrogen_reference!(
+    Agrocosm.soil_nitrogen!(
         crop_reference, reference; air_temperature = air, wind_speed = wind,
     )
     air_gpu = CuArray(air)

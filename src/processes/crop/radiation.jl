@@ -3,49 +3,6 @@ petpar!(pet, day, lat, temp, lwnet, swdown; dayseconds=86400)
 
 Compute daylength, PAR, and equilibrium evapotranspiration diagnostics.
 """
-function petpar_reference!(pet::PetPar,
-                           day::Int64,
-                           lat::AbstractArray{T},
-                           temp::AbstractArray{T},
-                           lwnet::AbstractArray{T},
-                           swdown::AbstractArray{T};
-                           dayseconds = 86400
-) where {T <: AbstractFloat}
-
-
-    delta = T(deg2rad(-23.4 * cos(2 * π * (day + 10) / 365)))
-    u = T.(sin.(deg2rad.(lat)) * sin(delta))
-    v = T.(cos.(deg2rad.(lat)) * cos(delta))
-
-    launch_1D!(
-        daylength_kernel!,
-        pet.daylength,
-        u,
-        v,
-    )
-
-    swnet = (1 .- pet.albedo) .* swdown
-
-    pet.par .= T(dayseconds) .* swdown ./ T(2)
-
-    s = T(2.503e6) * exp.(T(17.269) * temp ./ (T(237.3) .+ temp)) ./
-        ((T(237.3) .+ temp).^2)
-
-    gamma_t = T(65.05) .+ T(0.064) * temp
-    lambda = T(2.495e6) .- T(2380) * temp
-
-    pet.eeq .= T(dayseconds) * (s ./ (s .+ gamma_t) ./ lambda) .*
-        (swnet .+ lwnet .* (pet.daylength / T(24)))
-
-    # idx = pet.eeq .< 0
-    # pet.eeq[idx] .= zero(T)
-    # pet.eeq .= ifelse.(pet.eeq .< 0, zero(T), pet.eeq)
-    pet.eeq .= max.(pet.eeq, zero(T))
-
-    ## check equilibrium evapotranspiration
-    pet.eeq .= min.(pet.eeq, T(15)) ##  set an upper bound for pet.eeq to avoid extreme values to stop GPU computing
-
-end
 
 """Allocation-free radiation and equilibrium-evaporation preprocessing."""
 function petpar!(pet::PetPar,
@@ -139,26 +96,6 @@ apar_crop!(PFT, crop, pet)
 Compute absorbed PAR and fPAR. Set `maize=true` for the maize-specific fPAR
 parameterization.
 """
-function apar_crop_reference!(PFT::PftParameters,
-                              crop,
-                              pet::PetPar,
-                              snow_height = nothing,
-)
-
-    @unpack name, lightextcoeff, albedo_leaf, alphaa  = PFT
-
-    actual_lai = max.(
-        zero(eltype(crop_prognostic(crop).canopy.lai)),
-        crop_prognostic(crop).canopy.lai .- crop_prognostic(crop).canopy.lai_npp_deficit,
-    )
-    crop_canopy_auxiliary(crop).fpar .= 1 .- exp.(-lightextcoeff * actual_lai)
-    if snow_height !== nothing
-        crop_canopy_auxiliary(crop).fpar .*= snow_height .<= zero(eltype(snow_height))
-    end
-
-    crop_canopy_auxiliary(crop).apar .= pet.par * (1 - albedo_leaf) * alphaa .* crop_canopy_auxiliary(crop).fpar
-
-end
 
 function apar_crop!(
     PFT::PftParameters, crop, pet::PetPar, snow_height = nothing; maize::Bool = false,
@@ -187,26 +124,6 @@ apar_crop_maize!(PFT, crop, pet)
 
 Compute absorbed PAR and maize-specific fPAR parameterization.
 """
-function apar_crop_maize_reference!(PFT::PftParameters,
-                                    crop,
-                                    pet::PetPar,
-                                    snow_height = nothing,
-)
-
-    @unpack name, lightextcoeff, albedo_leaf, alphaa  = PFT
-
-    actual_lai = max.(
-        zero(eltype(crop_prognostic(crop).canopy.lai)),
-        crop_prognostic(crop).canopy.lai .- crop_prognostic(crop).canopy.lai_npp_deficit,
-    )
-    crop_canopy_auxiliary(crop).fpar .= min.(1.0f0, max.(0.0f0, 0.2558f0 * max.(0.01f0, actual_lai) .- 0.0024f0))
-    if snow_height !== nothing
-        crop_canopy_auxiliary(crop).fpar .*= snow_height .<= zero(eltype(snow_height))
-    end
-
-    crop_canopy_auxiliary(crop).apar .= pet.par * (1 - albedo_leaf) * alphaa .* crop_canopy_auxiliary(crop).fpar
-
-end
 
 
 apar_crop_maize!(PFT::PftParameters, crop, pet::PetPar, snow_height = nothing) =

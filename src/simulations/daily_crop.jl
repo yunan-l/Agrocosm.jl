@@ -261,6 +261,10 @@ function _daily_crop!(
         if carbon_balance !== nothing
             record_carbon_balance_end!(carbon_balance, diagnostic_day, crop, soil)
         end
+        # All process kernels for a day share the current backend stream. Wait
+        # once at the lifecycle boundary so callers observe a completed daily
+        # transition without forcing a host/device barrier after every process.
+        synchronize_backend!(crop_prognostic(crop).canopy.lai)
     end
     return nothing
 end

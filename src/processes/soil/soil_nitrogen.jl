@@ -3,58 +3,6 @@ soil_nitrogen!(crop, soil)
 
 Update litter and soil nitrogen pools and crop-available mineral nitrogen.
 """
-function soil_nitrogen_reference!(crop,
-                                  soil;
-                                  air_temperature = nothing,
-                                  wind_speed = nothing,
-                                  lpjmlparams::LPJmLParams = lpjmlparams,
-                                  soil_decomp_params::SoilDecompParams = soil_decomp_params
-)
-
-    @unpack atmfrac, fastfrac, k_soil10 = lpjmlparams
-    @unpack intercept, moist3, moist2, moist1, eps = soil_decomp_params
-
-    # compute soil carbon: litter carbon and soil carbon
-    # soil_nitrogen_fluxes(soil).decomposed_litter = (1.0f0 .- exp.(-soil_nitrogen_auxiliary(soil).litter_response / 100)) .* soil_nitrogen_prognostic(soil).litter
-
-    soil_nitrogen_fluxes(soil).decomposed_litter .=
-        -expm1.(-soil_nitrogen_auxiliary(soil).litter_response .* soil_decomposition_auxiliary(soil).litter_response) .* soil_nitrogen_prognostic(soil).litter
-    soil_nitrogen_prognostic(soil).litter .-= soil_nitrogen_fluxes(soil).decomposed_litter
-
-    route_harvest_nitrogen_input_reference!(soil, crop)
-
-    decomposed_litter = soil_decomposition_workspace(soil).surface_scratch_1
-    @views decomposed_litter .=
-        soil_nitrogen_fluxes(soil).decomposed_litter[1, :] .+
-        soil_nitrogen_fluxes(soil).decomposed_litter[2, :] .+
-        soil_nitrogen_fluxes(soil).decomposed_litter[3, :]
-    soil_nitrogen_fluxes(soil).litter_to_fast .= soil_decomposition_input(soil).shift_fast .*
-        reshape(decomposed_litter, 1, :) .* fastfrac .* (1.0f0 - atmfrac)
-    soil_nitrogen_fluxes(soil).litter_to_slow .= soil_decomposition_input(soil).shift_slow .*
-        reshape(decomposed_litter, 1, :) .* (1.0f0 - fastfrac) .* (1.0f0 - atmfrac)
-
-    # soil_nitrogen_fluxes(soil).decomposed_fast = (1.0f0 .- exp.(-soil.response_fastn .* response / 50)) .* soil_nitrogen_prognostic(soil).fast
-    soil_nitrogen_fluxes(soil).decomposed_fast .= max.(
-        0.0f0,
-        -expm1.(-k_soil10.fast .* soil_decomposition_auxiliary(soil).response) .* soil_nitrogen_prognostic(soil).fast,
-    )
-    soil_nitrogen_prognostic(soil).fast .+= soil_nitrogen_fluxes(soil).litter_to_fast .- soil_nitrogen_fluxes(soil).decomposed_fast
-
-    # soil_nitrogen_fluxes(soil).decomposed_slow = (1.0f0 .- exp.(-soil.response_slown .* response / 10)) .* soil_nitrogen_prognostic(soil).slow
-    soil_nitrogen_fluxes(soil).decomposed_slow .= max.(
-        0.0f0,
-        -expm1.(-k_soil10.slow .* soil_decomposition_auxiliary(soil).response) .* soil_nitrogen_prognostic(soil).slow,
-    )
-    soil_nitrogen_prognostic(soil).slow .+= soil_nitrogen_fluxes(soil).litter_to_slow .- soil_nitrogen_fluxes(soil).decomposed_slow
-
-    nitrogen_transform!(
-        soil;
-        air_temperature = air_temperature,
-        wind_speed = wind_speed,
-        lpjmlparams = lpjmlparams,
-    )
-
-end
 
 """Decompose existing litter and SOM nitrogen without mineral transformations."""
 function soil_nitrogen_decomposition!(soil;

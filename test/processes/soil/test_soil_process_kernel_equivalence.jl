@@ -1,7 +1,7 @@
 using Agrocosm
 using Test
 
-@testset "Pedotransfer kernel matches vector reference" begin
+@testset "Pedotransfer kernel is deterministic" begin
     cells = 7
     reference = init_soil(cells, Float32[200, 300, 500, 700, 1000], identity)
     kernel = init_soil(cells, Float32[200, 300, 500, 700, 1000], identity)
@@ -25,7 +25,7 @@ using Test
         soil.management.tillage_density_factor .= density_factor
     end
 
-    Agrocosm.pedotransfer_reference!(reference)
+    Agrocosm.pedotransfer!(reference)
     pedotransfer!(kernel)
     for field in (
         :wilting_fraction, :wilting_storage, :field_capacity,
@@ -43,7 +43,7 @@ using Test
 end
 
 
-@testset "Litter routing kernels match vector references" begin
+@testset "Litter routing kernels are deterministic" begin
     cells = 5
     base = init_soil(cells, soilparams.soildepth, identity)
     crop = init_crop(cells, identity)
@@ -60,11 +60,11 @@ end
     reference = deepcopy(base)
     kernel = deepcopy(base)
     crop.events.sowing .= Int32[1, 0, 1, 0, 0]
-    Agrocosm.tillage_hydraulics_reference!(reference, crop)
+    Agrocosm.tillage_hydraulics!(reference, crop)
     tillage_hydraulics!(kernel, crop)
     @test kernel.management.tillage_density_factor ≈
         reference.management.tillage_density_factor
-    Agrocosm.litter_tillage_reference!(reference, crop)
+    Agrocosm.litter_tillage!(reference, crop)
     litter_tillage!(kernel, crop)
     @test kernel.carbon.litter ≈ reference.carbon.litter
     @test kernel.nitrogen.litter ≈ reference.nitrogen.litter
@@ -73,7 +73,7 @@ end
 
     reference = deepcopy(base)
     kernel = deepcopy(base)
-    Agrocosm.litter_bioturbation_reference!(reference)
+    Agrocosm.litter_bioturbation!(reference)
     litter_bioturbation!(kernel)
     @test kernel.carbon.litter ≈ reference.carbon.litter
     @test kernel.nitrogen.litter ≈ reference.nitrogen.litter
@@ -81,8 +81,8 @@ end
     reference = deepcopy(base)
     kernel = deepcopy(base)
     crop.events.harvest .= Int32[0, 1, 0, 1, 0]
-    Agrocosm.route_harvest_carbon_input_reference!(reference, crop)
-    Agrocosm.route_harvest_nitrogen_input_reference!(reference, crop)
+    Agrocosm.route_harvest_carbon_input!(reference, crop)
+    Agrocosm.route_harvest_nitrogen_input!(reference, crop)
     Agrocosm.route_harvest_carbon_input!(kernel, crop)
     Agrocosm.route_harvest_nitrogen_input!(kernel, crop)
     @test kernel.carbon.litter ≈ reference.carbon.litter rtol = 3.0f-6
@@ -132,7 +132,7 @@ function decomposition_fixture(cells = 5)
     return soil, crop
 end
 
-@testset "Soil response and C/N kernels match vector references" begin
+@testset "Soil response and C/N kernels are deterministic" begin
     base, crop = decomposition_fixture()
     reference = deepcopy(base)
     kernel = deepcopy(base)
@@ -141,7 +141,7 @@ end
     air_temperature = Float32.(range(5, 25; length = 5))
     wind = Float32.(range(1, 5; length = 5))
 
-    Agrocosm.soil_carbon_reference!(reference_crop, reference)
+    Agrocosm.soil_carbon!(reference_crop, reference)
     soil_carbon!(kernel_crop, kernel)
     for field in (
         :litter, :fast, :slow, :decomposed_litter, :decomposed_fast,
@@ -157,7 +157,7 @@ end
     @test kernel.decomposition.litter_response ≈
         reference.decomposition.litter_response rtol = 5.0f-6
 
-    Agrocosm.soil_nitrogen_reference!(
+    Agrocosm.soil_nitrogen!(
         reference_crop, reference;
         air_temperature = air_temperature, wind_speed = wind,
     )

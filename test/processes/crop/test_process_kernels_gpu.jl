@@ -20,7 +20,7 @@ CUDA.allowscalar(false)
     albedo_cpu = fill(0.2f0, cells)
     pet_reference.albedo .= albedo_cpu
     pet_gpu.albedo .= CuArray(albedo_cpu)
-    Agrocosm.petpar_reference!(
+    Agrocosm.petpar!(
         pet_reference, 172, latitude_cpu, temperature_cpu, longwave_cpu, shortwave_cpu,
     )
     petpar!(
@@ -38,7 +38,7 @@ CUDA.allowscalar(false)
     crop_gpu.auxiliary.photosynthesis.temperature_stress .= CuArray(stress_cpu)
     c3_gross_destination = crop_gpu.fluxes.carbon.gross_assimilation
     c3_vcmax_destination = crop_gpu.auxiliary.photosynthesis.vcmax
-    Agrocosm.photosynthesis_C3_reference!(
+    Agrocosm.photosynthesis_C3!(
         cft1, crop_reference, apar_cpu, daylength_cpu,
         temperature_cpu, Float32[40]; comp_vcmax = true,
     )
@@ -62,7 +62,7 @@ CUDA.allowscalar(false)
     crop_c4_gpu = init_crop(cells, CuArray)
     crop_c4_reference.auxiliary.photosynthesis.temperature_stress .= stress_cpu
     crop_c4_gpu.auxiliary.photosynthesis.temperature_stress .= CuArray(stress_cpu)
-    Agrocosm.photosynthesis_C4_reference!(
+    Agrocosm.photosynthesis_C4!(
         cft3, crop_c4_reference, apar_cpu, daylength_cpu,
         temperature_cpu; comp_vcmax = true,
     )
@@ -89,8 +89,8 @@ CUDA.allowscalar(false)
     end
     crop_reference.state.phenology.is_growing .= growing
     crop_gpu.state.phenology.is_growing .= CuArray(growing)
-    Agrocosm.respiration_reference!(
-        crop_reference, cft1, temperature_cpu, soil_temperature_cpu, gross .- leaf,
+    Agrocosm.respiration!(
+        crop_reference, cft1, temperature_cpu, soil_temperature_cpu, gross, leaf,
     )
     gross_gpu = CuArray(gross)
     leaf_gpu = CuArray(leaf)
@@ -157,46 +157,46 @@ CUDA.allowscalar(false)
     respiration_vector_gpu.state.carbon.storage .= crop_gpu.state.carbon.storage
     respiration_vector_gpu.state.carbon.pool .= crop_gpu.state.carbon.pool
     respiration_vector_gpu.state.phenology.is_growing .= crop_gpu.state.phenology.is_growing
-    Agrocosm.petpar_reference!(
+    Agrocosm.petpar!(
         pet_vector_gpu, 172, latitude_gpu, temperature_gpu, longwave_gpu, shortwave_gpu,
     )
-    Agrocosm.photosynthesis_C3_reference!(
+    Agrocosm.photosynthesis_C3!(
         cft1, photo_vector_gpu, apar_gpu, daylength_gpu,
         temperature_gpu, co2_gpu; comp_vcmax = true,
     )
-    Agrocosm.photosynthesis_C4_reference!(
+    Agrocosm.photosynthesis_C4!(
         cft3, c4_vector_gpu, apar_gpu, daylength_gpu,
         temperature_gpu; comp_vcmax = true,
     )
-    Agrocosm.respiration_reference!(
+    Agrocosm.respiration!(
         respiration_vector_gpu, cft1, temperature_gpu, soil_temperature_gpu,
-        gross_gpu .- leaf_gpu,
+        gross_gpu, leaf_gpu,
     )
     synchronize()
     vector_pet_device_bytes = CUDA.@allocated begin
-        Agrocosm.petpar_reference!(
+        Agrocosm.petpar!(
             pet_vector_gpu, 172, latitude_gpu, temperature_gpu, longwave_gpu, shortwave_gpu,
         )
         synchronize()
     end
     vector_photo_device_bytes = CUDA.@allocated begin
-        Agrocosm.photosynthesis_C3_reference!(
+        Agrocosm.photosynthesis_C3!(
             cft1, photo_vector_gpu, apar_gpu, daylength_gpu,
             temperature_gpu, co2_gpu; comp_vcmax = true,
         )
         synchronize()
     end
     vector_c4_device_bytes = CUDA.@allocated begin
-        Agrocosm.photosynthesis_C4_reference!(
+        Agrocosm.photosynthesis_C4!(
             cft3, c4_vector_gpu, apar_gpu, daylength_gpu,
             temperature_gpu; comp_vcmax = true,
         )
         synchronize()
     end
     vector_respiration_device_bytes = CUDA.@allocated begin
-        Agrocosm.respiration_reference!(
+        Agrocosm.respiration!(
             respiration_vector_gpu, cft1, temperature_gpu, soil_temperature_gpu,
-            gross_gpu .- leaf_gpu,
+            gross_gpu, leaf_gpu,
         )
         synchronize()
     end
@@ -245,7 +245,7 @@ CUDA.allowscalar(false)
     end
     vector_pet_seconds = @elapsed begin
         for _ in 1:20
-            Agrocosm.petpar_reference!(
+            Agrocosm.petpar!(
                 pet_vector_gpu, 172, latitude_gpu, temperature_gpu,
                 longwave_gpu, shortwave_gpu,
             )
@@ -254,7 +254,7 @@ CUDA.allowscalar(false)
     end
     vector_photo_seconds = @elapsed begin
         for _ in 1:20
-            Agrocosm.photosynthesis_C3_reference!(
+            Agrocosm.photosynthesis_C3!(
                 cft1, photo_vector_gpu, apar_gpu, daylength_gpu,
                 temperature_gpu, co2_gpu; comp_vcmax = true,
             )

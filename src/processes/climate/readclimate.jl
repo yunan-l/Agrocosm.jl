@@ -5,31 +5,6 @@ Read one day of climate forcing and return the active CO₂ buffer. A vector
 `climate.co2` is interpreted as a global annual series shared by all cells; a
 matrix is interpreted as daily forcing with shape `(day, cell)`.
 """
-function readclimate_reference!(climate::NamedTuple,
-                                dailyWeather::DailyWeather,
-                                day::Integer
-)
-
-    @views dailyWeather.temp .= climate.temp[day, :]
-    @views dailyWeather.prec .= climate.prec[day, :]
-    @views dailyWeather.swr .= climate.sw[day, :]
-    @views dailyWeather.lwr .= climate.lw[day, :]
-    if hasproperty(climate, :wind)
-        @views dailyWeather.wind .= climate.wind[day, :]
-    else
-        fill!(dailyWeather.wind, lpjmlparams.volatil_wind)
-    end
-    if ndims(climate.co2) == 1
-        co2_daily = hasproperty(climate, :co2_daily) && climate.co2_daily
-        co2_index = co2_daily ? day : div(day - 1, 365) + 1
-        @views dailyWeather.annual_co2 .= climate.co2[co2_index:co2_index] .* 0.1f0
-        return dailyWeather.annual_co2
-    elseif ndims(climate.co2) == 2
-        @views dailyWeather.daily_co2 .= climate.co2[day, :] .* 0.1f0
-        return dailyWeather.daily_co2
-    end
-    throw(ArgumentError("climate.co2 must be a vector or a (day, cell) matrix"))
-end
 
 function readclimate!(climate::NamedTuple,
                       dailyWeather::DailyWeather,

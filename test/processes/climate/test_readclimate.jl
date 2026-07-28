@@ -46,7 +46,7 @@ using Test
 end
 
 
-@testset "Climate read kernel matches vector reference" begin
+@testset "Climate read kernel is deterministic across independent state" begin
     cells = 5
     days = 3
     climate = (
@@ -59,7 +59,7 @@ end
     )
     reference = init_weather(cells, identity)
     kernel = init_weather(cells, identity)
-    reference_co2 = Agrocosm.readclimate_reference!(climate, reference, 2)
+    reference_co2 = Agrocosm.readclimate!(climate, reference, 2)
     kernel_co2 = readclimate!(climate, kernel, 2)
     for field in (:temp, :prec, :swr, :lwr, :wind, :annual_co2)
         @test getproperty(kernel, field) ≈ getproperty(reference, field)
@@ -69,7 +69,7 @@ end
 
     daily_co2 = reshape(Float32.(range(390, 430; length = days * cells)), days, cells)
     daily_climate = merge(climate, (co2 = daily_co2,))
-    reference_co2 = Agrocosm.readclimate_reference!(daily_climate, reference, 3)
+    reference_co2 = Agrocosm.readclimate!(daily_climate, reference, 3)
     kernel_co2 = readclimate!(daily_climate, kernel, 3)
     for field in (:temp, :prec, :swr, :lwr, :wind, :daily_co2)
         @test getproperty(kernel, field) ≈ getproperty(reference, field)
@@ -81,7 +81,7 @@ end
         co2 = Float32[401, 402, 403],
         co2_daily = true,
     ))
-    reference_co2 = Agrocosm.readclimate_reference!(global_daily_climate, reference, 2)
+    reference_co2 = Agrocosm.readclimate!(global_daily_climate, reference, 2)
     kernel_co2 = readclimate!(global_daily_climate, kernel, 2)
     @test reference_co2[1] == 40.2f0
     @test kernel_co2 == reference_co2

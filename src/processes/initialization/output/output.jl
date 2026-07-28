@@ -121,12 +121,24 @@ function init_output(::Type{T},
 end
 
 """Grow a backend array once for a simulation block, preserving existing rows."""
+@kernel inbounds = true function copy_output_rows_kernel!(destination, source)
+    row, column = @index(Global, NTuple)
+    destination[row, column] = source[row, column]
+end
+
+@kernel inbounds = true function write_output_row_kernel!(destination, row, source)
+    column = @index(Global)
+    destination[row, column] = source[column]
+end
+
 function _extend_output_rows(array::AbstractMatrix, additional_rows::Integer)
     additional_rows <= 0 && return array
     old_rows, columns = size(array)
     extended = similar(array, old_rows + additional_rows, columns)
     fill!(extended, zero(eltype(extended)))
-    @views extended[1:old_rows, :] .= array
+    old_rows > 0 && launch_custom!(
+        copy_output_rows_kernel!, extended, (old_rows, columns), array,
+    )
     return extended
 end
 
@@ -192,7 +204,7 @@ end
                                     row::Integer,
                                     source::AbstractVector)
     size(destination, 1) == 0 && return nothing
-    @views destination[row:row, :] .= reshape(source, 1, :)
+    launch_custom!(write_output_row_kernel!, destination, length(source), row, source)
     return nothing
 end
 
