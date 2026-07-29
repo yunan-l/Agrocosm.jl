@@ -30,27 +30,32 @@ function catalog_from_config(config)
         path = String(get(climate, name, default))
         isabspath(path) ? path : joinpath(climate_directory, path)
     end
-    registry = PFTRegistry([1], ["temperate cereals"])
-    single_pft(filename, variable; units = "") = DatasetSpec(
-        joinpath(management_directory, filename), variable; units, pft_ids = [1],
+    registry = PFTRegistry(collect(1:12), collect(CROP_PFT_NAMES))
+    bands = (rainfed = Int32.(1:12), irrigated = Int32.(13:24))
+    multi_pft(filename, variable; residue = false) = DatasetSpec(
+        joinpath(management_directory, filename), variable;
+        rainfed_bands = bands.rainfed,
+        irrigated_bands = residue ? bands.rainfed : bands.irrigated,
+    )
+    management = Dict{Symbol, DatasetSpec}(
+        :landuse => multi_pft("landuse_24cfts_2015.nc", "landfrac"),
+        :sowing_date => multi_pft("sdate_24cfts_2015.nc", "sdate"),
+        :phu => multi_pft("phu_24cfts_2015.nc", "phusum"),
+        :fertilizer => multi_pft("fertilizer_24cfts_2015.nc", "fertilizer"),
+        :manure => multi_pft("manure_24cfts_2015.nc", "manure"),
+        :residue_fraction => multi_pft("residue_12cfts_2015.nc", "residuefrac"; residue = true),
     )
     return DatasetCatalog(
-        Dict{Symbol, DatasetSpec}(
+        merge(management, Dict{Symbol, DatasetSpec}(
             :grid => DatasetSpec(joinpath(soil_directory, "grid.nc"), "cellid"),
             :soilcode => DatasetSpec(joinpath(soil_directory, "soil_30arcmin_13_types.nc"), "soilcode"),
             :soilph => DatasetSpec(joinpath(soil_directory, "soil_pH30arcmin.nc"), "soilph"),
-            :landuse => single_pft("landuse_wheat_rainfed.nc", "landfrac"),
-            :sowing_date => single_pft("sdate_wheat_rainfed.nc", "sdate"),
-            :phu => single_pft("phu_wheat_rainfed.nc", "phusum"),
-            :fertilizer => single_pft("fertilizer_wheat_rainfed.nc", "fertilizer"),
-            :manure => single_pft("manure_wheat_rainfed.nc", "manure"),
-            :residue_fraction => single_pft("residue_wheat_rainfed.nc", "residuefrac"),
             :temp => DatasetSpec(climate_path("temperature_file", "temp_2015_2016.nc"), "temp"),
             :prec => DatasetSpec(climate_path("precipitation_file", "prec_2015_2016.nc"), "prec"),
             :lwnet => DatasetSpec(climate_path("longwave_file", "lwnet_2015_2016.nc"), "lwnet"),
             :swdown => DatasetSpec(climate_path("shortwave_file", "swdown_2015_2016.nc"), "swdown"),
             :co2 => DatasetSpec(climate_path("co2_file", "co2_2015_2016.txt"), "co2"),
-        ),
+        )),
         registry,
     )
 end
@@ -81,6 +86,8 @@ function selected_pool_allocation(allocation, selection)
         allocation.fast_nitrogen_fraction[:, indices],
         allocation.c_shift_fast[:, indices],
         allocation.c_shift_slow[:, indices];
+        pft_id = allocation.pft_id,
+        irrigated = allocation.irrigated,
         provenance = allocation.provenance,
     )
 end
@@ -125,27 +132,28 @@ function management_source_years(config, simulation_years)
 end
 
 function read_management_schedule(
-    catalog, grid, selection, active, source_years, simulation_years, config,
+    catalog, grid, selection, active, source_years, simulation_years, config, pft_id;
+    irrigated::Bool,
 )
     sowing_date = read_management(
-        catalog, :sowing_date, grid, 1;
-        selection, active, simulation_years = source_years, T = Float32,
+        catalog, :sowing_date, grid, pft_id;
+        selection, active, simulation_years = source_years, T = Float32, irrigated,
     )
     phu = read_management(
-        catalog, :phu, grid, 1;
-        selection, active, simulation_years = source_years, T = Float32,
+        catalog, :phu, grid, pft_id;
+        selection, active, simulation_years = source_years, T = Float32, irrigated,
     )
     fertilizer = read_management(
-        catalog, :fertilizer, grid, 1;
-        selection, simulation_years = source_years, T = Float32,
+        catalog, :fertilizer, grid, pft_id;
+        selection, simulation_years = source_years, T = Float32, irrigated,
     )
     manure = read_management(
-        catalog, :manure, grid, 1;
-        selection, simulation_years = source_years, T = Float32,
+        catalog, :manure, grid, pft_id;
+        selection, simulation_years = source_years, T = Float32, irrigated,
     )
     residue = read_management(
-        catalog, :residue_fraction, grid, 1;
-        selection, simulation_years = source_years, T = Float32,
+        catalog, :residue_fraction, grid, pft_id;
+        selection, simulation_years = source_years, T = Float32, irrigated,
     )
     management = config["management"]
     schedule = management_schedule(
@@ -176,17 +184,18 @@ function model_inputs(
     return model_initial_data(grid, soil, crop, initial_state)
 end
 
-function create_simulation(initial_data, selection, config, days, device; diagnostics)
+function create_simulation(initial_data, selection, config, days, device, pft_id;
+    irrigated::Bool, diagnostics)
     management = config["management"]
     return initialize_simulation(
-        cft1, initial_data;
+        crop_pft(pft_id), initial_data;
         days,
         indices = collect(1:length(selection.cell_ids)),
         cell_ids = selection.cell_ids,
         device,
         T = Float32,
         diagnostics,
-        irrigation = false,
+        irrigation = irrigated,
         manure = management["manure"],
         fertilizer = Symbol(management["fertilizer"]),
         with_tillage = management["with_tillage"],
@@ -288,7 +297,13 @@ function balance_report(simulation, validation)
     )
 end
 
-function run_global_wheat(config_path; backend_override = nothing)
+function run_global_wheat(
+    config_path;
+    backend_override = nothing,
+    pft_id::Integer = 1,
+    irrigated::Bool = false,
+    output_subdirectory::Union{Nothing, AbstractString} = nothing,
+)
     config = TOML.parsefile(config_path)
     paths = config["paths"]
     run = config["run"]
@@ -298,6 +313,7 @@ function run_global_wheat(config_path; backend_override = nothing)
         (isnothing(backend.device_id) ? "" : ", device=$(backend.device_id)"),
     )
     output_directory = abspath(paths["output_directory"])
+    !isnothing(output_subdirectory) && (output_directory = joinpath(output_directory, output_subdirectory))
     mkpath(output_directory)
     catalog = catalog_from_config(config)
     grid = read_grid(dataset(catalog, :grid); T = Float32)
@@ -307,15 +323,16 @@ function run_global_wheat(config_path; backend_override = nothing)
     simulation_years = collect(start_year:end_year)
     source_years = management_source_years(config, simulation_years)
     landuse = read_management(
-        catalog, :landuse, grid, 1; simulation_years = source_years, T = Float32,
+        catalog, :landuse, grid, pft_id;
+        simulation_years = source_years, T = Float32, irrigated,
     )
     crop_mask = build_crop_mask(grid, landuse.values)
     phu_probe = read_management(
-        catalog, :phu, grid, 1;
+        catalog, :phu, grid, pft_id;
         selection = crop_mask.selection,
         simulation_years = source_years,
         active = falses(size(crop_mask.active)),
-        T = Float32,
+        T = Float32, irrigated,
     )
     valid_phu = map(axes(phu_probe.values, 2)) do cell
         active_years = view(crop_mask.active, :, cell)
@@ -347,13 +364,20 @@ function run_global_wheat(config_path; backend_override = nothing)
     hwsd = load_hwsd_targets(paths, selection)
     pool_allocation = haskey(paths, "pool_allocation") ?
         read_soil_pool_allocation(abspath(paths["pool_allocation"])) : nothing
+    !isnothing(pool_allocation) && pool_allocation.pft_id != pft_id && error(
+        "pool allocation CFT $(pool_allocation.pft_id) does not match requested CFT $pft_id",
+    )
+    !isnothing(pool_allocation) && pool_allocation.irrigated != irrigated && error(
+        "pool allocation irrigation metadata does not match the requested water system",
+    )
     selected_landuse = read_management(
-        catalog, :landuse, grid, 1;
-        selection, simulation_years = source_years, T = Float32,
+        catalog, :landuse, grid, pft_id;
+        selection, simulation_years = source_years, T = Float32, irrigated,
     )
     active = selected_landuse.values .> 0
     management = read_management_schedule(
-        catalog, grid, selection, active, source_years, simulation_years, config,
+        catalog, grid, selection, active, source_years, simulation_years, config, pft_id;
+        irrigated,
     )
     management_blocks = [annual_management(management, index) for index in eachindex(simulation_years)]
     initial_data = model_inputs(
@@ -368,12 +392,12 @@ function run_global_wheat(config_path; backend_override = nothing)
     warmup_years = collect(warmup_start_year:warmup_end_year)
     warmup_source_years = management_source_years(config, warmup_years)
     warmup_landuse = read_management(
-        catalog, :landuse, grid, 1;
-        selection, simulation_years = warmup_source_years, T = Float32,
+        catalog, :landuse, grid, pft_id;
+        selection, simulation_years = warmup_source_years, T = Float32, irrigated,
     )
     warmup_management = read_management_schedule(
         catalog, grid, selection, warmup_landuse.values .> 0,
-        warmup_source_years, warmup_years, config,
+        warmup_source_years, warmup_years, config, pft_id; irrigated,
     )
     warmup_management_blocks = [
         annual_management(warmup_management, index) for index in eachindex(warmup_years)
@@ -455,8 +479,8 @@ function run_global_wheat(config_path; backend_override = nothing)
         )),
     )
     warmup_simulation = create_simulation(
-        initial_data, selection, config, expected_days, backend.device;
-        diagnostics = false,
+        initial_data, selection, config, expected_days, backend.device, pft_id;
+        irrigated, diagnostics = false,
     )
     warmup = agricultural_warmup!(
         warmup_simulation, warmup_forcings;
@@ -475,6 +499,8 @@ function run_global_wheat(config_path; backend_override = nothing)
             warmup.calibrated_pool_allocation.fast_nitrogen_fraction,
             warmup.calibrated_pool_allocation.c_shift_fast,
             warmup.calibrated_pool_allocation.c_shift_slow;
+            pft_id,
+            irrigated,
             provenance = (
                 source = "agricultural_warmup",
                 warmup_years = warmup.years,
@@ -509,8 +535,8 @@ function run_global_wheat(config_path; backend_override = nothing)
     backend.name === :cuda && CUDA.reclaim()
 
     production = create_simulation(
-        initial_data, selection, config, expected_days, backend.device;
-        diagnostics = false,
+        initial_data, selection, config, expected_days, backend.device, pft_id;
+        irrigated, diagnostics = false,
     )
     restore_checkpoint!(production, warmup_checkpoint)
     state_equal(production.state.prognostic, warmup_simulation.state.prognostic) ||
@@ -542,8 +568,8 @@ function run_global_wheat(config_path; backend_override = nothing)
     save_checkpoint(first_year_checkpoint, production)
 
     continued = create_simulation(
-        initial_data, selection, config, expected_days, backend.device;
-        diagnostics = false,
+        initial_data, selection, config, expected_days, backend.device, pft_id;
+        irrigated, diagnostics = false,
     )
     restore_checkpoint!(continued, first_year_checkpoint)
     state_equal(continued.state.prognostic, production.state.prognostic) ||
@@ -587,14 +613,14 @@ function run_global_wheat(config_path; backend_override = nothing)
     diagnostic_count = min(Int(run["diagnostic_cells"]), length(selection.cell_ids))
     diagnostic_selection = select_cells(grid, selection.compact_indices[1:diagnostic_count])
     diagnostic_landuse = read_management(
-        catalog, :landuse, grid, 1;
+        catalog, :landuse, grid, pft_id;
         selection = diagnostic_selection,
         simulation_years = source_years,
-        T = Float32,
+        T = Float32, irrigated,
     )
     diagnostic_management = read_management_schedule(
         catalog, grid, diagnostic_selection, diagnostic_landuse.values .> 0,
-        source_years, simulation_years, config,
+        source_years, simulation_years, config, pft_id; irrigated,
     )
     diagnostic_management_blocks = [
         annual_management(diagnostic_management, index) for index in eachindex(simulation_years)
@@ -609,8 +635,8 @@ function run_global_wheat(config_path; backend_override = nothing)
         block_days = 365, T = Float32,
     )
     diagnostic = create_simulation(
-        diagnostic_initial, diagnostic_selection, config, expected_days, backend.device;
-        diagnostics = true,
+        diagnostic_initial, diagnostic_selection, config, expected_days, backend.device, pft_id;
+        irrigated, diagnostics = !irrigated,
     )
     diagnostic_warmup_reader = climate_blocks(
         catalog, grid;
@@ -619,15 +645,15 @@ function run_global_wheat(config_path; backend_override = nothing)
         block_days = 365, T = Float32,
     )
     diagnostic_warmup_landuse = read_management(
-        catalog, :landuse, grid, 1;
+        catalog, :landuse, grid, pft_id;
         selection = diagnostic_selection,
         simulation_years = warmup_source_years,
-        T = Float32,
+        T = Float32, irrigated,
     )
     diagnostic_warmup_management = read_management_schedule(
         catalog, grid, diagnostic_selection,
         diagnostic_warmup_landuse.values .> 0,
-        warmup_source_years, warmup_years, config,
+        warmup_source_years, warmup_years, config, pft_id; irrigated,
     )
     diagnostic_warmup_management_blocks = [
         annual_management(diagnostic_warmup_management, index)
@@ -648,8 +674,16 @@ function run_global_wheat(config_path; backend_override = nothing)
         diagnostic, climate_forcings(diagnostic_reader);
         spinup = false, management_blocks = diagnostic_management_blocks,
     )
-    balance = balance_report(diagnostic, config["validation"])
-    balance["simulation_summary"] = simulation_summary(diagnostic)
+    balance = if irrigated
+        Dict{String, Any}(
+            "water_balance" => "not evaluated for irrigated simulations",
+            "diagnostic_summary" => "daily balance ledgers are disabled for irrigation",
+        )
+    else
+        report = balance_report(diagnostic, config["validation"])
+        report["simulation_summary"] = simulation_summary(diagnostic)
+        report
+    end
     write_report(joinpath(output_directory, "sampled_balance_summary.toml"), balance)
     return (;
         cells = length(selection.cell_ids),
