@@ -67,7 +67,11 @@ end
     initial_state = NamedTuple{state_fields}(map(
         name -> copy(getproperty(initial.initialLPJmL.u0, name)), state_fields,
     ))
-    prepared = AgrocosmData.model_initial_data(grid, soil, initial.crop, initial_state)
+    initial_state = merge(initial_state, (
+        c_shift_fast = copy(initial.initialLPJmL.c_shift_fast),
+        c_shift_slow = copy(initial.initialLPJmL.c_shift_slow),
+    ))
+    prepared = model_initial_data(grid, soil, initial.crop, initial_state)
     adapted = initialize_simulation(
         cft1, prepared;
         T = Float32, days, fertilizer = :yes,
