@@ -409,7 +409,7 @@ function run_global_wheat(config_path; backend_override = nothing)
         string(name) => value for (name, value) in pairs(preflight_memory)
     ))
     if backend.name === :cuda
-        available_device_bytes = CUDA.available_memory()
+        available_device_bytes = CUDA.free_memory()
         preflight_memory.recommended_device_peak_bytes <= available_device_bytes || error(
             "estimated CUDA peak $(preflight_memory.recommended_device_peak_gib) GiB " *
             "exceeds available device memory $(available_device_bytes / 2.0^30) GiB",
