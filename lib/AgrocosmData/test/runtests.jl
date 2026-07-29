@@ -159,23 +159,6 @@ include("test_prepare_global_wheat_subset.jl")
         selected_soil = read_soil_data(
             catalog, grid; selection = crop_mask.selection,
         )
-        initial_state = (
-            swc = zeros(Float32, 5, 3),
-            litc = zeros(Float32, 3, 3),
-            fastc = zeros(Float32, 5, 3),
-            slowc = zeros(Float32, 5, 3),
-            litn = zeros(Float32, 3, 3),
-            fastn = zeros(Float32, 5, 3),
-            slown = zeros(Float32, 5, 3),
-        )
-        initial = model_initial_data(
-            grid, selected_soil, automatic_crop, initial_state,
-        )
-        @test initial.backend_neutral
-        @test initial.coords == crop_mask.selection.cell_ids
-        @test initial.latitude == Float32[11, 10, 11]
-        @test initial.initial_state === initial_state
-
         baseline_selection = CellSelection(1:10, 0:9)
         baseline_codes = Int32[6, 7, 9, 9, 9, 9, 9, 9, 9, 9]
         baseline_ph = Float32[6.5, 7, 7, 7, 5.5, 5.5, 5.5, 5.5, 7, 5.5]

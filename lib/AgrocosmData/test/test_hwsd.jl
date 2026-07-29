@@ -113,21 +113,14 @@
         Float32[4000, 6000, 10000, 20000, 20000]
     @test all(partial.uncertain)
 
-    soil = soil_data_from_values(Int32[9], Float32[7], selection)
-    initial_state = hwsd_initial_state(targets, soil)
-    @test initial_state.litc == zeros(Float32, 3, 1)
-    @test initial_state.litn == zeros(Float32, 3, 1)
-    @test initial_state.fastc + initial_state.slowc ≈
-        targets.soil_organic_carbon
-    @test initial_state.fastc ≈ 0.4 .* targets.soil_organic_carbon
-    @test initial_state.slowc ≈ 0.6 .* targets.soil_organic_carbon
-    mineral_nitrogen = 0.01f0 .* initial_state.slown
-    @test initial_state.fastn + initial_state.slown + 2 .* mineral_nitrogen ≈
-        targets.total_nitrogen
-    @test initial_state.fastn ≈ (2 / 3) .* initial_state.slown
-    @test all(initial_state.swc .> 0)
-    @test all(initial_state.swc .< soil.saturation .* reshape(soil.layer_depth, :, 1))
-
+    allocation = SoilPoolAllocation(
+        selection,
+        fill(0.25f0, 5, 1),
+        fill(0.50f0, 5, 1),
+        reshape(Float32[0.40, 0.25, 0.15, 0.10, 0.10], 5, 1),
+        reshape(Float32[0.50, 0.20, 0.15, 0.10, 0.05], 5, 1);
+        provenance = (source = "test",),
+    )
     mktempdir() do directory
         filled_targets = SoilCNTargets(
             targets.selection,
@@ -156,6 +149,16 @@
         @test restored.provenance.fill_policy == "nearest complete 0.5-degree HWSD cell"
         @test restored.provenance.donor_longitude == 10.25
         @test restored.provenance.fill_distance_km == 42.0
+
+        allocation_path = write_soil_pool_allocation(
+            joinpath(directory, "pool_allocation.nc"), allocation,
+        )
+        restored_allocation = read_soil_pool_allocation(allocation_path)
+        @test restored_allocation.selection.cell_ids == allocation.selection.cell_ids
+        @test restored_allocation.fast_carbon_fraction == allocation.fast_carbon_fraction
+        @test restored_allocation.fast_nitrogen_fraction == allocation.fast_nitrogen_fraction
+        @test restored_allocation.c_shift_fast == allocation.c_shift_fast
+        @test restored_allocation.c_shift_slow == allocation.c_shift_slow
     end
 
     @test_throws ArgumentError hwsd_layer_stocks(

@@ -61,17 +61,34 @@ function Base.propertynames(::CropSimulation, private::Bool = false)
     return private ? (public..., :diagnostics) : public
 end
 
+function _has_c_shift_restart(data::NamedTuple)
+    return (hasproperty(data, :c_shift_fast) && hasproperty(data, :c_shift_slow)) ||
+        (hasproperty(data, :initialLPJmL) &&
+         hasproperty(data.initialLPJmL, :c_shift_fast) &&
+         hasproperty(data.initialLPJmL, :c_shift_slow))
+end
+
 function _prepare_initial_data(data::NamedTuple, indices, device, T)
     if hasproperty(data, :ModelState) && hasproperty(data, :soilparams)
         return data
     end
     if hasproperty(data, :backend_neutral) && data.backend_neutral
-        return InitialDataLoader(data, collect(1:length(data.latitude)), device; T = T)
+        restore_c_shift = _has_c_shift_restart(data)
+        return InitialDataLoader(
+            data, collect(1:length(data.latitude)), device;
+            T = T,
+            load_c_shift_restart = restore_c_shift,
+        )
     end
     indices === nothing && throw(ArgumentError(
         "indices are required when initialize_simulation receives raw initial data",
     ))
-    return InitialDataLoader(data, collect(Int, indices), device; T = T)
+    restore_c_shift = _has_c_shift_restart(data)
+    return InitialDataLoader(
+        data, collect(Int, indices), device;
+        T = T,
+        load_c_shift_restart = restore_c_shift,
+    )
 end
 
 """
@@ -81,7 +98,9 @@ Create a precision- and backend-consistent crop simulation. `initial_data` may
 be either raw input data accepted by `InitialDataLoader` or its normalized
 output. Set `diagnostics=false` to avoid allocating daily balance ledgers.
 `fertilizer` follows LPJmL's `:no`, `:yes`, and `:auto` modes; `manure` is an
-independent prescribed-input switch.
+independent prescribed-input switch. By default,
+`c_shift_initialization=:auto` restores supplied `c_shift_fast`/`c_shift_slow`
+arrays and otherwise uses LPJmL's fresh-soil distribution.
 """
 function initialize_simulation(
     pft::PftParameters,
@@ -98,17 +117,22 @@ function initialize_simulation(
     with_tillage::Bool = true,
     nitrogen_limit_vcmax::Bool = false,
     mineral_nitrogen_initialization::Symbol = :lpjml_initsoil,
-    c_shift_initialization::Symbol = :lpjml_initsoil,
+    c_shift_initialization::Symbol = :auto,
 )
     days > 0 || throw(ArgumentError("days must be positive"))
     fertilizer = fertilizer_mode(fertilizer)
     prepared = _prepare_initial_data(initial_data, indices, device, T)
     cells = length(prepared.latitude)
+    resolved_c_shift_initialization = if c_shift_initialization === :auto
+        hasproperty(prepared.ModelState, :c_shift_fast) ? :restart : :lpjml_initsoil
+    else
+        c_shift_initialization
+    end
     states = init_states!(
         pft, prepared, cells, device;
         T = T,
         mineral_nitrogen_initialization = mineral_nitrogen_initialization,
-        c_shift_initialization = c_shift_initialization,
+        c_shift_initialization = resolved_c_shift_initialization,
     )
     climbuf, crop, pet, soil, managed_land, daily_weather, output = states
     state = model_state(climbuf, crop, pet, soil, managed_land, daily_weather, output)

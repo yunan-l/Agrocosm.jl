@@ -95,7 +95,7 @@ targets = SoilCNTargets(
         source_files = ["cell_$(cell_id).nc" for cell_id in selection.cell_ids],
     ),
 )
-initial_state = hwsd_initial_state(targets, soil)
+initial_state = soil_initial_state(targets, soil)
 initial_data = model_initial_data(grid, soil, crop, initial_state)
 
 reader = climate_blocks(

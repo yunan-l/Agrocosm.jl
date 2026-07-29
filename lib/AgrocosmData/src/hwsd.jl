@@ -516,95 +516,49 @@ function read_soil_cn_targets(path::AbstractString; T::Type{<:AbstractFloat} = F
     end
 end
 
-"""
-    field_capacity_water(soil, soil_organic_carbon)
-
-Calculate initial liquid water storage at field capacity with the same
-Saxton–Rawls-style equations used by Agrocosm's `pedotransfer!`. Carbon stocks
-must use the five model layers in gC m⁻². The result is layer × cell in mm.
-"""
-function field_capacity_water(
-    soil::SoilData,
-    soil_organic_carbon::AbstractMatrix;
-    mineral_density::Real = 2700,
-    T::Type{<:AbstractFloat} = Float32,
-)
-    size(soil_organic_carbon) == size(soil.saturation) || throw(DimensionMismatch(
-        "soil organic carbon must match the soil layer × cell shape",
-    ))
-    sand = reshape(T.(soil.sand), 1, :)
-    clay = reshape(T.(soil.clay), 1, :)
-    depth = reshape(T.(soil.layer_depth), :, 1)
-    saturation_reference = T.(soil.saturation)
-    carbon = T.(soil_organic_carbon)
-    organic_matter = clamp.(
-        T(2) .* carbon ./
-            ((one(T) .- saturation_reference) .* T(mineral_density) .* depth) .* T(100),
-        zero(T), T(8),
-    )
-    ws33t = T(0.278) .* sand .+ T(0.034) .* clay .+
-        T(0.022) .* organic_matter .- T(0.018) .* sand .* organic_matter .-
-        T(0.027) .* clay .* organic_matter .-
-        T(0.584) .* sand .* clay .+ T(0.078)
-    ws33 = ws33t .+ (T(0.636) .* ws33t .- T(0.107))
-    wfct = -T(0.251) .* sand .+ T(0.195) .* clay .+
-        T(0.011) .* organic_matter .+ T(0.006) .* sand .* organic_matter .-
-        T(0.027) .* clay .* organic_matter .+
-        T(0.452) .* sand .* clay .+ T(0.299)
-    field = wfct .+ ((T(1.283) .* wfct) .^ 2 .- T(0.374) .* wfct .- T(0.015))
-    saturation = field .+ ws33 .- T(0.097) .* sand .+ T(0.043)
-    field = ifelse.(saturation .- field .< T(0.05), saturation .- T(0.05), field)
-    return field .* depth
+"""Write a compact calibrated soil-pool allocation for later HWSD reconstruction."""
+function write_soil_pool_allocation(path::AbstractString, allocation::SoilPoolAllocation)
+    isfile(path) && rm(path; force = true)
+    NCDataset(path, "c") do dataset
+        layers, cells = size(allocation.fast_carbon_fraction)
+        defDim(dataset, "layer", layers)
+        defDim(dataset, "cell", cells)
+        defVar(dataset, "cell_id", Int32, ("cell",))[:] = allocation.selection.cell_ids
+        for name in (
+            :fast_carbon_fraction,
+            :fast_nitrogen_fraction,
+            :c_shift_fast,
+            :c_shift_slow,
+        )
+            values = getproperty(allocation, name)
+            defVar(dataset, String(name), eltype(values), ("layer", "cell"))[:, :] = values
+        end
+        dataset.attrib["schema_version"] = string(DATA_SCHEMA_VERSION)
+        for (name, value) in pairs(allocation.provenance)
+            value isa Union{AbstractString, Number, Symbol} || continue
+            dataset.attrib[string(name)] = string(value)
+        end
+    end
+    return String(path)
 end
 
-"""
-    hwsd_initial_state(targets, soil; fast_fraction=0.4)
-
-Construct the seven model initialization arrays directly from HWSD SOC and
-total-N targets, without spin-up. Surface/incorporated/root litter starts at
-zero because HWSD describes soil stocks rather than litter. The default 40:60
-fast:slow split matches the mean partition in the existing ten-grid
-LPJmL-spun-up fixture; callers may override it for a calibrated initialization.
-
-The default Agrocosm mineral-N initialization creates NO₃ and NH₄ equal to 1%
-of slow organic N. Organic N is reduced slightly here so organic plus those two
-mineral pools exactly equals HWSD total N.
-"""
-function hwsd_initial_state(
-    targets::SoilCNTargets,
-    soil::SoilData;
-    fast_fraction::Real = 0.4,
-    mineral_fraction_of_slow::Real = 0.01,
-    T::Type{<:AbstractFloat} = Float32,
-)
-    targets.selection.cell_ids == soil.selection.cell_ids || throw(ArgumentError(
-        "HWSD targets and soil properties must use the same compact cell selection",
-    ))
-    size(targets.soil_organic_carbon) == size(soil.saturation) ||
-        throw(DimensionMismatch("HWSD targets and soil properties must have matching layers"))
-    0 <= fast_fraction <= 1 || throw(ArgumentError("fast_fraction must be in [0, 1]"))
-    mineral_fraction_of_slow >= 0 || throw(ArgumentError(
-        "mineral_fraction_of_slow must be nonnegative",
-    ))
-    carbon = T.(targets.soil_organic_carbon)
-    nitrogen = T.(targets.total_nitrogen)
-    all(isfinite, carbon) || throw(ArgumentError("HWSD SOC targets contain missing values"))
-    all(isfinite, nitrogen) || throw(ArgumentError("HWSD total-N targets contain missing values"))
-    all(>=(zero(T)), carbon) || throw(ArgumentError("HWSD SOC targets must be nonnegative"))
-    all(>=(zero(T)), nitrogen) || throw(ArgumentError("HWSD total-N targets must be nonnegative"))
-
-    fast = T(fast_fraction)
-    slow = one(T) - fast
-    mineral = T(mineral_fraction_of_slow)
-    organic_nitrogen = nitrogen ./ (one(T) + T(2) * mineral * slow)
-    cells = length(targets.selection.cell_ids)
-    return (
-        swc = field_capacity_water(soil, carbon; T),
-        litc = zeros(T, 3, cells),
-        fastc = fast .* carbon,
-        slowc = slow .* carbon,
-        litn = zeros(T, 3, cells),
-        fastn = fast .* organic_nitrogen,
-        slown = slow .* organic_nitrogen,
-    )
+"""Read a calibrated soil-pool allocation written by `write_soil_pool_allocation`."""
+function read_soil_pool_allocation(path::AbstractString; T::Type{<:AbstractFloat} = Float32)
+    return NCDataset(path, "r") do dataset
+        cell_ids = Int32.(dataset["cell_id"][:])
+        selection = CellSelection(eachindex(cell_ids), cell_ids)
+        provenance = (schema_version = VersionNumber(dataset.attrib["schema_version"]),)
+        for name in keys(dataset.attrib)
+            name == "schema_version" && continue
+            provenance = merge(provenance, NamedTuple{(Symbol(name),)}((dataset.attrib[name],)))
+        end
+        return SoilPoolAllocation(
+            selection,
+            T.(dataset["fast_carbon_fraction"][:, :]),
+            T.(dataset["fast_nitrogen_fraction"][:, :]),
+            T.(dataset["c_shift_fast"][:, :]),
+            T.(dataset["c_shift_slow"][:, :]);
+            provenance,
+        )
+    end
 end

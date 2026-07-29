@@ -191,6 +191,45 @@ struct SoilCNTargets{T <: AbstractFloat}
     provenance::NamedTuple
 end
 
+"""Calibrated fast/slow SOC allocation and vertical litter-to-SOM routing."""
+struct SoilPoolAllocation{T <: AbstractFloat}
+    selection::CellSelection
+    fast_carbon_fraction::Matrix{T}
+    fast_nitrogen_fraction::Matrix{T}
+    c_shift_fast::Matrix{T}
+    c_shift_slow::Matrix{T}
+    provenance::NamedTuple
+end
+
+function SoilPoolAllocation(
+    selection::CellSelection,
+    fast_carbon_fraction::AbstractMatrix,
+    fast_nitrogen_fraction::AbstractMatrix,
+    c_shift_fast::AbstractMatrix,
+    c_shift_slow::AbstractMatrix;
+    provenance::NamedTuple = (;),
+)
+    arrays = (
+        fast_carbon_fraction,
+        fast_nitrogen_fraction,
+        c_shift_fast,
+        c_shift_slow,
+    )
+    shape = size(first(arrays))
+    all(size(values) == shape for values in arrays) || throw(DimensionMismatch(
+        "all soil-pool allocation arrays must share a layer × cell shape",
+    ))
+    T = float(promote_type(map(eltype, arrays)...))
+    return SoilPoolAllocation{T}(
+        selection,
+        T.(fast_carbon_fraction),
+        T.(fast_nitrogen_fraction),
+        T.(c_shift_fast),
+        T.(c_shift_slow),
+        provenance,
+    )
+end
+
 """Bounded-memory area accumulator used while streaming HWSD raster tiles."""
 mutable struct SoilCNAggregator{T <: AbstractFloat}
     carbon_sum::Matrix{T}

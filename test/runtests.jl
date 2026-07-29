@@ -44,6 +44,7 @@ using Test
     include("processes/soil/test_soil_cn_decomposition.jl")
     include("processes/soil/test_litter_routing.jl")
     include("processes/soil/test_c_shift_routing.jl")
+    include("input_output/test_soil_initialization.jl")
     include("processes/soil/test_soil_carbon.jl")
     include("diagnostics/test_water_balance.jl")
     include("diagnostics/test_nitrogen_balance.jl")

@@ -28,6 +28,7 @@ function _daily_crop!(
     selected_output::Union{Nothing, Set{Tuple{Symbol, Symbol}}} = nothing,
     prescribed_phu = nothing,
     prescribed_winter_type = nothing,
+    c_shift_response_sum = nothing,
 )
     pftparameters = processes.crop
     model_parameters = processes.global_parameters
@@ -131,6 +132,8 @@ function _daily_crop!(
             lpjmlparams = global_params,
             soil_decomp_params = decomp_params,
         )
+        c_shift_response_sum === nothing ||
+            accumulate_c_shift_response!(c_shift_response_sum, soil)
 
         phenology_crop!(
             crop, climbuf.V_req, pftparameters, dailyWeather.temp, pet.daylength,

@@ -29,8 +29,9 @@ soil = read_soil_data(catalog, grid; selection = crop_mask.selection)
 
 # `crop` comes from crop_inputs(...) using single-time management readers.
 hwsd_targets = read_soil_cn_targets("hwsd_cn_targets.nc")
-# Build model C/N pools and field-capacity water directly, without spin-up.
-initial_state = hwsd_initial_state(hwsd_targets, soil) # 40% fast, 60% slow
+# Agrocosm, not AgrocosmData, applies its initialization policy:
+initial_state = soil_initial_state(hwsd_targets, soil)
+initial = model_initial_data(grid, soil, crop, initial_state)
 
 reader = climate_blocks(
     catalog,
@@ -40,7 +41,6 @@ reader = climate_blocks(
     end_year = 2019,
     block_days = 31,
 )
-initial = model_initial_data(grid, soil, crop, initial_state)
 
 simulation = initialize_simulation(
     cft1,
@@ -113,8 +113,6 @@ HWSD ends at 2 m. By default, `remap_hwsd_layers` extends the stock density of
 the 1.5–2 m layer through Agrocosm's 2–3 m layer and marks every extrapolated
 value uncertain. Pass `deep_rule=:missing` when extrapolation is unsuitable.
 The generated targets remain source totals rather than runtime pools.
-`hwsd_initial_state` currently converts them to a no-spin-up initialization
-using a documented 40:60 fast/slow split and zero litter.
 
 For a real-data check after downloading the official `HWSD2.bil` and
 `HWSD2.mdb`, install `mdbtools` and run:

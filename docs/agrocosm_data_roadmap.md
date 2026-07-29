@@ -148,8 +148,8 @@ Deliverables:
   validation.
 
 The preprocessing output contains total SOC/N targets, not `fast`/`slow` pools
-or litter. `hwsd_initial_state` applies the explicit interim 40:60 fast/slow
-initialization and zero litter before Agrocosm's agricultural warm-up.
+or litter. Agrocosm's `soil_initial_state` applies the explicit interim 40:60
+fast/slow initialization and zero litter before agricultural warm-up.
 
 Acceptance:
 
@@ -237,7 +237,7 @@ Connect HWSD targets and streamed forcing to the Agrocosm spin-up workflow
 without moving scientific state evolution into the data package.
 
 Interim direct-initialization status: equilibrium spin-up is deferred.
-`hwsd_initial_state`
+`soil_initial_state`
 conservatively partitions HWSD SOC and total N into the current fast/slow
 pools, initializes litter to zero, accounts for the default initial mineral-N
 pools, and initializes water at field capacity. New data use the neutral

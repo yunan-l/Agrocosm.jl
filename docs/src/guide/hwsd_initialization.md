@@ -82,13 +82,14 @@ no complete donor exists inside the configured search radius.
 ## Constructing model state
 
 The preprocessing output contains SOC and total-N targets, not model pools.
-`hwsd_initial_state` creates the seven required initialization arrays:
+`soil_initial_state` creates the seven required initialization arrays from
+the source-neutral targets:
 
 ```julia
 grid = read_grid("grid.nc")
 soil = read_soil_data(catalog, grid; selection)
 targets = read_soil_cn_targets("hwsd_cn_targets.nc")
-initial_state = hwsd_initial_state(targets, soil)
+initial_state = soil_initial_state(targets, soil)
 ```
 
 The initialization defaults are:

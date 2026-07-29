@@ -40,6 +40,80 @@ function soil_decomp_response!(soil;
     return nothing
 end
 
+"""
+    accumulate_c_shift_response!(response_sum, soil)
+
+Accumulate the daily LPJmL soil-decomposition response for a later
+`equilsoil`-style calibration of the fixed vertical litter-to-SOM routing
+fractions. `response_sum` is a layer × cell backend array and is only used by
+agricultural warm-up; it does not alter the active routing fractions.
+"""
+function accumulate_c_shift_response!(response_sum, soil)
+    response = soil_decomposition_auxiliary(soil).response
+    size(response_sum) == size(response) || throw(DimensionMismatch(
+        "c_shift response accumulator must match the soil layer × cell response",
+    ))
+    launch_2D!(accumulate_c_shift_response_kernel!, response_sum, response)
+    return nothing
+end
+
+@kernel inbounds = true function accumulate_c_shift_response_kernel!(
+    response_sum::AbstractMatrix{T},
+    response::AbstractMatrix{T},
+) where {T <: AbstractFloat}
+    layer, cell = @index(Global, NTuple)
+    response_sum[layer, cell] += response[layer, cell]
+end
+
+"""
+    equilibrated_c_shift!(fast, slow, response_sum, reference_fast, reference_slow)
+
+Compute LPJmL `equilsoil()`-style vertical routing fractions. Each layer's
+reference SOC-input fraction is weighted by its accumulated daily
+decomposition response and normalized separately for the fast and slow pools.
+The existing reference distribution is retained for a cell with no positive
+response, matching LPJmL's top-layer fallback semantics without changing the
+running warm-up state.
+"""
+function equilibrated_c_shift!(fast, slow, response_sum, reference_fast, reference_slow)
+    size(fast) == size(response_sum) == size(slow) == size(reference_fast) ==
+        size(reference_slow) || throw(DimensionMismatch(
+        "all c_shift calibration arrays must share a layer × cell shape",
+    ))
+    launch_custom!(
+        equilibrated_c_shift_kernel!, fast, size(fast, 2), slow, response_sum,
+        reference_fast, reference_slow, size(fast, 1),
+    )
+    return nothing
+end
+
+@kernel inbounds = true function equilibrated_c_shift_kernel!(
+    fast::AbstractMatrix{T},
+    slow::AbstractMatrix{T},
+    response_sum::AbstractMatrix{T},
+    reference_fast::AbstractMatrix{T},
+    reference_slow::AbstractMatrix{T},
+    layers::Integer,
+) where {T <: AbstractFloat}
+    cell = @index(Global)
+    fast_total = zero(T)
+    slow_total = zero(T)
+    for layer in 1:layers
+        response = max(response_sum[layer, cell], zero(T))
+        fast_total += response * max(reference_fast[layer, cell], zero(T))
+        slow_total += response * max(reference_slow[layer, cell], zero(T))
+    end
+    for layer in 1:layers
+        response = max(response_sum[layer, cell], zero(T))
+        fast_weight = response * max(reference_fast[layer, cell], zero(T))
+        slow_weight = response * max(reference_slow[layer, cell], zero(T))
+        fast[layer, cell] = fast_total > eps(T) ? fast_weight / fast_total :
+            reference_fast[layer, cell]
+        slow[layer, cell] = slow_total > eps(T) ? slow_weight / slow_total :
+            reference_slow[layer, cell]
+    end
+end
+
 @inline function soil_temperature_response_scalar(temperature::T,
                                                   e0::T,
                                                   temp_response::T) where {T <: AbstractFloat}

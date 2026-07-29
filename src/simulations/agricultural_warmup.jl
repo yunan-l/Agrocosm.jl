@@ -66,6 +66,47 @@ function _warmup_targets(state::ModelState)
     )
 end
 
+function _warmup_c_shift_workspace(state::ModelState)
+    decomposition = soil_decomposition_input(state)
+    response = soil_decomposition_auxiliary(state).response
+    response_sum = similar(response)
+    fill!(response_sum, zero(eltype(response_sum)))
+    return (
+        response_sum,
+        reference_fast = copy(decomposition.shift_fast),
+        reference_slow = copy(decomposition.shift_slow),
+    )
+end
+
+function _warmup_c_shift_report(workspace)
+    fast = similar(workspace.reference_fast)
+    slow = similar(workspace.reference_slow)
+    equilibrated_c_shift!(
+        fast, slow, workspace.response_sum, workspace.reference_fast,
+        workspace.reference_slow,
+    )
+    return (
+        fast = Array(fast),
+        slow = Array(slow),
+        response_sum = Array(workspace.response_sum),
+    )
+end
+
+function _warmup_pool_allocation(state::ModelState, c_shift)
+    carbon = Array(soil_carbon_prognostic(state).fast)
+    carbon .+= Array(soil_carbon_prognostic(state).slow)
+    nitrogen = Array(soil_nitrogen_prognostic(state).fast)
+    nitrogen .+= Array(soil_nitrogen_prognostic(state).slow)
+    fast_carbon = Array(soil_carbon_prognostic(state).fast)
+    fast_nitrogen = Array(soil_nitrogen_prognostic(state).fast)
+    return (
+        fast_carbon_fraction = fast_carbon ./ max.(carbon, eps(eltype(carbon))),
+        fast_nitrogen_fraction = fast_nitrogen ./ max.(nitrogen, eps(eltype(nitrogen))),
+        c_shift_fast = c_shift.fast,
+        c_shift_slow = c_shift.slow,
+    )
+end
+
 @kernel inbounds = true function constrain_warmup_carbon_kernel!(
     fast::AbstractMatrix{T},
     slow::AbstractMatrix{T},
@@ -377,6 +418,7 @@ function agricultural_warmup!(
     nitrogen_correction = zeros(correction_type, maximum_years, cells)
     converged_fraction = zeros(Float64, maximum_years)
     targets = target_constrained ? _warmup_targets(simulation.state) : nothing
+    c_shift_workspace = _warmup_c_shift_workspace(simulation.state)
     consecutive = zeros(Int, cells)
     actual_years = 0
     converged = false
@@ -389,6 +431,7 @@ function agricultural_warmup!(
         nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
         reuse_output = true,
         selected_output = no_output,
+        c_shift_response_sum = c_shift_workspace.response_sum,
     )
 
     forcing_years = div(climate_days, 365)
@@ -431,6 +474,7 @@ function agricultural_warmup!(
     # warm-up year explicitly before returning.
     annual_climbuf!(simulation.climbuf.atemp, simulation.climbuf, simulation.pft)
     clear_output_timeseries!(simulation.output)
+    calibrated_c_shift = _warmup_c_shift_report(c_shift_workspace)
     return (
         years = actual_years,
         days = 365 * actual_years,
@@ -452,6 +496,10 @@ function agricultural_warmup!(
             nitrogen = nitrogen_correction[1:actual_years, :],
         ),
         converged_fraction = converged_fraction[1:actual_years],
+        calibrated_c_shift,
+        calibrated_pool_allocation = _warmup_pool_allocation(
+            simulation.state, calibrated_c_shift,
+        ),
     )
 end
 
@@ -509,6 +557,7 @@ function agricultural_warmup!(
     nitrogen_correction = zeros(correction_type, maximum_years, cells)
     converged_fraction = zeros(Float64, maximum_years)
     targets = target_constrained ? _warmup_targets(simulation.state) : nothing
+    c_shift_workspace = _warmup_c_shift_workspace(simulation.state)
     consecutive = zeros(Int, cells)
     actual_years = 0
     converged = false
@@ -521,6 +570,7 @@ function agricultural_warmup!(
         nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
         reuse_output = true,
         selected_output = no_output,
+        c_shift_response_sum = c_shift_workspace.response_sum,
     )
 
     forcing_years = div(climate_days, 365)
@@ -589,6 +639,7 @@ function agricultural_warmup!(
 
     annual_climbuf!(simulation.climbuf.atemp, simulation.climbuf, simulation.pft)
     clear_output_timeseries!(simulation.output)
+    calibrated_c_shift = _warmup_c_shift_report(c_shift_workspace)
     return (
         years = actual_years,
         days = 365 * actual_years,
@@ -610,5 +661,9 @@ function agricultural_warmup!(
             nitrogen = nitrogen_correction[1:actual_years, :],
         ),
         converged_fraction = converged_fraction[1:actual_years],
+        calibrated_c_shift,
+        calibrated_pool_allocation = _warmup_pool_allocation(
+            simulation.state, calibrated_c_shift,
+        ),
     )
 end

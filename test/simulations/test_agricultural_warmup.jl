@@ -33,6 +33,15 @@ end
     @test all(report.soil.total_carbon .>= 0)
     @test all(report.soil.total_nitrogen .>= 0)
     @test all(report.soil.mineral_nitrogen .>= 0)
+    @test size(report.calibrated_c_shift.fast) == (5, 1)
+    @test size(report.calibrated_c_shift.slow) == (5, 1)
+    @test all(report.calibrated_c_shift.response_sum .>= 0)
+    @test sum(report.calibrated_c_shift.fast; dims = 1)[1] ≈ 1.0f0
+    @test sum(report.calibrated_c_shift.slow; dims = 1)[1] ≈ 1.0f0
+    @test all((0 .<= report.calibrated_pool_allocation.fast_carbon_fraction) .&
+              (report.calibrated_pool_allocation.fast_carbon_fraction .<= 1))
+    @test all((0 .<= report.calibrated_pool_allocation.fast_nitrogen_fraction) .&
+              (report.calibrated_pool_allocation.fast_nitrogen_fraction .<= 1))
     drift = agricultural_warmup_drift(report)
     @test length(drift.total_carbon) == 11
     @test length(drift.total_nitrogen) == 11

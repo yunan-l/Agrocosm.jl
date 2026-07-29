@@ -263,6 +263,13 @@ end
     )
     @test restart.ModelState.c_shift_fast == fast_shift
     @test restart.ModelState.c_shift_slow == slow_shift
+
+    simulation = initialize_simulation(
+        cft1, data_with_shift;
+        indices = [1, 2], T = Float32, days = 1, diagnostics = false,
+    )
+    @test simulation.state.inputs.soil.decomposition.shift_fast == fast_shift
+    @test simulation.state.inputs.soil.decomposition.shift_slow == slow_shift
 end
 
 @testset "LPJmL mineral-N initialization strategies" begin

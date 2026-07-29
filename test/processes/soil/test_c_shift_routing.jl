@@ -47,4 +47,18 @@ using Test
     @test sum(soil.nitrogen.litter_to_fast .+ soil.nitrogen.litter_to_slow) ≈
           retained_nitrogen atol = 1.0f-7
     @test sum(root_distribution(0.96f0)) ≈ 1.0 atol = 1.0e-6
+
+    response_sum = reshape(Float32[1, 2, 3, 4, 5], 5, 1)
+    calibrated_fast = similar(response_sum)
+    calibrated_slow = similar(response_sum)
+    equilibrated_c_shift!(
+        calibrated_fast, calibrated_slow, response_sum,
+        reshape(fast_shift, :, 1), reshape(slow_shift, :, 1),
+    )
+    @test sum(calibrated_fast; dims = 1)[1] ≈ 1.0f0
+    @test sum(calibrated_slow; dims = 1)[1] ≈ 1.0f0
+    @test calibrated_fast[:, 1] ≈ fast_shift .* response_sum[:, 1] ./
+        sum(fast_shift .* response_sum[:, 1])
+    @test calibrated_slow[:, 1] ≈ slow_shift .* response_sum[:, 1] ./
+        sum(slow_shift .* response_sum[:, 1])
 end

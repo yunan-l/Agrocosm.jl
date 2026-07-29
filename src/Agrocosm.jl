@@ -75,6 +75,7 @@ export pedotransfer!, soil_carbon!
 export evaporation!, soil_infiltration!, soil_evapotranspiration!
 export soil_nitrogen!, nitrogen_transform!, soil_cn_decomposition!, post_crop_nitrogen_losses!
 export soil_decomp_response!
+export accumulate_c_shift_response!, equilibrated_c_shift!
 export update_surface_litter_properties!, surface_litter_interception!
 export litter_tillage!, tillage_hydraulics!, litter_bioturbation!
 
@@ -83,6 +84,7 @@ export deg2rad, ppm2Pa, ppm2bar, hour2day, hour2sec, degCtoK
 
 # DATA
 export InitialDataLoader, ClimateDataLoader, DataLoader, DataLoader_winter_wheat
+export field_capacity_water, soil_initial_state, model_initial_data
 export write_output_nc
 export OutputVariable, OutputChunk, OutputStream
 export JLD2BlockWriter, NetCDFBlockWriter
@@ -184,6 +186,7 @@ include("processes/soil/soil_response.jl")
 # Input and output
 include("input_output/climate_data_loader.jl")
 include("input_output/initial_data_loader.jl")
+include("input_output/soil_initialization.jl")
 include("input_output/write_output_nc.jl")
 include("input_output/stream_output.jl")
 

@@ -70,6 +70,21 @@ function selected_targets(targets, selection)
     )
 end
 
+function selected_pool_allocation(allocation, selection)
+    allocation === nothing && return nothing
+    position = Dict(cell_id => index for (index, cell_id) in pairs(allocation.selection.cell_ids))
+    indices = [get(position, cell_id, 0) for cell_id in selection.cell_ids]
+    all(>(0), indices) || error("pool allocation does not cover every selected wheat cell")
+    return SoilPoolAllocation(
+        selection,
+        allocation.fast_carbon_fraction[:, indices],
+        allocation.fast_nitrogen_fraction[:, indices],
+        allocation.c_shift_fast[:, indices],
+        allocation.c_shift_slow[:, indices];
+        provenance = allocation.provenance,
+    )
+end
+
 function load_hwsd_targets(paths, selection)
     if haskey(paths, "hwsd_targets") && isfile(abspath(paths["hwsd_targets"]))
         return read_soil_cn_targets(abspath(paths["hwsd_targets"]); T = Float32)
@@ -149,11 +164,15 @@ annual_management(schedule, index) = (
     residuefrac = vec(schedule.residuefrac[index, :]),
 )
 
-function model_inputs(grid, selection, hwsd_targets, catalog, management)
+function model_inputs(
+    grid, selection, hwsd_targets, catalog, management;
+    pool_allocation = nothing,
+)
     crop = annual_management(management, 1)
     soil = read_soil_data(catalog, grid; selection)
     targets = selected_targets(hwsd_targets, selection)
-    initial_state = hwsd_initial_state(targets, soil)
+    allocation = selected_pool_allocation(pool_allocation, selection)
+    initial_state = soil_initial_state(targets, soil; allocation)
     return model_initial_data(grid, soil, crop, initial_state)
 end
 
@@ -326,6 +345,8 @@ function run_global_wheat(config_path; backend_override = nothing)
         "run_cells" => length(selection.cell_ids),
     ))
     hwsd = load_hwsd_targets(paths, selection)
+    pool_allocation = haskey(paths, "pool_allocation") ?
+        read_soil_pool_allocation(abspath(paths["pool_allocation"])) : nothing
     selected_landuse = read_management(
         catalog, :landuse, grid, 1;
         selection, simulation_years = source_years, T = Float32,
@@ -335,7 +356,9 @@ function run_global_wheat(config_path; backend_override = nothing)
         catalog, grid, selection, active, source_years, simulation_years, config,
     )
     management_blocks = [annual_management(management, index) for index in eachindex(simulation_years)]
-    initial_data = model_inputs(grid, selection, hwsd, catalog, management)
+    initial_data = model_inputs(
+        grid, selection, hwsd, catalog, management; pool_allocation,
+    )
 
     warmup_start_year = Int(get(run, "warmup_climate_start_year", start_year))
     warmup_end_year = Int(get(run, "warmup_climate_end_year", end_year))
@@ -443,6 +466,21 @@ function run_global_wheat(config_path; backend_override = nothing)
     write_report(
         joinpath(output_directory, "warmup_cn_drift.toml"),
         warmup_drift,
+    )
+    write_soil_pool_allocation(
+        joinpath(output_directory, "warmup_soil_pool_allocation.nc"),
+        SoilPoolAllocation(
+            selection,
+            warmup.calibrated_pool_allocation.fast_carbon_fraction,
+            warmup.calibrated_pool_allocation.fast_nitrogen_fraction,
+            warmup.calibrated_pool_allocation.c_shift_fast,
+            warmup.calibrated_pool_allocation.c_shift_slow;
+            provenance = (
+                source = "agricultural_warmup",
+                warmup_years = warmup.years,
+                target_constrained = warmup.target_constrained,
+            ),
+        ),
     )
     println(
         "warm-up completed: years=$(warmup.years), converged=$(warmup.converged), " *
@@ -562,7 +600,8 @@ function run_global_wheat(config_path; backend_override = nothing)
         annual_management(diagnostic_management, index) for index in eachindex(simulation_years)
     ]
     diagnostic_initial = model_inputs(
-        grid, diagnostic_selection, hwsd, catalog, diagnostic_management,
+        grid, diagnostic_selection, hwsd, catalog, diagnostic_management;
+        pool_allocation,
     )
     diagnostic_reader = climate_blocks(
         catalog, grid;

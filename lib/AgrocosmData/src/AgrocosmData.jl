@@ -20,7 +20,7 @@ export GridIndex, CellSelection, CompactVariable, TimeCellData, CropMask
 export CO2Series, ClimateBlock, ClimateBlockReader, ClimateForcingReader
 export PrefetchedClimateForcingReader
 export SoilLookup, SoilData, DEFAULT_SOIL_LOOKUP_VERSION
-export SoilCNTargets, SoilCNAggregator
+export SoilCNTargets, SoilPoolAllocation, SoilCNAggregator
 export HWSD_LAYER_BOUNDS, AGROCOSM_SOIL_LAYER_BOUNDS, HWSD_CN_PREPROCESSING_VERSION
 export load_catalog, dataset, pft_index, pft_name
 export read_grid, all_cells, select_cells, compact_spatial, expand_to_grid
@@ -32,11 +32,10 @@ export hwsd_tile_mapping
 export init_soil_cn_aggregator, accumulate_soil_cn!, finish_soil_cn
 export soil_cn_conservation
 export preprocess_hwsd_cn, write_soil_cn_targets, read_soil_cn_targets
-export hwsd_initial_state, field_capacity_water
+export write_soil_pool_allocation, read_soil_pool_allocation
 export read_management, validate_management, crop_inputs, management_schedule
 export read_co2_series, climate_blocks, climate_days, read_climate_block
 export climate_forcing, climate_forcings
 export prefetch_climate_forcings
-export model_initial_data
 
 end
