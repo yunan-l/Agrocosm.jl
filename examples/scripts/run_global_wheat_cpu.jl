@@ -588,9 +588,7 @@ function run_global_wheat(
     )
     diagnostic = create_simulation(
         diagnostic_initial, diagnostic_selection, config, expected_days, backend.device, pft_id;
-        # Irrigation resets soil water to field capacity, but the diagnostic ledger
-        # has no irrigation-input term yet. Do not report a misleading closure.
-        irrigated, diagnostics = !irrigated,
+        irrigated, diagnostics = true,
     )
     diagnostic_warmup_reader = climate_blocks(
         catalog, grid;
@@ -628,16 +626,8 @@ function run_global_wheat(
         diagnostic, climate_forcings(diagnostic_reader);
         spinup = false, management_blocks = diagnostic_management_blocks,
     )
-    balance = if irrigated
-        Dict{String, Any}(
-            "water_balance" => "not evaluated for irrigated simulations",
-            "diagnostic_summary" => "daily balance ledgers are disabled for irrigation",
-        )
-    else
-        report = balance_report(diagnostic, config["validation"])
-        report["simulation_summary"] = simulation_summary(diagnostic)
-        report
-    end
+    balance = balance_report(diagnostic, config["validation"])
+    balance["simulation_summary"] = simulation_summary(diagnostic)
     write_report(joinpath(output_directory, "sampled_balance_summary.toml"), balance)
     return (;
         cells = length(selection.cell_ids),
