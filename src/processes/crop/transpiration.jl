@@ -44,6 +44,76 @@ function transpiration!(photos_adtmm::AbstractArray{T},
 
 end
 
+"""Compute LPJmL canopy conductance from water-limited assimilation."""
+@inline function compute_canopy_conductance(
+    water_limited_assimilation::T,
+    co2::T,
+    daylength::T,
+    fpar::T,
+    minimum_conductance::T,
+    lambda_optimum::T,
+) where {T <: AbstractFloat}
+    co2_bar = co2 * T(1e-5)
+    co2_bar > zero(T) && daylength > zero(T) || return zero(T)
+    denominator = co2_bar * (one(T) - lambda_optimum) * hour2sec(daylength)
+    return T(1.6) * water_limited_assimilation / denominator +
+           minimum_conductance * fpar
+end
+
+"""Compute root-water-limited transpiration supply for one crop column."""
+@inline compute_transpiration_supply(
+    maximum_supply::T, root_water::T, root_carbon::T,
+) where {T <: AbstractFloat} =
+    maximum_supply * root_water * (one(T) - exp(T(-0.04) * root_carbon))
+
+"""Compute canopy transpiration demand from conductance and wet-canopy fraction."""
+@inline function compute_transpiration_demand(
+    canopy_wet::T,
+    equilibrium_evaporation::T,
+    alpha::T,
+    conductance_shape::T,
+    conductance::T,
+) where {T <: AbstractFloat}
+    conductance > zero(T) || return zero(T)
+    return (one(T) - canopy_wet) * equilibrium_evaporation * alpha /
+           (one(T) + (conductance_shape * alpha) / conductance)
+end
+
+"""Return the LPJmL 0–100 seasonal water-sufficiency diagnostic."""
+@inline function compute_water_sufficiency(
+    supplied::T, demanded::T,
+) where {T <: AbstractFloat}
+    demanded > zero(T) || return T(100)
+    return clamp(T(100) * supplied / demanded, zero(T), T(100))
+end
+
+"""Cap one layer's transpiration extraction by its plant-available water."""
+@inline function compute_layer_transpiration(
+    transpiration::T,
+    root_fraction::T,
+    relative_water::T,
+    holding_storage::T,
+) where {T <: AbstractFloat}
+    unconstrained = transpiration * root_fraction * relative_water
+    capacity = relative_water * holding_storage
+    return min(unconstrained, capacity), unconstrained > capacity
+end
+
+"""Recover actual canopy conductance after layer-wise uptake capping."""
+@inline function compute_actual_canopy_conductance(
+    current_conductance::T,
+    actual_supply::T,
+    demand::T,
+    canopy_wet::T,
+    equilibrium_evaporation::T,
+    alpha::T,
+    conductance_shape::T,
+) where {T <: AbstractFloat}
+    actual_supply < demand && equilibrium_evaporation > zero(T) || return current_conductance
+    denominator = (one(T) - canopy_wet) * equilibrium_evaporation * alpha - actual_supply
+    return denominator > zero(T) ? conductance_shape * alpha * actual_supply / denominator : zero(T)
+end
+
 @kernel inbounds = true function water_demand_supply_kernel!(
                                              crop_gp::AbstractArray{T},
                                              photos_adtmm::AbstractArray{T},
@@ -70,20 +140,14 @@ end
     cell = @index(Global)
 
     @unpack lpjmlparams, soil_layers = kernel_params
-
     @unpack ALPHAM, GM, LAMBDA_OPT = lpjmlparams
     @unpack fpc, emax, gmin = PFT
 
     co2_index = length(co2) == 1 ? 1 : cell
-    co2_bar = co2[co2_index] * T(1e-5)
-    if co2_bar > zero(T) && daylength[cell] > zero(T)
-        conductance_denominator = co2_bar * (one(T) - T(LAMBDA_OPT)) *
-            hour2sec(daylength[cell])
-        crop_gp[cell] = T(1.6) * photos_adtmm[cell] / conductance_denominator +
-            T(gmin) * crop_fpar[cell]
-    else
-        crop_gp[cell] = zero(T)
-    end
+    crop_gp[cell] = compute_canopy_conductance(
+        photos_adtmm[cell], co2[co2_index], daylength[cell], crop_fpar[cell],
+        T(gmin), T(LAMBDA_OPT),
+    )
 
     wr = zero(T)
     rootzone_water = zero(T)
@@ -96,12 +160,10 @@ end
     crop_rootzone_available_water[cell] = rootzone_water
 
     if crop_isgrowing[cell] == 1
-        supply = emax * wr * (1 - exp(-0.04f0 * crop_rootc[cell]))
-        if crop_gp[cell] > 0
-            demand = (1 - crop_canopy_wet[cell]) * pet_eeq[cell] * ALPHAM / (1 + (GM * ALPHAM) / crop_gp[cell])
-        else
-            demand = zero(T)
-        end
+        supply = compute_transpiration_supply(T(emax), wr, crop_rootc[cell])
+        demand = compute_transpiration_demand(
+            crop_canopy_wet[cell], pet_eeq[cell], T(ALPHAM), T(GM), crop_gp[cell],
+        )
 
         crop_w_demandsum[cell] += demand
         if supply > demand
@@ -110,14 +172,9 @@ end
             crop_w_supplysum[cell] += supply
         end
 
-        if crop_w_demandsum[cell] > 0.0
-            crop_wdf[cell] = clamp(
-                T(100.0) * crop_w_supplysum[cell] / crop_w_demandsum[cell],
-                zero(T), T(100.0),
-            )
-        else
-            crop_wdf[cell] = T(100.0)
-        end
+        crop_wdf[cell] = compute_water_sufficiency(
+            crop_w_supplysum[cell], crop_w_demandsum[cell],
+        )
 
         if pet_eeq[cell] > 0.0 && crop_gp[cell] > 0.0
             crop_wscal[cell] = (emax * wr) / (pet_eeq[cell] * ALPHAM / (one(T) + (GM * ALPHAM) / crop_gp[cell]))
@@ -140,19 +197,11 @@ end
         # Apply layer-wise extraction cap so uptake does not exceed layer storage.
         if transp > 0
             for l in 1:soil_layers
-                transp_frac = 1
-                if transp * crop_rootdist[l] * soil_w[l, cell] > soil_w[l, cell] * soil_whcs[l, cell]
-                    transp_frac = soil_whcs[l, cell] / (transp * crop_rootdist[l])
-                end
-                transp_tmp = transp * crop_rootdist[l] * soil_w[l, cell] * transp_frac
-                if transp_tmp > soil_w[l, cell] * soil_whcs[l, cell]
-                    transp_cor += soil_w[l, cell] * soil_whcs[l, cell]
-                    if transp_cor < 1.0f-5
-                        transp_cor = zero(T)
-                    end
-                else
-                    transp_cor += transp_tmp
-                end
+                transp_tmp, capped = compute_layer_transpiration(
+                    transp, crop_rootdist[l], soil_w[l, cell], soil_whcs[l, cell],
+                )
+                transp_cor += transp_tmp
+                capped && transp_cor < T(1e-5) && (transp_cor = zero(T))
             end
         else
             transp_cor = zero(T)
@@ -167,18 +216,16 @@ end
         # LPJmL recomputes actual canopy conductance after layer extraction.
         # Store it in `gp`; downstream lambda solving consumes this actual value.
         actual_supply = fpc > zero(T) ? transp_cor / fpc : zero(T)
-        if actual_supply < demand && pet_eeq[cell] > zero(T)
-            denominator = (one(T) - crop_canopy_wet[cell]) * pet_eeq[cell] * ALPHAM - actual_supply
-            crop_gp[cell] = denominator > zero(T) ?
-                            (GM * ALPHAM) * actual_supply / denominator : zero(T)
-        end
+        crop_gp[cell] = compute_actual_canopy_conductance(
+            crop_gp[cell], actual_supply, demand, crop_canopy_wet[cell], pet_eeq[cell],
+            T(ALPHAM), T(GM),
+        )
 
         # Distribute corrected transpiration back to layers by root distribution.
         for l in 1:soil_layers
-            crop_trans_layer[l, cell] = transp * crop_rootdist[l] * soil_w[l, cell]
-            if crop_trans_layer[l, cell] > soil_w[l, cell] * soil_whcs[l, cell]
-                crop_trans_layer[l, cell] = soil_w[l, cell] * soil_whcs[l, cell]
-            end
+            crop_trans_layer[l, cell], _ = compute_layer_transpiration(
+                transp, crop_rootdist[l], soil_w[l, cell], soil_whcs[l, cell],
+            )
         end
     else
         crop_gp[cell] = zero(T)

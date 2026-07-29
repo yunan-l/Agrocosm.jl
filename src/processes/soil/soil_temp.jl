@@ -142,6 +142,33 @@ end
            max(conductivity_unfrozen, T(0.025))
 end
 
+"""
+    compute_litter_thermal_conductivity(water_storage, depth, temperature, params)
+
+Evaluate the dry-to-saturated litter conductivity interpolation used by the
+surface thermal resistance. This is kept separate from the five-layer heat
+solver because it is a local constitutive relation, not a column update.
+"""
+@inline function compute_litter_thermal_conductivity(
+    water_storage::T,
+    depth::T,
+    temperature::T,
+    porosity::T,
+    dry_conductivity::T,
+    saturated_unfrozen::T,
+    saturated_frozen::T,
+) where {T <: AbstractFloat}
+    depth > eps(T) || return dry_conductivity
+    saturation = water_storage > eps(T) ?
+        min((water_storage / T(1000)) / (porosity * depth), one(T)) : zero(T)
+    saturation <= eps(T) && return dry_conductivity
+    if temperature < zero(T)
+        return dry_conductivity + (saturated_frozen - dry_conductivity) * saturation
+    end
+    kersten = saturation < T(0.1) ? zero(T) : log10(saturation) + one(T)
+    return dry_conductivity + (saturated_unfrozen - dry_conductivity) * kersten
+end
+
 @kernel inbounds = true function soil_temperature_kernel!(
     initialized::AbstractArray{Bool},
     temperature::AbstractArray{T},
@@ -260,18 +287,11 @@ end
 
     depth_litter = max(litter_depth[cell], zero(T))
     old_litter_temperature = initialized[cell] ? litter_temperature[cell] : initial_temperature[cell]
-    saturation_litter = litter_water_storage[cell] > eps(T) && depth_litter > eps(T) ?
-        min((litter_water_storage[cell] / T(1000)) / (litter_porosity * depth_litter), one(T)) : zero(T)
-    if saturation_litter <= eps(T)
-        conductivity_litter = litter_conductivity_dry
-    elseif old_litter_temperature < zero(T)
-        conductivity_litter = litter_conductivity_dry +
-            (litter_conductivity_saturated_frozen - litter_conductivity_dry) * saturation_litter
-    else
-        kersten_litter = saturation_litter < T(0.1) ? zero(T) : log10(saturation_litter) + one(T)
-        conductivity_litter = litter_conductivity_dry +
-            (litter_conductivity_saturated_unfrozen - litter_conductivity_dry) * kersten_litter
-    end
+    conductivity_litter = compute_litter_thermal_conductivity(
+        litter_water_storage[cell], depth_litter, old_litter_temperature,
+        litter_porosity, litter_conductivity_dry,
+        litter_conductivity_saturated_unfrozen, litter_conductivity_saturated_frozen,
+    )
     litter_conductivity[cell] = conductivity_litter
 
     energy_before = rebased_column_energy

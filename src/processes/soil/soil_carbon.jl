@@ -56,6 +56,34 @@ function soil_carbon!(crop,
     return nothing
 end
 
+"""
+    compute_first_order_decomposition(pool, rate, environmental_response)
+
+Exact one-day first-order pool loss. `-expm1(-x)` is numerically stable for
+small daily rates. Pool-specific non-negative guards remain explicit in the
+calling kernel, preserving the original litter/SOM semantics.
+"""
+@inline function compute_first_order_decomposition(pool::T,
+                                                   rate::T,
+                                                   environmental_response::T) where {T <: AbstractFloat}
+    return -expm1(-rate * environmental_response) * pool
+end
+
+"""
+    compute_litter_to_som_routing(litter_flux, vertical_fraction,
+                                  atmospheric_fraction, pool_fraction)
+
+Return the non-respiratory share of decomposed litter delivered to one SOM
+pool and one layer. `pool_fraction` selects the fast or slow partition.
+"""
+@inline function compute_litter_to_som_routing(litter_flux::T,
+                                                vertical_fraction::T,
+                                                atmospheric_fraction::T,
+                                                pool_fraction::T) where {T <: AbstractFloat}
+    return vertical_fraction * litter_flux * pool_fraction *
+        (one(T) - atmospheric_fraction)
+end
+
 @kernel inbounds = true function soil_carbon_decomposition_kernel!(
     litter::AbstractMatrix{T},
     litter_rate::AbstractVector{T},
@@ -80,9 +108,9 @@ end
     cell = @index(Global)
     litter_flux = zero(T)
     for pool in 1:3
-        decomposition = -expm1(
-            -litter_rate[pool] * litter_environment[pool, cell],
-        ) * litter[pool, cell]
+        decomposition = compute_first_order_decomposition(
+            litter[pool, cell], litter_rate[pool], litter_environment[pool, cell],
+        )
         decomposed_litter[pool, cell] = decomposition
         litter[pool, cell] -= decomposition
         litter_flux += decomposition
@@ -90,20 +118,19 @@ end
 
     respiration = litter_flux * atmospheric_fraction
     for layer in 1:soil_layers
-        fast_decomposition = max(
-            zero(T),
-            -expm1(-fast_rate * soil_environment[layer, cell]) *
-            fast[layer, cell],
+        fast_decomposition = max(zero(T), compute_first_order_decomposition(
+            fast[layer, cell], fast_rate, soil_environment[layer, cell],
+        ))
+        slow_decomposition = max(zero(T), compute_first_order_decomposition(
+            slow[layer, cell], slow_rate, soil_environment[layer, cell],
+        ))
+        to_fast = compute_litter_to_som_routing(
+            litter_flux, shift_fast[layer, cell], atmospheric_fraction, fast_fraction,
         )
-        slow_decomposition = max(
-            zero(T),
-            -expm1(-slow_rate * soil_environment[layer, cell]) *
-            slow[layer, cell],
+        to_slow = compute_litter_to_som_routing(
+            litter_flux, shift_slow[layer, cell], atmospheric_fraction,
+            one(T) - fast_fraction,
         )
-        to_fast = shift_fast[layer, cell] * litter_flux * fast_fraction *
-            (one(T) - atmospheric_fraction)
-        to_slow = shift_slow[layer, cell] * litter_flux *
-            (one(T) - fast_fraction) * (one(T) - atmospheric_fraction)
         decomposed_fast[layer, cell] = fast_decomposition
         decomposed_slow[layer, cell] = slow_decomposition
         litter_to_fast[layer, cell] = to_fast

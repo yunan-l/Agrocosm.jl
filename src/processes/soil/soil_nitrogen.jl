@@ -121,29 +121,28 @@ end
     cell = @index(Global)
     litter_flux = zero(T)
     for pool in 1:3
-        decomposition = -expm1(
-            -litter_rate[pool] * litter_environment[pool, cell],
-        ) * litter[pool, cell]
+        decomposition = compute_first_order_decomposition(
+            litter[pool, cell], litter_rate[pool], litter_environment[pool, cell],
+        )
         decomposed_litter[pool, cell] = decomposition
         litter[pool, cell] -= decomposition
         litter_flux += decomposition
     end
 
     for layer in 1:soil_layers
-        fast_decomposition = max(
-            zero(T),
-            -expm1(-fast_rate * soil_environment[layer, cell]) *
-            fast[layer, cell],
+        fast_decomposition = max(zero(T), compute_first_order_decomposition(
+            fast[layer, cell], fast_rate, soil_environment[layer, cell],
+        ))
+        slow_decomposition = max(zero(T), compute_first_order_decomposition(
+            slow[layer, cell], slow_rate, soil_environment[layer, cell],
+        ))
+        to_fast = compute_litter_to_som_routing(
+            litter_flux, shift_fast[layer, cell], atmospheric_fraction, fast_fraction,
         )
-        slow_decomposition = max(
-            zero(T),
-            -expm1(-slow_rate * soil_environment[layer, cell]) *
-            slow[layer, cell],
+        to_slow = compute_litter_to_som_routing(
+            litter_flux, shift_slow[layer, cell], atmospheric_fraction,
+            one(T) - fast_fraction,
         )
-        to_fast = shift_fast[layer, cell] * litter_flux * fast_fraction *
-            (one(T) - atmospheric_fraction)
-        to_slow = shift_slow[layer, cell] * litter_flux *
-            (one(T) - fast_fraction) * (one(T) - atmospheric_fraction)
         decomposed_fast[layer, cell] = fast_decomposition
         decomposed_slow[layer, cell] = slow_decomposition
         litter_to_fast[layer, cell] = to_fast

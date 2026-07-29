@@ -126,6 +126,109 @@ function post_crop_nitrogen_losses!(soil;
     return nothing
 end
 
+"""
+    compute_water_filled_pore_space(relative_water, holding, wilting, ice_fraction,
+                                    free_water, saturation)
+
+Return liquid water-filled pore space in `[0, 1]`. This is shared by the
+LPJmL nitrification and denitrification response formulations; ice is removed
+from the wilting-water contribution before the ratio is formed.
+"""
+@inline function compute_water_filled_pore_space(relative_water::T,
+                                                  holding::T,
+                                                  wilting::T,
+                                                  wilting_ice_fraction::T,
+                                                  free_water::T,
+                                                  saturation::T) where {T <: AbstractFloat}
+    liquid_water = relative_water * holding +
+        wilting * (one(T) - wilting_ice_fraction) + free_water
+    return clamp(liquid_water / max(saturation, eps(T)), zero(T), one(T))
+end
+
+"""
+    compute_nitrification_moisture_response(wfps, b, c, d, n, m, z)
+
+Evaluate LPJmL's bounded two-branch water-filled-pore-space response. The
+explicit positive-base guard avoids fractional powers of a negative value.
+"""
+@inline function compute_nitrification_moisture_response(wfps::T,
+                                                          b::T,
+                                                          c::T,
+                                                          d::T,
+                                                          n::T,
+                                                          m::T,
+                                                          z::T) where {T <: AbstractFloat}
+    first_base = (wfps - b) / n
+    second_base = (wfps - c) / m
+    (first_base > zero(T) && second_base > zero(T)) || return zero(T)
+    return max(zero(T), first_base^z * second_base^d)
+end
+
+"""
+    compute_nitrification_temperature_response(temperature)
+
+Gaussian optimum-temperature response used by LPJmL nitrification.
+"""
+@inline function compute_nitrification_temperature_response(temperature::T) where {T <: AbstractFloat}
+    return exp(-(temperature - T(18.79))^2 / T(2 * 8.26 * 8.26))
+end
+
+"""
+    compute_nitrification_ph_response(ph)
+
+Smooth pH multiplier for nitrification. It intentionally remains unclamped to
+match the source formulation and its calibrated parameter range.
+"""
+@inline function compute_nitrification_ph_response(ph::T) where {T <: AbstractFloat}
+    return T(0.56) + atan(T(pi) * T(0.45) * (ph - T(5))) / T(pi)
+end
+
+"""
+    compute_denitrification_temperature_response(temperature)
+
+Piecewise LPJmL denitrification temperature response, including the low-
+temperature baseline and high-temperature cutoff.
+"""
+@inline function compute_denitrification_temperature_response(temperature::T) where {T <: AbstractFloat}
+    temperature > T(45.9) && return zero(T)
+    temperature <= zero(T) && return T(0.0326)
+    return max(zero(T), T(0.0326) + T(0.00351) * temperature^T(1.652) -
+        (temperature / T(41.748))^T(7.19))
+end
+
+"""
+    compute_denitrification_moisture_response(wfps)
+
+Exponential anaerobic moisture limitation capped at one.
+"""
+@inline function compute_denitrification_moisture_response(wfps::T) where {T <: AbstractFloat}
+    return min(one(T), T(6.664096e-10) * exp(T(20.92912) * wfps))
+end
+
+"""
+    compute_ammonia_volatilization(ammonium, ph, temperature, wind, depth, length)
+
+Return the LPJmL daily NH₃ loss from the upper ammonium pool. All quantities
+are scalar, so the balance-preserving subtraction remains visible in the
+calling kernel.
+"""
+@inline function compute_ammonia_volatilization(ammonium::T,
+                                                 ph::T,
+                                                 temperature::T,
+                                                 wind::T,
+                                                 depth::T,
+                                                 volatilization_length::T) where {T <: AbstractFloat}
+    available = max(zero(T), ammonium)
+    kelvin = temperature + T(273.15)
+    dissociation = T(10)^(T(0.05) - T(2788) / kelvin)
+    aqueous_fraction = one(T) / (one(T) + T(10)^(-ph) / max(dissociation, eps(T)))
+    aqueous_nh3 = aqueous_fraction * available / max(depth, eps(T)) * T(1000)
+    henry = T(0.2138) / kelvin * T(10)^(T(6.123) - T(1825) / kelvin)
+    transfer = T(0.000612) * max(zero(T), wind)^T(0.8) * kelvin^T(0.382) *
+        volatilization_length^T(-0.2)
+    return clamp(T(86400) * transfer * henry * aqueous_nh3, zero(T), available)
+end
+
 @kernel inbounds = true function mineralize_immobilize_kernel!(
     decomposed_litter_carbon::AbstractMatrix{T},
     decomposed_litter_nitrogen::AbstractMatrix{T},
@@ -241,31 +344,23 @@ end
     for layer in 1:soil_layers
         nitrification[layer, cell] = zero(M)
         n2o_nitrification[layer, cell] = zero(M)
-        water_filled_pore_space = clamp(
-            (relative_water[layer, cell] * holding_storage[layer, cell] +
-             wilting_storage[layer, cell] *
-             (one(M) - wilting_ice_fraction[layer, cell]) +
-             free_water[layer, cell]) /
-            max(saturation_storage[layer, cell], eps(M)),
-            zero(M), one(M),
+        water_filled_pore_space = compute_water_filled_pore_space(
+            relative_water[layer, cell], holding_storage[layer, cell],
+            wilting_storage[layer, cell], wilting_ice_fraction[layer, cell],
+            free_water[layer, cell], saturation_storage[layer, cell],
         )
-        n_nit = T(nitrification_a - nitrification_b)
-        m_nit = T(nitrification_a - nitrification_c)
-        z_nit = T(nitrification_d) * T(nitrification_b - nitrification_a) /
-            T(nitrification_a - nitrification_c)
-        base_1 = (water_filled_pore_space - T(nitrification_b)) / n_nit
-        base_2 = (water_filled_pore_space - T(nitrification_c)) / m_nit
-        moisture_factor = if base_1 > zero(M) && base_2 > zero(M)
-            max(zero(M), base_1^z_nit * base_2^T(nitrification_d))
-        else
-            zero(M)
-        end
-        temperature_factor = exp(
-            -(soil_temperature[layer, cell] - T(18.79))^2 /
-            T(2 * 8.26 * 8.26),
+        n_nit = M(nitrification_a - nitrification_b)
+        m_nit = M(nitrification_a - nitrification_c)
+        z_nit = M(nitrification_d) * M(nitrification_b - nitrification_a) /
+            M(nitrification_a - nitrification_c)
+        moisture_factor = compute_nitrification_moisture_response(
+            water_filled_pore_space, M(nitrification_b), M(nitrification_c),
+            M(nitrification_d), n_nit, m_nit, z_nit,
         )
-        ph_factor = T(0.56) +
-            atan(T(pi) * T(0.45) * (soil_ph[cell] - T(5))) / T(pi)
+        temperature_factor = compute_nitrification_temperature_response(
+            soil_temperature[layer, cell],
+        )
+        ph_factor = compute_nitrification_ph_response(M(soil_ph[cell]))
         gross_nitrification = clamp(
             T(k_max) * ammonium[layer, cell] * temperature_factor *
             moisture_factor * ph_factor,
@@ -306,22 +401,14 @@ end
         n2_denitrification[layer, cell] = zero(M)
         temperature = soil_temperature[layer, cell]
         organic_carbon = max(zero(M), fast_carbon[layer, cell] + slow_carbon[layer, cell])
-        temperature_factor = if temperature > M(45.9)
-            zero(M)
-        elseif temperature > zero(M)
-            max(zero(M), M(0.0326) + M(0.00351) * temperature^M(1.652) -
-                (temperature / M(41.748))^M(7.19))
-        else
-            M(0.0326)
-        end
-        water_filled_pore_space =
-            (wilting_storage[layer, cell] *
-             (one(M) - wilting_ice_fraction[layer, cell]) +
-             relative_water[layer, cell] * holding_storage[layer, cell] +
-             free_water[layer, cell]) /
-            max(saturation_storage[layer, cell], eps(M))
-        moisture_factor = min(
-            one(M), M(6.664096e-10) * exp(M(20.92912) * water_filled_pore_space),
+        temperature_factor = compute_denitrification_temperature_response(temperature)
+        water_filled_pore_space = compute_water_filled_pore_space(
+            relative_water[layer, cell], holding_storage[layer, cell],
+            wilting_storage[layer, cell], wilting_ice_fraction[layer, cell],
+            free_water[layer, cell], saturation_storage[layer, cell],
+        )
+        moisture_factor = compute_denitrification_moisture_response(
+            water_filled_pore_space,
         )
         carbon_factor = max(
             zero(M), one(M) - exp(-M(CDN) * temperature_factor * organic_carbon),
@@ -350,19 +437,10 @@ end
 ) where {T <: AbstractFloat, M <: AbstractFloat}
     cell = @index(Global)
     @unpack volatil_length = lpjmlparams
-    temperature = air_temperature[cell]
-    kelvin = temperature + M(273.15)
-    ammonium_top = max(zero(M), ammonium[1, cell])
-    dissociation = M(10)^(M(0.05) - M(2788) / kelvin)
-    aqueous_fraction = one(M) /
-        (one(M) + M(10)^(-soil_ph[cell]) / max(dissociation, eps(M)))
-    aqueous_nh3 = aqueous_fraction * ammonium_top /
-        max(layer_depth[1], eps(T)) * M(1000)
-    henry = M(0.2138) / kelvin * M(10)^(M(6.123) - M(1825) / kelvin)
-    mass_transfer = M(0.000612) * max(zero(M), wind_speed[cell])^M(0.8) *
-        kelvin^M(0.382) * M(volatil_length)^M(-0.2)
-    flux = clamp(M(86400) * mass_transfer * henry * aqueous_nh3,
-                 zero(M), ammonium_top)
+    flux = compute_ammonia_volatilization(
+        ammonium[1, cell], M(soil_ph[cell]), air_temperature[cell], wind_speed[cell],
+        M(layer_depth[1]), M(volatil_length),
+    )
     ammonium[1, cell] -= flux
     volatilization[cell] = flux
 end

@@ -21,6 +21,41 @@ function temp_stress(PFT::PftParameters,
 
 end
 
+"""
+    compute_photosynthesis_temperature_stress(daylength, temperature, path, ...)
+
+LPJmL's smooth lower and upper temperature response for C3/C4 assimilation.
+The function is scalar and allocation-free so it is safe to call from a CPU or
+GPU kernel. `path` uses the existing `1 = C3`, `2 = C4` convention.
+"""
+@inline function compute_photosynthesis_temperature_stress(
+    daylength::T,
+    temperature::T,
+    path,
+    temperature_co2,
+    temperature_photosynthesis,
+    c3_maximum::T,
+    c4_maximum::T,
+) where {T <: AbstractFloat}
+    # No light, or pathway-specific hard thermal limit: no canopy assimilation.
+    (daylength < 0.01 ||
+     (path == 1 && temperature > c3_maximum) ||
+     (path == 2 && temperature > c4_maximum) ||
+     temperature >= temperature_co2.high) && return zero(T)
+
+    lower_slope = T(2 * log(1 / 0.99 - 1)) /
+        (temperature_co2.low - temperature_photosynthesis.low)
+    # LPJmL fscanpftpar.c: midpoint of lower CO2 and photosynthesis limits.
+    lower_midpoint = (T(temperature_co2.low) + T(temperature_photosynthesis.low)) * T(0.5)
+    upper_slope = T(log(0.99 / 0.01)) /
+        (temperature_co2.high - temperature_photosynthesis.high)
+    lower_response = 1 / (1 + exp(lower_slope * (lower_midpoint - temperature)))
+    upper_response = 1 - 0.01 * exp(
+        upper_slope * (temperature - temperature_photosynthesis.high),
+    )
+    return T(lower_response * upper_response)
+end
+
 
 @kernel inbounds = true function temp_stress_kernel!(
                                      photos_tstress::AbstractArray{T},
@@ -35,22 +70,8 @@ end
     @unpack path, temp_co2, temp_photos = PFT
     @unpack tmc3, tmc4 = photoparams
 
-    k1 = T(2 * log(1 / 0.99 - 1)) / (temp_co2.low - temp_photos.low)
-    # LPJmL fscanpftpar.c: midpoint of the lower CO2 and optimum
-    # photosynthesis temperature limits. Parentheses matter when the former
-    # is nonzero (notably C4 maize).
-    k2 = (T(temp_co2.low) + T(temp_photos.low)) * T(0.5)
-    k3 = T(log(0.99 / 0.01)) / (temp_co2.high - temp_photos.high)
-
-    if pet_daylength[cell] < 0.01 || (path == 1 && temp[cell] > tmc3) || (path == 2 && temp[cell] > tmc4) # path == 1 : C3; path == 2 : C4
-        photos_tstress[cell] = zero(T)
-    else
-        if temp[cell] < temp_co2.high
-            low = 1 / (1 + exp(k1 * (k2 - temp[cell])))
-            high = 1 - 0.01 .* exp(k3 * (temp[cell] - temp_photos.high))
-            photos_tstress[cell] = T(low * high)
-        else
-            photos_tstress[cell] = zero(T)
-        end
-    end
+    photos_tstress[cell] = compute_photosynthesis_temperature_stress(
+        pet_daylength[cell], temp[cell], path, temp_co2, temp_photos,
+        T(tmc3), T(tmc4),
+    )
 end

@@ -183,6 +183,102 @@ function infil_perc!(soil,
     return nothing
 end
 
+"""
+    compute_infiltration_slug(slug, relative_storage, available_storage, exponent)
+
+LPJmL's bounded surface-infiltration response for one small precipitation
+slug. A saturated surface has no hydraulic intake; the remainder becomes
+surface runoff in the calling kernel.
+"""
+@inline function compute_infiltration_slug(slug::T,
+                                            relative_storage::T,
+                                            available_storage::T,
+                                            exponent::T) where {T <: AbstractFloat}
+    saturation_deficit = one(T) - relative_storage / available_storage
+    saturation_deficit >= zero(T) || return zero(T)
+    return slug * saturation_deficit^(one(T) / exponent)
+end
+
+"""
+    compute_liquid_water_enthalpy(temperature, water_heat_capacity,
+                                  ice_heat_capacity, fusion_heat)
+
+Return volumetric enthalpy transported by water leaving a soil layer. Liquid
+water above freezing carries fusion heat plus sensible heat; frozen material
+uses the ice heat capacity, matching the existing percolation-energy ledger.
+"""
+@inline function compute_liquid_water_enthalpy(temperature::T,
+                                               water_heat_capacity::T,
+                                               ice_heat_capacity::T,
+                                               fusion_heat::T) where {T <: AbstractFloat}
+    return temperature >= zero(T) ?
+        fusion_heat + water_heat_capacity * temperature :
+        ice_heat_capacity * temperature
+end
+
+"""
+    compute_percolation(storage, holding_capacity, threshold, conductivity,
+                         saturation_fraction, beta, ice_fraction,
+                         receiver_saturation_factor)
+
+Compute a daily LPJmL hydraulic drainage amount before the donor-stock clamp.
+The receiver factor is supplied by the caller because it depends on the next
+layer (or the bottom layer for free drainage).
+"""
+@inline function compute_percolation(storage::T,
+                                     holding_capacity::T,
+                                     threshold::T,
+                                     conductivity::T,
+                                     saturation_fraction::T,
+                                     beta::T,
+                                     ice_fraction::T,
+                                     receiver_saturation_factor::T) where {T <: AbstractFloat}
+    excess = (storage - threshold) * holding_capacity
+    excess > T(1e-5) || return zero(T)
+    hydraulic_conductivity = conductivity * saturation_fraction^beta *
+        T(10)^(-T(6) * ice_fraction)
+    time_constant = excess / hydraulic_conductivity
+    potential = excess * (one(T) - exp(-T(24) / time_constant))
+    return receiver_saturation_factor < zero(T) ? zero(T) :
+        potential * sqrt(receiver_saturation_factor)
+end
+
+"""
+    compute_mobile_nitrate_concentration(nitrate, mobile_water, exclusion,
+                                         saturation_storage)
+
+Calculate nitrate concentration in the mobile-water fraction. The threshold
+and non-negative clamp preserve the previous LPJmL-compatible behavior when a
+dry layer has no mobile flux.
+"""
+@inline function compute_mobile_nitrate_concentration(nitrate::T,
+                                                       mobile_water::T,
+                                                       anion_exclusion::T,
+                                                       saturation_storage::T) where {T <: AbstractFloat}
+    mobile_water > T(1e-7) || return zero(T)
+    exponent = -mobile_water / ((one(T) - anion_exclusion) * saturation_storage)
+    dissolved = nitrate * (one(T) - exp(exponent))
+    return max(dissolved / mobile_water, zero(T))
+end
+
+"""
+    compute_tillage_settling_fraction(infiltration, sand_fraction, depth)
+
+Return the rainfall-driven approach fraction toward untilled bulk density for
+the top layer. This is a state-independent LPJmL scalar response; its actual
+state update remains in the kernel after today's infiltration has completed.
+"""
+@inline function compute_tillage_settling_fraction(infiltration::T,
+                                                    sand_fraction::T,
+                                                    depth::T) where {T <: AbstractFloat}
+    sand_percent = sand_fraction * T(100)
+    settling_index = T(0.2) * infiltration * (
+        one(T) + T(2) * sand_percent /
+        (sand_percent + exp(T(8.597) - T(0.075) * sand_percent))
+    ) / max(depth * T(0.001), eps(T))^T(0.6)
+    return settling_index / (settling_index + exp(T(3.92) - T(0.0226) * settling_index))
+end
+
 @kernel inbounds = true function infil_perc_kernel!(
                                     infil::AbstractArray{T},
                                     soil_w::AbstractArray{M},
@@ -279,13 +375,12 @@ end
         infil[cell] -= slug
 
         # Calculate influx to first soil layer
-        if one(T) - (soil_w[1, cell] * soil_whcs[1, cell] + soil_w_fw[1, cell] + soil_ice_available[1, cell] + soil_ice_free[1, cell]) / (soil_wsats[1, cell] - soil_wpwps[1, cell]) >= 0
-            influx = slug * ((1 - (soil_w[1, cell] * soil_whcs[1, cell] + soil_w_fw[1, cell] + soil_ice_available[1, cell] + soil_ice_free[1, cell]) / (soil_wsats[1, cell] - soil_wpwps[1, cell])) ^ (1 / soil_infil))
-            soil_w_influx[1, cell] += influx
-        else
-            influx = zero(T)
-            soil_w_influx[1, cell] += influx
-        end
+        top_storage = soil_w[1, cell] * soil_whcs[1, cell] + soil_w_fw[1, cell] +
+            soil_ice_available[1, cell] + soil_ice_free[1, cell]
+        influx = compute_infiltration_slug(
+            slug, top_storage, soil_wsats[1, cell] - soil_wpwps[1, cell], soil_infil,
+        )
+        soil_w_influx[1, cell] += influx
         srunoff = slug-influx
         soil_srunoff[cell] += slug - influx # surface runoff used for leaching
         incoming_volumetric_enthalpy = top_volumetric_enthalpy
@@ -315,9 +410,10 @@ end
             soil_w[l, cell] += (soil_w_fw[l, cell] + layer_influx) / soil_whcs[l, cell]
             soil_w_fw[l, cell] = zero(T)
 
-            layer_volumetric_enthalpy = soil_temperature[l, cell] >= zero(T) ?
-                volumetric_fusion_heat + water_heat_capacity * soil_temperature[l, cell] :
-                ice_heat_capacity * soil_temperature[l, cell]
+            layer_volumetric_enthalpy = compute_liquid_water_enthalpy(
+                soil_temperature[l, cell], water_heat_capacity, ice_heat_capacity,
+                volumetric_fusion_heat,
+            )
 
             # Handle lateral runoff of water above saturation
             liquid_capacity = max(
@@ -346,31 +442,19 @@ end
 
             # Percolation from layer l to l+1 (or to outflux at bottom layer).
             if (soil_w[l, cell] - percthres) > (1.0f-5 / soil_whcs[l, cell])
-                # Calculate hydraulic conductivity
                 ice_fraction = soil_wsats[l, cell] > eps(T) ?
                                clamp(soil_ice[l, cell] / soil_wsats[l, cell], zero(T), one(T)) : zero(T)
-                ice_impedance = T(10) ^ (-T(6) * ice_fraction)
-                HC = soil_Ks[l, cell] * ((soil_w[l, cell] * soil_whcs[l, cell] + soil_wpwps[l, cell] + soil_ice_available[l, cell] + soil_ice_free[l, cell]) / soil_wsats[l, cell])^soil_beta_soil[l, cell] * ice_impedance
-                # Calculate time constant
-                TT = ((soil_w[l, cell] - percthres) * soil_whcs[l, cell]) / HC
-                # Calculate percolation amount
-                perc = ((soil_w[l, cell] - percthres) * soil_whcs[l, cell]) * (1 - exp(-24 / TT))
-                # Correction of percolation for water content of the following layer
                 if l < soil_layers
                     saturation_factor = 1 - (soil_w[l+1, cell] * soil_whcs[l+1, cell] + soil_w_fw[l+1, cell] + soil_ice_available[l+1, cell] + soil_ice_free[l+1, cell]) / (soil_wsats[l+1, cell] - soil_wpwps[l+1, cell])
-                    if saturation_factor < 0
-                        perc = zero(T)
-                    else
-                        perc *= sqrt(saturation_factor)
-                    end
                 else
                     saturation_factor = 1 - (soil_w[l, cell] * soil_whcs[l, cell] + soil_w_fw[l, cell] + soil_ice_available[l, cell] + soil_ice_free[l, cell]) / (soil_wsats[l, cell] - soil_wpwps[l, cell])
-                    if saturation_factor < 0
-                        perc = zero(T)
-                    else
-                        perc *= sqrt(saturation_factor)
-                    end
                 end
+                saturation = (soil_w[l, cell] * soil_whcs[l, cell] + soil_wpwps[l, cell] +
+                    soil_ice_available[l, cell] + soil_ice_free[l, cell]) / soil_wsats[l, cell]
+                perc = compute_percolation(
+                    soil_w[l, cell], soil_whcs[l, cell], percthres, soil_Ks[l, cell],
+                    saturation, soil_beta_soil[l, cell], ice_fraction, saturation_factor,
+                )
 
                 soil_w[l, cell] -= perc / soil_whcs[l, cell]
 
@@ -400,14 +484,10 @@ end
                     end
                 end
 
-                concNO3_mobile = zero(T)
-                # determination of nitrate concentration in mobile water
                 w_mobile = perc + srunoff + lrunoff
-                if w_mobile > 1.0e-7
-                    ww = -w_mobile / ((1 - anion_excl) * soil_wsats[l, cell])
-                    vno3 = soil_NO3[l, cell] * (1 - exp(ww))
-                    concNO3_mobile = max(vno3 / w_mobile, zero(0))
-                end
+                concNO3_mobile = compute_mobile_nitrate_concentration(
+                    soil_NO3[l, cell], w_mobile, anion_excl, soil_wsats[l, cell],
+                )
                 # Surface runoff NO3 can be added here if a dedicated pool is introduced.
                 srunoff = zero(T)
                 NO3lat = zero(T)
@@ -444,14 +524,9 @@ end
     # untilled bulk density. LPJmL applies this after the day's infiltration,
     # so the updated factor affects hydraulic properties on the next day.
     top_infiltration = soil_w_influx[1, cell]
-    sand_percent = soil_sand_fraction[1, cell] * T(100)
-    top_depth_m = max(soil_layer_depth[1] * T(0.001), eps(T))
-    settling_index = T(0.2) * top_infiltration * (
-        one(T) + T(2) * sand_percent /
-        (sand_percent + exp(T(8.597) - T(0.075) * sand_percent))
-    ) / top_depth_m^T(0.6)
-    settling_fraction = settling_index /
-        (settling_index + exp(T(3.92) - T(0.0226) * settling_index))
+    settling_fraction = compute_tillage_settling_fraction(
+        top_infiltration, soil_sand_fraction[1, cell], soil_layer_depth[1],
+    )
     tillage_density_factor[1, cell] += settling_fraction *
         (one(T) - tillage_density_factor[1, cell])
 

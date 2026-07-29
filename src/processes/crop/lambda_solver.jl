@@ -256,6 +256,116 @@ solve_lambda!(::Val{:C3}, PFT, crop, pet, temperature, co2; kwargs...) =
 solve_lambda!(::Val{:C4}, PFT, crop, pet, temperature, co2; kwargs...) =
     solve_lambda_c4!(PFT, crop, pet, temperature, co2; kwargs...)
 
+"""
+    compute_canopy_water_supply(daylength, conductance, minimum_conductance,
+                                fpar, co2)
+
+Construct LPJmL's scalar water-supply term for the internal-CO₂ bisection.
+`co2` is stored as Pa and therefore uses the existing `1e-5` Pa-to-bar
+conversion at this one boundary.
+"""
+@inline function compute_canopy_water_supply(daylength::T,
+                                             conductance::T,
+                                             minimum_conductance::T,
+                                             fpar::T,
+                                             co2::T) where {T <: AbstractFloat}
+    daily_conductance = daylength * T(3600) *
+        (conductance - minimum_conductance * fpar)
+    return daily_conductance, daily_conductance / T(1.6) * co2 * T(1e-5)
+end
+
+"""
+    compute_lambda_c3_solution(fac, vcmax, stress, b, co2, temperature, apar,
+                               daylength, params)
+
+Fixed-iteration, allocation-free LPJmL C3 bisection. Keeping the complete
+scalar solve outside the kernel makes its stopping rule testable while every
+grid cell retains the exact same 30-step numerical algorithm on CPU and GPU.
+"""
+@inline function compute_lambda_c3_solution(fac::T,
+                                             vcmax::T,
+                                             stress::T,
+                                             b::T,
+                                             co2::T,
+                                             temperature::T,
+                                             apar::T,
+                                             daylength::T,
+                                             lpjmlparams::LPJmLParams,
+                                             photoparams::PhotoParams) where {T <: AbstractFloat}
+    lower = T(0.02)
+    upper = T(0.85)
+    lower_residual = fac * (one(T) - lower) - c3_adtmm_scalar_impl(
+        lower, vcmax, stress, b, co2, temperature, apar, daylength,
+        lpjmlparams, photoparams,
+    )
+    best = (lower + upper) * T(0.5)
+    best_residual = typemax(T)
+    for _ in 1:30
+        midpoint = (lower + upper) * T(0.5)
+        residual = fac * (one(T) - midpoint) - c3_adtmm_scalar_impl(
+            midpoint, vcmax, stress, b, co2, temperature, apar, daylength,
+            lpjmlparams, photoparams,
+        )
+        if abs(residual) < best_residual
+            best_residual = abs(residual)
+            best = midpoint
+        end
+        abs(residual) < T(0.001) && break
+        if lower_residual * residual <= zero(T)
+            upper = midpoint
+        else
+            lower = midpoint
+            lower_residual = residual
+        end
+    end
+    return best
+end
+
+"""
+    compute_lambda_c4_solution(fac, vcmax, stress, b, temperature, apar,
+                               daylength, params)
+
+The C4 counterpart of `compute_lambda_c3_solution`, with the C4 assimilation
+relation but the same LPJmL bracket and residual-selection rule.
+"""
+@inline function compute_lambda_c4_solution(fac::T,
+                                             vcmax::T,
+                                             stress::T,
+                                             b::T,
+                                             temperature::T,
+                                             apar::T,
+                                             daylength::T,
+                                             lpjmlparams::LPJmLParams,
+                                             photoparams::PhotoParams) where {T <: AbstractFloat}
+    lower = T(0.02)
+    upper = T(0.85)
+    lower_residual = fac * (one(T) - lower) - c4_adtmm_scalar_impl(
+        lower, vcmax, stress, b, temperature, apar, daylength,
+        lpjmlparams, photoparams,
+    )
+    best = (lower + upper) * T(0.5)
+    best_residual = typemax(T)
+    for _ in 1:30
+        midpoint = (lower + upper) * T(0.5)
+        residual = fac * (one(T) - midpoint) - c4_adtmm_scalar_impl(
+            midpoint, vcmax, stress, b, temperature, apar, daylength,
+            lpjmlparams, photoparams,
+        )
+        if abs(residual) < best_residual
+            best_residual = abs(residual)
+            best = midpoint
+        end
+        abs(residual) < T(0.001) && break
+        if lower_residual * residual <= zero(T)
+            upper = midpoint
+        else
+            lower = midpoint
+            lower_residual = residual
+        end
+    end
+    return best
+end
+
 @kernel inbounds = true function solve_lambda_c4_kernel!(
     lambda::AbstractArray{T},
     vcmax::AbstractArray{T},
@@ -272,43 +382,16 @@ solve_lambda!(::Val{:C4}, PFT, crop, pet, temperature, co2; kwargs...) =
     @unpack b, gmin, lpjmlparams, photoparams = kernel_params
     co2_cell = co2[length(co2) == 1 ? 1 : cell]
 
-    gpd = daylength[cell] * T(3600) *
-          (conductance[cell] - gmin * fpar[cell])
+    gpd, fac = compute_canopy_water_supply(
+        daylength[cell], conductance[cell], gmin, fpar[cell], co2_cell,
+    )
 
     if gpd > T(1e-5) && tstress[cell] >= T(1e-2) &&
        daylength[cell] > zero(T) && co2_cell > zero(T)
-        fac = gpd / T(1.6) * co2_cell * T(1e-5)
-        xlow = T(0.02)
-        xhigh = T(0.85)
-        ylow = fac * (one(T) - xlow) -
-               c4_adtmm_scalar_impl(
-                   xlow, vcmax[cell], tstress[cell], b, temp[cell], apar[cell],
-                   daylength[cell], lpjmlparams, photoparams,
-               )
-        xmin = (xlow + xhigh) * T(0.5)
-        ymin = typemax(T)
-
-        for _ in 1:30
-            xmid = (xlow + xhigh) * T(0.5)
-            ymid = fac * (one(T) - xmid) -
-                   c4_adtmm_scalar_impl(
-                       xmid, vcmax[cell], tstress[cell], b, temp[cell], apar[cell],
-                       daylength[cell], lpjmlparams, photoparams,
-                   )
-            if abs(ymid) < ymin
-                ymin = abs(ymid)
-                xmin = xmid
-            end
-            if abs(ymid) < T(0.001)
-                break
-            elseif ylow * ymid <= zero(T)
-                xhigh = xmid
-            else
-                xlow = xmid
-                ylow = ymid
-            end
-        end
-        lambda[cell] = xmin
+        lambda[cell] = compute_lambda_c4_solution(
+            fac, vcmax[cell], tstress[cell], b, temp[cell], apar[cell],
+            daylength[cell], lpjmlparams, photoparams,
+        )
     else
         # LPJmL bypasses photosynthesis and returns zero GPP here. Lambda zero
         # reproduces that result when the vector photosynthesis routine follows.
@@ -334,43 +417,16 @@ end
 
     # LPJmL receives ppm and converts it to bar. Agrocosm stores partial
     # pressure in Pa, so the equivalent conversion is Pa * 1e-5.
-    gpd = daylength[cell] * T(3600) *
-          (conductance[cell] - gmin * fpar[cell])
+    gpd, fac = compute_canopy_water_supply(
+        daylength[cell], conductance[cell], gmin, fpar[cell], co2_cell,
+    )
 
     if gpd > T(1e-5) && tstress[cell] >= T(1e-2) &&
        daylength[cell] > zero(T) && co2_cell > zero(T)
-        fac = gpd / T(1.6) * co2_cell * T(1e-5)
-        xlow = T(0.02)
-        xhigh = T(0.85)
-        ylow = fac * (one(T) - xlow) -
-               c3_adtmm_scalar_impl(
-                   xlow, vcmax[cell], tstress[cell], b, co2_cell, temp[cell],
-                   apar[cell], daylength[cell], lpjmlparams, photoparams,
-               )
-        xmin = (xlow + xhigh) * T(0.5)
-        ymin = typemax(T)
-
-        for _ in 1:30
-            xmid = (xlow + xhigh) * T(0.5)
-            ymid = fac * (one(T) - xmid) -
-                   c3_adtmm_scalar_impl(
-                       xmid, vcmax[cell], tstress[cell], b, co2_cell, temp[cell],
-                       apar[cell], daylength[cell], lpjmlparams, photoparams,
-                   )
-            if abs(ymid) < ymin
-                ymin = abs(ymid)
-                xmin = xmid
-            end
-            if abs(ymid) < T(0.001)
-                break
-            elseif ylow * ymid <= zero(T)
-                xhigh = xmid
-            else
-                xlow = xmid
-                ylow = ymid
-            end
-        end
-        lambda[cell] = xmin
+        lambda[cell] = compute_lambda_c3_solution(
+            fac, vcmax[cell], tstress[cell], b, co2_cell, temp[cell], apar[cell],
+            daylength[cell], lpjmlparams, photoparams,
+        )
     else
         # LPJmL bypasses photosynthesis and returns zero GPP here.
         lambda[cell] = zero(T)

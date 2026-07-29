@@ -30,6 +30,56 @@ function evaporation!(pet_eeq::AbstractArray{T},
 
 end
 
+"""
+    compute_litter_evaporation(evaporation_energy, available_energy, storage,
+                               capacity, cover)
+
+Return the bounded evaporation loss from the surface-litter water store. The
+wetness-squared dependence and all three physical caps follow the existing
+LPJmL-compatible implementation.
+"""
+@inline function compute_litter_evaporation(evaporation_energy::A,
+                                             available_energy::B,
+                                             storage::C,
+                                             capacity::D,
+                                             cover::E) where {A <: AbstractFloat,
+                                                               B <: AbstractFloat,
+                                                               C <: AbstractFloat,
+                                                               D <: AbstractFloat,
+                                                               E <: AbstractFloat}
+    # `evaporation_energy` can be Float64 because LPJmL's scalar
+    # Priestley--Taylor parameter is retained at that precision. Do not narrow
+    # it here: the original kernel intentionally used Julia promotion.
+    (capacity > eps(D) && available_energy > zero(B)) || return zero(C)
+    wetness = clamp(storage / capacity, zero(C), one(C))
+    return min(evaporation_energy * wetness * wetness * cover, storage, available_energy)
+end
+
+"""
+    compute_soil_evaporation_ratio(evaporation_energy, available_energy,
+                                   available_water, holding_storage, litter_cover)
+
+Compute the scalar fraction of near-surface liquid water removed by bare-soil
+evaporation. Layer aggregation and layer-wise application remain in the kernel
+to preserve the existing five-layer mass update.
+"""
+@inline function compute_soil_evaporation_ratio(evaporation_energy::A,
+                                                 available_energy::B,
+                                                 available_water::C,
+                                                 holding_storage::D,
+                                                 litter_cover::E) where {A <: AbstractFloat,
+                                                                           B <: AbstractFloat,
+                                                                           C <: AbstractFloat,
+                                                                           D <: AbstractFloat,
+                                                                           E <: AbstractFloat}
+    (evaporation_energy > 1.0f-5 && available_energy > 1.0f-5 &&
+     available_water > zero(C)) || return zero(C)
+    soil_evaporation = evaporation_energy /
+        (1 + exp(5 - 10 * available_water / holding_storage)) *
+        max(0.05, 1 - litter_cover)
+    return soil_evaporation / available_water
+end
+
 @kernel inbounds = true function evaporation_kernel!(
                                      pet_eeq::AbstractArray{T},
                                      crop_fpar::AbstractArray{T},
@@ -68,20 +118,11 @@ end
         (one(T) - crop_canopy_wet[cell]) - crop_trans_layer_sum,
         zero(T),
     )
-    if litter_water_capacity[cell] > eps(T) && available_evaporation > zero(T)
-        litter_wetness = clamp(
-            litter_water_storage[cell] / litter_water_capacity[cell],
-            zero(T), one(T),
-        )
-        litter_evaporation[cell] = min(
-            evap_energy * litter_wetness * litter_wetness * soil_agtop_cover[cell],
-            litter_water_storage[cell],
-            available_evaporation,
-        )
-        litter_water_storage[cell] -= litter_evaporation[cell]
-    else
-        litter_evaporation[cell] = zero(T)
-    end
+    litter_evaporation[cell] = compute_litter_evaporation(
+        evap_energy, available_evaporation, litter_water_storage[cell],
+        litter_water_capacity[cell], soil_agtop_cover[cell],
+    )
+    litter_water_storage[cell] -= litter_evaporation[cell]
 
     evap_ratio = zero(T)
     if evap_energy > 1.0f-5 && (pet_eeq[cell] * PRIESTLEY_TAYLOR * (1 - crop_canopy_wet[cell]) - crop_trans_layer_sum) > 1.0f-5
@@ -100,12 +141,12 @@ end
             end
         end
 
-        evap_soil = evap_energy / (1 + exp(5 - 10 * w_evap / whcs_evap)) * max(0.05, (1 - soil_agtop_cover[cell]))
-        if w_evap > 0
-            evap_ratio = evap_soil / w_evap
-        else
-            evap_ratio = zero(T)
-        end
+        evap_ratio = compute_soil_evaporation_ratio(
+            evap_energy,
+            pet_eeq[cell] * PRIESTLEY_TAYLOR * (one(T) - crop_canopy_wet[cell]) -
+                crop_trans_layer_sum,
+            w_evap, whcs_evap, soil_agtop_cover[cell],
+        )
     end
 
     soildepth_evap = lpjmlparams.soildepth_evap

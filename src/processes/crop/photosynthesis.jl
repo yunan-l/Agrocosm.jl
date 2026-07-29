@@ -46,6 +46,41 @@ function photosynthesis_C3!(PFT::PftParameters,
     return nothing
 end
 
+@inline function compute_co_limited_assimilation(
+    light_limited::T,
+    rubisco_limited::T,
+    curvature::T,
+    daylength::T,
+) where {T <: AbstractFloat}
+    discriminant = max(
+        zero(T),
+        (light_limited + rubisco_limited) * (light_limited + rubisco_limited) -
+        T(4) * curvature * light_limited * rubisco_limited,
+    )
+    return (light_limited + rubisco_limited - sqrt(discriminant)) /
+           (T(2) * curvature) * daylength
+end
+
+@inline function compute_net_assimilation(
+    gross::T,
+    leaf_respiration::T,
+    daylength::T,
+) where {T <: AbstractFloat}
+    daily_net = gross - hour2day(daylength) * leaf_respiration
+    return max(zero(T), daily_net), daily_net
+end
+
+@inline function compute_water_limited_assimilation(
+    daily_net::T,
+    carbon_mass::T,
+    temperature::T,
+    pressure::T,
+) where {T <: AbstractFloat}
+    daily_net <= zero(T) && return zero(T)
+    return daily_net / carbon_mass * T(8.314) * (temperature + T(273.15)) /
+           pressure * T(1000)
+end
+
 @kernel inbounds = true function photosynthesis_c3_kernel!(
     gross_assimilation::AbstractVector{T},
     net_assimilation::AbstractVector{T},
@@ -104,20 +139,15 @@ end
     c2 = (internal_co2 - gammastar) / (internal_co2 + fac)
     je = c1 * apar[cell] * T(cmass) * T(cq) / (daylength[cell] + T(1e-5))
     jc = c2 * hour2day(vcmax[cell])
-    discriminant = max(
-        zero(T),
-        (je + jc) * (je + jc) - T(4) * T(theta) * je * jc,
-    )
-    agd = (je + jc - sqrt(discriminant)) / (T(2) * T(theta)) * daylength[cell]
+    agd = compute_co_limited_assimilation(je, jc, T(theta), daylength[cell])
     gross = inactive ? zero(T) : max(zero(T), agd)
     gross_assimilation[cell] = gross
     leaf = inactive ? zero(T) : T(b) * vcmax[cell]
     leaf_respiration[cell] = leaf
-    adt = gross - hour2day(daylength[cell]) * leaf
-    net_assimilation[cell] = max(zero(T), adt)
-    water_limited_assimilation[cell] = adt <= zero(T) ? zero(T) :
-        adt / T(cmass) * T(8.314) * (temperature_cell + T(273.15)) /
-        T(p) * T(1000)
+    net_assimilation[cell], adt = compute_net_assimilation(gross, leaf, daylength[cell])
+    water_limited_assimilation[cell] = compute_water_limited_assimilation(
+        adt, T(cmass), temperature_cell, T(p),
+    )
 end
 
 """Cell-local C4 photosynthesis kernel with no intermediate device arrays."""
@@ -202,18 +232,13 @@ photosynthesis!(::Val{:C4}, PFT, crop, apar, daylength, temperature, co2; kwargs
     c1 = stress * phipi * T(alphac4)
     je = c1 * apar[cell] * T(cmass) * T(cq) / (daylength[cell] + T(1e-5))
     jc = hour2day(vcmax[cell])
-    discriminant = max(
-        zero(T),
-        (je + jc) * (je + jc) - T(4) * T(theta) * je * jc,
-    )
-    agd = (je + jc - sqrt(discriminant)) / (T(2) * T(theta)) * daylength[cell]
+    agd = compute_co_limited_assimilation(je, jc, T(theta), daylength[cell])
     gross = inactive ? zero(T) : max(zero(T), agd)
     gross_assimilation[cell] = gross
     leaf = inactive ? zero(T) : T(b) * vcmax[cell]
     leaf_respiration[cell] = leaf
-    adt = gross - hour2day(daylength[cell]) * leaf
-    net_assimilation[cell] = max(zero(T), adt)
-    water_limited_assimilation[cell] = adt <= zero(T) ? zero(T) :
-        adt / T(cmass) * T(8.314) * (temperature[cell] + T(273.15)) /
-        T(p) * T(1000)
+    net_assimilation[cell], adt = compute_net_assimilation(gross, leaf, daylength[cell])
+    water_limited_assimilation[cell] = compute_water_limited_assimilation(
+        adt, T(cmass), temperature[cell], T(p),
+    )
 end

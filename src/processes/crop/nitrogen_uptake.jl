@@ -44,6 +44,51 @@ function nuptake_crop!(crop,
 
 end
 
+"""Compute LPJmL's bounded soil-temperature response for root nitrogen uptake."""
+@inline function compute_nitrogen_uptake_temperature_response(
+    temperature::T,
+    lower_temperature::T,
+    optimum_temperature::T,
+    reference_temperature::T,
+) where {T <: AbstractFloat}
+    return max(
+        (temperature - lower_temperature) *
+        (T(2) * optimum_temperature - lower_temperature - temperature) /
+        (reference_temperature - lower_temperature) /
+        (T(2) * optimum_temperature - lower_temperature - reference_temperature),
+        zero(T),
+    )
+end
+
+"""Compute the root-density and temperature scaling for one soil layer."""
+@inline function compute_root_nitrogen_uptake_factor(
+    temperature_response::T,
+    plant_nitrogen_factor::T,
+    root_carbon::T,
+    root_fraction::T,
+) where {T <: AbstractFloat}
+    return temperature_response * plant_nitrogen_factor * root_carbon * root_fraction / T(1000)
+end
+
+"""Compute a layer's capped Michaelis–Menten NO₃ or NH₄ uptake potential."""
+@inline function compute_mineral_nitrogen_uptake_potential(
+    available::T,
+    relative_water::T,
+    saturation_fraction::T,
+    layer_depth::T,
+    root_factor::T,
+    uptake_parameters,
+) where {T <: AbstractFloat}
+    available > zero(T) || return zero(T)
+    water_scaler = relative_water > T(1e-7) ? one(T) : zero(T)
+    saturation = available * water_scaler /
+                 (available * water_scaler + T(uptake_parameters.Km) *
+                  saturation_fraction * layer_depth / T(1000))
+    potential = T(uptake_parameters.vmax) *
+                (T(uptake_parameters.kmin) + saturation) * root_factor
+    return min(potential, available)
+end
+
 @kernel inbounds = true function nuptake_crop_kernel!(
                                       crop_nitrogen::AbstractArray{T},
                                       crop_nuptake::AbstractArray{T},
@@ -95,36 +140,20 @@ end
         if leaf_nc < T(ncleaf.high) * (one(T) + T(knstore))
             # First pass: independent potential NO3 and NH4 uptake per layer.
             for l in 1:soil_layers
-                wscaler = soil_w[l, cell] > T(1e-7) ? one(T) : zero(T)
-                temp_response = max(
-                    (soil_temp[l, cell] - T(T_0)) *
-                    (T(2) * T(T_m) - T(T_0) - soil_temp[l, cell]) /
-                    (T(T_r) - T(T_0)) /
-                    (T(2) * T(T_m) - T(T_0) - T(T_r)),
-                    zero(T),
+                temp_response = compute_nitrogen_uptake_temperature_response(
+                    soil_temp[l, cell], T(T_0), T(T_m), T(T_r),
                 )
-                root_factor = temp_response * f_NCplant * crop_rootc[cell] *
-                              crop_rootdist[l] / T(1000)
-
-                no3_available = max(zero(T), soil_NO3[l, cell])
-                if no3_available > zero(T)
-                    no3_saturation = no3_available * wscaler /
-                                     (no3_available * wscaler + T(no3_uptake.Km) *
-                                      soil_wsat[l, cell] * soil_layer_depth[l] / T(1000))
-                    no3_potential = T(no3_uptake.vmax) *
-                                    (T(no3_uptake.kmin) + no3_saturation) * root_factor
-                    total_potential_uptake += min(no3_potential, no3_available)
-                end
-
-                nh4_available = max(zero(T), soil_NH4[l, cell])
-                if nh4_available > zero(T)
-                    nh4_saturation = nh4_available * wscaler /
-                                     (nh4_available * wscaler + T(nh4_uptake.Km) *
-                                      soil_wsat[l, cell] * soil_layer_depth[l] / T(1000))
-                    nh4_potential = T(nh4_uptake.vmax) *
-                                    (T(nh4_uptake.kmin) + nh4_saturation) * root_factor
-                    total_potential_uptake += min(nh4_potential, nh4_available)
-                end
+                root_factor = compute_root_nitrogen_uptake_factor(
+                    temp_response, f_NCplant, crop_rootc[cell], crop_rootdist[l],
+                )
+                total_potential_uptake += compute_mineral_nitrogen_uptake_potential(
+                    max(zero(T), soil_NO3[l, cell]), soil_w[l, cell], soil_wsat[l, cell],
+                    soil_layer_depth[l], root_factor, no3_uptake,
+                )
+                total_potential_uptake += compute_mineral_nitrogen_uptake_potential(
+                    max(zero(T), soil_NH4[l, cell]), soil_w[l, cell], soil_wsat[l, cell],
+                    soil_layer_depth[l], root_factor, nh4_uptake,
+                )
             end
         end
 
@@ -136,39 +165,27 @@ end
 
             # Second pass: remove exactly the accepted uptake from each pool.
             for l in 1:soil_layers
-                wscaler = soil_w[l, cell] > T(1e-7) ? one(T) : zero(T)
-                temp_response = max(
-                    (soil_temp[l, cell] - T(T_0)) *
-                    (T(2) * T(T_m) - T(T_0) - soil_temp[l, cell]) /
-                    (T(T_r) - T(T_0)) /
-                    (T(2) * T(T_m) - T(T_0) - T(T_r)),
-                    zero(T),
+                temp_response = compute_nitrogen_uptake_temperature_response(
+                    soil_temp[l, cell], T(T_0), T(T_m), T(T_r),
                 )
-                root_factor = temp_response * f_NCplant * crop_rootc[cell] *
-                              crop_rootdist[l] / T(1000)
-
+                root_factor = compute_root_nitrogen_uptake_factor(
+                    temp_response, f_NCplant, crop_rootc[cell], crop_rootdist[l],
+                )
                 no3_available = max(zero(T), soil_NO3[l, cell])
                 if no3_available > zero(T)
-                    no3_saturation = no3_available * wscaler /
-                                     (no3_available * wscaler + T(no3_uptake.Km) *
-                                      soil_wsat[l, cell] * soil_layer_depth[l] / T(1000))
-                    no3_potential = min(
-                        T(no3_uptake.vmax) * (T(no3_uptake.kmin) + no3_saturation) * root_factor,
-                        no3_available,
+                    no3_potential = compute_mineral_nitrogen_uptake_potential(
+                        no3_available, soil_w[l, cell], soil_wsat[l, cell],
+                        soil_layer_depth[l], root_factor, no3_uptake,
                     )
                     soil_NO3[l, cell] = max(
                         zero(T), soil_NO3[l, cell] - no3_potential * uptake_scale,
                     )
                 end
-
                 nh4_available = max(zero(T), soil_NH4[l, cell])
                 if nh4_available > zero(T)
-                    nh4_saturation = nh4_available * wscaler /
-                                     (nh4_available * wscaler + T(nh4_uptake.Km) *
-                                      soil_wsat[l, cell] * soil_layer_depth[l] / T(1000))
-                    nh4_potential = min(
-                        T(nh4_uptake.vmax) * (T(nh4_uptake.kmin) + nh4_saturation) * root_factor,
-                        nh4_available,
+                    nh4_potential = compute_mineral_nitrogen_uptake_potential(
+                        nh4_available, soil_w[l, cell], soil_wsat[l, cell],
+                        soil_layer_depth[l], root_factor, nh4_uptake,
                     )
                     soil_NH4[l, cell] = max(
                         zero(T), soil_NH4[l, cell] - nh4_potential * uptake_scale,
