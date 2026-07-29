@@ -32,9 +32,7 @@ I_l=\max(0,W_{fc,l}-W_l),\qquad W_l\leftarrow W_l+I_l.
 ```
 
 The added water is an unconstrained boundary input; this option is not a water
-allocation, river, reservoir, or irrigation-infrastructure model. Therefore,
-irrigated patches do not report a closed daily water-balance residual. Rainfed
-patches continue to use the water-balance diagnostic.
+allocation or irrigation-infrastructure model.
 
 ## Soil thermal state
 

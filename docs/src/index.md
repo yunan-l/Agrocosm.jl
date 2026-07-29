@@ -23,12 +23,11 @@ line-by-line translation.
 
 ## Current maturity
 
-The model can run up to 12 LPJmL-compatible CFTs under rainfed and full
-irrigation modes (up to 24 independent crop-soil patches). The multi-CFT CPU
-runner writes one unweighted yield band per selected CFT and water system.
-The model remains under active research development: crop rotations,
-Penman–Monteith/Medlyn alternatives, and end-to-end automatic differentiation
-are not yet production features.
+The rainfed single-crop C3/C4 pathway is implemented and covered by CPU and
+CUDA-oriented regression tests. The model is under active research
+development: soil/ecosystem spin-up, multi-crop rotations, broader output
+metadata, Penman–Monteith/Medlyn alternatives, and end-to-end automatic
+differentiation are not yet production features.
 
 Start with [Getting started](@ref), then read [Model overview](@ref) and
 [State variables](@ref) before extending a process.
