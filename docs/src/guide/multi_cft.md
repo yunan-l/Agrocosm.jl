@@ -32,6 +32,9 @@ julia --project=. examples/scripts/run_global_cfts_cpu.jl \
 ```
 
 For CUDA, use `run_global_cfts_gpu.jl` with the same configuration.
+Both drivers execute the selected homogeneous CFT/water-system batches
+sequentially. This preserves backend-equivalent process execution during the
+current validation stage; it is not yet a fused compact multi-patch GPU domain.
 
 The extracted management files are ordered as rainfed CFTs `1:12`, irrigated
 CFTs `13:24`, and 12 residue bands shared by the two water systems. Before a
