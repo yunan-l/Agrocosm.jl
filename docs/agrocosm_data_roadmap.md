@@ -244,13 +244,13 @@ pools, and initializes water at field capacity. New data use the neutral
 top-level `initial_state` contract; `initialLPJmL.u0` remains a legacy fixture
 compatibility path only.
 
-`agricultural_warmup!` now cycles the configured 1901–1910 forcing for at least
-ten years and up to the configured maximum without advancing the production
+`agricultural_warmup!` now cycles the configured 1901–1930 forcing for five
+complete cycles (150 years) without advancing the production
 clock or retaining production outputs. It supports target-constrained annual
 corrections, same-climate-phase convergence, a strict production checkpoint
-gate, restartable climate-block readers, and annual C/N/water diagnostics. A
-previous global 100-year diagnostic converged about 96.15% of cells; this is
-not yet evidence of universal slow-pool equilibrium.
+gate, restartable climate-block readers, and annual C/N/water diagnostics. The
+150-year global result will determine whether a reusable target-constrained
+pool-allocation product is needed.
 
 Deliverables:
 

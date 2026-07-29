@@ -5,7 +5,7 @@ output_directory = "/absolute/path/to/global_wheat_output"
 
 [climate]
 # Relative paths are resolved below paths.input_directory/climate. Absolute
-# paths are also accepted. These files provide both the 1901-1910 warm-up
+# paths are also accepted. These files provide both the 1901-1930 warm-up
 # cycle and the 2015-2016 production forcing.
 temperature_file = "tas_gswp3-w5e5_obsclim_1901-2019.nc"
 precipitation_file = "pr_gswp3-w5e5_obsclim_1901-2019.nc"
@@ -29,19 +29,20 @@ device_id = 0
 memory_safety_factor = 1.2
 simulation_start_year = 2015
 simulation_end_year = 2016
-# Repeat the first ten climate years while keeping management fixed at 2015.
+# Repeat the first thirty climate years five times while keeping management
+# fixed at 2015.
 warmup_climate_start_year = 1901
-warmup_climate_end_year = 1910
-# Same-phase convergence compares year t with t-10. The first convergence
-# decision therefore occurs only after one complete ten-year forcing cycle.
+warmup_climate_end_year = 1930
+# Same-phase convergence compares year t with t-30. The fixed 150-year run
+# completes five full thirty-year forcing cycles.
 warmup_target_constrained = true
-warmup_minimum_years = 10
-warmup_maximum_years = 100
+warmup_minimum_years = 150
+warmup_maximum_years = 150
 warmup_consecutive_years = 3
 warmup_relative_tolerance = 0.01
 warmup_pool_fraction_tolerance = 0.01
 warmup_required_converged_fraction = 1.0
-# Cache the ten forcing years once to avoid repeated NetCDF reads. Enable only
+# Cache the thirty forcing years once to avoid repeated NetCDF reads. Enable only
 # after memory_preflight.toml confirms sufficient host memory.
 warmup_cache_climate = false
 # Production runs stop before writing a warm-up checkpoint when convergence

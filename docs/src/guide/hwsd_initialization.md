@@ -178,21 +178,20 @@ number of consecutive years:
 - the absolute annual target correction, relative to the initial cell total,
   is below the relative tolerance.
 
-The global CPU workflow currently requires every selected cell to pass for
-three consecutive years, with a 10-year minimum and 100-year maximum. All
-cells continue on the same cycling calendar until the batch stops; this keeps
-the checkpoint deterministic and also requires previously stable cells to
-remain stable.
+The global CPU workflow cycles 1901--1930 climate five times and runs every
+selected cell for 150 years. It still reports whether each cell passes for
+three consecutive years. Keeping all cells on the same fixed calendar makes
+the checkpoint deterministic and exposes the residual unconverged fraction.
 
 Recommended procedure:
 
 1. Build the HWSD state and initialize water at field capacity.
-2. Run target-constrained agricultural warm-up for at least ten years, using
+2. Run the 150-year target-constrained agricultural warm-up, using
    the same crop, fertilization, irrigation, residue, and tillage configuration
    as the target experiment.
 3. Use observed historical forcing when available. If forcing must be cycled,
    pass a complete multi-year block rather than one anomalous year.
-4. Continue until the convergence rule passes or the maximum year is reached.
+4. Evaluate convergence after the five complete 30-year forcing cycles.
 5. Discard warm-up outputs but save the final native Agrocosm checkpoint.
 6. Use a separate diagnostic run when daily C, N, water, and energy closure
    must be audited; the production warm-up deliberately does not allocate
@@ -252,13 +251,19 @@ The server production script exposes the same controls:
 ```toml
 [run]
 warmup_target_constrained = true
-warmup_minimum_years = 10
-warmup_maximum_years = 100
+warmup_minimum_years = 150
+warmup_maximum_years = 150
 warmup_consecutive_years = 3
 warmup_relative_tolerance = 0.01
 warmup_pool_fraction_tolerance = 0.01
 warmup_required_converged_fraction = 1.0
 ```
+
+The global production configuration cycles the 1901--1930 climate five times,
+for a fixed 150-year target-constrained warm-up. Convergence compares states at
+the same position in the 30-year forcing cycle. HWSD mineral-soil C and total-N
+targets remain fixed while litter and the fast/slow pool allocation develop
+under the model processes.
 
 For the complete canonical grid, run the bounded-memory HWSD raster pipeline
 on the server:

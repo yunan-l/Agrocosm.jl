@@ -133,20 +133,21 @@ Production time and output remain unchanged,
 d_{production}=0,\qquad Y_{production}=\varnothing,
 ```
 
-until the formal run begins. After the ten-year minimum, annual total-C/N
-changes, fast-pool fraction changes, and target corrections must remain below
-their thresholds for the configured consecutive years. Otherwise warm-up
-continues to its maximum duration. Annual reports retain convergence status,
+until the formal run begins. In the global production configuration, the
+1901--1930 forcing block is repeated five times for 150 years. Same-phase
+total-C/N changes, fast-pool fraction changes, and target corrections are
+checked against their thresholds for the configured consecutive years. Annual
+reports retain convergence status,
 target corrections, litter, fast, slow, total C/N, mineral N, and soil water.
 The final state is saved as a native Agrocosm checkpoint.
 
 ## Interpretation
 
-Ten years is the minimum, not an equilibrium claim. A run that reaches its
-maximum duration without satisfying the per-cell criteria is reported as
-`target_constrained_maximum_years` and remains a baseline rather than an
-accepted equilibrium initialization. The annual correction itself is an
-initialization diagnostic and is never introduced as a production flux.
+The fixed 150-year duration is not by itself an equilibrium claim. A run that
+reaches its maximum duration without satisfying the per-cell criteria is
+reported as `target_constrained_maximum_years` and remains a baseline rather
+than an accepted equilibrium initialization. The annual correction itself is
+an initialization diagnostic and is never introduced as a production flux.
 
 Warm-up, HWSD preprocessing, input loading, checkpoint I/O, and reporting stay
 outside the future Enzyme-differentiable one-day transition.

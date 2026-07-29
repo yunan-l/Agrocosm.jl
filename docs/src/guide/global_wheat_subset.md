@@ -137,11 +137,12 @@ year. `landfrac > 0` selects crop cells but never scales single-cell processes.
 
 For the global production experiment, point the `[climate]` file entries at
 the complete 1901--2019 forcing files. Warm-up repeatedly uses
-`warmup_climate_start_year = 1901` through `warmup_climate_end_year = 1910`,
+`warmup_climate_start_year = 1901` through `warmup_climate_end_year = 1930`,
 while production still reads 2015--2016. Convergence compares soil state at
-the same position in the ten-year forcing cycle (`t` versus `t-10`); it is not
+the same position in the 30-year forcing cycle (`t` versus `t-30`); it is not
 evaluated from unlike adjacent climate years. Management remains fixed at the
-2015 level during warm-up.
+2015 level during warm-up. The production configuration runs five complete
+cycles, for a fixed total of 150 warm-up years.
 
 The runner performs the configured streamed agricultural warm-up, writes and
 exactly restores a native warm-up checkpoint, checkpoints after the first
@@ -152,7 +153,7 @@ canonical longitude/latitude grid.
 The full domain runs with daily balance ledgers disabled. A configurable small
 canonical subset repeats the same warm-up and production run with diagnostics to
 produce sampled C/N/water/energy closure. The output directory also contains a
-pre-allocation memory estimate and a ten-year C/N drift report.
+pre-allocation memory estimate and a warm-up C/N drift report.
 
 ## 7. CUDA production workflow
 
