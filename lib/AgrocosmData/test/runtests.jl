@@ -92,19 +92,6 @@ include("test_prepare_global_wheat_subset.jl")
         @test crop_mask.fraction == Float32[0 0.2 0.3; 0.4 0 0.1]
         @test crop_mask.active == Bool[0 1 1; 1 0 1]
 
-        rainfed_patches = build_patch_domain(grid, landuse.values, 20)
-        irrigated_patches = build_patch_domain(
-            grid, irrigated_landuse.values, 20; irrigated = true,
-        )
-        patches = combine_patch_domains([rainfed_patches, irrigated_patches])
-        @test rainfed_patches.cell_ids == Int32[0, 1, 3]
-        @test rainfed_patches.landfrac == Float32[0.4, 0.2, 0.3]
-        @test patches.patch_ids == Int32.(1:6)
-        @test patches.cell_ids == Int32[0, 1, 3, 0, 1, 3]
-        @test patches.pft_ids == fill(Int32(20), 6)
-        @test patches.irrigated == BitVector([false, false, false, true, true, true])
-        @test patches.landfrac == Float32[0.4, 0.2, 0.3, 0.5, 0.3, 0.4]
-
         residue = read_management(
             catalog,
             :residue_fraction,

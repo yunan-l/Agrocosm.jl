@@ -96,47 +96,6 @@ struct CellSelection
     end
 end
 
-"""One or more crop-system patches, allowing the same grid cell in multiple patches."""
-struct PatchDomain{T <: AbstractFloat}
-    patch_ids::Vector{Int32}
-    compact_indices::Vector{Int}
-    cell_ids::Vector{Int32}
-    pft_ids::Vector{Int32}
-    irrigated::BitVector
-    landfrac::Vector{T}
-
-    function PatchDomain(
-        patch_ids::AbstractVector{<:Integer},
-        compact_indices::AbstractVector{<:Integer},
-        cell_ids::AbstractVector{<:Integer},
-        pft_ids::AbstractVector{<:Integer},
-        irrigated::AbstractVector{Bool},
-        landfrac::AbstractVector{T},
-    ) where {T <: AbstractFloat}
-        lengths = length.((patch_ids, compact_indices, cell_ids, pft_ids, irrigated, landfrac))
-        all(==(first(lengths)), lengths) || throw(DimensionMismatch(
-            "every PatchDomain field must have the same length",
-        ))
-        patch_ids32 = Int32.(patch_ids)
-        compact = Int.(compact_indices)
-        pft_ids32 = Int32.(pft_ids)
-        allunique(patch_ids32) || throw(ArgumentError("patch ids must be unique"))
-        all(>(0), compact) || throw(ArgumentError("compact indices must be positive"))
-        all(>(0), pft_ids32) || throw(ArgumentError("PFT ids must be positive"))
-        all(isfinite, landfrac) && all(>=(zero(T)), landfrac) || throw(ArgumentError(
-            "patch land fractions must be finite and non-negative",
-        ))
-        return new{T}(
-            patch_ids32,
-            compact,
-            Int32.(cell_ids),
-            pft_ids32,
-            BitVector(irrigated),
-            collect(landfrac),
-        )
-    end
-end
-
 """An array with named canonical dimensions ending in `:cell`."""
 struct CompactVariable{T, N, A <: AbstractArray{T, N}}
     values::A

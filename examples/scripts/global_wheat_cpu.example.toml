@@ -1,7 +1,7 @@
 [paths]
 input_directory = "/absolute/path/to/input_data"
 hwsd_targets = "/absolute/path/to/hwsd_canonical.nc"
-output_directory = "/absolute/path/to/global_crops_output"
+output_directory = "/absolute/path/to/global_wheat_output"
 
 [climate]
 # Relative paths are resolved below paths.input_directory/climate. Absolute
@@ -21,12 +21,6 @@ fixed_year = 2015
 fertilizer = "yes"
 manure = true
 with_tillage = true
-
-[cfts]
-# All runners use the extracted 24-band management files. The multi-CFT runner
-# accepts any non-empty subset of these CFT ids.
-pft_ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-water_systems = ["rainfed", "irrigated"]
 
 [run]
 backend = "cpu"
