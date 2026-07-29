@@ -12,7 +12,6 @@ function execution_backend(config; override = nothing)
     backend in (:cpu, :cuda) || error("run.backend must be cpu or cuda")
     backend === :cpu && return (name = :cpu, device = identity, device_id = nothing)
 
-    @eval import CUDA
     CUDA.functional() || error("CUDA backend requested, but CUDA.functional() is false")
     device_id = Int(get(config["run"], "device_id", 0))
     CUDA.device!(device_id)

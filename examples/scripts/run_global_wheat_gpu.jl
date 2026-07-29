@@ -1,3 +1,4 @@
+import CUDA
 include(joinpath(@__DIR__, "run_global_wheat_cpu.jl"))
 
 if abspath(PROGRAM_FILE) == @__FILE__
