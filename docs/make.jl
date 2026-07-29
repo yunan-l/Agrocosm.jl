@@ -20,6 +20,7 @@ makedocs(
         "Model concepts" => [
             "Overview" => "concepts/overview.md",
             "State variables" => "concepts/state_lifecycle.md",
+            "Process contracts" => "concepts/process_contracts.md",
             "Daily process order" => "concepts/daily_processes.md",
             "Model processes" => "science/model_equations.md",
             "Crop processes" => "science/crop.md",

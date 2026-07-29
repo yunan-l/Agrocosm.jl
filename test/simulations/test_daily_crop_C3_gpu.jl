@@ -144,7 +144,7 @@ function run_c3_e2e(device, host_climate)
         thermal_balance = thermal,
     )
 
-    return (; climbuf, crop, pet, soil, managed_land, weather, output,
+    return (; state, climbuf, crop, pet, soil, managed_land, weather, output,
             water, nitrogen, carbon, thermal)
 end
 
@@ -270,6 +270,32 @@ function test_exact_equivalence(gpu_values, cpu_values; label)
     return nothing
 end
 
+"""Recursively compare every numerical leaf in the canonical lifecycle tree."""
+function test_lifecycle_state_equivalence(gpu_value, cpu_value; label)
+    if gpu_value isa AbstractArray
+        if eltype(gpu_value) <: AbstractFloat
+            test_float_equivalence(gpu_value, cpu_value; label)
+        else
+            test_exact_equivalence(gpu_value, cpu_value; label)
+        end
+        return nothing
+    end
+
+    if gpu_value isa NamedTuple || isstructtype(typeof(gpu_value))
+        @test propertynames(gpu_value) == propertynames(cpu_value)
+        for field in propertynames(cpu_value)
+            test_lifecycle_state_equivalence(
+                getproperty(gpu_value, field), getproperty(cpu_value, field);
+                label = "$label.$field",
+            )
+        end
+        return nothing
+    end
+
+    @test gpu_value == cpu_value
+    return nothing
+end
+
 @testset "CUDA C3 rainfed wheat 365/730-day end-to-end equivalence" begin
     host_climate = c3_e2e_climate_host()
     cpu = run_c3_e2e(identity, host_climate)
@@ -282,6 +308,7 @@ end
     @test sum(cpu.output.calendar.sowing_event) > 0
     @test sum(cpu.output.calendar.harvest_event) > 0
 
+    test_lifecycle_state_equivalence(gpu.state, cpu.state; label = "state")
     log_first_crop_divergence(cpu, gpu)
 
     daily_float_fields = (

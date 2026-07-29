@@ -1,6 +1,21 @@
 using Agrocosm
 using Test
 
+@testset "Photosynthesis scalar formulas" begin
+    T = Float32
+    gross = Agrocosm.compute_co_limited_assimilation(T(3), T(5), T(0.9), T(12))
+    @test gross > zero(T)
+    @test isfinite(gross)
+
+    net, daily_net = Agrocosm.compute_net_assimilation(T(5), T(1), T(12))
+    @test net == daily_net == T(4.5)
+    @test Agrocosm.compute_water_limited_assimilation(daily_net, T(12), T(20), T(101325)) > zero(T)
+
+    net, daily_net = Agrocosm.compute_net_assimilation(T(1), T(1), T(24))
+    @test net == zero(T)
+    @test Agrocosm.compute_water_limited_assimilation(daily_net, T(12), T(20), T(101325)) == zero(T)
+end
+
 @testset "C3 photosynthesis CPU smoke test" begin
     crop = init_crop(1, identity)
     photos = crop.auxiliary.photosynthesis

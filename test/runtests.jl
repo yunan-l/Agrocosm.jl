@@ -18,6 +18,7 @@ using Test
     include("processes/crop/test_lambda_solver_c4.jl")
     include("processes/crop/test_lambda_water_coupling.jl")
     include("processes/crop/test_fertilizer.jl")
+    include("processes/crop/test_phenology_scalar_formulas.jl")
     include("processes/crop/test_crop_lifecycle.jl")
     include("processes/crop/test_checkpoint_minimal_state.jl")
     include("processes/crop/test_field_lifecycle.jl")
