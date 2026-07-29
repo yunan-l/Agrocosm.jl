@@ -26,6 +26,16 @@ cft_ids = "all"
 water_systems = ["rainfed", "irrigated"]
 ```
 
+To calibrate and validate a separate soil-pool allocation for every selected
+patch in one workflow, add an `[allocation_validation]` section. The supplied
+`global_cfts_allocation_validation.example.toml` is the canonical template.
+The calibration phase uses target-constrained warm-up and writes an allocation;
+the validation phase reloads that same allocation, performs free warm-up, then
+runs the requested production years with checkpoint/restart.
+The supplied configuration uses 150--600 years for target-constrained
+calibration, followed by 60--150 years for free validation (two to five full
+30-year climate cycles).
+
 ```bash
 julia --project=. examples/scripts/run_global_cfts_cpu.jl \
   /absolute/path/global_crops.toml
@@ -43,19 +53,24 @@ one in any geographic cell.
 
 ## Outputs and warm-up
 
-Each batch writes below `batches/cft_XX_rainfed` or
-`batches/cft_XX_irrigated`. The combined file
+Each allocation-validation batch writes separately below
+`batches/cft_XX_rainfed/{calibration,production}` or
+`batches/cft_XX_irrigated/{calibration,production}`. The combined file
 `global_cft_yield_START_END.nc` contains:
 
 ```text
 yield(longitude, latitude, band, time)
+landfrac(longitude, latitude, band, time)
 cft_id(band)
 irrigated(band)  # 0 = rainfed; 1 = irrigated
+landfrac_sum(longitude, latitude, time)
 ```
 
 `yield` is deliberately unweighted: it is a per-patch yield and is not summed
-or multiplied by `landfrac`. Full irrigation resets rooted soil layers to field
-capacity daily, so water-balance closure is reported only for rainfed batches.
+or multiplied by `landfrac`; `landfrac_sum` is retained only as a coverage QC.
+`cft_batch_manifest.toml` records the allocation and production paths for every
+batch. Full irrigation resets rooted soil layers to field capacity daily, so
+water-balance closure is reported only for rainfed batches.
 
 Each batch writes `warmup_soil_pool_allocation.nc`. Its allocation fields have
 dimensions `(layer, cell, patch)` and its singleton `patch` coordinate carries

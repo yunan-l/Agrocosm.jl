@@ -527,6 +527,15 @@ function run_global_wheat(
         required_converged_fraction = warmup.required_converged_fraction,
         converged = warmup.converged,
     )
+    if !Bool(get(run, "production", true))
+        return (
+            cells = length(selection.cell_ids),
+            backend = backend.name,
+            warmup_years = warmup_contract.years,
+            warmup_converged = warmup_contract.converged,
+            output_directory,
+        )
+    end
     warmup_checkpoint = joinpath(output_directory, "warmup_checkpoint.jld2")
     save_checkpoint(warmup_checkpoint, warmup_simulation)
     warmup = nothing
