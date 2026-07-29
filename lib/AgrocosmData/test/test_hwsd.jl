@@ -1,3 +1,5 @@
+using NCDatasets
+
 @testset "HWSD C/N preprocessing" begin
     organic_carbon = fill(1.0f0, 7, 2)
     total_nitrogen = fill(1.0f0, 7, 2)
@@ -119,6 +121,8 @@
         fill(0.50f0, 5, 1),
         reshape(Float32[0.40, 0.25, 0.15, 0.10, 0.10], 5, 1),
         reshape(Float32[0.50, 0.20, 0.15, 0.10, 0.05], 5, 1);
+        pft_id = 5,
+        irrigated = true,
         provenance = (source = "test",),
     )
     mktempdir() do directory
@@ -154,7 +158,14 @@
             joinpath(directory, "pool_allocation.nc"), allocation,
         )
         restored_allocation = read_soil_pool_allocation(allocation_path)
+        NCDataset(allocation_path, "r") do dataset
+            @test size(dataset["fast_carbon_fraction"]) == (5, 1, 1)
+            @test dataset["pft_id"][:] == Int32[5]
+            @test dataset["irrigated"][:] == Int8[1]
+        end
         @test restored_allocation.selection.cell_ids == allocation.selection.cell_ids
+        @test restored_allocation.pft_id == 5
+        @test restored_allocation.irrigated
         @test restored_allocation.fast_carbon_fraction == allocation.fast_carbon_fraction
         @test restored_allocation.fast_nitrogen_fraction == allocation.fast_nitrogen_fraction
         @test restored_allocation.c_shift_fast == allocation.c_shift_fast

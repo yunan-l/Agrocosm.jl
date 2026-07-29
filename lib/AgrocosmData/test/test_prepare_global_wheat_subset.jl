@@ -39,6 +39,41 @@ include(joinpath(@__DIR__, "..", "scripts", "prepare_global_wheat_subset.jl"))
                 end
         end
 
+        management_24_output = joinpath(directory, "management_24.nc")
+        subset_netcdf(
+            management_path, management_24_output, "landfrac";
+            pft_indices = [1, 2, 1, 2], years = [2001],
+            require_365_days = false, chunk_length = 1,
+        )
+        NCDataset(management_24_output, "r") do dataset
+            @test size(dataset["landfrac"]) == (2, 4, 2, 1)
+            @test dataset["band"][:] == Int32[1, 2, 3, 4]
+            @test dataset.attrib["agrocosm_source_pft_indices"] == "1,2,1,2"
+            @test dataset["landfrac"][:, 1, :, :] == dataset["landfrac"][:, 3, :, :]
+            @test dataset["landfrac"][:, 2, :, :] == dataset["landfrac"][:, 4, :, :]
+        end
+
+        sdate_path = joinpath(directory, "sdate.nc")
+        NCDataset(sdate_path, "c") do dataset
+            defDim(dataset, "longitude", 2); defDim(dataset, "band", 24)
+            defDim(dataset, "latitude", 2); defDim(dataset, "time", 1)
+            defVar(dataset, "longitude", Float64[0, 1], ("longitude",))
+            defVar(dataset, "band", Int32.(1:24), ("band",))
+            defVar(dataset, "latitude", Float64[1, 0], ("latitude",))
+            defVar(dataset, "time", Int32[0], ("time",))
+            defVar(dataset, "sdate", reshape(Float32.(1:96), 2, 24, 2, 1),
+                ("longitude", "band", "latitude", "time"))
+        end
+        @test has_time_dimension(sdate_path, "sdate")
+        @test isnothing(management_years(sdate_path, "sdate", 2015))
+        sdate_output = joinpath(directory, "sdate_24.nc")
+        subset_netcdf(sdate_path, sdate_output, "sdate";
+            pft_indices = collect(1:24), years = management_years(sdate_path, "sdate", 2015),
+            require_365_days = false, chunk_length = 1)
+        NCDataset(sdate_output, "r") do dataset
+            @test size(dataset["sdate"]) == (2, 24, 2, 1)
+        end
+
         climate_path = joinpath(directory, "climate.nc")
         time_values = Int32.(0:729)
         NCDataset(climate_path, "c") do dataset

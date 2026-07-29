@@ -516,14 +516,17 @@ function read_soil_cn_targets(path::AbstractString; T::Type{<:AbstractFloat} = F
     end
 end
 
-"""Write a compact calibrated soil-pool allocation for later HWSD reconstruction."""
+"""Write one CFT/water-system-calibrated soil-pool allocation for later reconstruction."""
 function write_soil_pool_allocation(path::AbstractString, allocation::SoilPoolAllocation)
     isfile(path) && rm(path; force = true)
     NCDataset(path, "c") do dataset
         layers, cells = size(allocation.fast_carbon_fraction)
         defDim(dataset, "layer", layers)
         defDim(dataset, "cell", cells)
+        defDim(dataset, "patch", 1)
         defVar(dataset, "cell_id", Int32, ("cell",))[:] = allocation.selection.cell_ids
+        defVar(dataset, "pft_id", Int32, ("patch",))[:] = Int32[allocation.pft_id]
+        defVar(dataset, "irrigated", Int8, ("patch",))[:] = Int8[allocation.irrigated]
         for name in (
             :fast_carbon_fraction,
             :fast_nitrogen_fraction,
@@ -531,7 +534,7 @@ function write_soil_pool_allocation(path::AbstractString, allocation::SoilPoolAl
             :c_shift_slow,
         )
             values = getproperty(allocation, name)
-            defVar(dataset, String(name), eltype(values), ("layer", "cell"))[:, :] = values
+            defVar(dataset, String(name), eltype(values), ("layer", "cell", "patch"))[:, :, 1] = values
         end
         dataset.attrib["schema_version"] = string(DATA_SCHEMA_VERSION)
         for (name, value) in pairs(allocation.provenance)
@@ -542,7 +545,7 @@ function write_soil_pool_allocation(path::AbstractString, allocation::SoilPoolAl
     return String(path)
 end
 
-"""Read a calibrated soil-pool allocation written by `write_soil_pool_allocation`."""
+"""Read one CFT/water-system-calibrated soil-pool allocation."""
 function read_soil_pool_allocation(path::AbstractString; T::Type{<:AbstractFloat} = Float32)
     return NCDataset(path, "r") do dataset
         cell_ids = Int32.(dataset["cell_id"][:])
@@ -552,12 +555,20 @@ function read_soil_pool_allocation(path::AbstractString; T::Type{<:AbstractFloat
             name == "schema_version" && continue
             provenance = merge(provenance, NamedTuple{(Symbol(name),)}((dataset.attrib[name],)))
         end
+        has_patch = haskey(dataset, "pft_id") && haskey(dataset, "irrigated")
+        has_patch && length(dataset["pft_id"]) != 1 && error(
+            "allocation file contains multiple patches; select one CFT/water-system allocation first",
+        )
+        pft_id = has_patch ? Int(dataset["pft_id"][1]) : 1
+        irrigated = has_patch ? Bool(dataset["irrigated"][1]) : false
+        values(name) = ndims(dataset[name]) == 3 ? dataset[name][:, :, 1] : dataset[name][:, :]
         return SoilPoolAllocation(
             selection,
-            T.(dataset["fast_carbon_fraction"][:, :]),
-            T.(dataset["fast_nitrogen_fraction"][:, :]),
-            T.(dataset["c_shift_fast"][:, :]),
-            T.(dataset["c_shift_slow"][:, :]);
+            T.(values("fast_carbon_fraction")),
+            T.(values("fast_nitrogen_fraction")),
+            T.(values("c_shift_fast")),
+            T.(values("c_shift_slow"));
+            pft_id, irrigated,
             provenance,
         )
     end
