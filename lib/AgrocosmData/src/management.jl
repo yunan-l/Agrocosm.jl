@@ -109,9 +109,9 @@ function validate_management(name::Symbol, values::AbstractMatrix; active::Union
 end
 
 """
-Read one management variable for a selected PFT as `time × cell`.
+Read one management variable for a selected CFT as `time × cell`.
 
-PFT-independent files are accepted and applied to the requested PFT. Missing
+CFT-independent files are accepted and applied to the requested CFT. Missing
 values are replaced with `missing_value`; callers should pass the land-use
 activity mask to enforce active-year ranges for sowing date and PHU.
 """
@@ -119,8 +119,8 @@ function read_management(
     spec::DatasetSpec,
     name::Symbol,
     grid::GridIndex,
-    registry::PFTRegistry,
-    pft_id::Integer;
+    registry::CFTRegistry,
+    cft_id::Integer;
     selection::CellSelection = all_cells(grid),
     years = nothing,
     simulation_years = nothing,
@@ -136,11 +136,11 @@ function read_management(
     ))
     source_names, canonical_names, variable_size = _variable_dimension_info(spec)
     time_position = findfirst(==(:time), canonical_names)
-    pft_position = findfirst(==(:pft), canonical_names)
-    file_pft_ids = isempty(spec.pft_ids) ? registry.ids : spec.pft_ids
-    if !isnothing(pft_position) && spec.management_bands === nothing &&
-            variable_size[pft_position] != length(file_pft_ids)
-        throw(DimensionMismatch("PFT dimension has $(variable_size[pft_position]) entries but its configured mapping has $(length(file_pft_ids))"))
+    cft_position = findfirst(==(:cft), canonical_names)
+    file_cft_ids = isempty(spec.cft_ids) ? registry.ids : spec.cft_ids
+    if !isnothing(cft_position) && spec.management_bands === nothing &&
+            variable_size[cft_position] != length(file_cft_ids)
+        throw(DimensionMismatch("CFT dimension has $(variable_size[cft_position]) entries but its configured mapping has $(length(file_cft_ids))"))
     end
 
     mapped_rows = nothing
@@ -157,28 +157,28 @@ function read_management(
     end
     selector_pairs = Pair{Symbol, Any}[]
     !isnothing(time_position) && push!(selector_pairs, :time => selected_time)
-    if !isnothing(pft_position)
-        crop_position = pft_index(registry, pft_id)
+    if !isnothing(cft_position)
+        crop_position = cft_index(registry, cft_id)
         file_band = if spec.management_bands === nothing
-            position = findfirst(==(Int32(pft_id)), file_pft_ids)
-            isnothing(position) && throw(ArgumentError("PFT id $pft_id is not present in $(spec.path)"))
+            position = findfirst(==(Int32(cft_id)), file_cft_ids)
+            isnothing(position) && throw(ArgumentError("CFT id $cft_id is not present in $(spec.path)"))
             position
         else
             bands = irrigated ? spec.management_bands.irrigated : spec.management_bands.rainfed
             Int(bands[crop_position])
         end
-        file_band <= variable_size[pft_position] ||
-            throw(DimensionMismatch("configured band $file_band exceeds the file's $(variable_size[pft_position])-band PFT dimension"))
-        push!(selector_pairs, :pft => file_band)
+        file_band <= variable_size[cft_position] ||
+            throw(DimensionMismatch("configured band $file_band exceeds the file's $(variable_size[cft_position])-band CFT dimension"))
+        push!(selector_pairs, :cft => file_band)
     end
     selectors = (; selector_pairs...)
     order = isnothing(time_position) ?
-        (isnothing(pft_position) ? (:cell,) : (:pft, :cell)) :
-        (isnothing(pft_position) ? (:time, :cell) : (:time, :pft, :cell))
+        (isnothing(cft_position) ? (:cell,) : (:cft, :cell)) :
+        (isnothing(cft_position) ? (:time, :cell) : (:time, :cft, :cell))
     compact = read_compact_variable(spec, grid; selection, selectors, order)
 
     values = compact.values
-    !isnothing(pft_position) && (values = dropdims(values; dims = findfirst(==(:pft), order)))
+    !isnothing(cft_position) && (values = dropdims(values; dims = findfirst(==(:cft), order)))
     isnothing(time_position) && (values = reshape(values, 1, :))
     if !isnothing(simulation_years)
         requested_years = Int.(collect(simulation_years))
@@ -197,23 +197,23 @@ function read_management(
     else
         _time_coordinate(spec, selected_time)
     end
-    return TimeCellData(time, matrix, selection, Int32(pft_id), irrigated, compact.provenance)
+    return TimeCellData(time, matrix, selection, Int32(cft_id), irrigated, compact.provenance)
 end
 
 function read_management(
     catalog::DatasetCatalog,
     name::Symbol,
     grid::GridIndex,
-    pft_id::Integer;
+    cft_id::Integer;
     kwargs...,
 )
-    return read_management(dataset(catalog, name), name, grid, catalog.pfts, pft_id; kwargs...)
+    return read_management(dataset(catalog, name), name, grid, catalog.cfts, cft_id; kwargs...)
 end
 
 function _aligned_management_values(name::Symbol, data::TimeCellData, reference::TimeCellData)
     data.selection.cell_ids == reference.selection.cell_ids ||
         throw(ArgumentError("$name uses a different cell selection"))
-    data.pft_id == reference.pft_id || throw(ArgumentError("$name uses a different PFT"))
+    data.cft_id == reference.cft_id || throw(ArgumentError("$name uses a different CFT"))
     data.irrigated == reference.irrigated ||
         throw(ArgumentError("$name uses a different rainfed/irrigated system"))
     data.time == reference.time || throw(ArgumentError("$name uses different management years"))
@@ -259,9 +259,9 @@ function management_schedule(;
     )
 end
 
-function _single_management_row(name::Symbol, data::TimeCellData, selection, pft_id, irrigated)
+function _single_management_row(name::Symbol, data::TimeCellData, selection, cft_id, irrigated)
     data.selection.cell_ids == selection.cell_ids || throw(ArgumentError("$name uses a different cell selection"))
-    data.pft_id == pft_id || throw(ArgumentError("$name uses a different PFT"))
+    data.cft_id == cft_id || throw(ArgumentError("$name uses a different CFT"))
     data.irrigated == irrigated || throw(ArgumentError("$name uses a different rainfed/irrigated system"))
     size(data.values, 1) == 1 || throw(ArgumentError("$name must contain exactly one selected time"))
     return vec(data.values)
@@ -278,10 +278,10 @@ function crop_inputs(;
     manure_enabled::Bool = true,
 )
     selection = sowing_date.selection
-    pft_id = sowing_date.pft_id
+    cft_id = sowing_date.cft_id
     irrigated = sowing_date.irrigated
-    sdate_values = _single_management_row(:sowing_date, sowing_date, selection, pft_id, irrigated)
-    phu_values = _single_management_row(:phu, phu, selection, pft_id, irrigated)
+    sdate_values = _single_management_row(:sowing_date, sowing_date, selection, cft_id, irrigated)
+    phu_values = _single_management_row(:phu, phu, selection, cft_id, irrigated)
     fertilizer_mode = fertilizer_mode isa Symbol ? fertilizer_mode : Symbol(lowercase(String(fertilizer_mode)))
     fertilizer_mode in (:no, :yes, :auto) ||
         throw(ArgumentError("fertilizer_mode must be :no, :yes, or :auto"))
@@ -292,13 +292,13 @@ function crop_inputs(;
         throw(ArgumentError("prescribed manure requires manure data"))
     end
     manure_values = !manure_enabled ? zeros(eltype(phu_values), length(phu_values)) :
-        _single_management_row(:manure, manure, selection, pft_id, irrigated)
+        _single_management_row(:manure, manure, selection, cft_id, irrigated)
     fertilizer_values = if fertilizer_mode === :yes
-        _single_management_row(:fertilizer, fertilizer, selection, pft_id, irrigated)
+        _single_management_row(:fertilizer, fertilizer, selection, cft_id, irrigated)
     else
         zeros(eltype(phu_values), length(phu_values))
     end
-    residue_values = _single_management_row(:residue_fraction, residue_fraction, selection, pft_id, irrigated)
+    residue_values = _single_management_row(:residue_fraction, residue_fraction, selection, cft_id, irrigated)
     return (
         sdate = Int32.(round.(sdate_values)),
         phu = phu_values,

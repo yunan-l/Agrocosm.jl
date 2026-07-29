@@ -1,11 +1,11 @@
 """
-phenology_crop!(crop, climbuf_V_req, PFT, temp, daylength)
+phenology_crop!(crop, climbuf_V_req, CFT, temp, daylength)
 
 Advance crop phenology, vernalization status, and harvest/senescence flags.
 """
 function phenology_crop!(crop,
                          climbuf_V_req::AbstractArray{T},
-                         PFT::PftParameters,
+                         CFT::CFTParameters,
                          temp::AbstractArray{T},
                          daylength::AbstractArray{T},
 ) where {T <: AbstractFloat}
@@ -28,10 +28,10 @@ function phenology_crop!(crop,
         crop_phenology_input(crop).winter_type,
         temp,
         daylength,
-        PFT
+        CFT
     )
 
-    lai_crop!(crop, PFT)
+    lai_crop!(crop, CFT)
 
 end
 
@@ -125,12 +125,12 @@ end
                                    crop_wtype::AbstractArray{B},
                                    temp::AbstractArray{T},
                                    daylength::AbstractArray{T},
-                                   PFT::PftParameters
+                                   CFT::CFTParameters
 ) where {T <: AbstractFloat, B <: Bool, S <: Integer}
 
     cell = @index(Global)
 
-    @unpack basetemp, tv_eff, tv_opt, fphuc, flaimaxc, fphuk, flaimaxk, fphusen, flaimaxharvest, psens, pb, ps, hlimit, sla, shapesenescencenorm = PFT
+    @unpack basetemp, tv_eff, tv_opt, fphuc, flaimaxc, fphuk, flaimaxk, fphusen, flaimaxharvest, psens, pb, ps, hlimit, sla, shapesenescencenorm = CFT
 
     crop_harvesting_previous[cell] = crop_harvesting[cell]
     crop_senescence0[cell] = crop_senescence[cell]

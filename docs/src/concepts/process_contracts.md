@@ -69,9 +69,9 @@ eligible on the following day.
 | Cultivation and fertilization | Sowing date, PHU/winter type, management, crop/soil state | Sowing event, establishment state, pending inputs, mineral-N and manure-litter additions | events and prognostic crop/soil; fluxes | day of year, gN m⁻² | CPU/GPU |
 | Phenology and harvest | Climate history, temperature, day length, phenology state | Heat/vernalization sums, growing/senescence/harvest state, harvest event and exports | prognostic crop; events and fluxes | °C day, day equivalent, gC or gN m⁻² day⁻¹ | CPU/GPU |
 | Canopy radiation | LAI, crop/soil/snow albedo, shortwave forcing, day length | Albedo, FPAR, APAR, wet-canopy and interception fluxes | auxiliary crop; fluxes | 0–1, J m⁻² day⁻¹, mm day⁻¹ | CPU/GPU |
-| Photosynthesis and conductance | APAR, day length, temperature, CO₂, PFT traits, crop state | `Vcmax`, temperature stress, `λ`, gross/net assimilation, water-limited assimilation | auxiliary crop; fluxes | gC m⁻² day⁻¹, mm day⁻¹, 0–1 | CPU/GPU |
+| Photosynthesis and conductance | APAR, day length, temperature, CO₂, CFT traits, crop state | `Vcmax`, temperature stress, `λ`, gross/net assimilation, water-limited assimilation | auxiliary crop; fluxes | gC m⁻² day⁻¹, mm day⁻¹, 0–1 | CPU/GPU |
 | Crop carbon | Assimilation, respiration drivers, organ C state, soil temperature | Organ/total crop C, NPP, respiration, yield/export fluxes | prognostic crop; fluxes | gC m⁻²; gC m⁻² day⁻¹ | CPU/GPU |
-| Crop nitrogen | Soil mineral N, PFT C:N traits, realized `Vcmax`, crop C/N state | Organ/total N, demand/deficit, uptake, automatic-fertilizer flux | prognostic crop; fluxes | gN m⁻²; gN m⁻² day⁻¹ | CPU/GPU |
+| Crop nitrogen | Soil mineral N, CFT C:N traits, realized `Vcmax`, crop C/N state | Organ/total N, demand/deficit, uptake, automatic-fertilizer flux | prognostic crop; fluxes | gN m⁻²; gN m⁻² day⁻¹ | CPU/GPU |
 | Crop failure | Negative-biomass condition, crop/soil state, residue fraction | Failed-crop event, residue fluxes, cleared crop state | events and prognostic crop; fluxes | 0/1, gC or gN m⁻² day⁻¹ | CPU/GPU |
 
 The C3/C4 pathway is selected before kernel launch. Both pathways satisfy the
@@ -84,7 +84,7 @@ framework:
 
 | Interface | Responsibility | Must not own |
 |---|---|---|
-| `ProcessModules` | Immutable PFT traits, global parameters, and the C3/C4 pathway selected before daily execution | Numerical arrays or cross-day state |
+| `ProcessModules` | Immutable CFT traits, global parameters, and the C3/C4 pathway selected before daily execution | Numerical arrays or cross-day state |
 | `ModelState` | Prognostic, flux, auxiliary, input, event, workspace, and output arrays grouped by lifecycle | Parameter selection or file I/O |
 | `ExecutionContext` | Precision, CPU/accelerator array transfer, and stable active-cell identifiers | Scientific process choices |
 | `SimulationConfiguration` | Immutable assembly choices: precision, backend, active domain, run duration, and management/process switches | Parameters, arrays, or dataset decoding |

@@ -1,13 +1,13 @@
 # Climate buffer updates: monthly aggregation, rolling means, and vernalization metrics.
 """
-annual_climbuf!(daily_temp, climbuf, PFT; n=5, kk=0.05)
+annual_climbuf!(daily_temp, climbuf, CFT; n=5, kk=0.05)
 
 Update annual climate-buffer diagnostics used by phenology, including rolling
 monthly means and vernalization requirements.
 """
 function annual_climbuf!(daily_temp::AbstractArray{T},
                          climbuf::ClimBuf,
-                         PFT::PftParameters;
+                         CFT::CFTParameters;
                          n::Int = 5,
                          kk = T(0.05)
 ) where {T <: AbstractFloat}
@@ -39,7 +39,7 @@ function annual_climbuf!(daily_temp::AbstractArray{T},
         climbuf.atemp_mean,
         climbuf.mtemp20,
         daily_temp,
-        PFT,
+        CFT,
         n,
         kk,
     )
@@ -71,12 +71,12 @@ end
     climbuf_atemp_mean::AbstractVector{T},
     climbuf_mtemp20::AbstractMatrix{T},
     daily_temp::AbstractMatrix{T},
-    PFT::PftParameters,
+    CFT::CFTParameters,
     n::Integer,
     kk::T,
 ) where {T <: AbstractFloat}
     cell = @index(Global)
-    @unpack tv_opt, pvd_max = PFT
+    @unpack tv_opt, pvd_max = CFT
 
     # One thread owns one cell. Maintain the n smallest monthly values in
     # sorted order without allocating or sorting a 12-by-cells temporary.

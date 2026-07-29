@@ -20,7 +20,7 @@ and use the multi-CFT driver to select several patches:
 ```toml
 [cfts]
 # A single CFT, an arbitrary unique subset, or "all".
-pft_ids = "all"
+cft_ids = "all"
 
 # One or both water systems.
 water_systems = ["rainfed", "irrigated"]
@@ -49,7 +49,7 @@ Each batch writes below `batches/cft_XX_rainfed` or
 
 ```text
 yield(longitude, latitude, band, time)
-pft_id(band)
+cft_id(band)
 irrigated(band)  # 0 = rainfed; 1 = irrigated
 ```
 
@@ -59,6 +59,6 @@ capacity daily, so water-balance closure is reported only for rainfed batches.
 
 Each batch writes `warmup_soil_pool_allocation.nc`. Its allocation fields have
 dimensions `(layer, cell, patch)` and its singleton `patch` coordinate carries
-`pft_id` and `irrigated`; these metadata identify the CFT and water system that
+`cft_id` and `irrigated`; these metadata identify the CFT and water system that
 calibrated the file. A soil-pool allocation calibrated for one patch must not
 be reused for another CFT or water system.

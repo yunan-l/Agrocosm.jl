@@ -1,10 +1,10 @@
 """
-interception!(crop, PFT, pet_eeq, rain)
+interception!(crop, CFT, pet_eeq, rain)
 
 Update canopy wetness and interception evaporation for the current day.
 """
 function interception!(crop,
-                       PFT::PftParameters,
+                       CFT::CFTParameters,
                        pet_eeq::AbstractArray{T},
                        rain::AbstractArray{T};
                        lpjmlparams::LPJmLParams = lpjmlparams
@@ -19,7 +19,7 @@ function interception!(crop,
         crop_prognostic(crop).phenology.is_growing,
         pet_eeq,
         rain,
-        PFT,
+        CFT,
         lpjmlparams
     )
 
@@ -33,14 +33,14 @@ end
                                       crop_isgrowing::AbstractArray{S},
                                       pet_eeq::AbstractArray{T},
                                       rain::AbstractArray{T},
-                                      PFT::PftParameters,
+                                      CFT::CFTParameters,
                                       lpjmlparams::LPJmLParams
 ) where {T <: AbstractFloat, S <: Integer}
 
     cell = @index(Global)
 
     @unpack PRIESTLEY_TAYLOR = lpjmlparams
-    @unpack fpc, intc = PFT
+    @unpack fpc, intc = CFT
 
     if crop_isgrowing[cell] == 1
         if pet_eeq[cell] < 0.0001 || fpc == 0.0

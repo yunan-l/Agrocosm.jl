@@ -1,10 +1,10 @@
 """
-transpiration!(photos_adtmm, PFT, crop, pet, soil, co2; lpjmlparams=lpjmlparams)
+transpiration!(photos_adtmm, CFT, crop, pet, soil, co2; lpjmlparams=lpjmlparams)
 
 Compute water demand/supply balance and layer-resolved transpiration uptake.
 """
 function transpiration!(photos_adtmm::AbstractArray{T},
-                        PFT::PftParameters,
+                        CFT::CFTParameters,
                         crop,
                         pet::PetPar,
                         soil,
@@ -39,7 +39,7 @@ function transpiration!(photos_adtmm::AbstractArray{T},
                crop_root_auxiliary(crop).zone_available_water,
                soil_water_auxiliary(soil).relative_content,
                soil_water_auxiliary(soil).holding_capacity_storage,
-               PFT,
+               CFT,
                kernel_params)
 
 end
@@ -133,7 +133,7 @@ end
                                              crop_rootzone_available_water::AbstractArray{T},
                                              soil_w::AbstractArray{M},
                                              soil_whcs::AbstractArray{M},
-                                             PFT::PftParameters,
+                                             CFT::CFTParameters,
                                              kernel_params
 ) where {T <: AbstractFloat, M <: AbstractFloat, S <: Integer}
 
@@ -141,7 +141,7 @@ end
 
     @unpack lpjmlparams, soil_layers = kernel_params
     @unpack ALPHAM, GM, LAMBDA_OPT = lpjmlparams
-    @unpack fpc, emax, gmin = PFT
+    @unpack fpc, emax, gmin = CFT
 
     co2_index = length(co2) == 1 ? 1 : cell
     crop_gp[cell] = compute_canopy_conductance(

@@ -178,14 +178,14 @@ function solve_lambda_c4_lpj(fac::T,
 end
 
 """
-    solve_lambda_c3!(PFT, photos, crop, pet, temp, co2)
+    solve_lambda_c3!(CFT, photos, crop, pet, temp, co2)
 
 Solve the LPJmL water-stress equation independently for every grid cell. The
 fixed 30-step loop and scalar, allocation-free objective are compatible with
 both CPU and GPU backends. `co2` must be atmospheric partial pressure in Pa and
 `crop_canopy_auxiliary(crop).canopy_conductance` must contain actual canopy conductance after water limitation.
 """
-function solve_lambda_c3!(PFT::PftParameters,
+function solve_lambda_c3!(CFT::CFTParameters,
                           crop,
                           pet::PetPar,
                           temp::AbstractArray{T},
@@ -193,8 +193,8 @@ function solve_lambda_c3!(PFT::PftParameters,
                           lpjmlparams::LPJmLParams = lpjmlparams,
                           photoparams::PhotoParams = photoparams) where {T <: AbstractFloat}
     kernel_params = (
-        b = T(PFT.b),
-        gmin = T(PFT.gmin),
+        b = T(CFT.b),
+        gmin = T(CFT.gmin),
         lpjmlparams = lpjmlparams,
         photoparams = photoparams,
     )
@@ -216,12 +216,12 @@ end
 
 
 """
-    solve_lambda_c4!(PFT, photos, crop, pet, temp, co2)
+    solve_lambda_c4!(CFT, photos, crop, pet, temp, co2)
 
 GPU/CPU backend implementation of LPJmL's C4 water-stress lambda solve.
 `co2` is atmospheric partial pressure in Pa.
 """
-function solve_lambda_c4!(PFT::PftParameters,
+function solve_lambda_c4!(CFT::CFTParameters,
                           crop,
                           pet::PetPar,
                           temp::AbstractArray{T},
@@ -229,8 +229,8 @@ function solve_lambda_c4!(PFT::PftParameters,
                           lpjmlparams::LPJmLParams = lpjmlparams,
                           photoparams::PhotoParams = photoparams) where {T <: AbstractFloat}
     kernel_params = (
-        b = T(PFT.b),
-        gmin = T(PFT.gmin),
+        b = T(CFT.b),
+        gmin = T(CFT.gmin),
         lpjmlparams = lpjmlparams,
         photoparams = photoparams,
     )
@@ -251,10 +251,10 @@ function solve_lambda_c4!(PFT::PftParameters,
 end
 
 """Dispatch the water-limited lambda solve to the compile-time crop pathway."""
-solve_lambda!(::Val{:C3}, PFT, crop, pet, temperature, co2; kwargs...) =
-    solve_lambda_c3!(PFT, crop, pet, temperature, co2; kwargs...)
-solve_lambda!(::Val{:C4}, PFT, crop, pet, temperature, co2; kwargs...) =
-    solve_lambda_c4!(PFT, crop, pet, temperature, co2; kwargs...)
+solve_lambda!(::Val{:C3}, CFT, crop, pet, temperature, co2; kwargs...) =
+    solve_lambda_c3!(CFT, crop, pet, temperature, co2; kwargs...)
+solve_lambda!(::Val{:C4}, CFT, crop, pet, temperature, co2; kwargs...) =
+    solve_lambda_c4!(CFT, crop, pet, temperature, co2; kwargs...)
 
 """
     compute_canopy_water_supply(daylength, conductance, minimum_conductance,

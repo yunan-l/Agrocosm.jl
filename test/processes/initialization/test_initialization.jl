@@ -122,10 +122,10 @@ end
     @test eltype(crop.state.phenology.is_growing) == Int32
     @test eltype(crop.auxiliary.calendar.sowing_date) == Int32
 
-    pft64 = convert_precision(Float64, cft1)
+    cft64 = convert_precision(Float64, cft1)
     parameters64 = ModelParameters(Float64)
     soilparams64 = convert_precision(Float64, soilparams)
-    @test pft64 isa PftParameters{Float64, Int32}
+    @test cft64 isa CFTParameters{Float64, Int32}
     @test parameters64 isa ModelParameters{Float64}
     @test parameters64.lpjml isa LPJmLParams{Float64}
     @test parameters64.photosynthesis isa PhotoParams{Float64}

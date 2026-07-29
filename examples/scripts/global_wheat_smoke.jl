@@ -16,21 +16,21 @@ grid_path = joinpath(soil_directory, "grid.nc")
 soilcode_path = joinpath(soil_directory, "soil_30arcmin_13_types.nc")
 soilph_path = joinpath(soil_directory, "soil_pH30arcmin.nc")
 
-registry = PFTRegistry([1], ["temperate cereals"])
-single_pft(path, variable; units = "") = DatasetSpec(
-    joinpath(management_directory, path), variable; units, pft_ids = [1],
+registry = CFTRegistry([1], ["temperate cereals"])
+single_cft(path, variable; units = "") = DatasetSpec(
+    joinpath(management_directory, path), variable; units, cft_ids = [1],
 )
 catalog = DatasetCatalog(
     Dict{Symbol, DatasetSpec}(
         :grid => DatasetSpec(grid_path, "cellid"),
         :soilcode => DatasetSpec(soilcode_path, "soilcode"),
         :soilph => DatasetSpec(soilph_path, "soilph"),
-        :landuse => single_pft("landuse_wheat_rainfed.nc", "landfrac"),
-        :sowing_date => single_pft("sdate_wheat_rainfed.nc", "sdate"),
-        :phu => single_pft("phu_wheat_rainfed.nc", "phusum"),
-        :fertilizer => single_pft("fertilizer_wheat_rainfed.nc", "fertilizer"),
-        :manure => single_pft("manure_wheat_rainfed.nc", "manure"),
-        :residue_fraction => single_pft(
+        :landuse => single_cft("landuse_wheat_rainfed.nc", "landfrac"),
+        :sowing_date => single_cft("sdate_wheat_rainfed.nc", "sdate"),
+        :phu => single_cft("phu_wheat_rainfed.nc", "phusum"),
+        :fertilizer => single_cft("fertilizer_wheat_rainfed.nc", "fertilizer"),
+        :manure => single_cft("manure_wheat_rainfed.nc", "manure"),
+        :residue_fraction => single_cft(
             "residue_wheat_rainfed.nc", "residuefrac",
         ),
         :temp => DatasetSpec(joinpath(climate_directory, "temp_2015_2016.nc"), "temp"),

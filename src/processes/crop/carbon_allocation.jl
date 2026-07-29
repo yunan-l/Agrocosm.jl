@@ -1,9 +1,9 @@
 """
-carbon_allocation!(PFT, crop, photos)
+carbon_allocation!(CFT, crop, photos)
 
 Partition crop biomass among leaf/root/storage/pool carbon compartments.
 """
-function carbon_allocation!(PFT::PftParameters,
+function carbon_allocation!(CFT::CFTParameters,
                             crop
 )
     # 1D cell-wise allocation; crop_prognostic(crop).carbon.storage provides launch length and kernel arg #1.
@@ -32,7 +32,7 @@ function carbon_allocation!(PFT::PftParameters,
                crop_prognostic(crop).carbon.root,
                crop_prognostic(crop).carbon.pool,
                crop_prognostic(crop).canopy.lai_npp_deficit,
-               PFT,
+               CFT,
                kernel_params)
 
 end
@@ -120,13 +120,13 @@ end
                                            crop_rootc::AbstractArray{T},
                                            crop_poolc::AbstractArray{T},
                                            crop_lai_nppdeficit::AbstractArray{T},
-                                           PFT::PftParameters,
+                                           CFT::CFTParameters,
                                            kernel_params
 ) where {T <: AbstractFloat, B <: Bool, S <: Integer}
 
     cell = @index(Global)
 
-    @unpack sla, hiopt, himin = PFT
+    @unpack sla, hiopt, himin = CFT
     @unpack FROOTMAX, FROOTMIN = kernel_params
 
     if crop_isgrowing[cell] == 1

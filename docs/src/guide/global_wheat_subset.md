@@ -36,7 +36,7 @@ the NetCDF variable because filenames and variable names are independent.
 | sowing date | 24 | 1 | `sdate` |
 | PHU | 24 | 1 | `phusum` |
 
-The PFT dimension may be named `pft`, `cft`, `crop`, or `band`, and it may
+The CFT dimension may be named `cft`, `cft`, `crop`, or `band`, and it may
 occur in any dimension position. The script requires exactly one such
 dimension in each management variable.
 
@@ -73,10 +73,10 @@ preserved. Additional global attributes record:
 
 - the absolute source path;
 - the selected variable;
-- rainfed PFT index 1 for management data;
+- rainfed CFT index 1 for management data;
 - selected climate years for climate data.
 
-The PFT dimension remains present with length one. Keeping it avoids ambiguous
+The CFT dimension remains present with length one. Keeping it avoids ambiguous
 dimension semantics and allows the normal AgrocosmData reader to use an
 explicit single-entry band mapping.
 
@@ -91,7 +91,7 @@ ncdump -h /output/path/temp_first_two_years.nc
 
 Expected properties:
 
-- management PFT/band dimension: `1`;
+- management CFT/band dimension: `1`;
 - longitude and latitude dimensions: unchanged;
 - management time dimension: unchanged;
 - climate time dimension: exactly 730 rows;
@@ -111,7 +111,7 @@ files; the production test must call readers with `irrigated = false`.
 
 ## 5. Scope
 
-This extraction reduces time and PFT volume, not space. It is deliberately a
+This extraction reduces time and CFT volume, not space. It is deliberately a
 global fixture for testing the real `720 × 280` alignment, land-use mask,
 compact cell ordering, streamed forcing, CPU/GPU execution, and output
 reconstruction. It is not a scientifically complete historical experiment.

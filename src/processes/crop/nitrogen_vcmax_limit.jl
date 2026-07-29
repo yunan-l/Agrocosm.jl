@@ -1,5 +1,5 @@
 """
-    limit_vcmax_by_nitrogen!(crop, PFT, temperature)
+    limit_vcmax_by_nitrogen!(crop, CFT, temperature)
 
 Apply LPJmL's crop leaf-nitrogen constraint to the potential Rubisco capacity.
 `crop_stress_auxiliary(crop).nitrogen_demand_leaf` is the leaf-N stock remaining after uptake logic;
@@ -9,7 +9,7 @@ dimensionless retained fraction is stored in
 `crop_photosynthesis_auxiliary(crop).nitrogen_limitation`.
 """
 function limit_vcmax_by_nitrogen!(crop,
-                                 PFT::PftParameters,
+                                 CFT::CFTParameters,
                                  temperature::AbstractArray{T};
                                  lpjmlparams::LPJmLParams = lpjmlparams
 ) where {T <: AbstractFloat}
@@ -22,7 +22,7 @@ function limit_vcmax_by_nitrogen!(crop,
         crop_prognostic(crop).carbon.leaf,
         crop_prognostic(crop).phenology.is_growing,
         temperature,
-        PFT,
+        CFT,
         lpjmlparams,
     )
     return nothing
@@ -36,14 +36,14 @@ end
     leaf_carbon::AbstractArray{T},
     is_growing::AbstractArray{S},
     temperature::AbstractArray{T},
-    PFT::PftParameters,
+    CFT::CFTParameters,
     lpjmlparams::LPJmLParams,
 ) where {T <: AbstractFloat, S <: Integer}
     cell = @index(Global)
     potential = max(zero(T), potential_vcmax[cell])
 
     if is_growing[cell] == one(S) && potential > zero(T)
-        @unpack ncleaf = PFT
+        @unpack ncleaf = CFT
         @unpack p, k_temp = lpjmlparams
         rubisco_nitrogen = max(
             zero(T),

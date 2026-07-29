@@ -21,7 +21,7 @@ function build_crop_mask(
         active_full[index] = _valid_crop_fraction(landuse[index], threshold)
     end
     allocated_local = findall(vec(any(active_full; dims = 1)))
-    isempty(allocated_local) && throw(ArgumentError("selected PFT has no active land-use cells"))
+    isempty(allocated_local) && throw(ArgumentError("selected CFT has no active land-use cells"))
     compact_indices = selection.compact_indices[allocated_local]
     allocated = select_cells(grid, compact_indices)
 
@@ -38,7 +38,7 @@ end
 function build_patch_domain(
     grid::GridIndex,
     landuse::AbstractMatrix,
-    pft_id::Integer;
+    cft_id::Integer;
     irrigated::Bool = false,
     selection::CellSelection = all_cells(grid),
     valid::Union{Nothing, AbstractVector{Bool}} = nothing,
@@ -60,7 +60,7 @@ function build_patch_domain(
         1:patch_count,
         patch_selection.compact_indices,
         patch_selection.cell_ids,
-        fill(Int32(pft_id), patch_count),
+        fill(Int32(cft_id), patch_count),
         fill(irrigated, patch_count),
         landfrac,
     )
@@ -72,8 +72,8 @@ function combine_patch_domains(domains::AbstractVector{<:PatchDomain})
     T = promote_type((eltype(domain.landfrac) for domain in domains)...)
     compact_indices = reduce(vcat, (domain.compact_indices for domain in domains))
     cell_ids = reduce(vcat, (domain.cell_ids for domain in domains))
-    pft_ids = reduce(vcat, (domain.pft_ids for domain in domains))
+    cft_ids = reduce(vcat, (domain.cft_ids for domain in domains))
     irrigated = reduce(vcat, (domain.irrigated for domain in domains))
     landfrac = reduce(vcat, (T.(domain.landfrac) for domain in domains))
-    return PatchDomain(1:length(cell_ids), compact_indices, cell_ids, pft_ids, irrigated, landfrac)
+    return PatchDomain(1:length(cell_ids), compact_indices, cell_ids, cft_ids, irrigated, landfrac)
 end

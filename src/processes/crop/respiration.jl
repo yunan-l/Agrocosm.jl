@@ -1,12 +1,12 @@
 """
-respiration!(crop, PFT, temp, assim; lpjmlparams=lpjmlparams)
+respiration!(crop, CFT, temp, assim; lpjmlparams=lpjmlparams)
 
 Compute maintenance and growth respiration and update `crop_fluxes(crop).carbon.respiration`.
 """
 
 """Allocation-free daily respiration using one cell-local CPU/GPU kernel."""
 function respiration!(crop,
-                      PFT::PftParameters,
+                      CFT::CFTParameters,
                       air_temperature::AbstractVector{T},
                       soil_temperature::AbstractMatrix{T},
                       gross_assimilation::AbstractArray{T},
@@ -24,7 +24,7 @@ function respiration!(crop,
         soil_temperature,
         gross_assimilation,
         leaf_respiration,
-        PFT,
+        CFT,
         lpjmlparams,
     )
     return nothing
@@ -33,13 +33,13 @@ end
 # Backward-compatible entry for callers without an explicit soil-temperature
 # profile. Daily simulations use the method above.
 function respiration!(crop,
-                      PFT::PftParameters,
+                      CFT::CFTParameters,
                       air_temperature::AbstractVector{T},
                       gross_assimilation::AbstractArray{T},
                       leaf_respiration::AbstractArray{T};
                       lpjmlparams::LPJmLParams = lpjmlparams) where {T <: AbstractFloat}
     return respiration!(
-        crop, PFT, air_temperature, reshape(air_temperature, 1, :),
+        crop, CFT, air_temperature, reshape(air_temperature, 1, :),
         gross_assimilation, leaf_respiration; lpjmlparams = lpjmlparams,
     )
 end
@@ -99,11 +99,11 @@ end
     soil_temperature::AbstractMatrix{T},
     gross_assimilation::AbstractVector{T},
     leaf_respiration::AbstractVector{T},
-    PFT::PftParameters,
+    CFT::CFTParameters,
     lpjmlparams::LPJmLParams,
 ) where {T <: AbstractFloat, I <: Integer}
     cell = @index(Global)
-    @unpack respcoeff, nc_ratio = PFT
+    @unpack respcoeff, nc_ratio = CFT
     @unpack k, r_growth, e0, temp_response = lpjmlparams
 
     gtemp_air = compute_respiration_temperature_response(

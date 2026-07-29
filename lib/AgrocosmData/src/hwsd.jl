@@ -525,7 +525,7 @@ function write_soil_pool_allocation(path::AbstractString, allocation::SoilPoolAl
         defDim(dataset, "cell", cells)
         defDim(dataset, "patch", 1)
         defVar(dataset, "cell_id", Int32, ("cell",))[:] = allocation.selection.cell_ids
-        defVar(dataset, "pft_id", Int32, ("patch",))[:] = Int32[allocation.pft_id]
+        defVar(dataset, "cft_id", Int32, ("patch",))[:] = Int32[allocation.cft_id]
         defVar(dataset, "irrigated", Int8, ("patch",))[:] = Int8[allocation.irrigated]
         for name in (
             :fast_carbon_fraction,
@@ -555,11 +555,15 @@ function read_soil_pool_allocation(path::AbstractString; T::Type{<:AbstractFloat
             name == "schema_version" && continue
             provenance = merge(provenance, NamedTuple{(Symbol(name),)}((dataset.attrib[name],)))
         end
-        has_patch = haskey(dataset, "pft_id") && haskey(dataset, "irrigated")
-        has_patch && length(dataset["pft_id"]) != 1 && error(
+        # `pft_id` was written by pre-CFT allocation files. Accept it only at
+        # this serialized-data boundary and normalize immediately to `cft_id`.
+        cft_variable = haskey(dataset, "cft_id") ? "cft_id" :
+            (haskey(dataset, "pft_id") ? "pft_id" : nothing)
+        has_patch = !isnothing(cft_variable) && haskey(dataset, "irrigated")
+        has_patch && length(dataset[cft_variable]) != 1 && error(
             "allocation file contains multiple patches; select one CFT/water-system allocation first",
         )
-        pft_id = has_patch ? Int(dataset["pft_id"][1]) : 1
+        cft_id = has_patch ? Int(dataset[cft_variable][1]) : 1
         irrigated = has_patch ? Bool(dataset["irrigated"][1]) : false
         values(name) = ndims(dataset[name]) == 3 ? dataset[name][:, :, 1] : dataset[name][:, :]
         return SoilPoolAllocation(
@@ -568,7 +572,7 @@ function read_soil_pool_allocation(path::AbstractString; T::Type{<:AbstractFloat
             T.(values("fast_nitrogen_fraction")),
             T.(values("c_shift_fast")),
             T.(values("c_shift_slow"));
-            pft_id, irrigated,
+            cft_id, irrigated,
             provenance,
         )
     end

@@ -76,8 +76,8 @@ Deliverables:
 
 - exact coordinate validation for already aligned 0.5-degree inputs;
 - conversion between gridded fields and compact `cell` arrays;
-- `allocation_mask(landuse, pft, years)` and crop-fraction metadata;
-- the 12-crop PFT registry plus explicit rainfed/irrigated band maps for every
+- `allocation_mask(landuse, cft, years)` and crop-fraction metadata;
+- the 12-crop CFT registry plus explicit rainfed/irrigated band maps for every
   management file.
 
 Acceptance:
@@ -91,7 +91,7 @@ Acceptance:
 
 Status: complete at the reader, mapping, and fixture-equivalence level. The
 production files do not need to be copied into the repository or materialized
-for every PFT locally.
+for every CFT locally.
 
 Move the existing NetCDF reading and lookup work out of the model package.
 
@@ -106,7 +106,7 @@ Deliverables:
 - the existing soil-code-to-property lookup represented as a versioned
   Agrocosm dataset rather than executable LPJmL input;
 - unit and range checks before arrays reach model initialization;
-- crop-specific reads that select one PFT without materializing every PFT.
+- crop-specific reads that select one CFT without materializing every CFT.
 
 Acceptance:
 
@@ -196,7 +196,7 @@ Integrate the data package with the Agrocosm simulation API.
 Default execution:
 
 ```text
-grid + PFT + years
+grid + CFT + years
   → cells with 2015 landfrac > 0
   → all active cells on one backend
   → streamed climate blocks
@@ -210,7 +210,7 @@ Deliverables:
 - fixed 2015 management reused across production years;
 - output reconstruction to `720 × 280` using `cellid`;
 - per-shard checkpoints and deterministic merge for fallback batching;
-- reproducibility metadata containing PFT, years, masks, source versions, and
+- reproducibility metadata containing CFT, years, masks, source versions, and
   model/data schema versions.
 
 Acceptance:
@@ -260,7 +260,7 @@ Deliverables:
 - removal of the runtime requirement for `initialLPJmL.u0` after equivalence
   and restart tests pass;
 - server deployment documentation, data catalog examples, and performance
-  benchmarks for representative PFT masks.
+  benchmarks for representative CFT masks.
 
 Acceptance:
 

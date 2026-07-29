@@ -13,12 +13,15 @@ include("test_prepare_global_wheat_subset.jl")
         paths = FixtureData.write_fixture(directory)
         catalog = load_catalog(paths.catalog_path)
 
+        # Keep legacy LPJmL source dimensions at the file-I/O boundary only.
+        @test AgrocosmData._canonical_dimension(:pft) === :cft
+
         @test dataset(catalog, :grid).path == paths.grid_path
         @test dataset(catalog, :landuse).management_bands.rainfed == Int32[1, 2]
         @test dataset(catalog, :landuse).management_bands.irrigated == Int32[3, 4]
-        @test pft_index(catalog.pfts, 20) == 2
-        @test pft_index(catalog.pfts, "crop_b") == 2
-        @test pft_name(catalog.pfts, 10) == "crop_a"
+        @test cft_index(catalog.cfts, 20) == 2
+        @test cft_index(catalog.cfts, "crop_b") == 2
+        @test cft_name(catalog.cfts, 10) == "crop_a"
 
         grid = read_grid(dataset(catalog, :grid))
         @test grid.cell_ids == Int32[0, 1, 2, 3]
@@ -101,7 +104,7 @@ include("test_prepare_global_wheat_subset.jl")
         @test rainfed_patches.landfrac == Float32[0.4, 0.2, 0.3]
         @test patches.patch_ids == Int32.(1:7)
         @test patches.cell_ids == Int32[0, 1, 3, 0, 1, 2, 3]
-        @test patches.pft_ids == fill(Int32(20), 7)
+        @test patches.cft_ids == fill(Int32(20), 7)
         @test patches.irrigated == BitVector([false, false, false, true, true, true, true])
         @test patches.landfrac == Float32[0.4, 0.2, 0.3, 0.5, 0.3, 0.1, 0.4]
 
@@ -187,15 +190,15 @@ include("test_prepare_global_wheat_subset.jl")
             DatasetSpec(paths.management_path, "landfrac"; units = "%"),
             :landuse,
             grid,
-            catalog.pfts,
+            catalog.cfts,
             20,
         )
     end
 
     example = load_catalog(joinpath(@__DIR__, "..", "config", "catalog.example.toml"))
-    @test example.pfts.ids == Int32.(1:12)
-    @test pft_name(example.pfts, 4) == "tropical cereals"
-    @test pft_name(example.pfts, 9) == "oil crops soybean"
+    @test example.cfts.ids == Int32.(1:12)
+    @test cft_name(example.cfts, 4) == "tropical cereals"
+    @test cft_name(example.cfts, 9) == "oil crops soybean"
     @test dataset(example, :landuse).management_bands.irrigated == Int32.(17:28)
     @test dataset(example, :sowing_date).management_bands.irrigated == Int32.(13:24)
     @test dataset(example, :residue_fraction).management_bands.irrigated == Int32.(1:12)

@@ -1,7 +1,7 @@
 """
-PftParameters{T,S}
+CFTParameters{T,S}
 
-Plant functional type parameter bundle for one crop type.
+Crop functional type parameter bundle for one crop type.
 Contains phenology, photosynthesis, allocation, and nutrient traits.
 """
 struct Temp{T} # lower and upper coldest monthly mean temperature(deg C)
@@ -78,8 +78,8 @@ _convert_precision(::Type{T}, value::K_Litter10) where {T <: AbstractFloat} = K_
 _convert_precision(::Type{T}, value::NuptakeKinetics) where {T <: AbstractFloat} =
     NuptakeKinetics{T}(T(value.vmax), T(value.kmin), T(value.Km))
 
-@kwdef struct PftParameters{T <: AbstractFloat, S <: Integer}
-    name::S                 # Numeric crop/PFT identifier.
+@kwdef struct CFTParameters{T <: AbstractFloat, S <: Integer}
+    name::S                 # Numeric crop/CFT identifier.
     plant_type::S           # LPJmL plant-type category identifier.
     path::S                 # Photosynthetic pathway: 1 = C3, 2 = C4.
     temp::Temp{T}           # Bioclimatic cold-temperature limits (°C).
@@ -126,15 +126,15 @@ _convert_precision(::Type{T}, value::NuptakeKinetics) where {T <: AbstractFloat}
     himin::T                # Minimum harvest index under stress.
 end
 
-"""Return a PFT parameter set whose floating fields consistently use `T`."""
-function convert_precision(::Type{T}, pft::PftParameters{<:AbstractFloat, S}) where {T <: AbstractFloat, S <: Integer}
-    names = fieldnames(typeof(pft))
-    values = map(name -> _convert_precision(T, getfield(pft, name)), names)
+"""Return a CFT parameter set whose floating fields consistently use `T`."""
+function convert_precision(::Type{T}, cft::CFTParameters{<:AbstractFloat, S}) where {T <: AbstractFloat, S <: Integer}
+    names = fieldnames(typeof(cft))
+    values = map(name -> _convert_precision(T, getfield(cft, name)), names)
     kwargs = NamedTuple{names}(values)
-    return PftParameters{T, S}(; kwargs...)
+    return CFTParameters{T, S}(; kwargs...)
 end
 
-const CROP_PFT_NAMES = (
+const CFT_NAMES = (
     "temperate cereals",
     "rice",
     "maize",
@@ -151,14 +151,14 @@ const CROP_PFT_NAMES = (
 
 _crop_sla(longevity) = Float32(2e-4 * 10^(2.25 - 0.4 * log10(longevity * 12)) / 0.4763)
 
-function _crop_pft(;
+function _crop_cft(;
     id, path, temp_co2, temp_photos, tv_eff = (1000, 1000), tv_opt = (1000, 1000),
     psens = 1, pb = 0, ps = 24, basetemp, fphuc, flaimaxc, fphuk, flaimaxk = 0.95,
     fphusen, flaimaxharvest, laimax, laimin, hlimit, pvd_max = 0, beta_root,
     longevity, emax, gmin, shapesenescencenorm, storage_ratio, hiopt, himin,
 )
     T = Float32
-    return PftParameters{T, Int32}(
+    return CFTParameters{T, Int32}(
         name = id,
         plant_type = 1,
         path = path,
@@ -209,74 +209,74 @@ end
 
 # The order is the LPJmL 6.1.1 CFT/management-band order. Rainfed and irrigated
 # variants share the same biological parameter set.
-const cft1 = _crop_pft(id=1, path=1, temp_co2=(0, 40), temp_photos=(12, 17),
+const cft1 = _crop_cft(id=1, path=1, temp_co2=(0, 40), temp_photos=(12, 17),
     tv_eff=(-4, 17), tv_opt=(3, 10), pb=8, ps=20, basetemp=0,
     fphuc=.05, flaimaxc=.05, fphuk=.45, fphusen=.70, flaimaxharvest=0,
     laimax=7, laimin=2, hlimit=360, pvd_max=70, beta_root=.94,
     longevity=.50, emax=8, gmin=1, shapesenescencenorm=2, storage_ratio=.99,
     hiopt=.50, himin=.20)
-const cft2 = _crop_pft(id=2, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
+const cft2 = _crop_cft(id=2, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
     pb=24, ps=0, basetemp=8, fphuc=.10, flaimaxc=.05, fphuk=.50,
     fphusen=.80, flaimaxharvest=0, laimax=7, laimin=5, hlimit=288,
     beta_root=.91, longevity=.33, emax=8, gmin=1, shapesenescencenorm=2,
     storage_ratio=1.30, hiopt=.50, himin=.25)
-const cft3 = _crop_pft(id=3, path=2, temp_co2=(8, 42), temp_photos=(21, 26),
+const cft3 = _crop_cft(id=3, path=2, temp_co2=(8, 42), temp_photos=(21, 26),
     basetemp=5, fphuc=.10, flaimaxc=.05, fphuk=.50, fphusen=.75,
     flaimaxharvest=0, laimax=5, laimin=4, hlimit=334, beta_root=.94,
     longevity=.33, emax=10, gmin=1.2, shapesenescencenorm=2, storage_ratio=.83,
     hiopt=.50, himin=.30)
-const cft4 = _crop_pft(id=4, path=2, temp_co2=(6, 55), temp_photos=(20, 45),
+const cft4 = _crop_cft(id=4, path=2, temp_co2=(6, 55), temp_photos=(20, 45),
     basetemp=8, fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.85,
     flaimaxharvest=0, laimax=7, laimin=5, hlimit=299, beta_root=.94,
     longevity=.50, emax=10, gmin=1.6, shapesenescencenorm=2, storage_ratio=.99,
     hiopt=.25, himin=.10)
-const cft5 = _crop_pft(id=5, path=1, temp_co2=(-4, 45), temp_photos=(10, 30),
+const cft5 = _crop_cft(id=5, path=1, temp_co2=(-4, 45), temp_photos=(10, 30),
     basetemp=1, fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.90,
     flaimaxharvest=0, laimax=4, laimin=4, hlimit=282, beta_root=.94,
     longevity=.50, emax=8, gmin=1, shapesenescencenorm=2, storage_ratio=.45,
     hiopt=.45, himin=.10)
-const cft6 = _crop_pft(id=6, path=1, temp_co2=(-4, 45), temp_photos=(10, 30),
+const cft6 = _crop_cft(id=6, path=1, temp_co2=(-4, 45), temp_photos=(10, 30),
     basetemp=3, fphuc=.15, flaimaxc=.05, fphuk=.50, fphusen=.75,
     flaimaxharvest=.75, laimax=5, laimin=5, hlimit=299, beta_root=.94,
     longevity=.50, emax=7, gmin=1, shapesenescencenorm=.5, storage_ratio=1.74,
     hiopt=3.5, himin=1.25)
-const cft7 = _crop_pft(id=7, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
+const cft7 = _crop_cft(id=7, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
     basetemp=15, fphuc=.15, flaimaxc=.05, fphuk=.50, fphusen=.75,
     flaimaxharvest=.75, laimax=5, laimin=5, hlimit=360, beta_root=.94,
     longevity=.50, emax=10, gmin=1.6, shapesenescencenorm=.5, storage_ratio=3.27,
     hiopt=2, himin=1.10)
-const cft8 = _crop_pft(id=8, path=1, temp_co2=(8, 42), temp_photos=(25, 32),
+const cft8 = _crop_cft(id=8, path=1, temp_co2=(8, 42), temp_photos=(25, 32),
     basetemp=6, fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.70,
     flaimaxharvest=0, laimax=5, laimin=5, hlimit=282, beta_root=.94,
     longevity=.33, emax=7, gmin=1, shapesenescencenorm=2, storage_ratio=1.04,
     hiopt=.40, himin=.20)
-const cft9 = _crop_pft(id=9, path=1, temp_co2=(5, 45), temp_photos=(28, 32),
+const cft9 = _crop_cft(id=9, path=1, temp_co2=(5, 45), temp_photos=(28, 32),
     basetemp=7, fphuc=.15, flaimaxc=.05, fphuk=.50, fphusen=.70,
     flaimaxharvest=0, laimax=5, laimin=5, hlimit=282, pvd_max=70,
     beta_root=.94, longevity=.66, emax=10, gmin=1.2, shapesenescencenorm=.5,
     storage_ratio=.42, hiopt=.40, himin=.10)
-const cft10 = _crop_pft(id=10, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
+const cft10 = _crop_cft(id=10, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
     basetemp=14, fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.75,
     flaimaxharvest=0, laimax=5, laimin=5, hlimit=282, pvd_max=70,
     beta_root=.94, longevity=.50, emax=10, gmin=1.6, shapesenescencenorm=.5,
     storage_ratio=.68, hiopt=.40, himin=.30)
-const cft11 = _crop_pft(id=11, path=1, temp_co2=(0, 40), temp_photos=(12, 17),
+const cft11 = _crop_cft(id=11, path=1, temp_co2=(0, 40), temp_photos=(12, 17),
     tv_eff=(-4, 17), tv_opt=(3, 10), pb=8, ps=20, basetemp=0,
     fphuc=.05, flaimaxc=.01, fphuk=.50, fphusen=.85, flaimaxharvest=0,
     laimax=7, laimin=7, hlimit=360, pvd_max=70, beta_root=.94,
     longevity=.41, emax=7, gmin=1, shapesenescencenorm=2, storage_ratio=.76,
     hiopt=.30, himin=.15)
-const cft12 = _crop_pft(id=12, path=2, temp_co2=(8, 42), temp_photos=(18, 30),
+const cft12 = _crop_cft(id=12, path=2, temp_co2=(8, 42), temp_photos=(18, 30),
     basetemp=12, fphuc=.01, flaimaxc=.01, fphuk=.40, fphusen=.95,
     flaimaxharvest=.50, laimax=6, laimin=2, hlimit=360, beta_root=.94,
     longevity=.66, emax=10, gmin=1.6, shapesenescencenorm=2, storage_ratio=4.57,
     hiopt=.80, himin=.80)
 
-const CROP_PFTS = (cft1, cft2, cft3, cft4, cft5, cft6, cft7, cft8, cft9, cft10, cft11, cft12)
+const CFTS = (cft1, cft2, cft3, cft4, cft5, cft6, cft7, cft8, cft9, cft10, cft11, cft12)
 
-crop_pft(id::Integer) = 1 <= id <= length(CROP_PFTS) ? CROP_PFTS[id] : throw(ArgumentError("crop PFT id must be in 1:12"))
-function crop_pft(name::AbstractString)
-    id = findfirst(==(String(name)), CROP_PFT_NAMES)
-    isnothing(id) && throw(ArgumentError("unknown crop PFT '$name'"))
-    return crop_pft(id)
+crop_cft(id::Integer) = 1 <= id <= length(CFTS) ? CFTS[id] : throw(ArgumentError("crop CFT id must be in 1:12"))
+function crop_cft(name::AbstractString)
+    id = findfirst(==(String(name)), CFT_NAMES)
+    isnothing(id) && throw(ArgumentError("unknown crop CFT '$name'"))
+    return crop_cft(id)
 end

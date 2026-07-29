@@ -101,7 +101,7 @@ end
 
 
 """
-init_states!(PFT, InitialData, cell_size, device;
+init_states!(CFT, InitialData, cell_size, device;
              lpjmlparams=lpjmlparams,
              mineral_nitrogen_initialization=:lpjml_initsoil)
 
@@ -111,7 +111,7 @@ Returns `(climbuf, crop, pet, soil, managed_land, dailyWeather, output)`.
 Crop storage is separated by lifetime into `crop.state`, `crop.fluxes`,
 `crop.auxiliary`, and `crop.workspace`.
 """
-function init_states!(PFT::PftParameters,
+function init_states!(CFT::CFTParameters,
                        InitialData::NamedTuple,
                        cell_size::Int,
                        device;
@@ -122,7 +122,7 @@ function init_states!(PFT::PftParameters,
 )
 
     @unpack residue_frac = lpjmlparams
-    @unpack k_litter10, beta_root = PFT
+    @unpack k_litter10, beta_root = CFT
 
     @unpack latitude, soilparams, ModelState = InitialData
 

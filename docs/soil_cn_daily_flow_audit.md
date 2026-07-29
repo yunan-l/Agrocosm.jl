@@ -67,7 +67,7 @@ NO3 negative and is limited by the mineral-N supply in each layer.
 ## Deliberately retained differences
 
 - Agrocosm currently represents one crop/litter class per simulated cell,
-  rather than LPJmL's list of PFT-specific litter items. It therefore uses one
+  rather than LPJmL's list of CFT-specific litter items. It therefore uses one
   fast and one slow `c_shift` profile for the active crop case.
 - Leaf-like surface, incorporated and root litter are represented, but woody
   fuel-size classes are not needed for the current annual crop scope.

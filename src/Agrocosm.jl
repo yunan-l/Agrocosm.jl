@@ -18,7 +18,7 @@ import Parameters: @with_kw, @unpack
 import MuladdMacro: @muladd
 
 # STRUCTURES
-export LPJmLParams, PftParameters, PhotoParams, ModelParameters, PetPar, Output
+export LPJmLParams, CFTParameters, PhotoParams, ModelParameters, PetPar, Output
 export DailyWeather, ClimBuf, CO2
 export Crop, CropState, CropFluxes, CropAuxiliary, CropWorkspace
 export crop_restart_payload
@@ -37,10 +37,10 @@ export SoilProperties, SoilWater, SoilThermal, SoilCarbon, SoilNitrogen
 export SoilDecomposition, SoilManagement, SoilSurfaceLitter, SoilSnow
 export CropOutput, SoilOutput, ClimateOutput, CalendarOutput, AnnualOutputAccumulator
 
-# PARAMETERS (PFTs)
+# PARAMETERS (CFTs)
 export lpjmlparams, photoparams, soilparams, soil_decomp_params, soil_thermal_params, snowparams
 export cft1, cft2, cft3, cft4, cft5, cft6, cft7, cft8, cft9, cft10, cft11, cft12
-export CROP_PFT_NAMES, CROP_PFTS, crop_pft
+export CFT_NAMES, CFTS, crop_cft
 export convert_precision
 export FERTILIZER_MODES, fertilizer_mode
 
@@ -102,7 +102,7 @@ export estimate_memory
 # process-based crop model
 # Parameters
 include("parameters/default_params.jl")
-include("parameters/pft.jl")
+include("parameters/cft.jl")
 
 # Numerics
 include("numerics/lpj_bisect.jl")

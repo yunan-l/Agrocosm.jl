@@ -1,9 +1,9 @@
 """
-spin_up_climbuf!(PFT, climate, climbuf, day, lat, temp, lwnet, swdown, output)
+spin_up_climbuf!(CFT, climate, climbuf, day, lat, temp, lwnet, swdown, output)
 
 Run climate-buffer spin-up for one step before full crop process integration.
 """
-function spin_up_climbuf!(PFT::PftParameters, 
+function spin_up_climbuf!(CFT::CFTParameters,
                           temp_spinup::AbstractArray{T}, 
                           climbuf::ClimBuf;
                           year_spinup = 1
@@ -13,25 +13,25 @@ function spin_up_climbuf!(PFT::PftParameters,
         for day in axes(year_temp, 1)
             daily_climbuf!(year_temp[day, :], climbuf.temp)
         end
-        annual_climbuf!(year_temp, climbuf, PFT)
+        annual_climbuf!(year_temp, climbuf, CFT)
     end
 
 end
 
 
 """
-update_climbuf!(PFT, climbuf, day, lat, temp, lwnet, swdown)
+update_climbuf!(CFT, climbuf, day, lat, temp, lwnet, swdown)
 
 Update climate-buffer and PET diagnostics during daily simulation.
 """
-function update_climbuf!(PFT::PftParameters, 
+function update_climbuf!(CFT::CFTParameters,
                          temp::AbstractArray{T},
                          climbuf::ClimBuf,
                          day::Integer
 )where {T <: AbstractFloat}
 
     if day > 1 && day % 365 == 1
-        annual_climbuf!(climbuf.atemp, climbuf, PFT)
+        annual_climbuf!(climbuf.atemp, climbuf, CFT)
     end
     
     if day % 365 == 0

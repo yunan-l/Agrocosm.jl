@@ -21,7 +21,7 @@ public roadmap is in `docs/src/development/roadmap.md`.
 - Finite agricultural warm-up that leaves production time, output, and balance
   ledgers untouched while retaining warmed state; eager and streamed forcing
   paths are numerically equivalent.
-- Checkpoint schema validation for compact `cell_ids` and PFT identity, strict
+- Checkpoint schema validation for compact `cell_ids` and CFT identity, strict
   warm-up convergence gating, and explicit warm-up/cached-forcing memory
   accounting.
 - Backend kernels throughout daily processes and initialization/output state
@@ -39,7 +39,7 @@ Milestones 1–5 are substantially complete at the code and fixture-test level:
 
 - dataset catalog and versioned backend-neutral contracts;
 - canonical grid selection and compact/global round trips;
-- 12-PFT registry, explicit 64/32/24/16-band mappings, and crop masks;
+- 12-CFT registry, explicit 64/32/24/16-band mappings, and crop masks;
 - soil-code properties, pH, sowing date, PHU, fertilizer, manure, residue, and
   land-use readers;
 - HWSD SOC/total-N aggregation, vertical remapping, uncertainty/fallback
@@ -99,7 +99,7 @@ then repeats checkpoint/restart at the end of 2015.
   first ten `landfrac > 0` cells pass a 730-day CPU smoke test with HWSD state.
 - Generate the complete canonical-grid HWSD product and review its
   coverage and conservation summaries.
-- Start with one rainfed wheat PFT over all cells selected by land use.
+- Start with one rainfed wheat CFT over all cells selected by land use.
 - Run CPU and a single GPU using identical compact cell ordering.
 - Stream climate and monthly/annual output; avoid full daily global ledgers.
 - Check NaN/Inf, invalid negative pools, crop lifecycle failures, memory peak,
@@ -112,13 +112,14 @@ Acceptance: the complete year finishes within estimated memory, CPU/GPU
 differences meet declared tolerances, and the second-year restart/reassembly is
 deterministic.
 
-Current launch status: the latest CPU suite passes 2092/2092. A unified GPU
-suite exists and its isolated-module loading has been repaired; it still needs
-a fresh server run. Non-interactive Slurm CPU/GPU templates are maintained in
-the workspace `outputs` directory. A previous global diagnostic reached the
-100-year warm-up limit with approximately 96.15% of cells converged. With the
-current strict gate this is diagnostic evidence, not an accepted production
-checkpoint; the remaining cells must be characterized.
+Current launch status: non-interactive Slurm CPU/GPU templates are maintained
+in the workspace `outputs` directory. The global CFT 1 rainfed GPU calibration
+completed 600 years for 33,025 selected cells with a repeated 30-year climate
+cycle: 98.31% met the strict per-cell drift rule and late aggregate C/N drift
+was approximately `10^-7`. This establishes a useful calibration baseline,
+but is not an accepted production checkpoint until the remaining cells are
+characterized and the derived allocation is validated through 2015→2016
+restart.
 
 ### 3.4 HWSD pool-allocation decision
 
@@ -152,11 +153,23 @@ with a longer or target-constrained spin-up after the global baseline run.
 The current LPJmL-informed canopy remains the default global daily pathway.
 Phase 3 may add a separately configured Farquhar–Medlyn–Penman–Monteith
 alternative. It requires humidity/VPD and pressure contracts, explicit soil
-moisture stress, new PFT parameters, and C3/C4 calibration. The first version
+moisture stress, new CFT parameters, and C3/C4 calibration. The first version
 should use prescribed leaf temperature equal to air temperature; iterative
 leaf-energy balance and plant hydraulics are later extensions.
 
-## 6. Later extensions
+## 6. CFT patch production sequence
+
+- Keep CFT as the public model/data contract. Legacy LPJmL `pft` is permitted
+  only while reading source dimensions and historical allocation files.
+- Each `(cft_id, irrigated)` patch has independent crop, soil, litter, and
+  management state. `landfrac` selects patches and weights reconstructed
+  outputs; it does not scale cell-level process equations.
+- Derive and store one soil-pool allocation product per patch batch, validate
+  the CFT 1 rainfed reference first, then execute the full 24-batch matrix.
+- Verify each batch on CPU/GPU, native checkpoint/restart, sampled balance
+  closure, and canonical-grid aggregation before adding rotations.
+
+## 7. Later extensions
 
 - rotations, sequential and simultaneous crops, and shared soil resources;
 - broader output/observation operators and global validation;

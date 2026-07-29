@@ -10,7 +10,7 @@ Model processes overview with dedicated crop, soil, climate/surface,
 numerics, and initialization/warm-up pages.
 
 Launch hardening is also complete at the CPU regression level. Checkpoints now
-bind compact cell identity and PFT identity; production warm-up has a strict
+bind compact cell identity and CFT identity; production warm-up has a strict
 convergence gate and explicit memory accounting; process, initialization, and
 output updates use backend kernels with synchronization at lifecycle
 boundaries rather than after every kernel. Legacy `_reference!` paths have
@@ -26,7 +26,7 @@ The AgrocosmData core is also substantially complete:
   one-block prefetch;
 - model-facing `model_initial_data` and `climate_forcings` adapters.
 - a configuration-driven server utility that extracts one rainfed wheat band
-  from 2015 multi-PFT management data and the 2015–2016 daily forcing.
+  from 2015 multi-CFT management data and the 2015–2016 daily forcing.
 
 This means new grids no longer require an LPJmL restart. It does not yet mean
 that the global production workflow is complete.
@@ -60,11 +60,18 @@ Work in this phase is ordered as follows:
    transient after ten years; changing only the initial ratio would not resolve
    the continuing total C/N decline.
 
+The global CFT 1 rainfed GPU calibration now provides the first full-domain
+evidence: 33,025 selected cells completed 600 years under a repeated 30-year
+climate cycle, with 98.31% satisfying the strict per-cell drift rule and late
+aggregate C/N drift near `10^-7`. It is a calibration product, not yet a
+production initial state: the remaining cells must be inspected and the
+derived allocation must be rerun through 2015–2016 checkpoint/restart.
+
 The phase is complete when the current commit passes both full backend suites
-and a 2015-selected global crop domain can be initialized from native data,
-warmed under the declared convergence contract, checkpointed, run across a
-year boundary, and reconstructed to the canonical grid without LPJmL-derived
-state.
+and every selected CFT × water-regime patch can be initialized from native data,
+warmed under the declared allocation/convergence contract, checkpointed, run
+across a year boundary, and reconstructed to the canonical grid without
+LPJmL-derived state.
 
 ## Phase 2: differentiable transition
 
@@ -77,14 +84,20 @@ state.
 4. Keep data loading, warm-up, checkpoints, and reporting outside the
    differentiated region.
 
-## Phase 3: alternative processes and multi-crop operation
+## Phase 3: multi-crop operation and alternative processes
 
+- The public interface is CFT-based (`CFTParameters`, `CFTRegistry`, `cft_id`)
+  while legacy LPJmL `pft` identifiers are accepted only while decoding source
+  NetCDF or pre-migration allocation files.
+- Complete the independent-soil 12-CFT × rainfed/irrigated patch batches,
+  per-batch soil-pool allocation products, and landfrac-weighted output
+  aggregation. CFT 1 rainfed is the reference regression case.
 - Retain the current LPJmL-informed canopy exchange as the reference pathway.
 - Add an optional Farquhar photosynthesis + Medlyn conductance + simplified
   Penman–Monteith pathway after humidity/VPD and pressure forcing contracts are
   available. Compare it against the reference before changing defaults.
-- Add crop rotations, sequential crops, stand/crop indexing, and shared-soil
-  management.
+- Add crop rotations and sequential crops after the independent-patch workflow
+  is validated; do not introduce shared soil state by default.
 - Complete broader soil/climate outputs as required by validation workflows.
 
 ## Later work

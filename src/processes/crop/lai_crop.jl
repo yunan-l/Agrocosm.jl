@@ -1,10 +1,10 @@
 """
-lai_crop!(crop, PFT)
+lai_crop!(crop, CFT)
 
 Update leaf-area index from phenology and carbon state.
 """
 function lai_crop!(crop,
-                   PFT::PftParameters
+                   CFT::CFTParameters
 )
 
     launch_1D!(
@@ -17,7 +17,7 @@ function lai_crop!(crop,
         crop_canopy_auxiliary(crop).flaimax,
         crop_prognostic(crop).canopy.laimax_adjusted,
         crop_prognostic(crop).phenology.is_growing,
-        PFT,
+        CFT,
     )
 
 end
@@ -31,12 +31,12 @@ end
                                   crop_flaimax::AbstractArray{T},
                                   crop_laimax_adjusted::AbstractArray{T},
                                   crop_isgrowing::AbstractArray{S},
-                                  PFT::PftParameters
+                                  CFT::CFTParameters
 ) where {T <: AbstractFloat, S <: Integer, B <: Bool}
 
     cell = @index(Global)
 
-    @unpack sla, laimax = PFT
+    @unpack sla, laimax = CFT
 
     if crop_isgrowing[cell] == 1
         lai0 = crop_lai[cell]

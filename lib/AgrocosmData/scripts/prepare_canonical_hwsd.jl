@@ -244,8 +244,8 @@ function prepare_canonical_hwsd(
     production_active = if isnothing(landuse_path)
         trues(length(grid.cell_ids))
     else
-        spec = DatasetSpec(landuse_path, "landfrac"; pft_ids = [1])
-        registry = PFTRegistry([1], ["rainfed wheat"])
+        spec = DatasetSpec(landuse_path, "landfrac"; cft_ids = [1])
+        registry = CFTRegistry([1], ["rainfed wheat"])
         landuse = read_management(spec, :landuse, grid, registry, 1; T = Float32)
         size(landuse.values, 1) == 1 || error(
             "production land-use file must contain exactly one selected year",

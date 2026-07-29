@@ -1,10 +1,10 @@
 """
-ndemand_crop!(crop, PFT, photos_vcmax, temp)
+ndemand_crop!(crop, CFT, photos_vcmax, temp)
 
 Compute crop nitrogen demand from photosynthetic potential and organ stoichiometry.
 """
 function ndemand_crop!(crop,
-                       PFT::PftParameters,
+                       CFT::CFTParameters,
                        photos_vcmax::AbstractArray{T},
                        temp::AbstractArray{T};
                        lpjmlparams::LPJmLParams = lpjmlparams
@@ -23,7 +23,7 @@ function ndemand_crop!(crop,
         crop_prognostic(crop).phenology.is_growing,
         photos_vcmax,
         temp,
-        PFT,
+        CFT,
         kernel_params
     )
 
@@ -39,7 +39,7 @@ end
                                       crop_isgrowing::AbstractArray{S},
                                       photos_vcmax::AbstractArray{T},
                                       temp::AbstractArray{T},
-                                      PFT::PftParameters,
+                                      CFT::CFTParameters,
                                       kernel_params
 ) where {T <: AbstractFloat, S <: Integer}
 
@@ -48,7 +48,7 @@ end
     @unpack lpjmlparams = kernel_params
 
     @unpack p, k_temp = lpjmlparams
-    @unpack ratio, ncleaf = PFT
+    @unpack ratio, ncleaf = CFT
 
     if crop_isgrowing[cell] == 1
         # LPJmL ndemand_crop: Rubisco requirement plus structural minimum leaf N.

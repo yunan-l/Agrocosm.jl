@@ -1,12 +1,12 @@
 """
-nuptake_crop!(crop, PFT, soil)
+nuptake_crop!(crop, CFT, soil)
 
 Compute root uptake of mineral nitrogen from soil NH4/NO3 pools. When
 `auto_fertilizer=true`, supply the remaining plant demand as an explicit
 external N input after root uptake, following LPJmL's AUTO_FERTILIZER mode.
 """
 function nuptake_crop!(crop,
-                       PFT::PftParameters,
+                       CFT::CFTParameters,
                        soil;
                        auto_fertilizer::Bool = false,
                        lpjmlparams::LPJmLParams = lpjmlparams
@@ -38,7 +38,7 @@ function nuptake_crop!(crop,
         soil_nitrogen_prognostic(soil).ammonium,
         soil_properties(soil).layer_depth,
         soil_thermal_prognostic(soil).temperature,
-        PFT,
+        CFT,
         kernel_params
     )
 
@@ -108,7 +108,7 @@ end
                                       soil_NH4::AbstractArray{M},
                                       soil_layer_depth::AbstractArray{T},
                                       soil_temp::AbstractArray{M},
-                                      PFT::PftParameters,
+                                      CFT::CFTParameters,
                                       kernel_params
 ) where {T <: AbstractFloat, M <: AbstractFloat, S <: Integer}
 
@@ -117,7 +117,7 @@ end
     @unpack lpjmlparams, soil_layers, auto_fertilizer = kernel_params
 
     @unpack T_0, T_m, T_r = lpjmlparams
-    @unpack ncleaf, knstore, no3_uptake, nh4_uptake = PFT
+    @unpack ncleaf, knstore, no3_uptake, nh4_uptake = CFT
 
     if crop_isgrowing[cell] == 1
         crop_nuptake[cell] = zero(T)

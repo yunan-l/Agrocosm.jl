@@ -76,14 +76,14 @@ function write_fixture(directory)
     management_path = joinpath(directory, "management.nc")
     NCDataset(management_path, "c") do ds
         _coordinates!(ds, longitude, latitude)
-        defDim(ds, "pft", 4)
+        defDim(ds, "cft", 4)
         defDim(ds, "time", 2)
-        pft = defVar(ds, "pft", Int32, ("pft",))
+        cft = defVar(ds, "cft", Int32, ("cft",))
         time = defVar(ds, "time", Int32, ("time",))
-        pft[:] = Int32[1, 2, 3, 4]
+        cft[:] = Int32[1, 2, 3, 4]
         time[:] = Int32[2000, 2001]
 
-        dimensions = ("time", "latitude", "pft", "longitude")
+        dimensions = ("time", "latitude", "cft", "longitude")
         landuse = defVar(ds, "landfrac", Float32, dimensions; fillvalue = -9999.0f0)
         residue = defVar(ds, "residuefrac", Float32, dimensions; fillvalue = -9999.0f0)
         sowing_date = defVar(ds, "sdate", Float32, dimensions; fillvalue = -9999.0f0)
@@ -94,7 +94,7 @@ function write_fixture(directory)
         residue.attrib["units"] = "1"
 
         land_values = zeros(Float32, 2, 2, 4, 3)
-        # PFT id 20. Coordinates are assigned by canonical cell id.
+        # CFT id 20. Coordinates are assigned by canonical cell id.
         land_values[1, 2, 2, 1] = 0.0f0 # cell 0
         land_values[1, 1, 2, 3] = 0.2f0 # cell 1
         land_values[1, 1, 2, 1] = 0.0f0 # cell 2
@@ -132,7 +132,7 @@ function write_fixture(directory)
     catalog_path = joinpath(directory, "catalog.toml")
     open(catalog_path, "w") do io
         write(io, """
-[pfts]
+[cfts]
 ids = [10, 20]
 names = ["crop_a", "crop_b"]
 

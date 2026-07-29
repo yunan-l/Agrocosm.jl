@@ -472,7 +472,7 @@ function agricultural_warmup!(
     # `update_climbuf!` normally closes a year on the following day 1. The
     # production clock intentionally restarts at day 1, so close the final
     # warm-up year explicitly before returning.
-    annual_climbuf!(simulation.climbuf.atemp, simulation.climbuf, simulation.pft)
+    annual_climbuf!(simulation.climbuf.atemp, simulation.climbuf, simulation.cft)
     clear_output_timeseries!(simulation.output)
     calibrated_c_shift = _warmup_c_shift_report(c_shift_workspace)
     return (
@@ -637,7 +637,7 @@ function agricultural_warmup!(
         end
     end
 
-    annual_climbuf!(simulation.climbuf.atemp, simulation.climbuf, simulation.pft)
+    annual_climbuf!(simulation.climbuf.atemp, simulation.climbuf, simulation.cft)
     clear_output_timeseries!(simulation.output)
     calibrated_c_shift = _warmup_c_shift_report(c_shift_workspace)
     return (

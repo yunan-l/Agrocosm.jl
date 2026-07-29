@@ -17,7 +17,7 @@ function Base.show(io::IO, simulation::CropSimulation)
     diagnostics_enabled = any(!isnothing, values(simulation.diagnostics))
     print(
         io,
-        "CropSimulation(", CROP_PFT_NAMES[simulation.pft.name], ", ",
+        "CropSimulation(", CFT_NAMES[simulation.cft.name], ", ",
         architecture_name(simulation.config.execution), ", ", simulation.config.T,
         ", cells=", length(simulation.config.execution.domain.indices),
         ", days=", simulation.simulated_days, "/", simulation.config.days,
@@ -33,7 +33,7 @@ const _SIMULATION_DIAGNOSTIC_PROPERTIES = (
 )
 
 function Base.getproperty(simulation::CropSimulation, name::Symbol)
-    if name === :pft
+    if name === :cft
         return getfield(simulation, :processes).crop
     elseif name === :model_parameters
         return getfield(simulation, :processes).global_parameters
@@ -55,7 +55,7 @@ end
 
 function Base.propertynames(::CropSimulation, private::Bool = false)
     public = (
-        :processes, :pft, :model_parameters, :config, :simulated_days,
+        :processes, :cft, :model_parameters, :config, :simulated_days,
         :state, _SIMULATION_STATE_PROPERTIES..., _SIMULATION_DIAGNOSTIC_PROPERTIES...,
     )
     return private ? (public..., :diagnostics) : public
@@ -92,7 +92,7 @@ function _prepare_initial_data(data::NamedTuple, indices, device, T)
 end
 
 """
-    initialize_simulation(pft, initial_data; kwargs...)
+    initialize_simulation(cft, initial_data; kwargs...)
 
 Create a precision- and backend-consistent crop simulation. `initial_data` may
 be either raw input data accepted by `InitialDataLoader` or its normalized
@@ -103,7 +103,7 @@ independent prescribed-input switch. By default,
 arrays and otherwise uses LPJmL's fresh-soil distribution.
 """
 function initialize_simulation(
-    pft::PftParameters,
+    cft::CFTParameters,
     initial_data::NamedTuple;
     indices = nothing,
     cell_ids = nothing,
@@ -129,7 +129,7 @@ function initialize_simulation(
         c_shift_initialization
     end
     states = init_states!(
-        pft, prepared, cells, device;
+        cft, prepared, cells, device;
         T = T,
         mineral_nitrogen_initialization = mineral_nitrogen_initialization,
         c_shift_initialization = resolved_c_shift_initialization,
@@ -159,7 +159,7 @@ function initialize_simulation(
         carbon_balance = nothing,
         thermal_balance = nothing,
     )
-    processes = ProcessModules(convert_precision(T, pft), ModelParameters(T))
+    processes = ProcessModules(convert_precision(T, cft), ModelParameters(T))
     return CropSimulation(
         processes, state, balances, config, 0,
     )
@@ -339,7 +339,7 @@ function run_simulation!(
 
     if spinup && simulation.simulated_days == 0 && hasproperty(prepared_climate, :temp_spinup)
         spin_up_climbuf!(
-            simulation.pft,
+            simulation.cft,
             prepared_climate.temp_spinup,
             simulation.climbuf;
             year_spinup = spinup_years,
@@ -486,8 +486,8 @@ function _simulation_checkpoint(simulation::CropSimulation)
             cells = cells,
             cell_ids = copy(simulation.config.execution.domain.cell_ids),
             configured_days = simulation.config.days,
-            pft_id = simulation.pft.name,
-            photosynthetic_pathway = simulation.pft.path,
+            cft_id = simulation.cft.name,
+            photosynthetic_pathway = simulation.cft.path,
             irrigation = simulation.config.irrigation,
             manure = simulation.config.manure,
             fertilizer = simulation.config.fertilizer,
@@ -495,7 +495,7 @@ function _simulation_checkpoint(simulation::CropSimulation)
             nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
         ),
         simulated_days = simulation.simulated_days,
-        pft = simulation.pft,
+        cft = simulation.cft,
         model_parameters = simulation.model_parameters,
         state = (
             prognostic = _checkpoint_snapshot(simulation.state.prognostic),
@@ -536,8 +536,8 @@ function _validate_checkpoint_target(simulation::CropSimulation, checkpoint)
         ("cell count", metadata.cells, length(simulation.managed_land.latitude)),
         ("cell ids", metadata.cell_ids, simulation.config.execution.domain.cell_ids),
         ("configured days", metadata.configured_days, simulation.config.days),
-        ("PFT id", metadata.pft_id, simulation.pft.name),
-        ("photosynthetic pathway", metadata.photosynthetic_pathway, simulation.pft.path),
+        ("CFT id", metadata.cft_id, simulation.cft.name),
+        ("photosynthetic pathway", metadata.photosynthetic_pathway, simulation.cft.path),
         ("irrigation", metadata.irrigation, simulation.config.irrigation),
         ("manure", metadata.manure, simulation.config.manure),
         ("fertilizer", metadata.fertilizer, simulation.config.fertilizer),
@@ -566,7 +566,7 @@ function restore_checkpoint!(simulation::CropSimulation, path::AbstractString)
     checkpoint = load(path, "checkpoint")
     _validate_checkpoint_target(simulation, checkpoint)
 
-    simulation.processes = ProcessModules(checkpoint.pft, checkpoint.model_parameters)
+    simulation.processes = ProcessModules(checkpoint.cft, checkpoint.model_parameters)
     _restore_checkpoint_fields!(
         simulation.state.prognostic, checkpoint.state.prognostic,
     )

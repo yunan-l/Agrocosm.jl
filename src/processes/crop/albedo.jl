@@ -1,5 +1,5 @@
 """
-    albedo!(PFT, crop, soil, pet; maize=false)
+    albedo!(CFT, crop, soil, pet; maize=false)
 
 Compute LPJmL-style effective surface albedo from green canopy absorption,
 surface-litter cover, bare soil, and the snow state present at the start of the
@@ -7,7 +7,7 @@ day. Surface-litter cover is rebuilt directly from its carbon stock so event
 routing and restart initialization cannot leave radiation on a stale cache.
 """
 
-function albedo!(PFT::PftParameters,
+function albedo!(CFT::CFTParameters,
                  crop,
                  soil,
                  pet::PetPar;
@@ -26,10 +26,10 @@ function albedo!(PFT::PftParameters,
         soil_carbon_prognostic(soil).litter,
         soil_snow_prognostic(soil).height,
         soil_snow_prognostic(soil).fraction,
-        T(PFT.lightextcoeff),
-        T(PFT.albedo_leaf),
-        T(PFT.albedo_litter),
-        T(PFT.fpc),
+        T(CFT.lightextcoeff),
+        T(CFT.albedo_leaf),
+        T(CFT.albedo_litter),
+        T(CFT.fpc),
         T(soil_albedo),
         T(snow_albedo),
         T(litter_carbon_fraction),

@@ -27,7 +27,7 @@ LPJmL commit `572e2b906ac2c55b2ee6661a93e4633b126254e4`.
 
 ## Persistent struct versus LPJmL allocation
 
-LPJmL deletes the harvested crop PFT and allocates a new `Pftcrop` at the next
+LPJmL deletes the harvested crop CFT and allocates a new `Pftcrop` at the next
 cultivation. Agrocosm keeps one structure-of-arrays allocation for efficient GPU
 execution. The sowing kernel therefore explicitly reconstructs the seasonal
 fields initialized by `new_crop.c`: phenology sums and flags, canopy seed state,

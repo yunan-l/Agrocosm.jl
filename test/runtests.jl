@@ -9,7 +9,7 @@ using Test
     include("processes/climate/test_readclimate.jl")
     include("processes/climate/test_climbuf.jl")
     include("processes/crop/test_photosynthesis.jl")
-    include("processes/crop/test_pft_registry.jl")
+    include("processes/crop/test_cft_registry.jl")
     include("processes/crop/test_temperature_stress_lpjml.jl")
     include("processes/crop/test_respiration_lpjml.jl")
     include("processes/crop/test_actual_lai.jl")

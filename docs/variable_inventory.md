@@ -119,7 +119,7 @@ consistent with the organ-carbon pools and is checked as a derived total.
 | `crop.auxiliary.stress.nitrogen_demand_leaf` | Potential leaf N demand | Daily diagnostic |
 | `crop.auxiliary.stress.nitrogen_deficit` | Unmet crop N demand | Daily diagnostic |
 | `crop.auxiliary.stress.water_deficit` | Allocation water-deficit factor | Daily diagnostic |
-| `crop.auxiliary.root.distribution` | Static fraction of roots by layer | Derived from PFT parameter `beta_root` |
+| `crop.auxiliary.root.distribution` | Static fraction of roots by layer | Derived from CFT parameter `beta_root` |
 | `crop.auxiliary.root.zone_available_water` | Top-three-layer root-weighted plant-available water | mm; daily diagnostic |
 
 `crop.events.sowing` and `crop.events.harvest` are one-day 0/1 events.
@@ -260,7 +260,7 @@ simulation.
 Parameter fields are configuration and never prognostic state. The source
 declarations contain the units and detailed LPJmL-style field comments.
 
-### Crop/PFT parameters
+### Crop/CFT parameters
 
 | Group | Fields |
 |---|---|

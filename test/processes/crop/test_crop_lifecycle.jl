@@ -83,7 +83,7 @@ end
     @test size(simulation.output.crop.yield) == (2, 1)
     @test all(>(0), Array(simulation.output.crop.yield))
 
-    # LPJmL deletes the crop PFT after harvest. Agrocosm retains allocated GPU
+    # LPJmL deletes the crop CFT after harvest. Agrocosm retains allocated GPU
     # arrays, so every active-crop stock, flux, and seasonal accumulator must be
     # zero from the following day until the next sowing event.
     inactive_days = vcat(138:464, 503:730)

@@ -1,7 +1,7 @@
 # Crop processes
 
 This page documents the equations used by the current default crop pathway.
-Parameter values depend on the selected PFT; symbols map to fields in the
+Parameter values depend on the selected CFT; symbols map to fields in the
 model parameter structures rather than defining a second parameter source.
 
 ## Establishment, phenology, and LAI
@@ -82,7 +82,7 @@ Before senescence, water and nitrogen reduce potential LAI growth:
 ```
 
 During senescence the model scales from LAI at senescence onset. Harvest is
-triggered by completed PHU or the PFT maximum growing duration.
+triggered by completed PHU or the CFT maximum growing duration.
 
 ## Canopy cover and absorbed PAR
 
@@ -98,7 +98,7 @@ For most crops, the green fraction follows Beer--Lambert absorption,
 f_g=1-\exp(-k_LL_{act}),
 ```
 
-where ``k_L`` is the PFT extinction coefficient. Maize uses
+where ``k_L`` is the CFT extinction coefficient. Maize uses
 
 ```math
 f_g=\operatorname{clamp}(0.2558\max(0.01,L_{act})-0.0024,0,1).
@@ -297,7 +297,7 @@ N_{leaf}^{dem}=p_N10^{-3}\frac{V_{c\max}}
 \exp[-k_T(T-25)]+\rho_{N:C,leaf}^{min}C_{leaf}.
 ```
 
-After clipping leaf N:C to the PFT range, total demand is
+After clipping leaf N:C to the CFT range, total demand is
 
 ```math
 N_{tot}^{dem}=N_{leaf}^{dem}+\rho_{N:C}

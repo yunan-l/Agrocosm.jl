@@ -106,7 +106,7 @@ fields. No workspace field is present in `Output` or `CropOutput`.
 `crop_restart_payload(crop)` exposes all checkpointed crop state plus static
 phenology/calendar configuration. Daily fluxes, events, recomputable
 diagnostics and workspace are excluded. Root distribution is reconstructed
-from PFT parameters at initialization. A full `CropSimulation` checkpoint must
+from CFT parameters at initialization. A full `CropSimulation` checkpoint must
 also retain `output.annual` when it may resume before the year-end annual row
 is emitted. A restart must be written only at a completed daily boundary.
 The public `save_checkpoint`/`restore_checkpoint!` API implements this boundary,

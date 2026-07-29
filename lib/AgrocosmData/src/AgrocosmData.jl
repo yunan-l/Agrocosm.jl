@@ -15,14 +15,14 @@ include("management.jl")
 include("climate.jl")
 
 export DATA_SCHEMA_VERSION
-export DataProvenance, DatasetSpec, DatasetCatalog, PFTRegistry, ManagementBands
+export DataProvenance, DatasetSpec, DatasetCatalog, CFTRegistry, ManagementBands
 export GridIndex, CellSelection, PatchDomain, CompactVariable, TimeCellData, CropMask
 export CO2Series, ClimateBlock, ClimateBlockReader, ClimateForcingReader
 export PrefetchedClimateForcingReader
 export SoilLookup, SoilData, DEFAULT_SOIL_LOOKUP_VERSION
 export SoilCNTargets, SoilPoolAllocation, SoilCNAggregator
 export HWSD_LAYER_BOUNDS, AGROCOSM_SOIL_LAYER_BOUNDS, HWSD_CN_PREPROCESSING_VERSION
-export load_catalog, dataset, pft_index, pft_name
+export load_catalog, dataset, cft_index, cft_name
 export read_grid, all_cells, select_cells, compact_spatial, expand_to_grid
 export read_compact_variable, read_static_cell
 export build_crop_mask, build_patch_domain, combine_patch_domains

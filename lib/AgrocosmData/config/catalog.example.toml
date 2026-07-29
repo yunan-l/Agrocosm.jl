@@ -1,4 +1,4 @@
-[pfts]
+[cfts]
 # LPJmL's 12-crop CFT order. File-specific rainfed/irrigated band positions are
 # declared on each management dataset below.
 ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]

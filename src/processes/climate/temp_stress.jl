@@ -1,9 +1,9 @@
 """
-temp_stress(PFT, pet, photos, temp)
+temp_stress(CFT, pet, photos, temp)
 
 Compute temperature stress scalar used by photosynthesis routines.
 """
-function temp_stress(PFT::PftParameters,
+function temp_stress(CFT::CFTParameters,
                      pet::PetPar,
                      crop,
                      temp::AbstractArray{T};
@@ -15,7 +15,7 @@ function temp_stress(PFT::PftParameters,
         crop_photosynthesis_auxiliary(crop).temperature_stress,
         pet.daylength,
         temp,
-        PFT,
+        CFT,
         photoparams
     )
 
@@ -45,7 +45,7 @@ GPU kernel. `path` uses the existing `1 = C3`, `2 = C4` convention.
 
     lower_slope = T(2 * log(1 / 0.99 - 1)) /
         (temperature_co2.low - temperature_photosynthesis.low)
-    # LPJmL fscanpftpar.c: midpoint of lower CO2 and photosynthesis limits.
+    # LPJmL fscancftpar.c: midpoint of lower CO2 and photosynthesis limits.
     lower_midpoint = (T(temperature_co2.low) + T(temperature_photosynthesis.low)) * T(0.5)
     upper_slope = T(log(0.99 / 0.01)) /
         (temperature_co2.high - temperature_photosynthesis.high)
@@ -61,13 +61,13 @@ end
                                      photos_tstress::AbstractArray{T},
                                      pet_daylength::AbstractArray{T},
                                      temp::AbstractArray{T},
-                                     PFT::PftParameters,
+                                     CFT::CFTParameters,
                                      photoparams::PhotoParams
 ) where {T <: AbstractFloat}
 
     cell = @index(Global)
 
-    @unpack path, temp_co2, temp_photos = PFT
+    @unpack path, temp_co2, temp_photos = CFT
     @unpack tmc3, tmc4 = photoparams
 
     photos_tstress[cell] = compute_photosynthesis_temperature_stress(

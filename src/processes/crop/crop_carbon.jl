@@ -1,11 +1,11 @@
 """
-crop_carbon!(photos, PFT, crop, pet, soil, temp, co2)
+crop_carbon!(photos, CFT, crop, pet, soil, temp, co2)
 
 Run the daily crop carbon process chain: respiration, allocation, and phenology coupling.
 """
 function crop_carbon!(crop,
                       output::Output,
-                      PFT::PftParameters,
+                      CFT::CFTParameters,
                       air_temperature::AbstractVector{T},
                       soil_temperature::AbstractMatrix{T};
                       output_row::Union{Nothing, Integer} = nothing,
@@ -14,14 +14,14 @@ function crop_carbon!(crop,
 
     # compute crop respiration
     respiration!(
-        crop, PFT, air_temperature, soil_temperature,
+        crop, CFT, air_temperature, soil_temperature,
         crop_fluxes(crop).carbon.gross_assimilation,
         crop_fluxes(crop).carbon.leaf_respiration;
         lpjmlparams = lpjmlparams,
     )
 
     # compute crop carbon allocation
-    carbon_allocation!(PFT, crop)
+    carbon_allocation!(CFT, crop)
 
     sources = (
         gpp = crop_fluxes(crop).carbon.gross_assimilation,

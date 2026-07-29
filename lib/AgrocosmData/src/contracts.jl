@@ -32,7 +32,7 @@ struct DatasetSpec
     path::String
     variable::String
     units::String
-    pft_ids::Vector{Int32}
+    cft_ids::Vector{Int32}
     management_bands::Union{Nothing, ManagementBands}
 end
 
@@ -40,38 +40,38 @@ function DatasetSpec(
     path::AbstractString,
     variable::AbstractString;
     units::AbstractString = "",
-    pft_ids::AbstractVector{<:Integer} = Int[],
+    cft_ids::AbstractVector{<:Integer} = Int[],
     rainfed_bands::AbstractVector{<:Integer} = Int[],
     irrigated_bands::AbstractVector{<:Integer} = Int[],
 )
-    ids = Int32.(pft_ids)
-    allunique(ids) || throw(ArgumentError("dataset PFT ids must be unique"))
+    ids = Int32.(cft_ids)
+    allunique(ids) || throw(ArgumentError("dataset CFT ids must be unique"))
     has_bands = !isempty(rainfed_bands) || !isempty(irrigated_bands)
-    has_bands && !isempty(ids) && throw(ArgumentError("use either pft_ids or explicit management bands, not both"))
+    has_bands && !isempty(ids) && throw(ArgumentError("use either cft_ids or explicit management bands, not both"))
     bands = has_bands ? ManagementBands(rainfed_bands, irrigated_bands) : nothing
     return DatasetSpec(String(path), String(variable), String(units), ids, bands)
 end
 
-"""Stable mapping between external PFT ids, names, and array positions."""
-struct PFTRegistry
+"""Stable mapping between external CFT ids, names, and array positions."""
+struct CFTRegistry
     ids::Vector{Int32}
     names::Vector{String}
 
-    function PFTRegistry(ids::AbstractVector{<:Integer}, names::AbstractVector{<:AbstractString})
-        length(ids) == length(names) || throw(ArgumentError("PFT ids and names must have equal length"))
-        isempty(ids) && throw(ArgumentError("PFT registry cannot be empty"))
+    function CFTRegistry(ids::AbstractVector{<:Integer}, names::AbstractVector{<:AbstractString})
+        length(ids) == length(names) || throw(ArgumentError("CFT ids and names must have equal length"))
+        isempty(ids) && throw(ArgumentError("CFT registry cannot be empty"))
         ids32 = Int32.(ids)
         names_string = String.(names)
-        allunique(ids32) || throw(ArgumentError("PFT ids must be unique"))
-        allunique(names_string) || throw(ArgumentError("PFT names must be unique"))
+        allunique(ids32) || throw(ArgumentError("CFT ids must be unique"))
+        allunique(names_string) || throw(ArgumentError("CFT names must be unique"))
         return new(ids32, names_string)
     end
 end
 
-"""Configured data sources and the explicit PFT ordering used by their files."""
+"""Configured data sources and the explicit CFT ordering used by their files."""
 struct DatasetCatalog
     datasets::Dict{Symbol, DatasetSpec}
-    pfts::PFTRegistry
+    cfts::CFTRegistry
 end
 
 """Canonical compact representation of the configured longitude/latitude grid."""
@@ -101,7 +101,7 @@ struct PatchDomain{T <: AbstractFloat}
     patch_ids::Vector{Int32}
     compact_indices::Vector{Int}
     cell_ids::Vector{Int32}
-    pft_ids::Vector{Int32}
+    cft_ids::Vector{Int32}
     irrigated::BitVector
     landfrac::Vector{T}
 
@@ -109,20 +109,20 @@ struct PatchDomain{T <: AbstractFloat}
         patch_ids::AbstractVector{<:Integer},
         compact_indices::AbstractVector{<:Integer},
         cell_ids::AbstractVector{<:Integer},
-        pft_ids::AbstractVector{<:Integer},
+        cft_ids::AbstractVector{<:Integer},
         irrigated::AbstractVector{Bool},
         landfrac::AbstractVector{T},
     ) where {T <: AbstractFloat}
-        lengths = length.((patch_ids, compact_indices, cell_ids, pft_ids, irrigated, landfrac))
+        lengths = length.((patch_ids, compact_indices, cell_ids, cft_ids, irrigated, landfrac))
         all(==(first(lengths)), lengths) || throw(DimensionMismatch(
             "every PatchDomain field must have the same length",
         ))
         patch_ids32 = Int32.(patch_ids)
         compact = Int.(compact_indices)
-        pft_ids32 = Int32.(pft_ids)
+        cft_ids32 = Int32.(cft_ids)
         allunique(patch_ids32) || throw(ArgumentError("patch ids must be unique"))
         all(>(0), compact) || throw(ArgumentError("compact indices must be positive"))
-        all(>(0), pft_ids32) || throw(ArgumentError("PFT ids must be positive"))
+        all(>(0), cft_ids32) || throw(ArgumentError("CFT ids must be positive"))
         all(isfinite, landfrac) && all(>=(zero(T)), landfrac) || throw(ArgumentError(
             "patch land fractions must be finite and non-negative",
         ))
@@ -130,7 +130,7 @@ struct PatchDomain{T <: AbstractFloat}
             patch_ids32,
             compact,
             Int32.(cell_ids),
-            pft_ids32,
+            cft_ids32,
             BitVector(irrigated),
             collect(landfrac),
         )
@@ -145,12 +145,12 @@ struct CompactVariable{T, N, A <: AbstractArray{T, N}}
     provenance::DataProvenance
 end
 
-"""One selected PFT's time-varying management field."""
+"""One selected CFT's time-varying management field."""
 struct TimeCellData{T, TT, A <: AbstractMatrix{T}, V <: AbstractVector{TT}}
     time::V
     values::A
     selection::CellSelection
-    pft_id::Int32
+    cft_id::Int32
     irrigated::Bool
     provenance::DataProvenance
 end
@@ -187,7 +187,7 @@ mutable struct PrefetchedClimateForcingReader{R} <: AbstractVector{NamedTuple}
     closed::Bool
 end
 
-"""Fixed allocation selection and annual activity for one PFT."""
+"""Fixed allocation selection and annual activity for one CFT."""
 struct CropMask{T, A <: AbstractMatrix{T}}
     selection::CellSelection
     fraction::A
@@ -235,7 +235,7 @@ end
 """Calibrated fast/slow SOC allocation and vertical litter-to-SOM routing."""
 struct SoilPoolAllocation{T <: AbstractFloat}
     selection::CellSelection
-    pft_id::Int32
+    cft_id::Int32
     irrigated::Bool
     fast_carbon_fraction::Matrix{T}
     fast_nitrogen_fraction::Matrix{T}
@@ -250,7 +250,7 @@ function SoilPoolAllocation(
     fast_nitrogen_fraction::AbstractMatrix,
     c_shift_fast::AbstractMatrix,
     c_shift_slow::AbstractMatrix;
-    pft_id::Integer = 1,
+    cft_id::Integer = 1,
     irrigated::Bool = false,
     provenance::NamedTuple = (;),
 )
@@ -267,7 +267,7 @@ function SoilPoolAllocation(
     T = float(promote_type(map(eltype, arrays)...))
     return SoilPoolAllocation{T}(
         selection,
-        Int32(pft_id),
+        Int32(cft_id),
         irrigated,
         T.(fast_carbon_fraction),
         T.(fast_nitrogen_fraction),

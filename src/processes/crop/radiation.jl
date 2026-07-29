@@ -142,14 +142,14 @@ end
 
 # for one cft
 """
-apar_crop!(PFT, crop, pet)
+apar_crop!(CFT, crop, pet)
 
 Compute absorbed PAR and fPAR. Set `maize=true` for the maize-specific fPAR
 parameterization.
 """
 
 function apar_crop!(
-    PFT::PftParameters, crop, pet::PetPar, snow_height = nothing; maize::Bool = false,
+    CFT::CFTParameters, crop, pet::PetPar, snow_height = nothing; maize::Bool = false,
 )
     T = eltype(crop_canopy_auxiliary(crop).apar)
     launch_1D!(
@@ -160,9 +160,9 @@ function apar_crop!(
         crop_prognostic(crop).canopy.lai_npp_deficit,
         snow_height === nothing ? pet.eeq : snow_height,
         pet.par,
-        T(PFT.lightextcoeff),
-        T(PFT.albedo_leaf),
-        T(PFT.alphaa),
+        T(CFT.lightextcoeff),
+        T(CFT.albedo_leaf),
+        T(CFT.alphaa),
         maize,
         snow_height !== nothing,
     )
@@ -171,14 +171,14 @@ end
 # Radiation and daylength preprocessing for canopy photosynthesis.
 
 """
-apar_crop_maize!(PFT, crop, pet)
+apar_crop_maize!(CFT, crop, pet)
 
 Compute absorbed PAR and maize-specific fPAR parameterization.
 """
 
 
-apar_crop_maize!(PFT::PftParameters, crop, pet::PetPar, snow_height = nothing) =
-    apar_crop!(PFT, crop, pet, snow_height; maize = true)
+apar_crop_maize!(CFT::CFTParameters, crop, pet::PetPar, snow_height = nothing) =
+    apar_crop!(CFT, crop, pet, snow_height; maize = true)
 
 @kernel inbounds = true function apar_crop_kernel!(
     apar::AbstractVector{T},

@@ -7,17 +7,17 @@ CUDA.allowscalar(false)
 
 @testset "CUDA LPJmL crop snow cover suppresses absorbed PAR" begin
     cells = 4096
-    for pft in (cft1, cft3)
+    for cft in (cft1, cft3)
         crop = init_crop(Float32, cells, CuArray)
         pet = init_pet(Float32, cells, CuArray)
         crop.state.canopy.lai .= 2.0f0
         pet.par .= 20.0f0
         snow = CuArray(repeat(Float32[0, 0.1], cells ÷ 2))
 
-        if pft === cft3
-            apar_crop_maize!(pft, crop, pet, snow)
+        if cft === cft3
+            apar_crop_maize!(cft, crop, pet, snow)
         else
-            apar_crop!(pft, crop, pet, snow)
+            apar_crop!(cft, crop, pet, snow)
         end
         synchronize()
 

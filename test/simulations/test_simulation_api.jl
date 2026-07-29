@@ -305,7 +305,7 @@ end
 
     @test simulation.output === simulation.state.output
     @test simulation.config.with_tillage
-    @test simulation.processes.crop === simulation.pft
+    @test simulation.processes.crop === simulation.cft
     @test simulation.processes.global_parameters === simulation.model_parameters
     crop_lifecycle_ids = runtime_array_ids((
         simulation.state.prognostic.crop,

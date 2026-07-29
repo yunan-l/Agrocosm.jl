@@ -5,29 +5,29 @@ include(joinpath(@__DIR__, "run_global_wheat_cpu.jl"))
 
 function requested_crop_systems(config)
     cfts = get(config, "cfts", Dict{String, Any}())
-    requested = get(cfts, "pft_ids", [1])
-    pft_ids = requested isa AbstractString && lowercase(requested) == "all" ?
-        collect(1:length(CROP_PFTS)) : Int.(requested)
-    isempty(pft_ids) && error("cfts.pft_ids must not be empty")
-    all(id -> 1 <= id <= length(CROP_PFTS), pft_ids) ||
-        error("cfts.pft_ids must be in 1:$(length(CROP_PFTS))")
-    allunique(pft_ids) || error("cfts.pft_ids must be unique")
+    requested = get(cfts, "cft_ids", [1])
+    cft_ids = requested isa AbstractString && lowercase(requested) == "all" ?
+        collect(1:length(CFTS)) : Int.(requested)
+    isempty(cft_ids) && error("cfts.cft_ids must not be empty")
+    all(id -> 1 <= id <= length(CFTS), cft_ids) ||
+        error("cfts.cft_ids must be in 1:$(length(CFTS))")
+    allunique(cft_ids) || error("cfts.cft_ids must be unique")
     systems = Symbol.(lowercase.(String.(get(cfts, "water_systems", ["rainfed"]))))
     all(system -> system in (:rainfed, :irrigated), systems) || error(
         "cfts.water_systems must contain rainfed and/or irrigated",
     )
     allunique(systems) || error("cfts.water_systems must be unique")
-    return [(pft_id, system === :irrigated) for pft_id in pft_ids for system in systems]
+    return [(cft_id, system === :irrigated) for cft_id in cft_ids for system in systems]
 end
 
-batch_name(pft_id, irrigated) = "cft_$(lpad(pft_id, 2, '0'))_" *
+batch_name(cft_id, irrigated) = "cft_$(lpad(cft_id, 2, '0'))_" *
     (irrigated ? "irrigated" : "rainfed")
 
 function validate_patch_landfrac(catalog, grid, systems, source_years)
     total = zeros(Float32, length(source_years), length(grid.cell_ids))
-    for (pft_id, irrigated) in systems
+    for (cft_id, irrigated) in systems
         landuse = read_management(
-            catalog, :landuse, grid, pft_id;
+            catalog, :landuse, grid, cft_id;
             simulation_years = source_years, T = Float32, irrigated,
         )
         total .+= landuse.values
@@ -53,7 +53,7 @@ function write_cft_yield(path, batch_paths, systems)
             defVar(output, "latitude", eltype(latitude), ("latitude",))[:] = latitude
             defVar(output, "time", eltype(time), ("time",))[:] = time
             defVar(output, "band", Int32, ("band",))[:] = Int32.(1:length(systems))
-            defVar(output, "pft_id", Int32, ("band",))[:] = Int32[first(system) for system in systems]
+            defVar(output, "cft_id", Int32, ("band",))[:] = Int32[first(system) for system in systems]
             defVar(output, "irrigated", Int8, ("band",))[:] = Int8[last(system) for system in systems]
             yield = defVar(output, "yield", Float32, ("longitude", "latitude", "band", "time"))
             yield.attrib["long_name"] = "unweighted crop yield by CFT and water system"
@@ -89,13 +89,13 @@ function run_global_cfts(config_path; backend_override = :cpu)
         catalog, grid, systems, management_source_years(config, simulation_years),
     )
     batch_paths = String[]
-    for (pft_id, irrigated) in systems
-        name = batch_name(pft_id, irrigated)
+    for (cft_id, irrigated) in systems
+        name = batch_name(cft_id, irrigated)
         println("running $name")
         result = run_global_wheat(
             config_path;
             backend_override,
-            pft_id,
+            cft_id,
             irrigated,
             output_subdirectory = joinpath("batches", name),
         )

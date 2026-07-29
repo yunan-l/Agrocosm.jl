@@ -1,10 +1,10 @@
 """
-crop_nitrogen!(crop, PFT, soil, photos_vcmax, temp; auto_fertilizer=true)
+crop_nitrogen!(crop, CFT, soil, photos_vcmax, temp; auto_fertilizer=true)
 
 Allocate acquired crop nitrogen among leaf, root, storage, and pool compartments.
 """
 function crop_nitrogen!(crop,
-                        PFT::PftParameters,
+                        CFT::CFTParameters,
                         soil,
                         photos_vcmax::AbstractArray{T},
                         temp::AbstractArray{T};
@@ -12,26 +12,26 @@ function crop_nitrogen!(crop,
                         lpjmlparams::LPJmLParams = lpjmlparams,
 ) where {T <: AbstractFloat}
 
-    ndemand_crop!(crop, PFT, photos_vcmax, temp; lpjmlparams = lpjmlparams)
+    ndemand_crop!(crop, CFT, photos_vcmax, temp; lpjmlparams = lpjmlparams)
     nuptake_crop!(
-        crop, PFT, soil;
+        crop, CFT, soil;
         auto_fertilizer = auto_fertilizer,
         lpjmlparams = lpjmlparams,
     )
 
-    allocate_crop_nitrogen!(crop, PFT)
+    allocate_crop_nitrogen!(crop, CFT)
 
 end
 
 """
-    allocate_crop_nitrogen!(crop, PFT)
+    allocate_crop_nitrogen!(crop, CFT)
 
 Redistribute the complete plant nitrogen stock among crop organs. Organ pools
 are derived stocks, not daily uptake fluxes, so repeated calls with unchanged
 carbon and total nitrogen are idempotent.
 """
 function allocate_crop_nitrogen!(crop,
-                                 PFT::PftParameters)
+                                 CFT::CFTParameters)
 
     launch_1D!(crop_nitrogen_kernel!,
                crop_prognostic(crop).nitrogen.total,
@@ -44,7 +44,7 @@ function allocate_crop_nitrogen!(crop,
                crop_prognostic(crop).nitrogen.root,
                crop_prognostic(crop).nitrogen.storage,
                crop_prognostic(crop).nitrogen.pool,
-               PFT)
+               CFT)
 
 end
 
@@ -60,12 +60,12 @@ end
                                        crop_rootn::AbstractArray{T},
                                        crop_ston::AbstractArray{T},
                                        crop_pooln::AbstractArray{T},
-                                       PFT::PftParameters
+                                       CFT::CFTParameters
 ) where {T <: AbstractFloat, S <: Integer}
 
      cell = @index(Global)
 
-     @unpack ratio = PFT
+     @unpack ratio = CFT
 
      if (crop_isgrowing[cell] == 1) && (crop_nitrogen[cell] > zero(T)) && (crop_leafc[cell] > T(1e-7))
           # LPJmL clears all four organ pools before calling solve(). With those

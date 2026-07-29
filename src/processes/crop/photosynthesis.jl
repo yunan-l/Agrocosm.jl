@@ -1,19 +1,19 @@
 # using CUDA
 """
-photosynthesis_C3!(PFT, photos, crop, pet, co2, temp)
+photosynthesis_C3!(CFT, photos, crop, pet, co2, temp)
 
 Compute C3 photosynthesis rates and related diagnostic variables.
 """
 
 
 """
-photosynthesis_C4!(PFT, photos, crop, pet, co2, temp)
+photosynthesis_C4!(CFT, photos, crop, pet, co2, temp)
 
 Compute C4 photosynthesis rates and related diagnostic variables.
 """
 
 """Cell-local C3 photosynthesis kernel with no intermediate device arrays."""
-function photosynthesis_C3!(PFT::PftParameters,
+function photosynthesis_C3!(CFT::CFTParameters,
                             crop,
                             apar::AbstractArray{T},
                             pet_daylength::AbstractArray{T},
@@ -38,7 +38,7 @@ function photosynthesis_C3!(PFT::PftParameters,
         pet_daylength,
         temp,
         co2,
-        PFT,
+        CFT,
         lpjmlparams,
         photoparams,
         comp_vcmax,
@@ -95,13 +95,13 @@ end
     daylength::AbstractVector{T},
     temperature::AbstractVector{T},
     co2::AbstractVector{T},
-    PFT::PftParameters,
+    CFT::CFTParameters,
     lpjmlparams::LPJmLParams,
     photoparams::PhotoParams,
     comp_vcmax::Bool,
 ) where {T <: AbstractFloat}
     cell = @index(Global)
-    @unpack b = PFT
+    @unpack b = CFT
     @unpack ko25, kc25, alphac3, theta, LAMBDA_OPT = lpjmlparams
     @unpack q10ko, q10kc, po2, tau25, q10tau, cmass, cq, p, lambdamc3 = photoparams
 
@@ -151,7 +151,7 @@ end
 end
 
 """Cell-local C4 photosynthesis kernel with no intermediate device arrays."""
-function photosynthesis_C4!(PFT::PftParameters,
+function photosynthesis_C4!(CFT::CFTParameters,
                             crop,
                             apar::AbstractArray{T},
                             pet_daylength::AbstractArray{T},
@@ -174,7 +174,7 @@ function photosynthesis_C4!(PFT::PftParameters,
         apar,
         pet_daylength,
         temp,
-        PFT,
+        CFT,
         lpjmlparams,
         photoparams,
         comp_vcmax,
@@ -183,10 +183,10 @@ function photosynthesis_C4!(PFT::PftParameters,
 end
 
 """Dispatch photosynthesis to the compile-time C3 or C4 pathway."""
-photosynthesis!(::Val{:C3}, PFT, crop, apar, daylength, temperature, co2; kwargs...) =
-    photosynthesis_C3!(PFT, crop, apar, daylength, temperature, co2; kwargs...)
-photosynthesis!(::Val{:C4}, PFT, crop, apar, daylength, temperature, co2; kwargs...) =
-    photosynthesis_C4!(PFT, crop, apar, daylength, temperature; kwargs...)
+photosynthesis!(::Val{:C3}, CFT, crop, apar, daylength, temperature, co2; kwargs...) =
+    photosynthesis_C3!(CFT, crop, apar, daylength, temperature, co2; kwargs...)
+photosynthesis!(::Val{:C4}, CFT, crop, apar, daylength, temperature, co2; kwargs...) =
+    photosynthesis_C4!(CFT, crop, apar, daylength, temperature; kwargs...)
 
 @kernel inbounds = true function photosynthesis_c4_kernel!(
     gross_assimilation::AbstractVector{T},
@@ -201,13 +201,13 @@ photosynthesis!(::Val{:C4}, PFT, crop, apar, daylength, temperature, co2; kwargs
     apar::AbstractVector{T},
     daylength::AbstractVector{T},
     temperature::AbstractVector{T},
-    PFT::PftParameters,
+    CFT::CFTParameters,
     lpjmlparams::LPJmLParams,
     photoparams::PhotoParams,
     comp_vcmax::Bool,
 ) where {T <: AbstractFloat}
     cell = @index(Global)
-    @unpack b = PFT
+    @unpack b = CFT
     @unpack alphac4, theta, LAMBDA_OPT = lpjmlparams
     @unpack lambdamc4, cmass, cq, p = photoparams
 

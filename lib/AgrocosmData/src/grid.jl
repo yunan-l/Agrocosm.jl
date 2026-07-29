@@ -1,14 +1,16 @@
 const _LONGITUDE_NAMES = (:longitude, :lon, :x)
 const _LATITUDE_NAMES = (:latitude, :lat, :y)
 const _TIME_NAMES = (:time, :year)
-const _PFT_NAMES = (:pft, :cft, :crop, :band)
+# Source files may still use LPJmL's historical `pft` dimension name. It is
+# normalized at this I/O boundary; all AgrocosmData contracts use `:cft`.
+const _CFT_NAMES = (:cft, :pft, :crop, :band)
 
 function _canonical_dimension(name::Union{Symbol, AbstractString})
     symbol = Symbol(lowercase(String(name)))
     symbol in _LONGITUDE_NAMES && return :longitude
     symbol in _LATITUDE_NAMES && return :latitude
     symbol in _TIME_NAMES && return :time
-    symbol in _PFT_NAMES && return :pft
+    symbol in _CFT_NAMES && return :cft
     return symbol
 end
 

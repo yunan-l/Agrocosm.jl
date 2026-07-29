@@ -17,7 +17,7 @@ Agrocosm's current code path rather than an abstract textbook model.
 
 The current production configuration assumes:
 
-- one crop PFT per stand and grid cell;
+- one crop CFT per stand and grid cell;
 - a five-layer soil column;
 - daily forcing on a strict 365-day, no-leap calendar;
 - rainfed conditions or unconstrained full irrigation;

@@ -5,20 +5,20 @@ include(joinpath(@__DIR__, "..", "..", "examples", "scripts", "run_global_cfts_c
 @testset "multi-CFT patch selection, state isolation, and yield bands" begin
     @test requested_crop_systems(Dict{String, Any}()) == [(1, false)]
     @test requested_crop_systems(Dict("cfts" => Dict(
-        "pft_ids" => "all", "water_systems" => ["rainfed", "irrigated"],
-    ))) == [(pft_id, irrigated) for pft_id in 1:length(CROP_PFTS) for irrigated in (false, true)]
+        "cft_ids" => "all", "water_systems" => ["rainfed", "irrigated"],
+    ))) == [(cft_id, irrigated) for cft_id in 1:length(CFTS) for irrigated in (false, true)]
     patch_domain = combine_patch_domains([
         PatchDomain([1], [3], [42], [1], [false], Float32[0.2]),
         PatchDomain([1], [3], [42], [2], [true], Float32[0.3]),
     ])
     @test patch_domain.cell_ids == Int32[42, 42]
-    @test patch_domain.pft_ids == Int32[1, 2]
+    @test patch_domain.cft_ids == Int32[1, 2]
     @test patch_domain.irrigated == BitVector([false, true])
 
     single_catalog = catalog_from_config(Dict("paths" => Dict("input_directory" => "/tmp/input")))
-    @test single_catalog.pfts.ids == Int32.(1:12)
+    @test single_catalog.cfts.ids == Int32.(1:12)
     @test endswith(dataset(single_catalog, :landuse).path, "landuse_24cfts_2015.nc")
-    @test pft_index(single_catalog.pfts, 1) == 1
+    @test cft_index(single_catalog.cfts, 1) == 1
 
     days = 30
     rainfed = initialize_simulation(
@@ -59,7 +59,7 @@ include(joinpath(@__DIR__, "..", "..", "examples", "scripts", "run_global_cfts_c
             @test size(dataset["yield"]) == (2, 1, 2, 1)
             @test dataset["yield"][:, :, 1, :] == reshape(Float32[1, 2], 2, 1, 1)
             @test dataset["yield"][:, :, 2, :] == reshape(Float32[3, 4], 2, 1, 1)
-            @test dataset["pft_id"][:] == Int32[1, 1]
+            @test dataset["cft_id"][:] == Int32[1, 1]
             @test dataset["irrigated"][:] == Int8[0, 1]
         end
     end
