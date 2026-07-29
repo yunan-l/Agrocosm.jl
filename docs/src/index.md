@@ -23,11 +23,11 @@ line-by-line translation.
 
 ## Current maturity
 
-The rainfed single-crop C3/C4 pathway is implemented and covered by CPU and
-CUDA-oriented regression tests. The model is under active research
-development: soil/ecosystem spin-up, multi-crop rotations, broader output
-metadata, Penman–Monteith/Medlyn alternatives, and end-to-end automatic
-differentiation are not yet production features.
+The established single-CFT C3/C4 pathway is covered by CPU and CUDA-oriented
+regression tests. The multi-CFT drivers can execute selected CFT and
+water-system patches in independent batches. The model is under active research
+development: crop rotations, Penman–Monteith/Medlyn alternatives, and
+end-to-end automatic differentiation are not yet production features.
 
 Start with [Getting started](@ref), then read [Model overview](@ref) and
 [State variables](@ref) before extending a process.
