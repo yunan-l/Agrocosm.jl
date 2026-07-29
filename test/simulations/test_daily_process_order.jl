@@ -21,4 +21,8 @@ using Test
     @test position("pedotransfer!") <
           position("update_surface_litter_properties!") <
           position("soil_temperature!")
+    @test position("cultivate!") < position("phenology_crop!") < position("harvest_crop!")
+    @test position("harvest_crop!") < position("route_harvest_residues!")
+    @test position("crop_carbon!") < position("terminate_failed_crop!")
+    @test position("terminate_failed_crop!") < position("post_crop_nitrogen_losses!")
 end

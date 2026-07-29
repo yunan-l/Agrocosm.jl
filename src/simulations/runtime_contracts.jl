@@ -42,6 +42,47 @@ function ExecutionContext(
     return ExecutionContext{T, typeof(architecture), typeof(domain)}(architecture, domain)
 end
 
+"""
+    SimulationConfiguration
+
+Immutable assembly contract for one `CropSimulation`. It contains only
+execution and run choices; scientific parameters remain in `ProcessModules`
+and all numerical arrays remain in `ModelState`.
+"""
+struct SimulationConfiguration{T <: AbstractFloat, D, E}
+    indices::Union{Nothing, Vector{Int}}
+    device::D
+    T::Type{T}
+    days::Int
+    irrigation::Bool
+    manure::Bool
+    fertilizer::Symbol
+    with_tillage::Bool
+    nitrogen_limit_vcmax::Bool
+    execution::E
+end
+
+function SimulationConfiguration(
+    ::Type{T}, device, days::Integer,
+    active_indices::AbstractVector{<:Integer}, cell_ids::AbstractVector{<:Integer};
+    indices = nothing,
+    irrigation::Bool = false,
+    manure::Bool = false,
+    fertilizer::Symbol = :auto,
+    with_tillage::Bool = true,
+    nitrogen_limit_vcmax::Bool = false,
+) where {T <: AbstractFloat}
+    days > 0 || throw(ArgumentError("days must be positive"))
+    execution = ExecutionContext(T, device, active_indices; cell_ids)
+    source_indices = indices === nothing ? nothing : Int.(indices)
+    return SimulationConfiguration{
+        T, typeof(device), typeof(execution),
+    }(
+        source_indices, device, T, Int(days), irrigation, manure, fertilizer,
+        with_tillage, nitrogen_limit_vcmax, execution,
+    )
+end
+
 float_type(::ExecutionContext{T}) where {T} = T
 array_device(::HostArchitecture) = identity
 array_device(architecture::AcceleratorArchitecture) = architecture.device

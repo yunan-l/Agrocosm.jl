@@ -28,7 +28,8 @@ export CropCarbonFluxes, CropNitrogenFluxes, CropWaterFluxes, CropEvents
 export CropStressAuxiliary, CropRootAuxiliary, ManagedLand
 export ProcessModules, ModelState, model_state
 export AbstractPhotosynthesisPathway, C3Pathway, C4Pathway
-export ActiveLandDomain, ExecutionContext, HostArchitecture, AcceleratorArchitecture
+export ActiveLandDomain, ExecutionContext, SimulationConfiguration
+export HostArchitecture, AcceleratorArchitecture
 export VariableSpec, state_schema, validate_state_schema, output_variable_spec
 export float_type, array_device, architecture_name
 export SoilParams, SoilDecompParams, SoilThermalParams, SnowParams, Soil

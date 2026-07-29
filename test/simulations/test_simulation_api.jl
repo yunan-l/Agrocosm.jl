@@ -224,6 +224,9 @@ end
     simulation = initialize_simulation(
         cft1, initial; indices = [1], T = Float32, days = 1, fertilizer = :no,
     )
+    @test simulation.config isa SimulationConfiguration
+    @test simulation.config.fertilizer === :no
+    @test simulation.config.irrigation === false
     @test architecture_name(simulation.config.execution) == :cpu
     @test float_type(simulation.config.execution) === Float32
     @test simulation.config.execution.domain.cell_ids == Int32[1]

@@ -138,7 +138,15 @@ function initialize_simulation(
     state = model_state(climbuf, crop, pet, soil, managed_land, daily_weather, output)
     active_indices = indices === nothing ? collect(1:cells) : collect(Int, indices)
     active_cell_ids = cell_ids === nothing ? active_indices : collect(Int, cell_ids)
-    execution = ExecutionContext(T, device, active_indices; cell_ids = active_cell_ids)
+    config = SimulationConfiguration(
+        T, device, days, active_indices, active_cell_ids;
+        indices,
+        irrigation,
+        manure,
+        fertilizer,
+        with_tillage,
+        nitrogen_limit_vcmax,
+    )
     validate_state_schema(state, cells)
     balances = diagnostics ? (
         water_balance = init_water_balance(days, cells, device; T = T),
@@ -150,18 +158,6 @@ function initialize_simulation(
         nitrogen_balance = nothing,
         carbon_balance = nothing,
         thermal_balance = nothing,
-    )
-    config = (
-        indices = indices === nothing ? nothing : collect(Int, indices),
-        device = device,
-        T = T,
-        days = Int(days),
-        irrigation = irrigation,
-        manure = manure,
-        fertilizer = fertilizer,
-        with_tillage = with_tillage,
-        nitrogen_limit_vcmax = nitrogen_limit_vcmax,
-        execution = execution,
     )
     processes = ProcessModules(convert_precision(T, pft), ModelParameters(T))
     return CropSimulation(

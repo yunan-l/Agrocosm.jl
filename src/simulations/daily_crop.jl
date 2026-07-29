@@ -85,7 +85,9 @@ function _daily_crop!(
             )
         end
 
-        # Today's climate must enter history before sowing decisions.
+        # --- Discrete establishment event ---------------------------------
+        # Today's climate must enter history before sowing decisions. This is
+        # intentionally separate from continuous crop/soil process kernels.
         update_climbuf!(pftparameters, dailyWeather.temp, climbuf, day)
         cultivate!(
             crop, managed_land, soil, day_of_year;
@@ -135,6 +137,7 @@ function _daily_crop!(
         c_shift_response_sum === nothing ||
             accumulate_c_shift_response!(c_shift_response_sum, soil)
 
+        # --- Discrete calendar harvest event ------------------------------
         phenology_crop!(
             crop, climbuf.V_req, pftparameters, dailyWeather.temp, pet.daylength,
         )
@@ -223,6 +226,9 @@ function _daily_crop!(
             soil_thermal_prognostic(soil).temperature;
             output_row, lpjmlparams = global_params,
         )
+        # --- Discrete failed-crop termination event -----------------------
+        # This remains separate from calendar harvest: it is only triggered
+        # after today's carbon allocation identifies a non-viable stand.
         terminate_failed_crop!(
             crop, soil, output, managed_land.residue_fraction, day_of_year;
             output_row, annual_output_row,
