@@ -9,6 +9,7 @@ CUDA.allowscalar(false)
     cells = 32
     crop = init_crop(cells, CuArray)
     soil = init_soil(cells, soilparams.soildepth, CuArray)
+    state = test_model_state(crop, soil)
 
     soil.carbon.litter .= 10.0f0
     soil.nitrogen.litter .= 1.0f0
@@ -24,8 +25,8 @@ CUDA.allowscalar(false)
     soil.water.relative_content .= 0.5f0
     soil.thermal.temperature .= -20.0f0
 
-    soil_carbon!(crop, soil)
-    soil_nitrogen!(crop, soil)
+    soil_carbon!(state, state)
+    soil_nitrogen!(state, state)
     synchronize()
 
     @test all(iszero, Array(soil.carbon.decomposed_litter))
@@ -42,8 +43,8 @@ CUDA.allowscalar(false)
     soil.carbon.slow .= -1.0f0
     soil.nitrogen.fast .= -1.0f0
     soil.nitrogen.slow .= -1.0f0
-    soil_carbon!(crop, soil)
-    soil_nitrogen!(crop, soil)
+    soil_carbon!(state, state)
+    soil_nitrogen!(state, state)
     synchronize()
 
     @test all(iszero, Array(soil.carbon.decomposed_fast))

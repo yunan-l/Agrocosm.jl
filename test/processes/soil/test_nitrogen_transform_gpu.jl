@@ -8,6 +8,7 @@ CUDA.allowscalar(false)
 @testset "CUDA soil nitrogen transformations" begin
     cell_size = 2
     soil = init_soil(cell_size, soilparams.soildepth, CuArray)
+    state = test_model_state(soil)
     soil.properties.ph .= 6.5f0
     soil.nitrogen.ammonium .= 0.2f0
     soil.nitrogen.nitrate .= 0.1f0
@@ -29,7 +30,7 @@ CUDA.allowscalar(false)
     soil.nitrogen.fast .-= soil.nitrogen.decomposed_fast
     soil.nitrogen.slow .-= soil.nitrogen.decomposed_slow
     nitrogen_transform!(
-        soil;
+        state;
         air_temperature = CuArray(Float32[20, 21]),
         wind_speed = CuArray(Float32[1.5, 2.0]),
     )

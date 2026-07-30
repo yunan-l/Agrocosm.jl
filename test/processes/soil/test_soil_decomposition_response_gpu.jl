@@ -8,6 +8,7 @@ CUDA.allowscalar(false)
 @testset "CUDA LPJmL soil decomposition response" begin
     cells = 32
     soil = init_soil(cells, soilparams.soildepth, CuArray)
+    state = test_model_state(soil)
     soil.thermal.temperature .= 10.0f0
     soil.water.saturation_storage .= 100.0f0
     soil.water.holding_capacity_storage .= 100.0f0
@@ -15,7 +16,7 @@ CUDA.allowscalar(false)
     soil.surface_litter.temperature .= -20.0f0
     soil.surface_litter.water_capacity .= 1.0f0
     soil.surface_litter.water_storage .= 0.5f0
-    soil_decomp_response!(soil)
+    soil_decomp_response!(state)
     synchronize()
 
     response = Array(soil.decomposition.response)

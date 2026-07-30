@@ -8,6 +8,7 @@ CUDA.allowscalar(false)
 function run_soil_cn_gpu_fixture(device)
     cells = 2
     soil = init_soil(Float32, cells, Float32.(soilparams.soildepth), device)
+    state = test_model_state(soil)
     soil.carbon.litter .= device(Float32[30 18; 20 12; 10 6])
     soil.nitrogen.litter .= soil.carbon.litter ./ 12.0f0
     soil.carbon.fast .= 12.0f0
@@ -33,9 +34,9 @@ function run_soil_cn_gpu_fixture(device)
     soil.water.relative_content .= 0.5f0
     soil.properties.ph .= 6.5f0
 
-    soil_cn_decomposition!(soil)
+    soil_cn_decomposition!(state)
     post_crop_nitrogen_losses!(
-        soil;
+        state;
         air_temperature = device(fill(20.0f0, cells)),
         wind_speed = device(fill(2.0f0, cells)),
     )

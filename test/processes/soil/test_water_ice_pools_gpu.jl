@@ -8,15 +8,16 @@ CUDA.allowscalar(false)
 @testset "CUDA LPJmL three-reservoir water-ice partition" begin
     cells = 32
     soil = init_soil(cells, soilparams.soildepth, CuArray)
+    state = test_model_state(soil)
     soil.water.storage .= 50.0f0
-    pedotransfer!(soil)
+    pedotransfer!(state)
     soil_temperature!(
-        soil,
+        state,
         CUDA.fill(-20.0f0, cells),
         CUDA.fill(2.0f0, cells),
     )
     diagnostics = init_thermal_balance(1, cells, CuArray)
-    Agrocosm.record_thermal_balance!(diagnostics, 1, soil)
+    Agrocosm.record_thermal_balance!(diagnostics, 1, state)
 
     component_ice = Array(
         soil.water.wilting_ice_fraction .* soil.water.wilting_storage .+

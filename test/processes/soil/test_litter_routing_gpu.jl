@@ -7,6 +7,7 @@ CUDA.functional() || error("CUDA is required for this independent GPU test")
 @testset "GPU litter spatial routing" begin
     soil = init_soil(2, CuArray(soilparams.soildepth), CuArray)
     crop = init_crop(2, CuArray)
+    state = test_model_state(crop, soil)
     soil.management.tillage_fraction .= CuArray(Float32[
         0.05 0 0
         0.95 1 0
@@ -18,8 +19,8 @@ CUDA.functional() || error("CUDA is required for this independent GPU test")
 
     carbon_before = Array(sum(soil.carbon.litter, dims = 1))
     nitrogen_before = Array(sum(soil.nitrogen.litter, dims = 1))
-    litter_tillage!(soil, crop)
-    litter_bioturbation!(soil)
+    litter_tillage!(state, state)
+    litter_bioturbation!(state)
 
     @test Array(sum(soil.carbon.litter, dims = 1)) ≈ carbon_before atol = 2.0f-6
     @test Array(sum(soil.nitrogen.litter, dims = 1)) ≈ nitrogen_before atol = 2.0f-7

@@ -9,6 +9,7 @@ CUDA.allowscalar(false)
     cells = 32
     soil = init_soil(cells, soilparams.soildepth, CuArray)
     crop = init_crop(cells, CuArray)
+    state = test_model_state(crop, soil)
     fast_shift = Float32[0.40, 0.25, 0.15, 0.10, 0.10]
     slow_shift = Float32[0.55, 0.20, 0.10, 0.10, 0.05]
 
@@ -27,9 +28,9 @@ CUDA.allowscalar(false)
     soil.nitrogen.ammonium .= 0.2f0
     soil.nitrogen.nitrate .= 0.1f0
 
-    soil_carbon!(crop, soil)
+    soil_carbon!(state, state)
     soil_nitrogen!(
-        crop, soil;
+        state, state;
         air_temperature = CUDA.fill(10.0f0, cells),
         wind_speed = CUDA.fill(1.5f0, cells),
     )

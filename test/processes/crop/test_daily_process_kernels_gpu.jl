@@ -53,6 +53,8 @@ CUDA.allowscalar(false)
     soil_gpu = init_soil(cells, soilparams.soildepth, CuArray)
     pet_reference = init_pet(cells, identity)
     pet_gpu = init_pet(cells, CuArray)
+    state_reference = test_model_state(crop_reference, soil_reference; pet = pet_reference)
+    state_gpu = test_model_state(crop_gpu, soil_gpu; pet = pet_gpu)
     phenology = Float32.(range(0, 1; length = cells))
     lai = cft1.laimax .* phenology
     growing = Int32.(mod.(1:cells, 2))
@@ -72,16 +74,16 @@ CUDA.allowscalar(false)
     soil_gpu.carbon.litter[1, :] .= CuArray(litter_carbon)
     soil_gpu.snow.height .= CuArray(snow_height)
     soil_gpu.snow.fraction .= CuArray(snow_fraction)
-    Agrocosm.albedo!(cft1, crop_reference, soil_reference, pet_reference)
-    Agrocosm.apar_crop!(cft1, crop_reference, pet_reference)
-    albedo!(cft1, crop_gpu, soil_gpu, pet_gpu)
-    apar_crop!(cft1, crop_gpu, pet_gpu)
+    Agrocosm.albedo!(cft1, state_reference, state_reference, pet_reference)
+    Agrocosm.apar_crop!(cft1, state_reference, pet_reference)
+    albedo!(cft1, state_gpu, state_gpu, pet_gpu)
+    apar_crop!(cft1, state_gpu, pet_gpu)
     synchronize()
     @test Array(pet_gpu.albedo) ≈ pet_reference.albedo rtol = 3.0f-6
     @test Array(crop_gpu.auxiliary.canopy.apar) ≈ crop_reference.auxiliary.canopy.apar rtol = 3.0f-6
     canopy_bytes = CUDA.@allocated begin
-        albedo!(cft1, crop_gpu, soil_gpu, pet_gpu)
-        apar_crop!(cft1, crop_gpu, pet_gpu)
+        albedo!(cft1, state_gpu, state_gpu, pet_gpu)
+        apar_crop!(cft1, state_gpu, pet_gpu)
         synchronize()
     end
 
@@ -92,11 +94,11 @@ CUDA.allowscalar(false)
     crop_reference.auxiliary.calendar.sowing_date .= sowing_dates
     crop_gpu.auxiliary.calendar.sowing_date .= CuArray(sowing_dates)
     Agrocosm.cultivate!(
-        crop_reference, land_reference, soil_reference, 100;
+        state_reference, land_reference, state_reference, 100;
         apply_prescribed_fertilizer = false,
     )
     cultivate!(
-        crop_gpu, land_gpu, soil_gpu, 100;
+        state_gpu, land_gpu, state_gpu, 100;
         apply_prescribed_fertilizer = false,
     )
     synchronize()
@@ -104,7 +106,7 @@ CUDA.allowscalar(false)
     @test Array(crop_gpu.state.carbon.biomass) == crop_reference.state.carbon.biomass
     cultivation_bytes = CUDA.@allocated begin
         cultivate!(
-        crop_gpu, land_gpu, soil_gpu, 100;
+        state_gpu, land_gpu, state_gpu, 100;
             apply_prescribed_fertilizer = false,
         )
         synchronize()
@@ -119,10 +121,10 @@ CUDA.allowscalar(false)
     soil_gpu.water.holding_capacity_storage .= 100.0f0
     assimilation_gpu = CUDA.fill(8.0f0, cells)
     co2_gpu = CuArray(Float32[40])
-    transpiration!(assimilation_gpu, cft1, crop_gpu, pet_gpu, soil_gpu, co2_gpu)
+    transpiration!(assimilation_gpu, cft1, state_gpu, pet_gpu, state_gpu, co2_gpu)
     synchronize()
     transpiration_bytes = CUDA.@allocated begin
-        transpiration!(assimilation_gpu, cft1, crop_gpu, pet_gpu, soil_gpu, co2_gpu)
+        transpiration!(assimilation_gpu, cft1, state_gpu, pet_gpu, state_gpu, co2_gpu)
         synchronize()
     end
 

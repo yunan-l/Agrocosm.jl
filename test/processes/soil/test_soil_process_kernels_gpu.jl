@@ -12,6 +12,8 @@ CUDA.allowscalar(false)
     gpu = init_soil(cells, depths, CuArray)
     crop_reference = init_crop(cells, identity)
     crop_gpu = init_crop(cells, CuArray)
+    state_reference = test_model_state(crop_reference, reference)
+    state_gpu = test_model_state(crop_gpu, gpu)
 
     sand = reshape(Float32.(range(0.15, 0.75; length = cells)), 1, :)
     clay = reshape(Float32.(range(0.45, 0.10; length = cells)), 1, :)
@@ -39,14 +41,14 @@ CUDA.allowscalar(false)
 
     crop_reference.events.sowing .= Int32.(isodd.(1:cells))
     crop_gpu.events.sowing .= CuArray(Int32.(isodd.(1:cells)))
-    Agrocosm.tillage_hydraulics!(reference, crop_reference)
-    tillage_hydraulics!(gpu, crop_gpu)
+    Agrocosm.tillage_hydraulics!(state_reference)
+    tillage_hydraulics!(state_gpu)
     synchronize()
     @test Array(gpu.management.tillage_density_factor) ≈
         reference.management.tillage_density_factor
 
-    Agrocosm.pedotransfer!(reference)
-    pedotransfer!(gpu)
+    Agrocosm.pedotransfer!(state_reference)
+    pedotransfer!(state_gpu)
     synchronize()
     for field in (:field_capacity, :saturation_fraction, :beta, :saturated_conductivity)
         @test Array(getproperty(gpu.water, field)) ≈
@@ -107,17 +109,17 @@ CUDA.allowscalar(false)
     gpu.nitrogen.nitrate .= 0.8f0
     gpu.properties.ph .= 6.5f0
 
-    Agrocosm.soil_carbon!(crop_reference, reference)
-    soil_carbon!(crop_gpu, gpu)
+    Agrocosm.soil_carbon!(state_reference, state_reference)
+    soil_carbon!(state_gpu, state_gpu)
     air = fill(15.0f0, cells)
     wind = fill(2.0f0, cells)
     Agrocosm.soil_nitrogen!(
-        crop_reference, reference; air_temperature = air, wind_speed = wind,
+        state_reference, state_reference; air_temperature = air, wind_speed = wind,
     )
     air_gpu = CuArray(air)
     wind_gpu = CuArray(wind)
     soil_nitrogen!(
-        crop_gpu, gpu; air_temperature = air_gpu, wind_speed = wind_gpu,
+        state_gpu, state_gpu; air_temperature = air_gpu, wind_speed = wind_gpu,
     )
     synchronize()
     @test Array(gpu.decomposition.response) ≈
@@ -133,15 +135,15 @@ CUDA.allowscalar(false)
     @test Array(gpu.nitrogen.nitrate) ≈ reference.nitrogen.nitrate rtol = 1.0f-5 atol = 5.0f-6
     @test Array(gpu.nitrogen.ammonium) ≈ reference.nitrogen.ammonium rtol = 1.0f-5 atol = 5.0f-6
 
-    soil_carbon!(crop_gpu, gpu)
-    soil_nitrogen!(crop_gpu, gpu; air_temperature = air_gpu, wind_speed = wind_gpu)
+    soil_carbon!(state_gpu, state_gpu)
+    soil_nitrogen!(state_gpu, state_gpu; air_temperature = air_gpu, wind_speed = wind_gpu)
     synchronize()
     carbon_bytes = CUDA.@allocated begin
-        soil_carbon!(crop_gpu, gpu)
+        soil_carbon!(state_gpu, state_gpu)
         synchronize()
     end
     nitrogen_bytes = CUDA.@allocated begin
-        soil_nitrogen!(crop_gpu, gpu; air_temperature = air_gpu, wind_speed = wind_gpu)
+        soil_nitrogen!(state_gpu, state_gpu; air_temperature = air_gpu, wind_speed = wind_gpu)
         synchronize()
     end
 
@@ -151,21 +153,21 @@ CUDA.allowscalar(false)
         0 0 1
     ])
     crop_gpu.events.sowing .= Int32(1)
-    litter_tillage!(gpu, crop_gpu)
-    litter_bioturbation!(gpu)
+    litter_tillage!(state_gpu, state_gpu)
+    litter_bioturbation!(state_gpu)
     synchronize()
     litter_bytes = CUDA.@allocated begin
-        litter_tillage!(gpu, crop_gpu)
-        litter_bioturbation!(gpu)
+        litter_tillage!(state_gpu, state_gpu)
+        litter_bioturbation!(state_gpu)
         synchronize()
     end
 
     crop_gpu.fluxes.water.transpiration_layer .= 0.01f0
     gpu.water.evaporation .= 0.01f0
-    soil_evapotranspiration!(gpu, crop_gpu)
+    soil_evapotranspiration!(state_gpu, state_gpu)
     synchronize()
     water_update_bytes = CUDA.@allocated begin
-        soil_evapotranspiration!(gpu, crop_gpu)
+        soil_evapotranspiration!(state_gpu, state_gpu)
         synchronize()
     end
     # Measure this mutating kernel last: a second pedotransfer call uses the
@@ -173,7 +175,7 @@ CUDA.allowscalar(false)
     # state. Running it before the equivalence checks would no longer compare
     # the same one-step CPU and GPU trajectories.
     pedotransfer_bytes = CUDA.@allocated begin
-        pedotransfer!(gpu)
+        pedotransfer!(state_gpu)
         synchronize()
     end
     @test pedotransfer_bytes == 0

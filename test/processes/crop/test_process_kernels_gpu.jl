@@ -34,12 +34,14 @@ CUDA.allowscalar(false)
 
     crop_reference = init_crop(cells, identity)
     crop_gpu = init_crop(cells, CuArray)
+    state_reference = test_model_state(crop_reference)
+    state_gpu = test_model_state(crop_gpu)
     crop_reference.auxiliary.photosynthesis.temperature_stress .= stress_cpu
     crop_gpu.auxiliary.photosynthesis.temperature_stress .= CuArray(stress_cpu)
     c3_gross_destination = crop_gpu.fluxes.carbon.gross_assimilation
     c3_vcmax_destination = crop_gpu.auxiliary.photosynthesis.vcmax
     Agrocosm.photosynthesis_C3!(
-        cft1, crop_reference, apar_cpu, daylength_cpu,
+        cft1, state_reference, apar_cpu, daylength_cpu,
         temperature_cpu, Float32[40]; comp_vcmax = true,
     )
     apar_gpu = CuArray(apar_cpu)
@@ -47,7 +49,7 @@ CUDA.allowscalar(false)
     temperature_gpu = CuArray(temperature_cpu)
     co2_gpu = CuArray(Float32[40])
     photosynthesis_C3!(
-        cft1, crop_gpu, apar_gpu, daylength_gpu,
+        cft1, state_gpu, apar_gpu, daylength_gpu,
         temperature_gpu, co2_gpu; comp_vcmax = true,
     )
     synchronize()
@@ -60,14 +62,16 @@ CUDA.allowscalar(false)
 
     crop_c4_reference = init_crop(cells, identity)
     crop_c4_gpu = init_crop(cells, CuArray)
+    state_c4_reference = test_model_state(crop_c4_reference)
+    state_c4_gpu = test_model_state(crop_c4_gpu)
     crop_c4_reference.auxiliary.photosynthesis.temperature_stress .= stress_cpu
     crop_c4_gpu.auxiliary.photosynthesis.temperature_stress .= CuArray(stress_cpu)
     Agrocosm.photosynthesis_C4!(
-        cft3, crop_c4_reference, apar_cpu, daylength_cpu,
+        cft3, state_c4_reference, apar_cpu, daylength_cpu,
         temperature_cpu; comp_vcmax = true,
     )
     photosynthesis_C4!(
-        cft3, crop_c4_gpu, apar_gpu, daylength_gpu,
+        cft3, state_c4_gpu, apar_gpu, daylength_gpu,
         temperature_gpu; comp_vcmax = true,
     )
     synchronize()
@@ -90,14 +94,14 @@ CUDA.allowscalar(false)
     crop_reference.state.phenology.is_growing .= growing
     crop_gpu.state.phenology.is_growing .= CuArray(growing)
     Agrocosm.respiration!(
-        crop_reference, cft1, temperature_cpu, soil_temperature_cpu, gross, leaf,
+        state_reference, cft1, temperature_cpu, soil_temperature_cpu, gross, leaf,
     )
     gross_gpu = CuArray(gross)
     leaf_gpu = CuArray(leaf)
     soil_temperature_gpu = CuArray(soil_temperature_cpu)
     respiration_destination = crop_gpu.fluxes.carbon.respiration
     respiration!(
-        crop_gpu, cft1, temperature_gpu, soil_temperature_gpu, gross_gpu, leaf_gpu,
+        state_gpu, cft1, temperature_gpu, soil_temperature_gpu, gross_gpu, leaf_gpu,
     )
     synchronize()
     @test crop_gpu.fluxes.carbon.respiration === respiration_destination
@@ -126,21 +130,21 @@ CUDA.allowscalar(false)
     end
     steady_photo_device_bytes = CUDA.@allocated begin
         photosynthesis_C3!(
-            cft1, crop_gpu, apar_gpu, daylength_gpu,
+            cft1, state_gpu, apar_gpu, daylength_gpu,
             temperature_gpu, co2_gpu; comp_vcmax = true,
         )
         synchronize()
     end
     steady_c4_device_bytes = CUDA.@allocated begin
         photosynthesis_C4!(
-            cft3, crop_c4_gpu, apar_gpu, daylength_gpu,
+            cft3, state_c4_gpu, apar_gpu, daylength_gpu,
             temperature_gpu; comp_vcmax = true,
         )
         synchronize()
     end
     steady_respiration_device_bytes = CUDA.@allocated begin
         respiration!(
-            crop_gpu, cft1, temperature_gpu, soil_temperature_gpu, gross_gpu, leaf_gpu,
+            state_gpu, cft1, temperature_gpu, soil_temperature_gpu, gross_gpu, leaf_gpu,
         )
         synchronize()
     end
@@ -160,7 +164,7 @@ CUDA.allowscalar(false)
     photo_seconds = @elapsed begin
         for _ in 1:50
             photosynthesis_C3!(
-                cft1, crop_gpu, apar_gpu, daylength_gpu,
+                cft1, state_gpu, apar_gpu, daylength_gpu,
                 temperature_gpu, co2_gpu; comp_vcmax = true,
             )
         end
@@ -169,7 +173,7 @@ CUDA.allowscalar(false)
     c4_seconds = @elapsed begin
         for _ in 1:50
             photosynthesis_C4!(
-                cft3, crop_c4_gpu, apar_gpu, daylength_gpu,
+                cft3, state_c4_gpu, apar_gpu, daylength_gpu,
                 temperature_gpu; comp_vcmax = true,
             )
         end
@@ -178,7 +182,7 @@ CUDA.allowscalar(false)
     respiration_seconds = @elapsed begin
         for _ in 1:50
             respiration!(
-                crop_gpu, cft1, temperature_gpu, soil_temperature_gpu,
+                state_gpu, cft1, temperature_gpu, soil_temperature_gpu,
                 gross_gpu, leaf_gpu,
             )
         end
