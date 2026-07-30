@@ -1,5 +1,7 @@
 # Compatibility only for pre-lifecycle unit tests. Production kernels and the
 # package module define selectors exclusively for `ModelState`.
+using Agrocosm
+
 Agrocosm.crop_prognostic(x::Agrocosm.Crop) = x.state
 Agrocosm.crop_fluxes(x::Agrocosm.Crop) = x.fluxes
 Agrocosm.crop_events(x::Agrocosm.Crop) = x.events
