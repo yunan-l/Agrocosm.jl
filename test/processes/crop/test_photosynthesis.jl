@@ -18,12 +18,13 @@ end
 
 @testset "C3 photosynthesis CPU smoke test" begin
     crop = init_crop(1, identity)
+    state = test_model_state(crop)
     photos = crop.auxiliary.photosynthesis
     photos.temperature_stress .= 1.0f0
 
     photosynthesis_C3!(
         cft1,
-        crop,
+        state,
         Float32[10.0],
         Float32[12.0],
         Float32[20.0],
@@ -44,7 +45,7 @@ end
     photos.temperature_stress .= 0.0f0
     photosynthesis_C3!(
         cft1,
-        crop,
+        state,
         Float32[10.0],
         Float32[12.0],
         Float32[20.0],
@@ -62,7 +63,7 @@ end
     photos.vcmax .= 1.0f0
     photosynthesis_C3!(
         cft1,
-        crop,
+        state,
         Float32[0.0],
         Float32[12.0],
         Float32[20.0],
@@ -75,12 +76,13 @@ end
 
 @testset "C4 photosynthesis CPU smoke test" begin
     crop = init_crop(1, identity)
+    state = test_model_state(crop)
     photos = crop.auxiliary.photosynthesis
     photos.temperature_stress .= 1.0f0
 
     photosynthesis_C4!(
         cft3,
-        crop,
+        state,
         Float32[10.0],
         Float32[12.0],
         Float32[25.0];
@@ -100,7 +102,7 @@ end
     photos.temperature_stress .= 0.0f0
     photosynthesis_C4!(
         cft3,
-        crop,
+        state,
         Float32[10.0],
         Float32[12.0],
         Float32[25.0];

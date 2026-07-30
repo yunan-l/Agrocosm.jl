@@ -5,20 +5,21 @@ function initialized_thermal_soil(; storage = Float32[40, 60, 100, 200, 200],
                                   temperature = 5.0f0)
     soil = init_soil(1, soilparams.soildepth, identity)
     crop = init_crop(1, identity)
+    state = test_model_state(crop, soil)
     soil.properties.sand_fraction .= 0.4f0
     soil.properties.clay_fraction .= 0.2f0
     soil.water.storage .= reshape(storage, 5, 1)
     crop.fluxes.water.interception .= 0.0f0
-    pedotransfer!(soil)
-    soil_temperature!(soil, Float32[temperature], Float32[temperature])
-    return soil, crop
+    pedotransfer!(state)
+    soil_temperature!(state, Float32[temperature], Float32[temperature])
+    return soil, crop, state
 end
 
 @testset "LPJmL percolation enthalpy" begin
     @testset "rain at soil temperature preserves temperature" begin
-        soil, crop = initialized_thermal_soil()
+        soil, crop, state = initialized_thermal_soil()
         soil_infiltration!(
-            soil, crop, Float32[2.0];
+            state, state, Float32[2.0];
             snowmelt = Float32[0.0], air_temperature = Float32[5.0],
         )
 
@@ -34,9 +35,9 @@ end
     end
 
     @testset "rain and meltwater retain separate upper-boundary enthalpy" begin
-        soil, crop = initialized_thermal_soil(; temperature = 10.0f0)
+        soil, crop, state = initialized_thermal_soil(; temperature = 10.0f0)
         soil_infiltration!(
-            soil, crop, Float32[4.0];
+            state, state, Float32[4.0];
             snowmelt = Float32[2.0], air_temperature = Float32[10.0],
         )
 
@@ -53,12 +54,12 @@ end
     end
 
     @testset "layer transfers cancel and boundary ledger closes" begin
-        soil, crop = initialized_thermal_soil(
+        soil, crop, state = initialized_thermal_soil(
             storage = Float32[160, 240, 480, 800, 1600],
             temperature = 10.0f0,
         )
         soil_infiltration!(
-            soil, crop, Float32[50.0];
+            state, state, Float32[50.0];
             snowmelt = Float32[10.0], air_temperature = Float32[10.0],
         )
 

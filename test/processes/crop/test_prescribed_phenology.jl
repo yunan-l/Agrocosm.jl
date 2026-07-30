@@ -6,6 +6,7 @@ using Test
     soil = init_soil(1, soilparams.soildepth, identity)
     output = init_output(1, identity)
     managed_land = init_managed_land(1, identity)
+    state = test_model_state(crop, soil; managed_land, output)
     crop.auxiliary.calendar.sowing_date .= Int32(100)
     crop.auxiliary.phenology.phu .= 543.0f0
     temperature = Float32[15]
@@ -18,14 +19,14 @@ using Test
     # reusable GPU state without a separate retirement kernel.
     for day in 100:138
         cultivate!(
-        crop, managed_land, soil, day;
+        state, managed_land, state, day;
             apply_prescribed_fertilizer = false,
             laimax = cft1.laimax,
         )
         phenology_crop!(
-            crop, vernalization_requirement, cft1, temperature, daylength,
+            state, vernalization_requirement, cft1, temperature, daylength,
         )
-        harvest_crop!(crop, soil, output, Float32[0.67], day)
+        harvest_crop!(state, state, output, Float32[0.67], day)
         crop.state.phenology.senescence[1] && push!(senescence_days, day)
         crop.events.harvest[1] == 1 && push!(harvest_days, day)
     end

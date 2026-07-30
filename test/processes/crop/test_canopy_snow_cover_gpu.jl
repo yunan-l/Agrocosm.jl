@@ -10,14 +10,15 @@ CUDA.allowscalar(false)
     for cft in (cft1, cft3)
         crop = init_crop(Float32, cells, CuArray)
         pet = init_pet(Float32, cells, CuArray)
+        state = test_model_state(crop; pet)
         crop.state.canopy.lai .= 2.0f0
         pet.par .= 20.0f0
         snow = CuArray(repeat(Float32[0, 0.1], cells ÷ 2))
 
         if cft === cft3
-            apar_crop_maize!(cft, crop, pet, snow)
+            apar_crop_maize!(cft, state, pet, snow)
         else
-            apar_crop!(cft, crop, pet, snow)
+            apar_crop!(cft, state, pet, snow)
         end
         synchronize()
 

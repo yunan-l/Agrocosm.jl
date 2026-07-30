@@ -5,10 +5,11 @@ using Test
     crop = init_crop(1, identity)
     managed_land = init_managed_land(1, identity)
     soil = init_soil(1, soilparams.soildepth, identity)
+    state = test_model_state(crop, soil; managed_land)
     no3_before = copy(soil.nitrogen.nitrate)
     nh4_before = copy(soil.nitrogen.ammonium)
 
-    fertilizer!(crop, managed_land, soil, 1)
+    fertilizer!(state, managed_land, state, 1)
 
     @test soil.nitrogen.nitrate == no3_before
     @test soil.nitrogen.ammonium == nh4_before
@@ -18,18 +19,19 @@ end
     crop = init_crop(1, identity)
     managed_land = init_managed_land(1, identity)
     soil = init_soil(1, soilparams.soildepth, identity)
+    state = test_model_state(crop, soil; managed_land)
     crop.auxiliary.calendar.sowing_date .= 1
     managed_land.fertilizer .= 10.0f0
     no3_before = sum(soil.nitrogen.nitrate)
     nh4_before = sum(soil.nitrogen.ammonium)
 
-    fertilizer!(crop, managed_land, soil, 1)
+    fertilizer!(state, managed_land, state, 1)
     @test crop.state.nitrogen.pending_fertilizer[1] ≈ 8.0f0
     @test crop.fluxes.nitrogen.prescribed_fertilizer_input[1] ≈ 2.0f0
 
     crop.auxiliary.phenology.phu .= 1.0f0
     crop.state.phenology.husum .= 0.3f0
-    fertilizer!(crop, managed_land, soil, 2)
+    fertilizer!(state, managed_land, state, 2)
     @test crop.fluxes.nitrogen.prescribed_fertilizer_input[1] ≈ 8.0f0
 
     no3_input = sum(soil.nitrogen.nitrate) - no3_before
@@ -44,18 +46,19 @@ end
     crop = init_crop(1, identity)
     managed_land = init_managed_land(1, identity)
     soil = init_soil(1, soilparams.soildepth, identity)
+    state = test_model_state(crop, soil; managed_land)
     crop.auxiliary.calendar.sowing_date .= 1
     managed_land.manure .= 10.0f0
     mineral_before = sum(soil.nitrogen.ammonium)
     organic_before = sum(soil.nitrogen.litter)
 
-    fertilizer!(crop, managed_land, soil, 1; manure = true)
+    fertilizer!(state, managed_land, state, 1; manure = true)
     @test crop.state.nitrogen.pending_manure[1] ≈ 8.0f0
     @test crop.fluxes.nitrogen.prescribed_manure_input[1] ≈ 2.0f0
 
     crop.auxiliary.phenology.phu .= 1.0f0
     crop.state.phenology.husum .= 0.3f0
-    fertilizer!(crop, managed_land, soil, 2; manure = true)
+    fertilizer!(state, managed_land, state, 2; manure = true)
     @test crop.fluxes.nitrogen.prescribed_manure_input[1] ≈ 8.0f0
 
     mineral_input = sum(soil.nitrogen.ammonium) - mineral_before
@@ -68,12 +71,13 @@ end
     crop = init_crop(1, identity)
     managed_land = init_managed_land(1, identity)
     soil = init_soil(1, soilparams.soildepth, identity)
+    state = test_model_state(crop, soil; managed_land)
     crop.auxiliary.calendar.sowing_date .= 1
     managed_land.fertilizer .= 10.0f0
     no3_before = copy(soil.nitrogen.nitrate)
     nh4_before = copy(soil.nitrogen.ammonium)
 
-    fertilizer!(crop, managed_land, soil, 1; fertilizer = false)
+    fertilizer!(state, managed_land, state, 1; fertilizer = false)
 
     @test soil.nitrogen.nitrate == no3_before
     @test soil.nitrogen.ammonium == nh4_before
@@ -84,13 +88,14 @@ end
     crop = init_crop(1, identity)
     managed_land = init_managed_land(1, identity)
     soil = init_soil(1, soilparams.soildepth, identity)
+    state = test_model_state(crop, soil; managed_land)
     crop.auxiliary.calendar.sowing_date .= 1
     managed_land.fertilizer .= 10.0f0
     managed_land.manure .= 6.0f0
     no3_before = sum(soil.nitrogen.nitrate)
     litter_before = sum(soil.nitrogen.litter)
 
-    fertilizer!(crop, managed_land, soil, 1; fertilizer = false, manure = true)
+    fertilizer!(state, managed_land, state, 1; fertilizer = false, manure = true)
 
     @test sum(soil.nitrogen.nitrate) == no3_before
     @test sum(soil.nitrogen.litter) > litter_before

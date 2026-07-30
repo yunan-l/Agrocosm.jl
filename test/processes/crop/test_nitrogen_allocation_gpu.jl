@@ -7,6 +7,7 @@ CUDA.allowscalar(false)
 
 @testset "CUDA crop organ nitrogen redistribution" begin
     crop = init_crop(2, CuArray)
+    state = test_model_state(crop)
     crop.state.phenology.is_growing .= 1
     crop.state.nitrogen.total .= 0.7f0
     crop.state.carbon.leaf .= 2.0f0
@@ -18,11 +19,11 @@ CUDA.allowscalar(false)
     crop.state.nitrogen.storage .= 30.0f0
     crop.state.nitrogen.pool .= 40.0f0
 
-    Agrocosm.allocate_crop_nitrogen!(crop, cft1)
+    Agrocosm.allocate_crop_nitrogen!(state, cft1)
     first_sum = Array(crop.state.nitrogen.leaf .+ crop.state.nitrogen.root .+ crop.state.nitrogen.storage .+ crop.state.nitrogen.pool)
     first_leafn = Array(crop.state.nitrogen.leaf)
 
-    Agrocosm.allocate_crop_nitrogen!(crop, cft1)
+    Agrocosm.allocate_crop_nitrogen!(state, cft1)
     second_sum = Array(crop.state.nitrogen.leaf .+ crop.state.nitrogen.root .+ crop.state.nitrogen.storage .+ crop.state.nitrogen.pool)
     second_leafn = Array(crop.state.nitrogen.leaf)
 

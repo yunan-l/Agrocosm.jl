@@ -4,6 +4,7 @@ using Test
 @testset "Staged daily soil-water update" begin
     soil = init_soil(1, soilparams.soildepth, identity)
     crop = init_crop(1, identity)
+    state = test_model_state(crop, soil)
 
     soil.properties.sand_fraction .= 0.4f0
     soil.properties.clay_fraction .= 0.2f0
@@ -12,12 +13,12 @@ using Test
     crop.fluxes.water.interception .= 0.0f0
     crop.auxiliary.root.distribution .= 0.0f0
     crop.auxiliary.root.distribution[1] = 1.0f0
-    pedotransfer!(soil)
+    pedotransfer!(state)
 
     storage_before = sum(soil.water.storage)
     nitrate_before = sum(soil.nitrogen.nitrate)
     water_availability_before = sum(soil.water.relative_content .* crop.auxiliary.root.distribution)
-    soil_infiltration!(soil, crop, Float32[10.0])
+    soil_infiltration!(state, state, Float32[10.0])
     storage_after_infiltration = sum(soil.water.storage)
     water_availability_after = sum(soil.water.relative_content .* crop.auxiliary.root.distribution)
 
@@ -29,7 +30,7 @@ using Test
 
     crop.fluxes.water.transpiration_layer .= 0.4f0
     soil.water.evaporation .= 0.2f0
-    soil_evapotranspiration!(soil, crop)
+    soil_evapotranspiration!(state, state)
 
     @test sum(soil.water.storage) ≈ storage_after_infiltration - 3.0f0 atol = 1.0f-5
 end
@@ -37,16 +38,17 @@ end
 @testset "LPJmL infiltration iteration cap preserves water" begin
     soil = init_soil(1, soilparams.soildepth, identity)
     crop = init_crop(1, identity)
+    state = test_model_state(crop, soil)
     soil.properties.sand_fraction .= 0.4f0
     soil.properties.clay_fraction .= 0.2f0
     soil.water.storage .= Float32[40, 60, 100, 200, 200]
     crop.fluxes.water.interception .= 0.0f0
-    pedotransfer!(soil)
+    pedotransfer!(state)
 
     storage_before = sum(soil.water.storage)
     # 1001 four-millimetre slugs force LPJmL's MAXITER fallback.
     precipitation = 4004.0f0
-    soil_infiltration!(soil, crop, Float32[precipitation])
+    soil_infiltration!(state, state, Float32[precipitation])
     accounted_water = sum(soil.water.storage) + soil.water.surface_runoff[1] +
         sum(soil.water.lateral_runoff) + soil.water.bottom_drainage[1]
     @test accounted_water ≈ storage_before + precipitation atol = 0.2f0
@@ -56,6 +58,7 @@ end
     dry_soil = init_soil(1, soilparams.soildepth, identity)
     dry_crop = init_crop(1, identity)
     pet = init_pet(1, identity)
+    dry_state = test_model_state(dry_crop, dry_soil; pet)
 
     dry_soil.properties.sand_fraction .= 0.4f0
     dry_soil.properties.clay_fraction .= 0.2f0
@@ -68,16 +71,17 @@ end
     dry_crop.fluxes.water.interception .= 0.0f0
     pet.eeq .= 5.0f0
     pet.daylength .= 12.0f0
-    pedotransfer!(dry_soil)
+    pedotransfer!(dry_state)
 
     wet_soil = deepcopy(dry_soil)
     wet_crop = deepcopy(dry_crop)
-    soil_infiltration!(wet_soil, wet_crop, Float32[20.0])
+    wet_state = test_model_state(wet_crop, wet_soil; pet)
+    soil_infiltration!(wet_state, wet_state, Float32[20.0])
 
     assimilation = Float32[5.0]
     co2 = Float32[40.0]
-    transpiration!(assimilation, cft1, dry_crop, pet, dry_soil, co2)
-    transpiration!(assimilation, cft1, wet_crop, pet, wet_soil, co2)
+    transpiration!(assimilation, cft1, dry_state, pet, dry_state, co2)
+    transpiration!(assimilation, cft1, wet_state, pet, wet_state, co2)
 
     expected_rootzone_water = sum(
         wet_soil.water.relative_content[1:3, 1] .*

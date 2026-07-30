@@ -10,6 +10,7 @@ CUDA.allowscalar(false)
     soil = init_soil(1, soilparams.soildepth, CuArray)
     managed_land = init_managed_land(1, CuArray)
     pet = init_pet(1, CuArray)
+    state = test_model_state(crop, soil; managed_land, pet)
     restart = crop_restart_payload(crop)
 
     @test propertynames(crop.state) == (:phenology, :canopy, :carbon, :nitrogen, :water)
@@ -25,14 +26,14 @@ CUDA.allowscalar(false)
     crop.state.phenology.husum .= 300.0f0
     crop.auxiliary.phenology.phu .= 1000.0f0
     crop.auxiliary.phenology.fphu .= 0.0f0
-    fertilizer!(crop, managed_land, soil, 2)
+    fertilizer!(state, managed_land, state, 2)
     synchronize()
     @test Array(crop.fluxes.nitrogen.prescribed_fertilizer_input) == Float32[10]
     @test Array(crop.state.nitrogen.pending_fertilizer) == Float32[0]
 
     crop.state.canopy.lai .= 0.4f0 * cft1.laimax
     crop.state.phenology.is_growing .= 1
-    albedo!(cft1, crop, soil, pet)
+    albedo!(cft1, state, state, pet)
     synchronize()
     green_fraction = 1.0f0 - exp(-cft1.lightextcoeff * 0.4f0 * cft1.laimax)
     expected_canopy = green_fraction * cft1.albedo_leaf +

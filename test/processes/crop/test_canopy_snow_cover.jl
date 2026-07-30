@@ -5,14 +5,15 @@ using Test
     for T in (Float32, Float64), cft in (cft1, cft3)
         crop = init_crop(T, 2, identity)
         pet = init_pet(T, 2, identity)
+        state = test_model_state(crop; pet)
         crop.state.canopy.lai .= T(2)
         pet.par .= T(20)
         snow_height = T[0, 0.1]
 
         if cft === cft3
-            apar_crop_maize!(cft, crop, pet, snow_height)
+            apar_crop_maize!(cft, state, pet, snow_height)
         else
-            apar_crop!(cft, crop, pet, snow_height)
+            apar_crop!(cft, state, pet, snow_height)
         end
 
         @test crop.auxiliary.canopy.fpar[1] > zero(T)
@@ -27,6 +28,7 @@ end
     crop = init_crop(cells, identity)
     soil = init_soil(cells, soilparams.soildepth, identity)
     pet = init_pet(cells, identity)
+    state = test_model_state(crop, soil; pet)
     crop.state.phenology.is_growing .= Int32[0, 1, 1, 0, 1]
     crop.state.canopy.lai .= Float32[0, 0, 0, 0, 2]
 
@@ -36,7 +38,7 @@ end
     soil.snow.height .= Float32[0, 0, 0, 0.1, 0.1]
     soil.snow.fraction .= Float32[0, 0, 0, 0.5, 0.6]
 
-    albedo!(cft1, crop, soil, pet)
+    albedo!(cft1, state, state, pet)
 
     @test pet.albedo[1] ≈ 0.3f0
     @test pet.albedo[2] ≈ 0.3f0

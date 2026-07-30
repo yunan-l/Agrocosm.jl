@@ -1,6 +1,6 @@
 using Agrocosm
 using Test
-include("helpers/legacy_process_access.jl")
+include("helpers/model_state_fixture.jl")
 
 @testset "Agrocosm.jl" begin
     include("helpers/crop_lifecycle_fixture.jl")

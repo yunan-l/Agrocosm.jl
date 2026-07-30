@@ -23,8 +23,9 @@ end
         cells = length(temperatures)
         crop = init_crop(T, cells, identity)
         pet = init_pet(T, cells, identity)
+        state = test_model_state(crop; pet)
         pet.daylength .= T(12)
-        temp_stress(cft, pet, crop, temperatures)
+        temp_stress(cft, pet, state, temperatures)
         expected = lpjml_temperature_stress.(Ref(cft), temperatures, pet.daylength)
         @test crop.auxiliary.photosynthesis.temperature_stress ≈ expected rtol = eps(T) * T(16)
     end

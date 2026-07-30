@@ -7,6 +7,7 @@ CUDA.allowscalar(false)
 
 @testset "CUDA crop nitrogen demand" begin
     crop = init_crop(2, CuArray)
+    state = test_model_state(crop)
     crop.state.phenology.is_growing .= 1
     crop.state.carbon.leaf .= 2.0f0
     crop.state.carbon.root .= 3.0f0
@@ -14,7 +15,7 @@ CUDA.allowscalar(false)
     crop.state.carbon.storage .= 4.0f0
 
     ndemand_crop!(
-        crop,
+        state,
         cft1,
         CuArray(Float32[10.0, 5.0]),
         CuArray(Float32[25.0, 15.0]),

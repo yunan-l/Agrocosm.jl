@@ -8,6 +8,7 @@ CUDA.allowscalar(false)
 @testset "CUDA five-layer implicit soil heat conduction" begin
     cell_size = 32
     soil = init_soil(cell_size, soilparams.soildepth, CuArray)
+    state = test_model_state(soil)
     soil.thermal.diffusivity_0 .= 0.6f0
     soil.thermal.diffusivity_15 .= 0.7f0
     soil.water.relative_content .= 0.1f0
@@ -17,11 +18,11 @@ CUDA.allowscalar(false)
     soil.snow.height[17:24] .= 0.67f0
     soil.carbon.litter[1, 25:32] .= litter_carbon_2cm
     soil.snow.height[25:32] .= 0.67f0
-    update_surface_litter_properties!(soil)
+    update_surface_litter_properties!(state)
 
     air_temperature = CuArray(fill(30.0f0, cell_size))
     initial_temperature = CuArray(fill(10.0f0, cell_size))
-    soil_temperature!(soil, air_temperature, initial_temperature)
+    soil_temperature!(state, air_temperature, initial_temperature)
     synchronize()
 
     profile = Array(soil.thermal.temperature)

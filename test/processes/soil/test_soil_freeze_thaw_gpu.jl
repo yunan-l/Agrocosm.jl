@@ -8,13 +8,14 @@ CUDA.allowscalar(false)
 @testset "CUDA five-layer freeze-thaw" begin
     cells = 32
     soil = init_soil(cells, soilparams.soildepth, CuArray)
+    state = test_model_state(soil)
     soil.water.storage .= 50.0f0
-    pedotransfer!(soil)
+    pedotransfer!(state)
     total_before = Array(vec(sum(
         soil.water.storage + soil.water.ice_storage; dims = 1,
     )))
 
-    soil_temperature!(soil, CUDA.fill(-20.0f0, cells), CUDA.fill(2.0f0, cells))
+    soil_temperature!(state, CUDA.fill(-20.0f0, cells), CUDA.fill(2.0f0, cells))
     total_after = Array(vec(sum(
         soil.water.storage + soil.water.ice_storage; dims = 1,
     )))

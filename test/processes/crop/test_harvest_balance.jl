@@ -5,6 +5,7 @@ using Test
     crop = init_crop(1, identity)
     soil = init_soil(1, soilparams.soildepth, identity)
     output = init_output(1, identity)
+    state = test_model_state(crop, soil; output)
     residue_fraction = Float32[0.6]
     soil.management.tillage_fraction .= Float32[1 0 0; 0 1 0; 0 0 1]
 
@@ -25,7 +26,7 @@ using Test
     carbon_before = crop.state.carbon.leaf[1] + crop.state.carbon.root[1] +
         crop.state.carbon.storage[1] + crop.state.carbon.pool[1]
     nitrogen_before = crop.state.nitrogen.total[1]
-    harvest_crop!(crop, soil, output, residue_fraction, 150)
+    harvest_crop!(state, state, output, residue_fraction, 150)
 
     carbon_export = crop.fluxes.carbon.harvest_export[1]
     nitrogen_export = crop.fluxes.nitrogen.harvest_export[1]
@@ -40,7 +41,7 @@ using Test
     @test nitrogen_residue ≈ 0.7f0 atol = 1.0f-7
     @test nitrogen_export + nitrogen_residue ≈ nitrogen_before atol = 2.0f-7
 
-    Agrocosm.route_harvest_residues!(soil, crop)
+    Agrocosm.route_harvest_residues!(state, state)
     @test sum(soil.carbon.litter) == carbon_residue
     @test sum(soil.nitrogen.litter) == nitrogen_residue
     @test crop.state.phenology.is_growing[1] == 0
@@ -50,6 +51,7 @@ end
     crop = init_crop(1, identity)
     soil = init_soil(1, soilparams.soildepth, identity)
     output = init_output(1, identity)
+    state = test_model_state(crop, soil; output)
     Agrocosm.prepare_output_block!(output, 1, 0)
     residue_fraction = Float32[0.6]
     soil.management.tillage_fraction .= Float32[1 0 0; 0 1 0; 0 0 1]
@@ -67,14 +69,14 @@ end
     crop.state.nitrogen.root .= 0.1f0
     crop.state.nitrogen.pool .= 0.2f0
 
-    carbon_allocation!(cft1, crop)
+    carbon_allocation!(cft1, state)
     @test crop.fluxes.carbon.npp[1] == -2.0f0
     @test crop.events.harvest[1] == 1
 
     Agrocosm.terminate_failed_crop!(
-        crop, soil, output, residue_fraction, 100; output_row = 1,
+        state, state, output, residue_fraction, 100; output_row = 1,
     )
-    Agrocosm.route_harvest_residues!(soil, crop)
+    Agrocosm.route_harvest_residues!(state, state)
 
     @test crop.state.phenology.is_growing[1] == 0
     @test crop.events.harvest[1] == 1
@@ -93,7 +95,7 @@ end
     @test crop.fluxes.nitrogen.harvest_export[1] + sum(soil.nitrogen.input) ≈ 0.4f0
 
     # An absent stand cannot continue producing a negative-NPP tail.
-    carbon_allocation!(cft1, crop)
+    carbon_allocation!(cft1, state)
     @test crop.fluxes.carbon.npp[1] == 0.0f0
 end
 
@@ -101,20 +103,22 @@ end
     crop = init_crop(1, identity)
     soil = init_soil(1, soilparams.soildepth, identity)
     output = init_output(1, identity)
+    managed_land = init_managed_land(1, identity)
+    state = test_model_state(crop, soil; managed_land, output)
     Agrocosm.prepare_output_block!(output, 1, 0)
     residue_fraction = Float32[0.6]
     crop.auxiliary.calendar.sowing_date .= Int32(100)
     soil.management.tillage_fraction .= Float32[1 0 0; 0 1 0; 0 0 1]
 
     cultivate!(
-        crop, init_managed_land(1, identity), soil, 100;
+        state, managed_land, state, 100;
         apply_prescribed_fertilizer = false,
     )
     crop.events.harvest .= Int32(1)
     Agrocosm.terminate_failed_crop!(
-        crop, soil, output, residue_fraction, 100; output_row = 1,
+        state, state, output, residue_fraction, 100; output_row = 1,
     )
-    Agrocosm.route_harvest_residues!(soil, crop)
+    Agrocosm.route_harvest_residues!(state, state)
 
     @test crop.state.phenology.is_growing[1] == 0
     @test crop.fluxes.nitrogen.harvest_export[1] + sum(soil.nitrogen.litter) ≈

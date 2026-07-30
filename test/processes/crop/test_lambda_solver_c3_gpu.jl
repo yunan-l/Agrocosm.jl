@@ -9,6 +9,7 @@ CUDA.allowscalar(false)
     crop = init_crop(2, CuArray)
     photos = crop.auxiliary.photosynthesis
     pet = init_pet(2, CuArray)
+    state = test_model_state(crop; pet)
 
     target_lambda = 0.5f0
     vcmax = 2.0f0
@@ -35,7 +36,7 @@ CUDA.allowscalar(false)
     pet.daylength .= daylength
 
     solve_lambda_c3!(
-        cft1, crop, pet, CuArray(temp_cpu), CuArray(co2_cpu),
+        cft1, state, pet, CuArray(temp_cpu), CuArray(co2_cpu),
     )
 
     lambda_cpu = Array(photos.lambda)
@@ -44,7 +45,7 @@ CUDA.allowscalar(false)
 
     crop.auxiliary.canopy.canopy_conductance .= CuArray(Float32[target_conductance, 0.0])
     solve_lambda_c3!(
-        cft1, crop, pet, CuArray(temp_cpu), CuArray(co2_cpu),
+        cft1, state, pet, CuArray(temp_cpu), CuArray(co2_cpu),
     )
     @test Array(photos.lambda)[2] == 0.0f0
 end

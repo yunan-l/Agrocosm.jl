@@ -5,6 +5,7 @@ using Test
     crop = init_crop(2, identity)
     photos = crop.auxiliary.photosynthesis
     pet = init_pet(2, identity)
+    state = test_model_state(crop; pet)
 
     target_lambda = 0.5f0
     vcmax = 2.0f0
@@ -30,13 +31,13 @@ using Test
     crop.auxiliary.canopy.canopy_conductance .= target_conductance
     pet.daylength .= daylength
 
-    solve_lambda_c3!(cft1, crop, pet, temp, co2)
+    solve_lambda_c3!(cft1, state, pet, temp, co2)
 
     @test photos.lambda[1] ≈ target_lambda atol = 2.0f-3
     @test photos.lambda[2] ≈ target_lambda atol = 2.0f-3
 
     crop.auxiliary.canopy.canopy_conductance[2] = 0.0f0
-    solve_lambda_c3!(cft1, crop, pet, temp, co2)
+    solve_lambda_c3!(cft1, state, pet, temp, co2)
     @test photos.lambda[2] == 0.0f0
 end
 
@@ -57,12 +58,13 @@ end
 
     crop = init_crop(1, identity)
     photos = crop.auxiliary.photosynthesis
+    state = test_model_state(crop)
     photos.temperature_stress .= tstress
     photos.lambda .= target_lambda
     photos.vcmax .= vcmax
     photosynthesis_C3!(
         cft1,
-        crop,
+        state,
         Float32[apar],
         Float32[daylength],
         Float32[temp],

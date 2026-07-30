@@ -4,6 +4,7 @@ using Test
 @testset "Crop NPP subtracts complete maintenance and growth respiration" begin
     for T in (Float32, Float64)
         crop = init_crop(T, 3, identity)
+        state = test_model_state(crop)
         crop.state.phenology.is_growing .= Int32[1, 1, 0]
         crop.state.carbon.root .= T[10, 10, 10]
         crop.state.carbon.storage .= T[4, 4, 4]
@@ -15,7 +16,7 @@ using Test
         leaf = T[1, 2, 2]
         crop.fluxes.carbon.gross_assimilation .= gross
         crop.fluxes.carbon.leaf_respiration .= leaf
-        respiration!(crop, cft1, air, soil, gross, leaf)
+        respiration!(state, cft1, air, soil, gross, leaf)
 
         p = lpjmlparams
         temperature_response(temp) = temp < T(-15) ? zero(T) : exp(
@@ -40,7 +41,7 @@ using Test
 
         @test crop.fluxes.carbon.respiration ≈ expected_total rtol = T(8e-6)
         @test crop.fluxes.carbon.respiration[3] == zero(T)
-        carbon_allocation!(cft1, crop)
+        carbon_allocation!(cft1, state)
         @test crop.fluxes.carbon.npp ≈ expected_npp rtol = T(8e-6)
     end
 end

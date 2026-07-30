@@ -6,6 +6,7 @@ using Test
         crop = init_crop(T, 2, identity)
         soil = init_soil(T, 2, soilparams.soildepth, identity)
         managed_land = init_managed_land(T, 2, identity)
+        state = test_model_state(crop, soil; managed_land)
         crop.auxiliary.calendar.sowing_date .= Int32[100, 101]
 
         # Emulate stale state from a completed previous crop season.
@@ -27,7 +28,7 @@ using Test
         soil_carbon_before = copy(soil.carbon.slow)
 
         cultivate!(
-        crop, managed_land, soil, 100;
+        state, managed_land, state, 100;
             apply_prescribed_fertilizer = false,
             laimax = cft1.laimax,
         )
@@ -71,10 +72,11 @@ end
         crop = init_crop(Float32, 1, identity)
         soil = init_soil(Float32, 1, soilparams.soildepth, identity)
         managed_land = init_managed_land(Float32, 1, identity)
+        state = test_model_state(crop, soil; managed_land)
         crop.auxiliary.calendar.sowing_date .= Int32(100)
 
         cultivate!(
-            crop, managed_land, soil, 100;
+            state, managed_land, state, 100;
             apply_prescribed_fertilizer = false,
             cftparameters = cft,
         )
@@ -183,6 +185,7 @@ end
     crop = init_crop(1, identity)
     soil = init_soil(1, soilparams.soildepth, identity)
     managed_land = init_managed_land(1, identity)
+    state = test_model_state(crop, soil; managed_land)
     crop.auxiliary.calendar.sowing_date .= Int32(100)
     managed_land.fertilizer .= 10.0f0
     soil.management.tillage_fraction .= Float32[
@@ -195,19 +198,19 @@ end
     mineral_before = sum(soil.nitrogen.nitrate) + sum(soil.nitrogen.ammonium)
 
     cultivate!(
-        crop, managed_land, soil, 99;
+        state, managed_land, state, 99;
         apply_prescribed_fertilizer = true,
     )
-    litter_tillage!(soil, crop)
+    litter_tillage!(state, state)
     @test crop.events.sowing[1] == 0
     @test sum(soil.carbon.litter) == carbon_before
     @test sum(soil.nitrogen.nitrate) + sum(soil.nitrogen.ammonium) == mineral_before
 
     cultivate!(
-        crop, managed_land, soil, 100;
+        state, managed_land, state, 100;
         apply_prescribed_fertilizer = true,
     )
-    litter_tillage!(soil, crop)
+    litter_tillage!(state, state)
     carbon_after_sowing = copy(soil.carbon.litter)
     @test crop.events.sowing[1] == 1
     @test carbon_after_sowing[1, 1] < 100.0f0
@@ -218,10 +221,10 @@ end
     crop.auxiliary.phenology.phu .= 1.0f0
     crop.state.phenology.husum .= 0.3f0
     cultivate!(
-        crop, managed_land, soil, 101;
+        state, managed_land, state, 101;
         apply_prescribed_fertilizer = true,
     )
-    litter_tillage!(soil, crop)
+    litter_tillage!(state, state)
     @test crop.events.sowing[1] == 0
     @test soil.carbon.litter == carbon_after_sowing
     @test crop.fluxes.nitrogen.prescribed_fertilizer_input[1] == 8.0f0
@@ -230,7 +233,7 @@ end
         mineral_before + 10.0f0
 
     cultivate!(
-        crop, managed_land, soil, 102;
+        state, managed_land, state, 102;
         apply_prescribed_fertilizer = true,
     )
     @test crop.fluxes.nitrogen.prescribed_fertilizer_input[1] == 0.0f0

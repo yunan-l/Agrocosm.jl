@@ -3,6 +3,7 @@ using Test
 
 @testset "Crop nitrogen demand follows LPJmL ndemand_crop" begin
     crop = init_crop(1, identity)
+    state = test_model_state(crop)
     crop.state.phenology.is_growing .= 1
     crop.state.carbon.leaf .= 2.0f0
     crop.state.carbon.root .= 3.0f0
@@ -11,7 +12,7 @@ using Test
     vcmax = Float32[10.0]
     temp = Float32[25.0]
 
-    ndemand_crop!(crop, cft1, vcmax, temp)
+    ndemand_crop!(state, cft1, vcmax, temp)
 
     expected_leaf = lpjmlparams.p * 1.0f-3 * vcmax[1] /
                     (86400.0f0 * 12.0f0 * 1.0f-6) +
@@ -34,10 +35,11 @@ end
 
 @testset "Inactive crop has no nitrogen demand" begin
     crop = init_crop(1, identity)
+    state = test_model_state(crop)
     crop.auxiliary.stress.nitrogen_demand_leaf .= 9.0f0
     crop.auxiliary.stress.nitrogen_demand_total .= 9.0f0
 
-    ndemand_crop!(crop, cft1, Float32[10.0], Float32[25.0])
+    ndemand_crop!(state, cft1, Float32[10.0], Float32[25.0])
 
     @test crop.auxiliary.stress.nitrogen_demand_leaf[1] == 0.0f0
     @test crop.auxiliary.stress.nitrogen_demand_total[1] == 0.0f0

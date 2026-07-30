@@ -4,17 +4,18 @@ using Test
 @testset "LPJmL untracked water-mass enthalpy" begin
     soil = init_soil(1, soilparams.soildepth, identity)
     crop = init_crop(1, identity)
+    state = test_model_state(crop, soil)
     soil.properties.sand_fraction .= 0.4f0
     soil.properties.clay_fraction .= 0.2f0
     soil.water.storage .= reshape(Float32[40, 60, 100, 200, 200], 5, 1)
-    pedotransfer!(soil)
-    soil_temperature!(soil, Float32[5.0], Float32[5.0])
+    pedotransfer!(state)
+    soil_temperature!(state, Float32[5.0], Float32[5.0])
 
     crop.fluxes.water.transpiration_layer .= 0.5f0
     soil.water.evaporation .= 0.25f0
     removed_water = sum(crop.fluxes.water.transpiration_layer) + sum(soil.water.evaporation)
-    soil_evapotranspiration!(soil, crop)
-    soil_temperature!(soil, Float32[5.0])
+    soil_evapotranspiration!(state, state)
+    soil_temperature!(state, Float32[5.0])
 
     liquid_water_enthalpy = soil_thermal_params.volumetric_fusion_heat +
                             soil_thermal_params.water_heat_capacity * 5.0f0

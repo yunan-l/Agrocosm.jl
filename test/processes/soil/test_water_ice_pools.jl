@@ -32,9 +32,10 @@ end
 
 @testset "Layer states retain LPJmL ice-pool invariants" begin
     soil = init_soil(2, soilparams.soildepth, identity)
+    state = test_model_state(soil)
     soil.water.storage .= 50.0f0
-    pedotransfer!(soil)
-    soil_temperature!(soil, Float32[-20.0, 10.0], Float32[2.0, 2.0])
+    pedotransfer!(state)
+    soil_temperature!(state, Float32[-20.0, 10.0], Float32[2.0, 2.0])
 
     component_ice =
         soil.water.wilting_ice_fraction .* soil.water.wilting_storage .+

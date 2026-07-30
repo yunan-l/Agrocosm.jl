@@ -4,11 +4,12 @@ using Test
 @testset "LPJ-compatible snow fluxes" begin
     soil = init_soil(1, soilparams.soildepth, identity)
     weather = Agrocosm.init_weather(1, identity)
+    state = test_model_state(soil; weather)
 
     # Cold precipitation accumulates as snow, followed by LPJmL's fixed 0.1 mm sublimation.
     weather.temp .= -5.0f0
     weather.prec .= 3.0f0
-    snow!(soil, weather)
+    snow!(state, weather)
 
     @test weather.prec[1] == 0.0f0
     @test soil.snow.pack[1] ≈ 2.9f0 atol = 1.0f-6
@@ -21,7 +22,7 @@ using Test
     precipitation = 2.0f0
     weather.temp .= 5.0f0
     weather.prec .= precipitation
-    snow!(soil, weather)
+    snow!(state, weather)
 
     @test soil.snow.melt[1] > 0.0f0
     @test weather.prec[1] ≈ precipitation + soil.snow.melt[1] atol = 1.0f-6
@@ -33,7 +34,7 @@ using Test
     soil.snow.pack .= 0.0f0
     weather.temp .= -5.0f0
     weather.prec .= 2.0f0
-    snow!(soil, weather; lpjmlparams = small_snowpack_params)
+    snow!(state, weather; lpjmlparams = small_snowpack_params)
 
     @test soil.snow.runoff[1] == 1.0f0
     @test soil.snow.pack[1] ≈ 0.9f0 atol = 1.0f-6

@@ -9,14 +9,15 @@ CUDA.allowscalar(false)
     cells = 32
     soil = init_soil(cells, soilparams.soildepth, CuArray)
     crop = init_crop(cells, CuArray)
+    state = test_model_state(crop, soil)
     soil.properties.sand_fraction .= 0.4f0
     soil.properties.clay_fraction .= 0.2f0
     soil.water.storage .= CuArray(repeat(Float32[40, 60, 100, 200, 200], 1, cells))
     crop.fluxes.water.interception .= 0.0f0
-    pedotransfer!(soil)
-    soil_temperature!(soil, CUDA.fill(10.0f0, cells), CUDA.fill(10.0f0, cells))
+    pedotransfer!(state)
+    soil_temperature!(state, CUDA.fill(10.0f0, cells), CUDA.fill(10.0f0, cells))
     soil_infiltration!(
-        soil, crop, CUDA.fill(4.0f0, cells);
+        state, state, CUDA.fill(4.0f0, cells);
         snowmelt = CUDA.fill(2.0f0, cells),
         air_temperature = CUDA.fill(10.0f0, cells),
     )
