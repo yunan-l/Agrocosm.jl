@@ -48,6 +48,42 @@ include(joinpath(@__DIR__, "..", "..", "examples", "scripts", "run_global_cfts_c
     run_simulation!(irrigated, lifecycle_climate(Float32, days); spinup = false)
 
     mktempdir() do directory
+        batch_config = Dict{String, Any}(
+            "paths" => Dict{String, Any}("output_directory" => directory),
+            "run" => Dict{String, Any}(
+                "warmup_minimum_years" => 1,
+                "warmup_maximum_years" => 2,
+                "require_warmup_convergence" => true,
+            ),
+        )
+        calibration_config = write_batch_config(
+            joinpath(directory, "calibration.toml"), batch_config;
+            output_directory = joinpath(directory, "calibration"),
+            production = false,
+            target_constrained = true,
+        )
+        calibration_run = TOML.parsefile(calibration_config)["run"]
+        @test calibration_run["warmup_minimum_years"] == 600
+        @test calibration_run["warmup_maximum_years"] == 600
+        @test !calibration_run["require_warmup_convergence"]
+
+        free_config = write_batch_config(
+            joinpath(directory, "production.toml"), batch_config;
+            output_directory = joinpath(directory, "production"),
+            pool_allocation = joinpath(directory, "allocation.nc"),
+            production = true,
+            target_constrained = false,
+            warmup_options = Dict{String, Any}(
+                "warmup_minimum_years" => 600,
+                "warmup_maximum_years" => 1500,
+                "require_warmup_convergence" => true,
+            ),
+        )
+        free_run = TOML.parsefile(free_config)["run"]
+        @test free_run["warmup_minimum_years"] == 600
+        @test free_run["warmup_maximum_years"] == 1500
+        @test free_run["require_warmup_convergence"]
+
         batch_paths = String[]
         grid = GridIndex(
             Float32[0, 1], Float32[0], reshape(Int32[1, 2], 2, 1),

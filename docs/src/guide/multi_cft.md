@@ -26,15 +26,14 @@ cft_ids = "all"
 water_systems = ["rainfed", "irrigated"]
 ```
 
-To calibrate and validate a separate soil-pool allocation for every selected
-patch in one workflow, add an `[allocation_validation]` section. The supplied
+To calibrate and initialize a separate soil-pool state for every selected patch
+in one workflow, add a `[free_warmup]` section. The supplied
 `global_cfts_allocation_validation.example.toml` is the canonical template.
-The calibration phase uses target-constrained warm-up and writes an allocation;
-the validation phase reloads that same allocation, performs free warm-up, then
-runs the requested production years with checkpoint/restart.
-The supplied configuration uses 150--600 years for target-constrained
-calibration, followed by 60--150 years for free validation (two to five full
-30-year climate cycles).
+Every calibration phase runs a fixed 600-year target-constrained warm-up and
+writes an allocation. The free phase reloads that allocation, runs for at least
+600 years without target correction, and stops by 1500 years only after its
+configured convergence fraction is met. Production then restores the final
+free warm-up checkpoint and runs the requested years with checkpoint/restart.
 
 ```bash
 julia --project=. examples/scripts/run_global_cfts_cpu.jl \
@@ -53,7 +52,7 @@ one in any geographic cell.
 
 ## Outputs and warm-up
 
-Each allocation-validation batch writes separately below
+Each calibration/free-equilibrium batch writes separately below
 `batches/cft_XX_rainfed/{calibration,production}` or
 `batches/cft_XX_irrigated/{calibration,production}`. The combined file
 `global_cft_yield_START_END.nc` contains:

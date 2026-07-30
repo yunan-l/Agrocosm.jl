@@ -21,9 +21,9 @@ with_tillage = true
 cft_ids = "all"
 water_systems = ["rainfed", "irrigated"]
 
-# Calibration phase: each CFT × water-system batch starts from HWSD and writes
-# batches/<name>/calibration/warmup_soil_pool_allocation.nc. It intentionally
-# skips the 2015–2016 production run.
+# Calibration phase: every CFT × water-system batch starts from HWSD and runs
+# a fixed 600-year target-constrained calibration. The runner enforces these
+# values and writes batches/<name>/calibration/warmup_soil_pool_allocation.nc.
 [run]
 backend = "cuda"
 device_id = 0
@@ -33,7 +33,7 @@ simulation_end_year = 2016
 warmup_climate_start_year = 1901
 warmup_climate_end_year = 1930
 warmup_target_constrained = true
-warmup_minimum_years = 150
+warmup_minimum_years = 600
 warmup_maximum_years = 600
 warmup_consecutive_years = 3
 warmup_relative_tolerance = 0.01
@@ -44,19 +44,18 @@ require_warmup_convergence = false
 diagnostic_cells = 10
 cell_limit = 0
 
-# Validation phase: each batch reloads its own calibration allocation, performs
-# a free warm-up, then runs 2015–2016 with native checkpoint/restart.
-[allocation_validation]
-# Free validation uses two to five complete 30-year climate cycles. Calibration
-# above remains the longer target-constrained 150--600 year procedure.
-warmup_minimum_years = 60
-warmup_maximum_years = 150
+# Free-equilibrium phase: each batch rebuilds from its own allocation, then
+# runs without annual target correction. Production uses the final free state,
+# not HWSD or the constrained-calibration state.
+[free_warmup]
+warmup_minimum_years = 600
+warmup_maximum_years = 1500
 warmup_consecutive_years = 3
 warmup_relative_tolerance = 0.01
 warmup_pool_fraction_tolerance = 0.01
-warmup_required_converged_fraction = 1.0
+warmup_required_converged_fraction = 0.98
 warmup_cache_climate = false
-require_warmup_convergence = false
+require_warmup_convergence = true
 
 [validation]
 maximum_water_residual = 0.01

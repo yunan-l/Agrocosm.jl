@@ -23,7 +23,7 @@ end
 batch_name(cft_id, irrigated) = "cft_$(lpad(cft_id, 2, '0'))_" *
     (irrigated ? "irrigated" : "rainfed")
 
-const _ALLOCATION_VALIDATION_RUN_KEYS = (
+const _FREE_WARMUP_RUN_KEYS = (
     "warmup_minimum_years",
     "warmup_maximum_years",
     "warmup_consecutive_years",
@@ -34,8 +34,17 @@ const _ALLOCATION_VALIDATION_RUN_KEYS = (
     "require_warmup_convergence",
 )
 
+const _CALIBRATION_RUN_OPTIONS = Dict{String, Any}(
+    "warmup_minimum_years" => 600,
+    "warmup_maximum_years" => 600,
+    "warmup_target_constrained" => true,
+    # Calibration always writes its allocation product. The free warm-up stage
+    # is responsible for deciding whether the resulting state is production-ready.
+    "require_warmup_convergence" => false,
+)
+
 function write_batch_config(path, config; output_directory, pool_allocation = nothing,
-    production::Bool, target_constrained::Bool, validation_options = nothing)
+    production::Bool, target_constrained::Bool, warmup_options = nothing)
     batch = deepcopy(config)
     paths = batch["paths"]
     run = batch["run"]
@@ -47,12 +56,11 @@ function write_batch_config(path, config; output_directory, pool_allocation = no
     end
     run["production"] = production
     run["warmup_target_constrained"] = target_constrained
-    # Calibration must write an allocation even when the strict per-cell
-    # convergence criterion is not yet met; the free phase records that check.
-    !production && (run["require_warmup_convergence"] = false)
-    if !isnothing(validation_options)
-        for key in _ALLOCATION_VALIDATION_RUN_KEYS
-            haskey(validation_options, key) && (run[key] = validation_options[key])
+    if !production
+        merge!(run, _CALIBRATION_RUN_OPTIONS)
+    elseif !isnothing(warmup_options)
+        for key in _FREE_WARMUP_RUN_KEYS
+            haskey(warmup_options, key) && (run[key] = warmup_options[key])
         end
     end
     mkpath(dirname(path))
@@ -142,7 +150,11 @@ function run_global_cfts(config_path; backend_override = :cpu)
     )
     systems = requested_crop_systems(config)
     output_directory = abspath(config["paths"]["output_directory"])
-    validation_options = get(config, "allocation_validation", nothing)
+    haskey(config, "free_warmup") && haskey(config, "allocation_validation") && error(
+        "use [free_warmup], not both [free_warmup] and legacy [allocation_validation]",
+    )
+    free_warmup_options = get(config, "free_warmup",
+        get(config, "allocation_validation", nothing))
     catalog = catalog_from_config(config)
     grid = read_grid(dataset(catalog, :grid); T = Float32)
     simulation_years = Int(config["run"]["simulation_start_year"]):Int(
@@ -177,7 +189,7 @@ function run_global_cfts(config_path; backend_override = :cpu)
             pool_allocation = allocation_path,
             production = true,
             target_constrained = false,
-            validation_options,
+            warmup_options = free_warmup_options,
         )
         result = run_global_wheat(production_config; backend_override, cft_id, irrigated)
         push!(batch_paths, joinpath(
