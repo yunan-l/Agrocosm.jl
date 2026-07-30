@@ -5,6 +5,7 @@ using Test
     @testset "sowing tillage conserves C and N" begin
         soil = init_soil(2, soilparams.soildepth, identity)
         crop = init_crop(2, identity)
+        state = test_model_state(crop, soil)
         soil.management.tillage_fraction .= Float32[
             0.05 0 0
             0.95 1 0
@@ -16,7 +17,7 @@ using Test
 
         carbon_before = vec(sum(soil.carbon.litter, dims = 1))
         nitrogen_before = vec(sum(soil.nitrogen.litter, dims = 1))
-        litter_tillage!(soil, crop)
+        litter_tillage!(state, state)
 
         @test soil.carbon.litter[:, 1] ≈ Float32[0.5, 11.5, 5]
         @test soil.carbon.litter[:, 2] == Float32[4, 3, 6]
@@ -29,6 +30,7 @@ using Test
 
     @testset "daily bioturbation matches annual LPJmL fraction" begin
         soil = init_soil(1, soilparams.soildepth, identity)
+        state = test_model_state(soil)
         soil.carbon.litter[:, 1] .= Float32[10, 2, 5]
         soil.nitrogen.litter[:, 1] .= Float32[1, 0.2, 0.5]
         carbon_before = sum(soil.carbon.litter)
@@ -36,7 +38,7 @@ using Test
 
         expected_carbon_transfer = 10.0f0 * lpjmlparams.bioturbate
         expected_nitrogen_transfer = 1.0f0 * lpjmlparams.bioturbate
-        litter_bioturbation!(soil)
+        litter_bioturbation!(state)
 
         @test soil.management.bioturbation_carbon[1] ≈ expected_carbon_transfer
         @test soil.management.bioturbation_nitrogen[1] ≈ expected_nitrogen_transfer
@@ -50,6 +52,7 @@ using Test
         soil = init_soil(1, soilparams.soildepth, identity)
         crop = init_crop(1, identity)
         output = init_output(1, identity)
+        state = test_model_state(crop, soil; output)
         crop.state.carbon.leaf .= 2.0f0
         crop.state.carbon.pool .= 1.0f0
         crop.state.carbon.root .= 4.0f0
@@ -59,14 +62,14 @@ using Test
         crop.state.phenology.harvesting_previous .= false
         crop.state.phenology.harvesting .= true
 
-        harvest_crop!(crop, soil, output, Float32[0.5], 100)
+        harvest_crop!(state, state, output, Float32[0.5], 100)
         soil.management.tillage_fraction .= Float32[
             0.05 0 0
             0.95 1 0
             0 0 1
         ]
-        Agrocosm.route_harvest_carbon_input!(soil, crop)
-        Agrocosm.route_harvest_nitrogen_input!(soil, crop)
+        Agrocosm.route_harvest_carbon_input!(state, state)
+        Agrocosm.route_harvest_nitrogen_input!(state, state)
 
         @test soil.carbon.litter[:, 1] ≈ Float32[0.075, 1.425, 4]
         @test soil.nitrogen.litter[:, 1] ≈ Float32[0.0075, 0.1425, 0.4]

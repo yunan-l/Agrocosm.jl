@@ -52,11 +52,11 @@ end
     balance = init_water_balance(1, 1, identity)
     soil.water.storage .= 40.0f0
     pedotransfer!(state)
-    Agrocosm.record_water_balance_start!(balance, 1, soil, Float32[0.0])
+    Agrocosm.record_water_balance_start!(balance, 1, state, Float32[0.0])
     Agrocosm.record_water_balance_after_snow!(balance, 1, Float32[0.0])
 
     soil_temperature!(state, Float32[-15.0], Float32[-2.0])
-    Agrocosm.record_water_balance_end!(balance, 1, soil, crop)
+    Agrocosm.record_water_balance_end!(balance, 1, state, state)
 
     @test balance.soil_ice_storage_after[1, 1] > 0.0f0
     @test balance.residual[1, 1] ≈ 0.0f0 atol = 3.0f-5

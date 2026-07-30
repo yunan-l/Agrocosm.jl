@@ -3,11 +3,12 @@ using Test
 
 @testset "Daily freeze-thaw diagnostics" begin
     soil = init_soil(2, soilparams.soildepth, identity)
+    state = test_model_state(soil)
     diagnostics = init_thermal_balance(1, 2, identity)
     soil.water.storage .= 50.0f0
-    pedotransfer!(soil)
-    soil_temperature!(soil, Float32[-20.0, 10.0], Float32[2.0, 2.0])
-    Agrocosm.record_thermal_balance!(diagnostics, 1, soil)
+    pedotransfer!(state)
+    soil_temperature!(state, Float32[-20.0, 10.0], Float32[2.0, 2.0])
+    Agrocosm.record_thermal_balance!(diagnostics, 1, state)
 
     @test diagnostics.total_ice_storage[1, 1] > 0.0f0
     @test diagnostics.total_ice_storage[1, 2] == 0.0f0

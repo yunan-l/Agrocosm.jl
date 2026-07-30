@@ -4,6 +4,7 @@ using Test
 @testset "Conservative soil-carbon decomposition" begin
     soil = init_soil(1, soilparams.soildepth, identity)
     crop = init_crop(1, identity)
+    state = test_model_state(crop, soil)
 
     soil.carbon.litter .= 2.0f0
     soil.carbon.fast .= 3.0f0
@@ -19,7 +20,7 @@ using Test
 
     carbon_before = sum(soil.carbon.litter) +
                     sum(soil.carbon.fast) + sum(soil.carbon.slow)
-    soil_carbon!(crop, soil)
+    soil_carbon!(state, state)
     carbon_after = sum(soil.carbon.litter) +
                    sum(soil.carbon.fast) + sum(soil.carbon.slow)
 
@@ -37,24 +38,25 @@ end
 @testset "Daily carbon-balance diagnostics" begin
     crop = init_crop(1, identity)
     soil = init_soil(1, soilparams.soildepth, identity)
+    state = test_model_state(crop, soil)
     balance = @inferred init_carbon_balance(4, 1, identity)
 
     crop.state.carbon.leaf .= 1.0f0
     soil.carbon.litter .= 2.0f0
     soil.carbon.fast .= 3.0f0
     soil.carbon.slow .= 4.0f0
-    Agrocosm.record_carbon_balance_start!(balance, 1, crop, soil)
-    Agrocosm.record_carbon_balance_end!(balance, 1, crop, soil)
+    Agrocosm.record_carbon_balance_start!(balance, 1, state, state)
+    Agrocosm.record_carbon_balance_end!(balance, 1, state, state)
 
     @test balance.plant_before[1, 1] == 1.0f0
     @test balance.soil_before[1, 1] == 41.0f0
     @test balance.residual[1, 1] ≈ 0.0f0 atol = 1.0f-6
 
     # NPP is the net atmospheric input to the tracked plant-plus-soil system.
-    Agrocosm.record_carbon_balance_start!(balance, 2, crop, soil)
+    Agrocosm.record_carbon_balance_start!(balance, 2, state, state)
     crop.state.carbon.leaf .+= 2.0f0
     crop.fluxes.carbon.npp .= 2.0f0
-    Agrocosm.record_carbon_balance_end!(balance, 2, crop, soil)
+    Agrocosm.record_carbon_balance_end!(balance, 2, state, state)
     @test balance.net_primary_production[2, 1] == 2.0f0
     @test balance.residual[2, 1] ≈ 0.0f0 atol = 1.0f-6
 
@@ -72,28 +74,28 @@ end
     soil.management.tillage_fraction .= Float32[1 0 0; 0 1 0; 0 0 1]
     output = init_output(1, identity)
 
-    Agrocosm.record_carbon_balance_start!(balance, 3, crop, soil)
-    harvest_crop!(crop, soil, output, Float32[0.5], 100)
+    Agrocosm.record_carbon_balance_start!(balance, 3, state, state)
+    harvest_crop!(state, state, output, Float32[0.5], 100)
     Agrocosm.record_carbon_balance_after_harvest!(
-        balance, 3, crop, soil, Float32[0.5],
+        balance, 3, state, state, Float32[0.5],
     )
-    soil_carbon!(crop, soil)
+    soil_carbon!(state, state)
     crop.state.carbon.leaf .= 0.0f0
     crop.state.carbon.root .= 0.0f0
     crop.state.carbon.storage .= 0.0f0
     crop.state.carbon.pool .= 0.0f0
-    Agrocosm.record_carbon_balance_end!(balance, 3, crop, soil)
+    Agrocosm.record_carbon_balance_end!(balance, 3, state, state)
 
     @test balance.residue_transfer[3, 1] ≈ 0.5f0 atol = 1.0f-6
     @test balance.harvest_export[3, 1] ≈ 0.5f0 atol = 1.0f-6
     @test balance.residual[3, 1] ≈ 0.0f0 atol = 1.0f-6
 
     # Manure carbon is an external input, not unexplained soil-C creation.
-    Agrocosm.record_carbon_balance_start!(balance, 4, crop, soil)
+    Agrocosm.record_carbon_balance_start!(balance, 4, state, state)
     crop.fluxes.nitrogen.prescribed_manure_input .= 1.0f0
     soil.carbon.litter[2, 1] += lpjmlparams.manure_cn
-    Agrocosm.record_carbon_balance_after_cultivate!(balance, 4, crop)
-    Agrocosm.record_carbon_balance_end!(balance, 4, crop, soil)
+    Agrocosm.record_carbon_balance_after_cultivate!(balance, 4, state)
+    Agrocosm.record_carbon_balance_end!(balance, 4, state, state)
     @test balance.manure_input[4, 1] == lpjmlparams.manure_cn
     @test balance.residual[4, 1] ≈ 0.0f0 atol = 1.0f-6
 end

@@ -4,6 +4,7 @@ using Test
 @testset "Fixed post-spin-up c_shift routing" begin
     soil = init_soil(1, soilparams.soildepth, identity)
     crop = init_crop(1, identity)
+    state = test_model_state(crop, soil)
     fast_shift = Float32[0.40, 0.25, 0.15, 0.10, 0.10]
     slow_shift = Float32[0.55, 0.20, 0.10, 0.10, 0.05]
 
@@ -26,8 +27,8 @@ using Test
     @test sum(soil.decomposition.shift_fast; dims = 1)[1] ≈ 1.0f0
     @test sum(soil.decomposition.shift_slow; dims = 1)[1] ≈ 1.0f0
 
-    soil_carbon!(crop, soil)
-    soil_nitrogen!(crop, soil; air_temperature = Float32[10], wind_speed = Float32[1.5])
+    soil_carbon!(state, state)
+    soil_nitrogen!(state, state; air_temperature = Float32[10], wind_speed = Float32[1.5])
 
     decomposed_carbon = sum(soil.carbon.decomposed_litter)
     decomposed_nitrogen = sum(soil.nitrogen.decomposed_litter)

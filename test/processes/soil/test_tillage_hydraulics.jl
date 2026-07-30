@@ -5,6 +5,7 @@ using Test
     cells = 2
     settled = init_soil(cells, soilparams.soildepth, identity)
     crop = init_crop(cells, identity)
+    settled_state = test_model_state(crop, settled)
     settled.properties.sand_fraction .= 0.4f0
     settled.properties.clay_fraction .= 0.2f0
     settled.carbon.fast .= 60.0f0
@@ -12,9 +13,10 @@ using Test
     settled.water.saturation_fraction .= 0.45f0
     settled.water.storage .= reshape(Float32[40, 60, 100, 200, 200], 5, 1)
     tilled = deepcopy(settled)
+    tilled_state = test_model_state(crop, tilled)
 
     crop.events.sowing .= Int32[1, 0]
-    tillage_hydraulics!(tilled, crop)
+    tillage_hydraulics!(tilled_state)
     expected_density_factor = 1.0f0 - (1.0f0 - 0.667f0) * 0.9f0
     @test tilled.management.tillage_density_factor ≈
         reshape(Float32[expected_density_factor, 1.0f0], 1, :)
@@ -22,8 +24,8 @@ using Test
     water_before = vec(sum(
         tilled.water.storage .+ tilled.water.ice_storage; dims = 1,
     ))
-    pedotransfer!(settled)
-    pedotransfer!(tilled)
+    pedotransfer!(settled_state)
+    pedotransfer!(tilled_state)
 
     @test tilled.water.saturation_fraction[1, 1] >
         settled.water.saturation_fraction[1, 1]
@@ -38,7 +40,7 @@ using Test
         water_before
 
     density_before_rain = tilled.management.tillage_density_factor[1, 1]
-    soil_infiltration!(tilled, crop, Float32[20, 0])
+    soil_infiltration!(tilled_state, tilled_state, Float32[20, 0])
     top_infiltration = tilled.water.influx[1, 1]
     settling_index = 0.2f0 * top_infiltration * (
         1.0f0 + 2.0f0 * 40.0f0 / (40.0f0 + exp(8.597f0 - 0.075f0 * 40.0f0))

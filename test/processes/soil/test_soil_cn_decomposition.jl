@@ -37,6 +37,7 @@ mineral_nitrogen(soil) = sum(soil.nitrogen.ammonium) + sum(soil.nitrogen.nitrate
 @testset "Coupled LPJmL-style soil C-N decomposition" begin
     @testset "C and N use identical decay fractions" begin
         soil = initialize_soil_cn_case(10.0f0)
+        state = test_model_state(soil)
         litter_carbon_before = copy(soil.carbon.litter)
         litter_nitrogen_before = copy(soil.nitrogen.litter)
         fast_carbon_before = copy(soil.carbon.fast)
@@ -51,7 +52,7 @@ mineral_nitrogen(soil) = sum(soil.nitrogen.ammonium) + sum(soil.nitrogen.nitrate
         @test !hasproperty(soil.carbon, :shift_fast)
         @test !hasproperty(soil.nitrogen, :shift_fast)
 
-        soil_cn_decomposition!(soil)
+        soil_cn_decomposition!(state)
 
         @test soil.carbon.decomposed_litter ./ litter_carbon_before ≈
               soil.nitrogen.decomposed_litter ./ litter_nitrogen_before
@@ -72,16 +73,16 @@ mineral_nitrogen(soil) = sum(soil.nitrogen.ammonium) + sum(soil.nitrogen.nitrate
 
     @testset "Litter C:N controls mineralization and immobilization" begin
         nitrogen_rich = initialize_soil_cn_case(5.0f0)
-        soil_cn_decomposition!(nitrogen_rich)
+        soil_cn_decomposition!(test_model_state(nitrogen_rich))
         @test sum(nitrogen_rich.nitrogen.mineralization) > 0.0f0
         @test sum(nitrogen_rich.nitrogen.immobilization) == 0.0f0
 
         nitrogen_poor = initialize_soil_cn_case(80.0f0; mineral_n = 5.0f0)
-        soil_cn_decomposition!(nitrogen_poor)
+        soil_cn_decomposition!(test_model_state(nitrogen_poor))
         @test sum(nitrogen_poor.nitrogen.immobilization) > 0.0f0
 
         supply_limited = initialize_soil_cn_case(80.0f0; mineral_n = 0.0f0)
-        soil_cn_decomposition!(supply_limited)
+        soil_cn_decomposition!(test_model_state(supply_limited))
         @test sum(supply_limited.nitrogen.immobilization) >= 0.0f0
         @test sum(supply_limited.nitrogen.immobilization) <
               sum(nitrogen_poor.nitrogen.immobilization)
@@ -91,8 +92,9 @@ mineral_nitrogen(soil) = sum(soil.nitrogen.ammonium) + sum(soil.nitrogen.nitrate
 
     @testset "Pre-crop and post-crop nitrogen stages are separated" begin
         soil = initialize_soil_cn_case(5.0f0; mineral_n = 0.0f0)
+        state = test_model_state(soil)
         mineral_before = mineral_nitrogen(soil)
-        soil_cn_decomposition!(soil)
+        soil_cn_decomposition!(state)
         mineral_after_decomposition = mineral_nitrogen(soil)
 
         @test mineral_after_decomposition > mineral_before
@@ -103,7 +105,7 @@ mineral_nitrogen(soil) = sum(soil.nitrogen.ammonium) + sum(soil.nitrogen.nitrate
         soil.nitrogen.ammonium .*= 0.5f0
         soil.nitrogen.nitrate .*= 0.5f0
         post_crop_nitrogen_losses!(
-            soil; air_temperature = Float32[20], wind_speed = Float32[2],
+            state; air_temperature = Float32[20], wind_speed = Float32[2],
         )
         @test all(soil.nitrogen.denitrification .>= 0.0f0)
         @test all(soil.nitrogen.volatilization .>= 0.0f0)
