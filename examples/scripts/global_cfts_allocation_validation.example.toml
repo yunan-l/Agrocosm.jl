@@ -44,18 +44,19 @@ require_warmup_convergence = false
 diagnostic_cells = 10
 cell_limit = 0
 
-# Free-equilibrium phase: each batch rebuilds from its own allocation, then
-# runs without annual target correction. Production uses the final free state,
-# not HWSD or the constrained-calibration state.
+# Free settling phase: each batch rebuilds from its own allocation, then runs
+# five 30-year climate cycles without annual target correction. Production uses
+# the final free state, not HWSD or the constrained-calibration state. This is
+# an explicitly non-equilibrium production test when its drift rule is unmet.
 [free_warmup]
-warmup_minimum_years = 600
-warmup_maximum_years = 1500
+warmup_minimum_years = 150
+warmup_maximum_years = 150
 warmup_consecutive_years = 3
 warmup_relative_tolerance = 0.01
 warmup_pool_fraction_tolerance = 0.01
 warmup_required_converged_fraction = 0.98
 warmup_cache_climate = false
-require_warmup_convergence = true
+require_warmup_convergence = false
 
 [validation]
 maximum_water_residual = 0.01

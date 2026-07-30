@@ -1,10 +1,11 @@
-# Multi-CFT simulations
+# CFT simulations
 
-The multi-CFT drivers run any selected subset of the 12 LPJmL-compatible crop
-functional types (CFTs) under rainfed, full irrigation, or both. Each selected
-CFT and water system is an independent crop--soil patch. A geographic grid cell
-may therefore occur in several output bands, each with its own crop, soil,
-litter, management, warm-up, and checkpoint state.
+The CFT drivers run one, several, or all 12 LPJmL-compatible crop functional
+types (CFTs) under rainfed, full irrigation, or both. A configuration without a
+`[cfts]` section defaults to rainfed CFT 1. Each selected CFT and water system
+is an independent crop--soil patch. A geographic grid cell may therefore occur
+in several output bands, each with its own crop, soil, litter, management,
+warm-up, and checkpoint state.
 
 The first implementation groups identical CFT/water-system patches into
 separate batches and reuses the established single-crop process kernels.
@@ -13,9 +14,10 @@ imply a shared soil state between crop patches.
 
 ## Configuration
 
-The single-crop runners use the standard 24-band management products and, by
-default, simulate rainfed CFT 1 from their first band. Add a `[cfts]` section
-and use the multi-CFT driver to select several patches:
+Use `run_global_cfts_cpu.jl` or `run_global_cfts_gpu.jl` for both single- and
+multi-CFT global testing. To request one crop explicitly, use `cft_ids = [1]`;
+an omitted `[cfts]` section has the same rainfed-CFT-1 default. Add a `[cfts]`
+section to select several patches:
 
 ```toml
 [cfts]
@@ -26,14 +28,19 @@ cft_ids = "all"
 water_systems = ["rainfed", "irrigated"]
 ```
 
+`run_global_wheat_cpu.jl` remains the shared low-level batch executor used by
+the CFT driver. It is retained for compatibility, but new server tests should
+use the unified CFT entry points above.
+
 To calibrate and initialize a separate soil-pool state for every selected patch
 in one workflow, add a `[free_warmup]` section. The supplied
 `global_cfts_allocation_validation.example.toml` is the canonical template.
 Every calibration phase runs a fixed 600-year target-constrained warm-up and
-writes an allocation. The free phase reloads that allocation, runs for at least
-600 years without target correction, and stops by 1500 years only after its
-configured convergence fraction is met. Production then restores the final
-free warm-up checkpoint and runs the requested years with checkpoint/restart.
+writes an allocation. The default free-settling phase reloads that allocation,
+runs five 30-year climate cycles (150 years) without target correction, then
+uses the resulting state for production. It writes the convergence and drift
+diagnostics but does not require free equilibrium; therefore its outputs are a
+production baseline, not a claimed long-term soil equilibrium.
 
 ```bash
 julia --project=. examples/scripts/run_global_cfts_cpu.jl \

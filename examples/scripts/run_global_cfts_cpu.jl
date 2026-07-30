@@ -143,9 +143,8 @@ end
 
 function run_global_cfts(config_path; backend_override = :cpu)
     config = TOML.parsefile(config_path)
-    haskey(config, "cfts") || error("multi-CFT runs require a [cfts] configuration section")
     haskey(config["paths"], "pool_allocation") && error(
-        "multi-CFT workflow derives one CFT- and water-system-specific allocation per batch; " *
+        "the CFT workflow derives one CFT- and water-system-specific allocation per batch; " *
         "do not set paths.pool_allocation in the shared configuration",
     )
     systems = requested_crop_systems(config)
