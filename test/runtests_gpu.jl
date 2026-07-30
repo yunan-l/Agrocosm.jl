@@ -19,6 +19,7 @@ sort!(gpu_tests)
                 test_module,
                 :(include(path::AbstractString) = Base.include(@__MODULE__, path)),
             )
+            Base.include(test_module, joinpath(@__DIR__, "helpers", "legacy_process_access.jl"))
             Base.include(test_module, path)
         end
     end

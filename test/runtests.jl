@@ -1,5 +1,6 @@
 using Agrocosm
 using Test
+include("helpers/legacy_process_access.jl")
 
 @testset "Agrocosm.jl" begin
     include("helpers/crop_lifecycle_fixture.jl")
@@ -11,6 +12,7 @@ using Test
     include("processes/crop/test_photosynthesis.jl")
     include("processes/crop/test_cft_registry.jl")
     include("processes/crop/test_temperature_stress_lpjml.jl")
+    include("processes/crop/test_radiation_lpjml.jl")
     include("processes/crop/test_respiration_lpjml.jl")
     include("processes/crop/test_actual_lai.jl")
     include("processes/crop/test_canopy_snow_cover.jl")

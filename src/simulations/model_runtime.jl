@@ -34,61 +34,47 @@ struct ModelState{P, F, A, I, E, W, O}
     output::O
 end
 
-# Lifecycle selectors let one process implementation serve both the retained
-# legacy domain containers and the canonical ModelState without constructing
-# merged Crop/Soil views.
-crop_prognostic(x::Crop) = x.state
+# Process kernels consume only the canonical lifecycle state. Legacy direct
+# `Crop`/`Soil` access is confined to test fixtures while those tests migrate.
 crop_prognostic(x::ModelState) = x.prognostic.crop
-crop_fluxes(x::Crop) = x.fluxes
 crop_fluxes(x::ModelState) = x.fluxes.crop
-crop_events(x::Crop) = x.events
 crop_events(x::ModelState) = x.events.crop
-crop_canopy_auxiliary(x::Crop) = x.auxiliary.canopy
 crop_canopy_auxiliary(x::ModelState) = x.auxiliary.crop.canopy
-crop_photosynthesis_auxiliary(x::Crop) = x.auxiliary.photosynthesis
 crop_photosynthesis_auxiliary(x::ModelState) = x.auxiliary.crop.photosynthesis
-crop_stress_auxiliary(x::Crop) = x.auxiliary.stress
 crop_stress_auxiliary(x::ModelState) = x.auxiliary.crop.stress
-crop_phenology_auxiliary(x::Crop) = x.auxiliary.phenology
 crop_phenology_auxiliary(x::ModelState) = x.auxiliary.crop.phenology
-crop_phenology_input(x::Crop) = x.auxiliary.phenology
 crop_phenology_input(x::ModelState) = x.inputs.crop.phenology
-crop_calendar_input(x::Crop) = x.auxiliary.calendar
 crop_calendar_input(x::ModelState) = x.inputs.crop.calendar
-crop_root_auxiliary(x::Crop) = x.auxiliary.root
 crop_root_auxiliary(x::ModelState) = x.auxiliary.crop.root
-crop_root_input(x::Crop) = x.auxiliary.root
 crop_root_input(x::ModelState) = x.inputs.crop.root
 
-soil_properties(x::Soil) = x.properties
 soil_properties(x::ModelState) = x.inputs.soil.properties
-for (selector, legacy_field, lifecycle_group) in (
-    (:soil_water_prognostic, :water, :(x.prognostic.soil.water)),
-    (:soil_water_fluxes, :water, :(x.fluxes.soil.water)),
-    (:soil_water_auxiliary, :water, :(x.auxiliary.soil.water)),
-    (:soil_thermal_prognostic, :thermal, :(x.prognostic.soil.thermal)),
-    (:soil_thermal_fluxes, :thermal, :(x.fluxes.soil.thermal)),
-    (:soil_thermal_input, :thermal, :(x.inputs.soil.thermal)),
-    (:soil_carbon_prognostic, :carbon, :(x.prognostic.soil.carbon)),
-    (:soil_carbon_fluxes, :carbon, :(x.fluxes.soil.carbon)),
-    (:soil_carbon_auxiliary, :carbon, :(x.auxiliary.soil.carbon)),
-    (:soil_nitrogen_prognostic, :nitrogen, :(x.prognostic.soil.nitrogen)),
-    (:soil_nitrogen_fluxes, :nitrogen, :(x.fluxes.soil.nitrogen)),
-    (:soil_nitrogen_auxiliary, :nitrogen, :(x.auxiliary.soil.nitrogen)),
-    (:soil_decomposition_auxiliary, :decomposition, :(x.auxiliary.soil.decomposition)),
-    (:soil_decomposition_input, :decomposition, :(x.inputs.soil.decomposition)),
-    (:soil_decomposition_workspace, :decomposition, :(x.workspace.soil.decomposition)),
-    (:soil_management_prognostic, :management, :(x.prognostic.soil.management)),
-    (:soil_management_fluxes, :management, :(x.fluxes.soil.management)),
-    (:soil_management_input, :management, :(x.inputs.soil.management)),
-    (:soil_surface_litter_prognostic, :surface_litter, :(x.prognostic.soil.surface_litter)),
-    (:soil_surface_litter_fluxes, :surface_litter, :(x.fluxes.soil.surface_litter)),
-    (:soil_surface_litter_auxiliary, :surface_litter, :(x.auxiliary.soil.surface_litter)),
-    (:soil_snow_prognostic, :snow, :(x.prognostic.soil.snow)),
-    (:soil_snow_fluxes, :snow, :(x.fluxes.soil.snow)),
+for (selector, lifecycle_group) in (
+    (:soil_water_prognostic, :(x.prognostic.soil.water)),
+    (:soil_water_fluxes, :(x.fluxes.soil.water)),
+    (:soil_water_auxiliary, :(x.auxiliary.soil.water)),
+    (:soil_thermal_prognostic, :(x.prognostic.soil.thermal)),
+    (:soil_thermal_fluxes, :(x.fluxes.soil.thermal)),
+    (:soil_thermal_input, :(x.inputs.soil.thermal)),
+    (:soil_carbon_prognostic, :(x.prognostic.soil.carbon)),
+    (:soil_carbon_fluxes, :(x.fluxes.soil.carbon)),
+    (:soil_carbon_auxiliary, :(x.auxiliary.soil.carbon)),
+    (:soil_nitrogen_prognostic, :(x.prognostic.soil.nitrogen)),
+    (:soil_nitrogen_fluxes, :(x.fluxes.soil.nitrogen)),
+    (:soil_nitrogen_auxiliary, :(x.auxiliary.soil.nitrogen)),
+    (:soil_decomposition_auxiliary, :(x.auxiliary.soil.decomposition)),
+    (:soil_decomposition_input, :(x.inputs.soil.decomposition)),
+    (:soil_decomposition_workspace, :(x.workspace.soil.decomposition)),
+    (:soil_management_prognostic, :(x.prognostic.soil.management)),
+    (:soil_management_fluxes, :(x.fluxes.soil.management)),
+    (:soil_management_input, :(x.inputs.soil.management)),
+    (:soil_surface_litter_prognostic, :(x.prognostic.soil.surface_litter)),
+    (:soil_surface_litter_fluxes, :(x.fluxes.soil.surface_litter)),
+    (:soil_surface_litter_auxiliary, :(x.auxiliary.soil.surface_litter)),
+    (:soil_snow_prognostic, :(x.prognostic.soil.snow)),
+    (:soil_snow_fluxes, :(x.fluxes.soil.snow)),
 )
     @eval begin
-        $selector(x::Soil) = getfield(x, $(QuoteNode(legacy_field)))
         $selector(x::ModelState) = $lifecycle_group
     end
 end
