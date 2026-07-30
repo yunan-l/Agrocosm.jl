@@ -12,6 +12,9 @@ daily data flow, and intentional simplifications explicit.
   level relevant to the current single-crop model.
 - **Adapted:** the same process is present, but its representation is
   intentionally different for the current CPU/GPU architecture.
+- **Corrected:** a source comparison found a behavior that did not match the
+  intended LPJmL rule; the implementation and a focused regression test were
+  corrected together.
 - **Open:** a concrete source-order or formulation difference still needs a
   decision before claiming LPJmL-style behavior.
 
@@ -40,14 +43,14 @@ thermal and litter/SOM work, then calls `daily_stand()` (and therefore
 | --- | --- | --- | --- | --- |
 | Climate history and sowing | `update_climbuf!`, `cultivate!` | `daily_climbuf()`, `sowing()` | Aligned | Agrocosm now updates the climate buffer before cultivation. Current prescribed sowing does not consume that update, but the dependency direction is locked by the daily-order contract test for future dynamic sowing. |
 | Stand termination | harvested GPU sentinel reconstructed by `cultivate!` | `killstand()`, `delcft()` | Adapted | LPJmL deletes a crop CFT; Agrocosm zeros/reconstructs seasonal state in a fixed allocation. The resulting inactive-crop behavior is tested, while the representation is intentionally GPU-oriented. |
-| Snow, albedo, and PET | `albedo!`, `petpar!`, `snow!` | `albedo_stand()`, `albedo_crop()`, `petpar()`, `snow.c` | Aligned / Adapted | Agrocosm preserves LPJmL's albedo/PET-before-snow order and now reconstructs the full green-canopy, surface-litter, bare-soil, and start-of-day snow mixture. Inactive crop cells use the bare stand soil/snow mixture. The fixed-array kernel and direct reconstruction of litter cover from current carbon are GPU-oriented adaptations that avoid stale cached cover. Current snow still feeds same-day soil thermal resistance and canopy radiation later in the step. |
+| Snow, albedo, and PET | `albedo!`, `petpar!`, `snow!` | `albedo_stand()`, `albedo_crop()`, `petpar()`, `snow.c` | Aligned / Adapted / Corrected | Agrocosm preserves LPJmL's albedo/PET-before-snow order and reconstructs the full green-canopy, surface-litter, bare-soil, and start-of-day snow mixture. Inactive crop cells use the bare stand soil/snow mixture. PET now retains LPJmL's lower-zero clamp without the former non-source 15 mm d⁻¹ upper cap. The fixed-array kernel and direct reconstruction of litter cover from current carbon are GPU-oriented adaptations that avoid stale cached cover. Current snow still feeds same-day soil thermal resistance and canopy radiation later in the step. |
 | Tillage and bioturbation | `litter_tillage!`, `tillage_hydraulics!`, `litter_bioturbation!` | `cultivate.c`, `tillage.c`, `update_daily_cell.c` | Aligned / Adapted | Cultivation moves litter and reduces the top-layer bulk-density factor; accepted infiltration subsequently settles that factor toward one. Agrocosm's current single-crop path assumes tillage is enabled and omits LPJmL's water-table gate because it has no prognostic water table. |
 | Soil physical preparation | `pedotransfer!`, `update_surface_litter_properties!`, `soil_temperature!` | soil thermal update, `pedotransfer()`, `updatelitterproperties()` | Aligned / Adapted | `pedotransfer!` now applies LPJmL's tillage correction to top-layer saturation, field capacity, retention exponent, holding capacity, and saturated conductivity while conserving absolute water and ice stocks. The hydraulic/litter pair follows LPJmL's pedotransfer-before-litter order. Agrocosm intentionally performs both before its enthalpy solver because that solver consumes current pore volume and current litter depth/water as thermal properties; LPJmL's thermal solver is ordered earlier. |
 | C–N decomposition | `soil_cn_decomposition!` | `daily_littersom.c`, `littersom_nomethane.c` | Aligned / Adapted | Same pre-crop role: decomposition, respiration, mineralization/immobilization, and nitrification make mineral N available to the crop. Agrocosm uses one annual-crop litter class and shared post-spin-up `c_shift` profiles instead of LPJmL's CFT litter list. |
-| Phenology and normal harvest | `phenology_crop!`, `harvest_crop!` | `phenology_crop.c`, `harvest_crop.c` | Aligned | Both run before infiltration and daily crop assimilation. New residues are routed after the day's decomposition, so they begin decomposing the next day. |
-| Interception and infiltration | `interception!`, `soil_infiltration!` | `interception.c`, `infil_perc.c` | Aligned / Adapted | Same placement before water-stressed assimilation. Agrocosm retains an explicit five-layer enthalpy ledger and GPU-safe thermal update schedule. |
+| Phenology and normal harvest | `phenology_crop!`, `harvest_crop!` | `phenology_crop.c`, `harvest_crop.c` | Aligned / Corrected | Both run before infiltration and daily crop assimilation. Actual daily LAI increment now uses LPJmL's `min(wscal, vscal)` exactly; the former additional `/ 1.5` water scaling was removed. New residues are routed after the day's decomposition, so they begin decomposing the next day. |
+| Interception and infiltration | `interception!`, `soil_infiltration!` | `interception.c`, `infil_perc.c` | Aligned / Adapted | Same placement before water-stressed assimilation. The bounded 4 mm slug loop now uses LPJmL's `MAXITER = 1000`; if it reaches the cap, remaining infiltration is routed to surface runoff rather than left unaccounted. Agrocosm retains an explicit five-layer enthalpy ledger and GPU-safe thermal update schedule. |
 | C3/C4 assimilation and water limitation | `photosynthesis_C3!` / `photosynthesis_C4!`, `transpiration!`, `solve_lambda_*` | `photosynthesis.c`, crop water-stress path | Adapted | The LPJmL-informed potential-capacity → water-limited-λ → final-assimilation sequence is retained. The GPU-compatible λ solver and numerical guards are an implementation adaptation. |
-| Carbon allocation and respiration | `crop_carbon!` | `npp_crop.c`, `allocation_daily_crop.c` | Aligned / Adapted | Agrocosm follows LPJmL's default `crop_resp_fix=true` configuration by using fixed organ N:C ratios. It intentionally deducts root respiration from NPP to close crop carbon, correcting the omission in LPJmL's `npp_crop.c`; organ allocation otherwise follows the LPJmL crop path with a fixed-array representation. |
+| Carbon allocation and respiration | `crop_carbon!` | `npp_crop.c`, `allocation_daily_crop.c` | Aligned / Adapted | Agrocosm follows its fixed-organ-N:C crop-respiration configuration. NPP is defined after leaf, root, storage, pool, and growth respiration; organ allocation uses the LPJmL crop pathway as a historical process basis with a fixed-array representation. |
 | Crop N demand, uptake, and allocation | `crop_nitrogen!`, `allocate_crop_nitrogen!` | `ndemand_crop.c`, `nuptake_crop.c`, `vmaxlimit_crop.c` | Adapted | Soil-N supply, uptake, allocation, and management inputs are active. The optional N-to-`vcmax` feedback remains disabled by default until the full LPJmL feedback sequence is completed. |
 | Soil evaporation and plant water removal | `evaporation!`, `soil_evapotranspiration!` | `waterbalance.c` | Aligned / Adapted | Both apply after crop demand/growth calculations. Agrocosm keeps explicit daily water-flux arrays for conservation and GPU execution. |
 | Late N losses | `post_crop_nitrogen_losses!` | `denitrification.c`, `volatilization.c` | Aligned | Both occur after the daily stand/crop update, using the updated mineral-N pools and moisture state. |
@@ -70,6 +73,35 @@ thermal and litter/SOM work, then calls `daily_stand()` (and therefore
 | Snow, multilayer water, freezing/thawing, and energy transport | `processes/climate/snow.jl`, `processes/soil/soil_water.jl`, `soil_temperature.jl` | `snow.c`, `infil_perc.c`, soil thermal routines | Adapted |
 | Litter routing and soil C–N decomposition | `litter_routing.jl`, `soil_carbon.jl`, `soil_nitrogen.jl` | `daily_littersom.c`, `littersom_nomethane.c` | Aligned / Adapted |
 | N transformations and losses | `nitrogen_transform.jl` | `denitrification.c`, `volatilization.c` | Aligned |
+
+## 2026-07 source comparison pass
+
+This pass compared the active daily crop route against the named LPJmL source
+files, rather than only checking numerical outputs.  It covers the processes
+that execute for the present prescribed annual-crop configuration.
+
+| Process group | LPJmL source inspected | Conclusion |
+| --- | --- | --- |
+| Climate history, sowing, phenology, harvest, residue timing | `daily_climbuf()`, `cultivate.c`, `phenology_crop.c`, `harvest_crop.c` | Daily order and prescribed-crop behavior align. Dynamic sowing and crop rotations remain outside the present mode. |
+| Albedo, PET, snow, interception | `albedo_crop.c`, `petpar.c`, `snow.c`, `interception.c` | Snow phase partition, fixed sublimation, melt, and geometry follow the LPJmL pathway. The PET upper cap was a real discrepancy and is corrected below. |
+| Photosynthesis, water stress, lambda solve | `photosynthesis.c`, `water_stressed.c` | Potential assimilation, water-limited lambda closure, and the 30-step primary bisection are consistent with the current LPJmL crop path. Water-table/inundation terms are not represented because Agrocosm has no prognostic water table. |
+| Leaf development, respiration, carbon allocation and crop failure | `phenology_crop.c`, `npp_crop.c`, `allocation_daily_crop.c` | LAI water scaling is corrected below. Allocation, senescence pool draw-down, and negative-biomass termination follow the LPJmL control flow. Agrocosm defines NPP after all crop respiration components. |
+| N demand, uptake, allocation, mineralization, nitrification, denitrification, NH₃ | `ndemand_crop.c`, `nuptake_crop.c`, `daily_littersom.c`, `littersom_nomethane.c`, `denitrification.c`, `volatilization.c` | Current fixed-N:C crop-respiration mode and daily ordering are consistent. N-to-`vcmax` feedback stays deliberately disabled by default. Ice treatment in denitrification is an explicit frozen-soil simplification. |
+| Tillage, pedotransfer, infiltration/percolation, evaporation | `cultivate.c`, `pedotransfer.c`, `infil_perc.c`, `waterbalance.c` | Hydraulic parameter update and daily placement are retained. The infiltration cap was a real discrepancy and is corrected below. Full irrigation remains the configured LPJmL-style field-capacity reset, not a water-supply model. |
+| Soil thermal / freeze-thaw transport | LPJmL soil thermal routines | Not claimed equivalent: frozen-soil infiltration and heat transport are deliberately deferred from the current scope. The existing enthalpy solver is conservation-tested independently. |
+
+### Corrections found by the source pass
+
+| Process | Former behavior | LPJmL-compatible behavior now used | Regression evidence |
+| --- | --- | --- | --- |
+| Infiltration/percolation | Stopped after 500 4-mm slugs and could leave the remaining daily input unaccounted. | Uses `MAXITER = 1000`, then routes any remainder to surface runoff and zeros the mutable infiltration input, as in `infil_perc.c`. | `test/processes/soil/test_soil_water.jl` checks the cap and daily water accounting. |
+| Actual LAI development | Multiplied potential LAI growth by `min(wscal / 1.5, vscal)`. | Uses `min(wscal, vscal)`, matching `phenology_crop.c`; both factors are already 0–1. | `test/processes/crop/test_actual_lai.jl` checks a water-limited canopy increment. |
+| Equilibrium evaporation | Clamped PET to `[0, 15]` mm d⁻¹. | Keeps LPJmL's lower-zero clamp only; high-energy values are not artificially capped. | `test/processes/crop/test_radiation_lpjml.jl` checks a value above 15 mm d⁻¹. |
+
+The infiltration loop retains Agrocosm's `1e-5` residual threshold rather than
+LPJmL's smaller floating-point epsilon. This is a numerical tolerance choice;
+after the cap fallback it cannot discard a water input and is not treated as a
+separate process discrepancy.
 
 ## Current boundaries
 

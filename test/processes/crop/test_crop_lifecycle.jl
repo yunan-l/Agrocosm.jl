@@ -44,7 +44,14 @@ using Test
         @test crop.state.canopy.lai[1] == T(0.000083) * T(cft1.laimax)
         @test crop.state.canopy.laimax_adjusted[1] == one(T)
         @test crop.state.nitrogen.total[1] == T(0.7)
-        @test crop.state.nitrogen.leaf[1] == zero(T)
+        @test crop.state.nitrogen.leaf[1] > zero(T)
+        @test crop.state.nitrogen.root[1] > zero(T)
+        @test crop.state.nitrogen.pool[1] > zero(T)
+        @test crop.state.nitrogen.storage[1] == zero(T)
+        @test crop.state.nitrogen.leaf[1] +
+              crop.state.nitrogen.root[1] +
+              crop.state.nitrogen.pool[1] +
+              crop.state.nitrogen.storage[1] ≈ T(0.7) rtol = eps(T)
         @test crop.state.nitrogen.pending_fertilizer[1] == zero(T)
         @test crop.state.nitrogen.stress_sum[1] == zero(T)
         @test crop.state.nitrogen.sufficiency[1] == one(T)
@@ -56,6 +63,33 @@ using Test
         @test soil.carbon.slow == soil_carbon_before
         @test crop.state.phenology.husum[2] == T(9)
         @test crop.state.nitrogen.pending_fertilizer[2] == T(9)
+    end
+end
+
+@testset "Cultivation initializes CFT-specific seed carbon and nitrogen" begin
+    for cft in (cft1, cft6, cft12)
+        crop = init_crop(Float32, 1, identity)
+        soil = init_soil(Float32, 1, soilparams.soildepth, identity)
+        managed_land = init_managed_land(Float32, 1, identity)
+        crop.auxiliary.calendar.sowing_date .= Int32(100)
+
+        cultivate!(
+            crop, managed_land, soil, 100;
+            apply_prescribed_fertilizer = false,
+            cftparameters = cft,
+        )
+
+        expected_leaf = 0.000083f0 * cft.laimax / cft.sla
+        @test crop.state.carbon.biomass[1] == 20.0f0
+        @test crop.state.carbon.root[1] == 8.0f0
+        @test crop.state.carbon.leaf[1] ≈ expected_leaf rtol = 2f-6
+        @test crop.state.carbon.storage[1] == 0.0f0
+        @test sum((crop.state.carbon.leaf[1], crop.state.carbon.root[1],
+                   crop.state.carbon.storage[1], crop.state.carbon.pool[1])) ≈
+              crop.state.carbon.biomass[1] rtol = 2f-6
+        @test sum((crop.state.nitrogen.leaf[1], crop.state.nitrogen.root[1],
+                   crop.state.nitrogen.storage[1], crop.state.nitrogen.pool[1])) ≈
+              0.7f0 rtol = 2f-6
     end
 end
 

@@ -34,6 +34,24 @@ using Test
     @test sum(soil.water.storage) ≈ storage_after_infiltration - 3.0f0 atol = 1.0f-5
 end
 
+@testset "LPJmL infiltration iteration cap preserves water" begin
+    soil = init_soil(1, soilparams.soildepth, identity)
+    crop = init_crop(1, identity)
+    soil.properties.sand_fraction .= 0.4f0
+    soil.properties.clay_fraction .= 0.2f0
+    soil.water.storage .= Float32[40, 60, 100, 200, 200]
+    crop.fluxes.water.interception .= 0.0f0
+    pedotransfer!(soil)
+
+    storage_before = sum(soil.water.storage)
+    # 1001 four-millimetre slugs force LPJmL's MAXITER fallback.
+    precipitation = 4004.0f0
+    soil_infiltration!(soil, crop, Float32[precipitation])
+    accounted_water = sum(soil.water.storage) + soil.water.surface_runoff[1] +
+        sum(soil.water.lateral_runoff) + soil.water.bottom_drainage[1]
+    @test accounted_water ≈ storage_before + precipitation atol = 0.2f0
+end
+
 @testset "Same-day rain pulse affects crop water stress" begin
     dry_soil = init_soil(1, soilparams.soildepth, identity)
     dry_crop = init_crop(1, identity)

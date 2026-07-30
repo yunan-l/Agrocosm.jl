@@ -138,11 +138,10 @@ max(0, lai - lai_npp_deficit)`. This deliberately changes trajectories affected
 by an NPP deficit and prevents the former multi-day repeated subtraction that
 produced negative LAI; it is not a consequence of the storage refactor.
 
-Further scientific corrections align LPJmL temperature stress, respiration
-temperature sources, nonnegative growth respiration and snow-cover suppression
-of canopy absorbed PAR. Root respiration is also subtracted from NPP, correcting
-the current LPJmL crop carbon bookkeeping after consultation with its developers.
-These changes are independently tested
+Further scientific corrections establish Agrocosm temperature-stress,
+respiration-temperature, nonnegative-growth-respiration, and snow-cover
+suppression conventions for canopy absorbed PAR. Agrocosm defines NPP after all
+crop respiration components. These choices are independently tested
 against LPJmL formulas and can intentionally change trajectories; they are not
 storage-refactor differences. Negative-biomass crop termination remains
 deferred by design.

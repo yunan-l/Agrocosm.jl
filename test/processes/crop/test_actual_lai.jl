@@ -37,3 +37,21 @@ using Test
         @test only(crop.fluxes.water.interception) == zero(T)
     end
 end
+
+@testset "LPJmL canopy-growth water multiplier" begin
+    for T in (Float32, Float64)
+        crop = init_crop(T, 1, identity)
+        crop.state.phenology.is_growing .= Int32(1)
+        crop.state.phenology.senescence .= false
+        crop.state.canopy.lai .= T(1)
+        crop.auxiliary.canopy.flaimax .= T(0.8)
+        crop.state.water.sufficiency .= T(0.6)
+        crop.state.nitrogen.sufficiency .= T(0.9)
+
+        lai_crop!(crop, cft1)
+
+        potential_lai = T(0.8) * T(cft1.laimax)
+        expected = T(1) + (potential_lai - T(1)) * T(0.6)
+        @test only(crop.state.canopy.lai) ≈ expected
+    end
+end

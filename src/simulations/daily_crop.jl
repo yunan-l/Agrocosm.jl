@@ -33,14 +33,12 @@ function _daily_crop!(
     cftparameters = processes.crop
     model_parameters = processes.global_parameters
     climbuf = state.prognostic.climate
-    crop = state
     pet = state.auxiliary.pet
-    soil = state
     managed_land = state.inputs.management
     dailyWeather = state.inputs.weather
     output = state.output
 
-    T = eltype(crop_prognostic(crop).canopy.lai)
+    T = eltype(crop_prognostic(state).canopy.lai)
     cftparameters = convert_precision(T, cftparameters)
     model_parameters = convert_precision(T, model_parameters)
     global_params = model_parameters.lpjml
@@ -74,14 +72,14 @@ function _daily_crop!(
         current_co2 = readclimate!(climate, dailyWeather, climate_day)
 
         if carbon_balance !== nothing
-            record_carbon_balance_start!(carbon_balance, diagnostic_day, crop, soil)
+            record_carbon_balance_start!(carbon_balance, diagnostic_day, state, state)
         end
         if nitrogen_balance !== nothing
-            record_nitrogen_balance_start!(nitrogen_balance, diagnostic_day, crop, soil)
+            record_nitrogen_balance_start!(nitrogen_balance, diagnostic_day, state, state)
         end
         if water_balance !== nothing
             record_water_balance_start!(
-                water_balance, diagnostic_day, soil, dailyWeather.prec,
+                water_balance, diagnostic_day, state, dailyWeather.prec,
             )
         end
 
@@ -90,99 +88,100 @@ function _daily_crop!(
         # intentionally separate from continuous crop/soil process kernels.
         update_climbuf!(cftparameters, dailyWeather.temp, climbuf, day)
         cultivate!(
-            crop, managed_land, soil, day_of_year;
+            state, managed_land, state, day_of_year;
             manure,
             apply_prescribed_fertilizer = fertilizer === :yes,
             prescribed_phu,
             prescribed_winter_type,
+            cftparameters = cftparameters,
             lpjmlparams = global_params,
             laimax = cftparameters.laimax,
         )
         if carbon_balance !== nothing
-            record_carbon_balance_after_cultivate!(carbon_balance, diagnostic_day, crop)
+            record_carbon_balance_after_cultivate!(carbon_balance, diagnostic_day, state)
         end
 
         if with_tillage
-            litter_tillage!(soil, crop)
-            tillage_hydraulics!(soil, crop; lpjmlparams = global_params)
+            litter_tillage!(state, state)
+            tillage_hydraulics!(state, state; lpjmlparams = global_params)
         end
-        litter_bioturbation!(soil; lpjmlparams = global_params)
+        litter_bioturbation!(state; lpjmlparams = global_params)
 
         # Radiation uses the snow state present at the start of the day.
-        _pathway_albedo!(pathway, cftparameters, crop, soil, pet, maize)
+        _pathway_albedo!(pathway, cftparameters, state, state, pet, maize)
         petpar!(
             pet, day_of_year, managed_land.latitude, dailyWeather.temp,
             dailyWeather.lwr, dailyWeather.swr,
         )
-        snow!(soil, dailyWeather; snowparams = snow_params, lpjmlparams = global_params)
+        snow!(state, dailyWeather; snowparams = snow_params, lpjmlparams = global_params)
         if water_balance !== nothing
             record_water_balance_after_snow!(
                 water_balance, diagnostic_day, dailyWeather.prec,
             )
         end
 
-        pedotransfer!(soil; lpjmlparams = global_params)
-        update_surface_litter_properties!(soil; thermalparams = thermal_params)
+        pedotransfer!(state; lpjmlparams = global_params)
+        update_surface_litter_properties!(state; thermalparams = thermal_params)
         soil_temperature!(
-            soil, dailyWeather.temp, climbuf.atemp_mean;
+            state, dailyWeather.temp, climbuf.atemp_mean;
             thermalparams = thermal_params, snowparams = snow_params,
         )
 
         # Existing litter/SOM decomposes before today's crop uptake.
         soil_cn_decomposition!(
-            soil;
+            state;
             lpjmlparams = global_params,
             soil_decomp_params = decomp_params,
         )
         c_shift_response_sum === nothing ||
-            accumulate_c_shift_response!(c_shift_response_sum, soil)
+            accumulate_c_shift_response!(c_shift_response_sum, state)
 
         # --- Discrete calendar harvest event ------------------------------
         phenology_crop!(
-            crop, climbuf.V_req, cftparameters, dailyWeather.temp, pet.daylength,
+            state, climbuf.V_req, cftparameters, dailyWeather.temp, pet.daylength,
         )
         annual_output_row = day_of_year == 365 ?
             output_rows.first_annual_row + annual_output_offset : nothing
         harvest_crop!(
-            crop, soil, output, managed_land.residue_fraction, day_of_year;
+            state, state, output, managed_land.residue_fraction, day_of_year;
             output_row, annual_output_row,
         )
-        route_harvest_residues!(soil, crop)
+        route_harvest_residues!(state, state)
         annual_output_offset += day_of_year == 365
         if carbon_balance !== nothing
             record_carbon_balance_after_harvest!(
-                carbon_balance, diagnostic_day, crop, soil,
+                carbon_balance, diagnostic_day, state, state,
                 managed_land.residue_fraction,
             )
         end
 
         interception!(
-            crop, cftparameters, pet.eeq, dailyWeather.prec;
+            state, cftparameters, pet.eeq, dailyWeather.prec;
             lpjmlparams = global_params,
         )
-        pedotransfer!(soil; lpjmlparams = global_params)
+        pedotransfer!(state; lpjmlparams = global_params)
         soil_infiltration!(
-            soil, crop, dailyWeather.prec;
+            state, state, dailyWeather.prec;
             irrigation,
-            snowmelt = soil_snow_fluxes(soil).melt,
+            snowmelt = soil_snow_fluxes(state).melt,
             air_temperature = dailyWeather.temp,
             lpjmlparams = global_params,
             thermalparams = thermal_params,
         )
         if thermal_balance !== nothing
-            record_thermal_balance!(thermal_balance, diagnostic_day, soil)
+            record_thermal_balance!(thermal_balance, diagnostic_day, state)
         end
 
         _pathway_apar!(
-            pathway, cftparameters, crop, pet,
-            soil_snow_prognostic(soil).height, maize,
+            pathway, cftparameters, state, pet,
+            soil_snow_prognostic(state).height, maize,
         )
         temp_stress(
-            cftparameters, pet, crop, dailyWeather.temp;
+            cftparameters, pet, state, dailyWeather.temp;
             photoparams = photo_params,
         )
         photosynthesis!(
-            pathway, cftparameters, crop, crop_canopy_auxiliary(crop).apar,
+            pathway, cftparameters, state, crop_canopy_auxiliary(state).apar,
             pet.daylength, dailyWeather.temp, current_co2;
             comp_vcmax = true,
             lpjmlparams = global_params,
@@ -190,31 +189,31 @@ function _daily_crop!(
         )
 
         transpiration!(
-            crop_fluxes(crop).carbon.water_limited_assimilation,
-            cftparameters, crop, pet, soil, current_co2;
+            crop_fluxes(state).carbon.water_limited_assimilation,
+            cftparameters, state, pet, state, current_co2;
             lpjmlparams = global_params,
         )
         solve_lambda!(
-            pathway, cftparameters, crop, pet, dailyWeather.temp, current_co2;
+            pathway, cftparameters, state, pet, dailyWeather.temp, current_co2;
             lpjmlparams = global_params,
             photoparams = photo_params,
         )
 
         if nitrogen_limit_vcmax
             crop_nitrogen!(
-                crop, cftparameters, soil,
-                crop_photosynthesis_auxiliary(crop).potential_vcmax,
+                state, cftparameters, state,
+                crop_photosynthesis_auxiliary(state).potential_vcmax,
                 dailyWeather.temp;
                 auto_fertilizer = automatic_fertilizer,
                 lpjmlparams = global_params,
             )
             limit_vcmax_by_nitrogen!(
-                crop, cftparameters, dailyWeather.temp;
+                state, cftparameters, dailyWeather.temp;
                 lpjmlparams = global_params,
             )
         end
         photosynthesis!(
-            pathway, cftparameters, crop, crop_canopy_auxiliary(crop).apar,
+            pathway, cftparameters, state, crop_canopy_auxiliary(state).apar,
             pet.daylength, dailyWeather.temp, current_co2;
             comp_vcmax = false,
             lpjmlparams = global_params,
@@ -222,58 +221,58 @@ function _daily_crop!(
         )
 
         crop_carbon!(
-            crop, output, cftparameters, dailyWeather.temp,
-            soil_thermal_prognostic(soil).temperature;
+            state, output, cftparameters, dailyWeather.temp,
+            soil_thermal_prognostic(state).temperature;
             output_row, lpjmlparams = global_params,
         )
         # --- Discrete failed-crop termination event -----------------------
         # This remains separate from calendar harvest: it is only triggered
         # after today's carbon allocation identifies a non-viable stand.
         terminate_failed_crop!(
-            crop, soil, output, managed_land.residue_fraction, day_of_year;
+            state, state, output, managed_land.residue_fraction, day_of_year;
             output_row, annual_output_row,
         )
-        route_harvest_residues!(soil, crop)
+        route_harvest_residues!(state, state)
         if carbon_balance !== nothing
             record_carbon_balance_after_harvest!(
-                carbon_balance, diagnostic_day, crop, soil,
+                carbon_balance, diagnostic_day, state, state,
                 managed_land.residue_fraction,
             )
         end
 
         if nitrogen_limit_vcmax
-            allocate_crop_nitrogen!(crop, cftparameters)
+            allocate_crop_nitrogen!(state, cftparameters)
         else
             crop_nitrogen!(
-                crop, cftparameters, soil,
-                crop_photosynthesis_auxiliary(crop).vcmax, dailyWeather.temp;
+                state, cftparameters, state,
+                crop_photosynthesis_auxiliary(state).vcmax, dailyWeather.temp;
                 auto_fertilizer = automatic_fertilizer,
                 lpjmlparams = global_params,
             )
         end
 
-        evaporation!(pet.eeq, crop, soil; lpjmlparams = global_params)
-        soil_evapotranspiration!(soil, crop; irrigation)
+        evaporation!(pet.eeq, state, state; lpjmlparams = global_params)
+        soil_evapotranspiration!(state, state; irrigation)
         post_crop_nitrogen_losses!(
-            soil;
+            state;
             air_temperature = dailyWeather.temp,
             wind_speed = dailyWeather.wind,
             lpjmlparams = global_params,
         )
 
         if water_balance !== nothing
-            record_water_balance_end!(water_balance, diagnostic_day, soil, crop)
+            record_water_balance_end!(water_balance, diagnostic_day, state, state)
         end
         if nitrogen_balance !== nothing
-            record_nitrogen_balance_end!(nitrogen_balance, diagnostic_day, crop, soil)
+            record_nitrogen_balance_end!(nitrogen_balance, diagnostic_day, state, state)
         end
         if carbon_balance !== nothing
-            record_carbon_balance_end!(carbon_balance, diagnostic_day, crop, soil)
+            record_carbon_balance_end!(carbon_balance, diagnostic_day, state, state)
         end
         # All process kernels for a day share the current backend stream. Wait
         # once at the lifecycle boundary so callers observe a completed daily
         # transition without forcing a host/device barrier after every process.
-        synchronize_backend!(crop_prognostic(crop).canopy.lai)
+        synchronize_backend!(crop_prognostic(state).canopy.lai)
     end
     return nothing
 end

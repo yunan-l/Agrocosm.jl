@@ -51,9 +51,9 @@ end
     compute_equilibrium_evaporation(temperature, shortwave, longwave, albedo,
                                     daylength, dayseconds)
 
-Compute LPJmL's bounded daily equilibrium evaporation diagnostic in mm day⁻¹.
-All radiation and temperature inputs remain scalar; clipping to `[0, 15]`
-matches the previous kernel implementation.
+Compute LPJmL's daily equilibrium evaporation diagnostic in mm day⁻¹.
+LPJmL clips negative energy-balance values to zero, but does not impose an
+arbitrary upper bound.
 """
 @inline function compute_equilibrium_evaporation(temperature::T,
                                                   shortwave::T,
@@ -69,7 +69,7 @@ matches the previous kernel implementation.
     net_shortwave = (one(T) - albedo) * shortwave
     equilibrium = dayseconds * slope / (slope + psychrometric) / latent_heat *
         (net_shortwave + longwave * daylength / T(24))
-    return clamp(equilibrium, zero(T), T(15))
+    return max(equilibrium, zero(T))
 end
 
 """

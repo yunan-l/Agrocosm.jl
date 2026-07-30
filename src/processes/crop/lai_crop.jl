@@ -42,8 +42,9 @@ end
         lai0 = crop_lai[cell]
         if !crop_senescence[cell]
             crop_lai[cell] = crop_flaimax[cell] * laimax
-            # scale daily LAI increment with minimum of wscal and vscal as simplest approach
-            lai_inc = (crop_lai[cell] - lai0) * min(crop_wscal[cell]/T(1.5), crop_vscal[cell])
+            # LPJmL phenology_crop: scale the potential daily LAI increment
+            # by the prior-day water and nitrogen multipliers, both in 0--1.
+            lai_inc = (crop_lai[cell] - lai0) * min(crop_wscal[cell], crop_vscal[cell])
             crop_lai[cell] = lai_inc + lai0
         else
             if !crop_senescence0[cell]

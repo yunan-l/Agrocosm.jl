@@ -365,8 +365,10 @@ end
     soil_infil *= (one(T) + soil_agtop_cover[cell] * soil_infil_litter)
     influx = zero(T)
     iter = 0
-    # Iterative slug infiltration + redistribution; hard cap prevents non-convergent loops.
-    while (infil[cell] > 1.0f-5 || freewater > 1.0f-5) && iter < 500
+    # LPJmL bounds the slug loop at MAXITER = 1000. This is a safety cap,
+    # not a convergence criterion: any unprocessed rainfall becomes surface
+    # runoff when the cap is reached.
+    while (infil[cell] > T(1e-5) || freewater > T(1e-5)) && iter < 1000
         iter += 1
         NO3perc_ly = zero(T)
         freewater = zero(T)
@@ -509,6 +511,14 @@ end
                 end
             end
         end
+    end
+
+    # Preserve LPJmL's MAXITER fallback. Do not leave rainfall in the mutable
+    # infiltration input because it would be omitted from the day's water
+    # balance and silently disappear at the next process update.
+    if iter == 1000 && infil[cell] > zero(T)
+        soil_srunoff[cell] += infil[cell]
+        infil[cell] = zero(T)
     end
 
     for l in 1:soil_layers

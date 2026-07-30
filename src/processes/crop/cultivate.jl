@@ -13,13 +13,15 @@ function cultivate!(crop,
                     apply_prescribed_fertilizer::Bool = true,
                     prescribed_phu = nothing,
                     prescribed_winter_type = nothing,
-                    laimax = cft1.laimax)
+                    cftparameters::CFTParameters = cft1,
+                    laimax = nothing)
     T = eltype(crop_prognostic(crop).canopy.lai)
     current_phu = crop_phenology_input(crop).phu
     current_winter_type = crop_phenology_input(crop).winter_type
     prescribed_phu = isnothing(prescribed_phu) ? current_phu : prescribed_phu
     prescribed_winter_type = isnothing(prescribed_winter_type) ?
         current_winter_type : prescribed_winter_type
+    laimax = isnothing(laimax) ? cftparameters.laimax : laimax
     launch_1D!(
         cultivate_kernel!,
         crop_calendar_input(crop).sowing_date,
@@ -63,6 +65,7 @@ function cultivate!(crop,
         crop_prognostic(crop).water.sufficiency,
         T(0.000083),
         T(0.000083) * T(laimax),
+        cftparameters,
         day,
     )
     fertilizer!(
@@ -116,6 +119,7 @@ end
     water_stress::AbstractVector{T},
     seed_flaimax::T,
     seed_lai::T,
+    cftparameters::CFTParameters,
     day::Integer,
 ) where {T <: AbstractFloat, S <: Integer, B <: Bool}
     cell = @index(Global)
@@ -137,17 +141,32 @@ end
         flaimax[cell] = seed_flaimax
         laimax_adjusted[cell] = one(T)
         lai_npp_deficit[cell] = zero(T)
+        # LPJmL new_crop() initializes 20 gC m⁻² and immediately executes
+        # allocation_daily_crop(..., npp = 0). At fPHU = 0 this gives a
+        # 0.4 root fraction, leaf C required by the CFT-specific seed LAI,
+        # zero storage C, and a mass-closing mobile pool.
         biomass[cell] = T(20)
-        root[cell] = T(8)
-        leaf[cell] = T(0.0113804)
+        root[cell] = T(0.4) * biomass[cell]
+        leaf[cell] = seed_lai / T(cftparameters.sla)
         storage[cell] = zero(T)
-        pool[cell] = T(11.9886196)
+        pool[cell] = biomass[cell] - root[cell] - leaf[cell]
         seed_input[cell] = T(0.7)
         total_nitrogen[cell] = T(0.7)
-        leaf_nitrogen[cell] = zero(T)
-        root_nitrogen[cell] = zero(T)
-        pool_nitrogen[cell] = zero(T)
-        storage_nitrogen[cell] = zero(T)
+        # LPJmL's new_crop() immediately calls allocation_daily_crop() with
+        # zero daily NPP.  Distribute seed N across the seed carbon pools here
+        # for the same reason: a crop that fails on its sowing day must still
+        # carry all seed N through the failed-harvest accounting.
+        @unpack ratio = cftparameters
+        leaf_weight = leaf[cell]
+        root_weight = root[cell] / T(ratio.root)
+        storage_weight = storage[cell] / T(ratio.sto)
+        pool_weight = pool[cell] / T(ratio.pool)
+        nitrogen_weight = leaf_weight + root_weight + storage_weight + pool_weight
+        nitrogen_scale = T(0.7) / nitrogen_weight
+        leaf_nitrogen[cell] = leaf_weight * nitrogen_scale
+        root_nitrogen[cell] = root_weight * nitrogen_scale
+        storage_nitrogen[cell] = storage_weight * nitrogen_scale
+        pool_nitrogen[cell] = pool_weight * nitrogen_scale
         pending_manure[cell] = zero(T)
         pending_fertilizer[cell] = zero(T)
         nitrogen_stress_sum[cell] = zero(T)

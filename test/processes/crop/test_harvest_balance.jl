@@ -96,3 +96,27 @@ end
     carbon_allocation!(cft1, crop)
     @test crop.fluxes.carbon.npp[1] == 0.0f0
 end
+
+@testset "Seed nitrogen is conserved when a crop fails on its sowing day" begin
+    crop = init_crop(1, identity)
+    soil = init_soil(1, soilparams.soildepth, identity)
+    output = init_output(1, identity)
+    Agrocosm.prepare_output_block!(output, 1, 0)
+    residue_fraction = Float32[0.6]
+    crop.auxiliary.calendar.sowing_date .= Int32(100)
+    soil.management.tillage_fraction .= Float32[1 0 0; 0 1 0; 0 0 1]
+
+    cultivate!(
+        crop, init_managed_land(1, identity), soil, 100;
+        apply_prescribed_fertilizer = false,
+    )
+    crop.events.harvest .= Int32(1)
+    Agrocosm.terminate_failed_crop!(
+        crop, soil, output, residue_fraction, 100; output_row = 1,
+    )
+    Agrocosm.route_harvest_residues!(soil, crop)
+
+    @test crop.state.phenology.is_growing[1] == 0
+    @test crop.fluxes.nitrogen.harvest_export[1] + sum(soil.nitrogen.litter) ≈
+          0.7f0 atol = 2.0f-7
+end
