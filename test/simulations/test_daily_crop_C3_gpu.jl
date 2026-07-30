@@ -272,6 +272,16 @@ end
 
 """Recursively compare every numerical leaf in the canonical lifecycle tree."""
 function test_lifecycle_state_equivalence(gpu_value, cpu_value; label)
+    # These are cancellation-sensitive diagnostic residuals, not prognostic
+    # state. Each backend is instead checked against its own energy ledger by
+    # `test_thermal_closure` below.
+    if label in (
+        "state.fluxes.soil.thermal.energy_residual",
+        "state.fluxes.soil.thermal.percolation_energy_residual",
+    )
+        return nothing
+    end
+
     if gpu_value isa AbstractArray
         if eltype(gpu_value) <: AbstractFloat
             test_float_equivalence(gpu_value, cpu_value; label)
