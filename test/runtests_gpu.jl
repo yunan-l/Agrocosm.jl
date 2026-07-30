@@ -19,6 +19,7 @@ sort!(gpu_tests)
                 test_module,
                 :(include(path::AbstractString) = Base.include(@__MODULE__, path)),
             )
+            Core.eval(test_module, :(using Agrocosm))
             Base.include(test_module, joinpath(@__DIR__, "helpers", "model_state_fixture.jl"))
             Base.include(test_module, path)
         end
