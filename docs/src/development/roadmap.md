@@ -14,7 +14,8 @@ bind compact cell identity and CFT identity; production warm-up has a strict
 convergence gate and explicit memory accounting; process, initialization, and
 output updates use backend kernels with synchronization at lifecycle
 boundaries rather than after every kernel. Legacy `_reference!` paths have
-been removed. The current CPU suite passes 2092 tests.
+been removed. Process and diagnostics tests now exercise the same `ModelState`
+interface as the runtime; the full local `Pkg.test()` suite passes.
 
 The AgrocosmData core is also substantially complete:
 
@@ -49,8 +50,9 @@ Work in this phase is ordered as follows:
    checkpoints must use separate directories.
 5. Validate memory, throughput, grid reconstruction, finite/non-negative state,
    CPU/GPU agreement, sampled C/N/water/energy closure, and 2015→2016 native
-   checkpoint continuity. The latest unified GPU suite still requires a fresh
-   server run after its isolated-test entry point was repaired.
+   checkpoint continuity. The latest server CUDA suite passed 1866 checks; its
+   one remaining cancellation-sensitive thermal-residual comparison is fixed
+   locally and requires a fresh server rerun.
 6. Use target-constrained warm-up with a strict production gate. A previous
    100-year global diagnostic reached about 96.15% converged cells, so the
    current code must identify and review the remaining cells rather than
@@ -73,7 +75,7 @@ warmed under the declared allocation/convergence contract, checkpointed, run
 across a year boundary, and reconstructed to the canonical grid without
 LPJmL-derived state.
 
-## Phase 2: differentiable transition
+## Later method work: differentiable transition
 
 1. Declare the active parameter/state boundary for the existing one-day
    transition.
@@ -84,7 +86,7 @@ LPJmL-derived state.
 4. Keep data loading, warm-up, checkpoints, and reporting outside the
    differentiated region.
 
-## Phase 3: multi-crop operation and alternative processes
+## Later production extensions
 
 - The public interface is CFT-based (`CFTParameters`, `CFTRegistry`, `cft_id`)
   while legacy LPJmL `pft` identifiers are accepted only while decoding source

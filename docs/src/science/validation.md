@@ -9,10 +9,9 @@
 - Daily water, carbon, nitrogen, thermal-energy, and percolation-energy ledgers.
 - Interrupted/checkpointed trajectories against uninterrupted simulations.
 
-The current post-refactor CPU suite contains 1686 passing assertions. The
-three-day C3/C4 lifecycle migration was compared against the previous runtime
-entry point across all arrays before that entry was removed (`1032/1032`
-exactly equal).
+The full local CPU `Pkg.test()` suite passes. The three-day C3/C4 lifecycle
+migration was compared against the previous runtime entry point across all
+arrays before that entry was removed (`1032/1032` exactly equal).
 
 ## Scientific interpretation
 
@@ -25,7 +24,8 @@ Current limitations include:
 
 - no equilibrium soil/ecosystem spin-up workflow; the available finite
   agricultural warm-up does not equilibrate the slow SOC pool;
-- no multi-crop framework;
+- the multi-CFT patch runner is implemented, but its complete 24-patch global
+  production matrix still needs server evidence;
 - no production Penman–Monteith/Medlyn alternative;
 - simplified frozen-soil infiltration and heat transport;
 - incomplete soil/climate time-series output coverage;
