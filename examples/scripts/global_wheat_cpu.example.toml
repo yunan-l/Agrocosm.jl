@@ -58,3 +58,6 @@ maximum_carbon_relative_residual = 0.0001
 maximum_nitrogen_relative_residual = 0.0001
 maximum_thermal_relative_residual = 0.0001
 maximum_percolation_energy_residual = 5.0
+# Relative tolerance for high-throughput cells; combined with the absolute
+# tolerance above as `absolute + relative × boundary_enthalpy`.
+maximum_percolation_energy_relative_residual = 5.0e-6

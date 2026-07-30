@@ -274,6 +274,21 @@ function write_report(path, report)
     return path
 end
 
+"""Return the scale-aware closure summary for routed water enthalpy."""
+function percolation_energy_closure(residual, rain, snowmelt, lateral_runoff, bottom_drainage;
+                                    absolute_tolerance, relative_tolerance)
+    boundary_scale = max.(
+        abs.(rain) .+ abs.(snowmelt) .+ abs.(lateral_runoff) .+ abs.(bottom_drainage),
+        1.0f0,
+    )
+    tolerance = absolute_tolerance .+ relative_tolerance .* boundary_scale
+    return (
+        maximum_absolute_residual = maximum(abs, residual),
+        maximum_relative_residual = maximum(abs.(residual) ./ boundary_scale),
+        closes = all(abs.(residual) .<= tolerance),
+    )
+end
+
 function balance_report(simulation, validation)
     water = maximum(abs, Array(simulation.water_balance.residual))
     carbon = maximum(abs, Array(simulation.carbon_balance.relative_residual))
@@ -281,19 +296,32 @@ function balance_report(simulation, validation)
     energy = Array(simulation.thermal_balance.energy_residual)
     column_energy = Array(simulation.thermal_balance.column_energy)
     thermal = maximum(abs.(energy) ./ max.(abs.(column_energy), 1.0f0))
-    percolation = maximum(abs, Array(simulation.thermal_balance.percolation_energy_residual))
+    thermal_balance = simulation.thermal_balance
+    percolation = percolation_energy_closure(
+        Array(thermal_balance.percolation_energy_residual),
+        Array(thermal_balance.rain_energy_input),
+        Array(thermal_balance.snowmelt_energy_input),
+        Array(thermal_balance.lateral_runoff_energy_output),
+        Array(thermal_balance.bottom_drainage_energy_output);
+        absolute_tolerance = validation["maximum_percolation_energy_residual"],
+        relative_tolerance = get(validation, "maximum_percolation_energy_relative_residual", 5.0e-6),
+    )
     water <= validation["maximum_water_residual"] || error("sampled water closure failed")
     carbon <= validation["maximum_carbon_relative_residual"] || error("sampled carbon closure failed")
     nitrogen <= validation["maximum_nitrogen_relative_residual"] || error("sampled nitrogen closure failed")
     thermal <= validation["maximum_thermal_relative_residual"] || error("sampled thermal closure failed")
-    percolation <= validation["maximum_percolation_energy_residual"] ||
-        error("sampled percolation-energy closure failed")
+    percolation.closes || error(
+        "sampled percolation-energy closure failed: " *
+        "maximum_absolute_residual=$(percolation.maximum_absolute_residual), " *
+        "maximum_relative_residual=$(percolation.maximum_relative_residual)",
+    )
     return Dict{String, Any}(
         "maximum_water_residual" => water,
         "maximum_carbon_relative_residual" => carbon,
         "maximum_nitrogen_relative_residual" => nitrogen,
         "maximum_thermal_relative_residual" => thermal,
-        "maximum_percolation_energy_residual" => percolation,
+        "maximum_percolation_energy_residual" => percolation.maximum_absolute_residual,
+        "maximum_percolation_energy_relative_residual" => percolation.maximum_relative_residual,
     )
 end
 

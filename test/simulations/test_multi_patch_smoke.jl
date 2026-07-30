@@ -3,6 +3,17 @@ using NCDatasets
 include(joinpath(@__DIR__, "..", "..", "examples", "scripts", "run_global_cfts_cpu.jl"))
 
 @testset "multi-CFT patch selection, state isolation, and yield bands" begin
+    high_throughput_closure = percolation_energy_closure(
+        Float32[10], Float32[2.0e6], Float32[0], Float32[0], Float32[0];
+        absolute_tolerance = 5.0f0, relative_tolerance = 5.0f-6,
+    )
+    @test high_throughput_closure.closes
+    @test high_throughput_closure.maximum_relative_residual ≈ 5.0f-6
+    @test !percolation_energy_closure(
+        Float32[20], Float32[2.0e6], Float32[0], Float32[0], Float32[0];
+        absolute_tolerance = 5.0f0, relative_tolerance = 5.0f-6,
+    ).closes
+
     @test requested_crop_systems(Dict{String, Any}()) == [(1, false)]
     @test requested_crop_systems(Dict("cfts" => Dict(
         "cft_ids" => "all", "water_systems" => ["rainfed", "irrigated"],
