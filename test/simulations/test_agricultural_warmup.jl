@@ -25,6 +25,8 @@ end
     @test report.years == 10
     @test report.days == 3650
     @test report.forcing_years == 1
+    @test length(report.consecutive_stable_years) == 1
+    @test report.unconverged_cells == count(<(report.consecutive_years), report.consecutive_stable_years)
     @test size(report.soil.total_carbon) == (10, 1)
     @test size(report.soil.total_nitrogen) == (10, 1)
     @test size(report.soil.fast_carbon) == (10, 1)

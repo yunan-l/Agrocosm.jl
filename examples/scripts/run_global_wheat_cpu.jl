@@ -274,6 +274,56 @@ function write_report(path, report)
     return path
 end
 
+"""Write per-cell same-phase warm-up diagnostics for offline convergence QC."""
+function write_warmup_cell_audit(path, grid, selection, warmup)
+    cells = length(selection.cell_ids)
+    length(warmup.consecutive_stable_years) == cells || error(
+        "warm-up convergence audit does not match the selected cells",
+    )
+    comparison_year = max(0, warmup.years - warmup.forcing_years)
+    previous(name) = comparison_year == 0 ?
+        getproperty(warmup.initial_soil, name) :
+        vec(getproperty(warmup.soil, name)[comparison_year, :])
+    current(name) = vec(getproperty(warmup.soil, name)[end, :])
+    relative_change(name) = (current(name) .- previous(name)) ./
+        max.(abs.(previous(name)), eps(Float32))
+    fast_fraction(fast, slow) = fast ./ (fast .+ slow)
+    current_fast_fraction = fast_fraction(current(:fast_carbon), current(:slow_carbon))
+    previous_fast_fraction = fast_fraction(previous(:fast_carbon), previous(:slow_carbon))
+    positions = CartesianIndices(grid.cellid)[selection.compact_indices]
+    longitude = Float32[grid.longitude[position[1]] for position in positions]
+    latitude = Float32[grid.latitude[position[2]] for position in positions]
+    correction = warmup.target_correction
+    isfile(path) && rm(path; force = true)
+    NCDataset(path, "c") do dataset
+        defDim(dataset, "cell", cells)
+        dataset.attrib["long_name"] = "per-cell agricultural warm-up convergence audit"
+        dataset.attrib["forcing_years"] = warmup.forcing_years
+        dataset.attrib["warmup_years"] = warmup.years
+        dataset.attrib["target_constrained"] = string(warmup.target_constrained)
+        dataset.attrib["consecutive_years_required"] = warmup.consecutive_years
+        defVar(dataset, "cell_id", Int32, ("cell",))[:] = selection.cell_ids
+        defVar(dataset, "longitude", Float32, ("cell",))[:] = longitude
+        defVar(dataset, "latitude", Float32, ("cell",))[:] = latitude
+        defVar(dataset, "strict_converged", Int8, ("cell",))[:] = Int8.(
+            warmup.consecutive_stable_years .>= warmup.consecutive_years,
+        )
+        defVar(dataset, "consecutive_stable_years", Int32, ("cell",))[:] =
+            warmup.consecutive_stable_years
+        defVar(dataset, "same_phase_carbon_relative_change", Float32, ("cell",))[:] =
+            Float32.(relative_change(:total_carbon))
+        defVar(dataset, "same_phase_nitrogen_relative_change", Float32, ("cell",))[:] =
+            Float32.(relative_change(:total_nitrogen))
+        defVar(dataset, "same_phase_fast_carbon_fraction_change", Float32, ("cell",))[:] =
+            Float32.(current_fast_fraction .- previous_fast_fraction)
+        defVar(dataset, "final_target_carbon_correction", Float32, ("cell",))[:] =
+            Float32.(vec(correction.carbon[end, :]))
+        defVar(dataset, "final_target_nitrogen_correction", Float32, ("cell",))[:] =
+            Float32.(vec(correction.nitrogen[end, :]))
+    end
+    return path
+end
+
 """Return the scale-aware closure summary for routed water enthalpy."""
 function percolation_energy_closure(residual, rain, snowmelt, lateral_runoff, bottom_drainage;
                                     absolute_tolerance, relative_tolerance)
@@ -518,6 +568,9 @@ function run_global_wheat(
     write_report(
         joinpath(output_directory, "warmup_cn_drift.toml"),
         warmup_drift,
+    )
+    write_warmup_cell_audit(
+        joinpath(output_directory, "warmup_cell_audit.nc"), grid, selection, warmup,
     )
     write_soil_pool_allocation(
         joinpath(output_directory, "warmup_soil_pool_allocation.nc"),

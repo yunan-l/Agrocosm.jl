@@ -489,6 +489,7 @@ function agricultural_warmup!(
         converged,
         converged_cell_fraction = converged_fraction[actual_years],
         unconverged_cells = count(<(consecutive_years), consecutive),
+        consecutive_stable_years = consecutive,
         initial_soil = initial_soil,
         soil = _warmup_history_view(history, actual_years),
         target_correction = (
@@ -654,6 +655,7 @@ function agricultural_warmup!(
         converged,
         converged_cell_fraction = converged_fraction[actual_years],
         unconverged_cells = count(<(consecutive_years), consecutive),
+        consecutive_stable_years = consecutive,
         initial_soil = initial_soil,
         soil = _warmup_history_view(history, actual_years),
         target_correction = (
