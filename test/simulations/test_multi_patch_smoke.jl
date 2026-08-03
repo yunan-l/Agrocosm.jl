@@ -81,6 +81,66 @@ include(joinpath(@__DIR__, "..", "..", "examples", "scripts", "run_global_cfts_c
         @test free_run["warmup_minimum_years"] == 600
         @test free_run["warmup_maximum_years"] == 1500
         @test free_run["require_warmup_convergence"]
+
+        allocation_path = joinpath(directory, "allocation.nc")
+        production_output = joinpath(directory, "production.nc")
+        write(allocation_path, "allocation")
+        write(production_output, "production")
+        status_path = joinpath(directory, "batch_status.toml")
+        fingerprint = _file_fingerprint(free_config)
+        _write_batch_status(
+            status_path;
+            status = "calibration_completed",
+            name = "cft_01_rainfed",
+            cft_id = 1,
+            irrigated = false,
+            calibration_config,
+            production_config = free_config,
+            production_output,
+            calibration_output_directory = joinpath(directory, "calibration"),
+            production_output_directory = joinpath(directory, "production"),
+            allocation_path,
+            production_config_fingerprint = fingerprint,
+            allocation_fingerprint = _file_fingerprint(allocation_path),
+            calibration_completed = true,
+        )
+        @test _resumable_calibration(status_path, fingerprint) !== nothing
+        @test _resumable_batch(status_path, fingerprint) === nothing
+
+        _write_batch_status(
+            status_path;
+            status = "failed",
+            name = "cft_01_rainfed",
+            cft_id = 1,
+            irrigated = false,
+            calibration_config,
+            production_config = free_config,
+            production_output,
+            calibration_output_directory = joinpath(directory, "calibration"),
+            production_output_directory = joinpath(directory, "production"),
+            allocation_path,
+            production_config_fingerprint = fingerprint,
+            allocation_fingerprint = _file_fingerprint(allocation_path),
+            calibration_completed = true,
+        )
+        @test _resumable_calibration(status_path, fingerprint) !== nothing
+
+        _write_batch_status(
+            status_path;
+            status = "completed",
+            name = "cft_01_rainfed",
+            cft_id = 1,
+            irrigated = false,
+            calibration_config,
+            production_config = free_config,
+            production_output,
+            calibration_output_directory = joinpath(directory, "calibration"),
+            production_output_directory = joinpath(directory, "production"),
+            allocation_path,
+            production_config_fingerprint = fingerprint,
+        )
+        @test _resumable_batch(status_path, fingerprint) !== nothing
+        @test _resumable_batch(status_path, "different-config") === nothing
     end
 
 end

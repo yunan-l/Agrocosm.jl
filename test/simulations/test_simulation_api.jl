@@ -445,5 +445,16 @@ end
 
         wrong_domain = create(; cell_ids = [202])
         @test_throws ArgumentError restore_checkpoint!(wrong_domain, path)
+
+        checkpoint = JLD2.load(path, "checkpoint")
+        incompatible_metadata = merge(
+            checkpoint.metadata,
+            (parameter_fingerprint = "incompatible-parameters",),
+        )
+        JLD2.jldsave(path; checkpoint = merge(
+            checkpoint,
+            (metadata = incompatible_metadata,),
+        ))
+        @test_throws ArgumentError restore_checkpoint!(create(), path)
     end
 end

@@ -18,7 +18,7 @@ restore_checkpoint!(resumed, "checkpoint.jld2")
 run_simulation!(resumed, remaining_climate; spinup = false)
 ```
 
-The v2 checkpoint records prognostic state, restart-relevant inputs, partial
+The current checkpoint format records prognostic state, restart-relevant inputs, partial
 outputs, diagnostics, process parameters, and run metadata. Arrays are stored
 on the host and copied to the target backend during restoration.
 

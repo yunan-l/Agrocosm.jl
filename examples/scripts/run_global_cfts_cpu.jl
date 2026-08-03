@@ -1,4 +1,6 @@
 using TOML
+using Dates
+using SHA
 
 include(joinpath(@__DIR__, "run_global_wheat_cpu.jl"))
 
@@ -42,6 +44,71 @@ const _CALIBRATION_RUN_OPTIONS = Dict{String, Any}(
     "require_warmup_convergence" => false,
 )
 
+const _CFT_BATCH_MANIFEST_SCHEMA_VERSION = "1"
+
+_file_fingerprint(path::AbstractString) = bytes2hex(sha256(read(path)))
+
+function _repository_commit()
+    try
+        return readchomp(`git rev-parse --verify HEAD`)
+    catch
+        return "unknown"
+    end
+end
+
+function _write_batch_status(path; status, name, cft_id, irrigated,
+    calibration_config, production_config, production_output,
+    calibration_output_directory, production_output_directory,
+    allocation_path, production_config_fingerprint, kwargs...)
+    payload = Dict{String, Any}(
+        "schema_version" => _CFT_BATCH_MANIFEST_SCHEMA_VERSION,
+        "status" => String(status),
+        "name" => name,
+        "cft_id" => cft_id,
+        "irrigated" => irrigated,
+        "calibration_config" => abspath(calibration_config),
+        "production_config" => abspath(production_config),
+        "production_output" => abspath(production_output),
+        "calibration_output_directory" => abspath(calibration_output_directory),
+        "production_output_directory" => abspath(production_output_directory),
+        "pool_allocation" => abspath(allocation_path),
+        "production_config_fingerprint" => production_config_fingerprint,
+        "updated_at" => string(now()),
+    )
+    for (key, value) in pairs(kwargs)
+        payload[String(key)] = value
+    end
+    write_report(path, payload)
+    return path
+end
+
+function _resumable_batch(status_path, production_config_fingerprint)
+    isfile(status_path) || return nothing
+    status = TOML.parsefile(status_path)
+    get(status, "schema_version", "") == _CFT_BATCH_MANIFEST_SCHEMA_VERSION || return nothing
+    get(status, "status", "") == "completed" || return nothing
+    get(status, "production_config_fingerprint", "") == production_config_fingerprint || return nothing
+    production_output = get(status, "production_output", nothing)
+    allocation_path = get(status, "pool_allocation", nothing)
+    (production_output isa AbstractString && isfile(production_output)) || return nothing
+    (allocation_path isa AbstractString && isfile(allocation_path)) || return nothing
+    return status
+end
+
+function _resumable_calibration(status_path, production_config_fingerprint)
+    isfile(status_path) || return nothing
+    status = TOML.parsefile(status_path)
+    get(status, "schema_version", "") == _CFT_BATCH_MANIFEST_SCHEMA_VERSION || return nothing
+    status["status"] in ("calibration_completed", "failed") || return nothing
+    get(status, "calibration_completed", false) || return nothing
+    get(status, "production_config_fingerprint", "") == production_config_fingerprint || return nothing
+    allocation_path = get(status, "pool_allocation", nothing)
+    allocation_fingerprint = get(status, "allocation_fingerprint", nothing)
+    (allocation_path isa AbstractString && isfile(allocation_path)) || return nothing
+    allocation_fingerprint == _file_fingerprint(allocation_path) || return nothing
+    return status
+end
+
 function write_batch_config(path, config; output_directory, pool_allocation = nothing,
     production::Bool, target_constrained::Bool, warmup_options = nothing)
     batch = deepcopy(config)
@@ -69,13 +136,23 @@ function write_batch_config(path, config; output_directory, pool_allocation = no
     return path
 end
 
-function run_global_cfts(config_path; backend_override = :cpu)
+function run_global_cfts(
+    config_path;
+    backend_override = :cpu,
+    cft_id::Union{Nothing, Integer} = nothing,
+    irrigated::Union{Nothing, Bool} = nothing,
+)
     config = TOML.parsefile(config_path)
     haskey(config["paths"], "pool_allocation") && error(
         "the CFT workflow derives one CFT- and water-system-specific allocation per batch; " *
         "do not set paths.pool_allocation in the shared configuration",
     )
     systems = requested_crop_systems(config)
+    if !isnothing(cft_id)
+        1 <= cft_id <= length(CFTS) || error("cft_id must be in 1:$(length(CFTS))")
+        isnothing(irrigated) && error("a single CFT run must specify rainfed or irrigated")
+        systems = [(Int(cft_id), irrigated)]
+    end
     output_directory = abspath(config["paths"]["output_directory"])
     haskey(config, "free_warmup") && haskey(config, "allocation_validation") && error(
         "use [free_warmup], not both [free_warmup] and legacy [allocation_validation]",
@@ -85,6 +162,7 @@ function run_global_cfts(config_path; backend_override = :cpu)
     simulation_years = Int(config["run"]["simulation_start_year"]):Int(
         config["run"]["simulation_end_year"],
     )
+    resume_completed_batches = Bool(get(config["run"], "resume_completed_batches", true))
     batch_manifest = Dict{String, Any}[]
     for (cft_id, irrigated) in systems
         name = batch_name(cft_id, irrigated)
@@ -97,15 +175,8 @@ function run_global_cfts(config_path; backend_override = :cpu)
             production = false,
             target_constrained = true,
         )
-        calibration = run_global_wheat(
-            calibration_config;
-            backend_override,
-            cft_id,
-            irrigated,
-        )
-        allocation_path = joinpath(calibration.output_directory, "warmup_soil_pool_allocation.nc")
-        isfile(allocation_path) || error("$name did not write a soil-pool allocation")
         production_directory = joinpath(batch_directory, "production")
+        allocation_path = joinpath(calibration_directory, "warmup_soil_pool_allocation.nc")
         production_config = write_batch_config(
             joinpath(batch_directory, "production.toml"), config;
             output_directory = production_directory,
@@ -114,29 +185,121 @@ function run_global_cfts(config_path; backend_override = :cpu)
             target_constrained = false,
             warmup_options = free_warmup_options,
         )
-        result = run_global_wheat(production_config; backend_override, cft_id, irrigated)
         production_output = joinpath(
-            result.output_directory,
+            production_directory,
             "global_wheat_$(first(simulation_years))_$(last(simulation_years)).nc",
         )
-        push!(batch_manifest, Dict(
-            "name" => name,
-            "cft_id" => cft_id,
-            "irrigated" => irrigated,
-            "calibration_output_directory" => calibration.output_directory,
-            "pool_allocation" => allocation_path,
-            "production_output_directory" => result.output_directory,
-            "production_output" => production_output,
-            "production_warmup_years" => result.warmup_years,
-            "production_warmup_converged" => result.warmup_converged,
-        ))
+        production_config_fingerprint = _file_fingerprint(production_config)
+        status_path = joinpath(batch_directory, "batch_status.toml")
+        resumed = resume_completed_batches ?
+            _resumable_batch(status_path, production_config_fingerprint) : nothing
+        if resumed !== nothing
+            println("resuming completed $name")
+            push!(batch_manifest, Dict{String, Any}(String(k) => v for (k, v) in pairs(resumed)))
+            continue
+        end
+
+        calibration_resume = resume_completed_batches ?
+            _resumable_calibration(status_path, production_config_fingerprint) : nothing
+        calibration_resume === nothing && _write_batch_status(
+            status_path;
+            status = "running", name, cft_id, irrigated,
+            calibration_config, production_config, production_output,
+            calibration_output_directory = calibration_directory,
+            production_output_directory = production_directory,
+            allocation_path, production_config_fingerprint,
+        )
+        try
+            calibration_output_directory = calibration_directory
+            calibration_completed = false
+            if calibration_resume === nothing
+                calibration = run_global_wheat(
+                    calibration_config;
+                    backend_override,
+                    cft_id,
+                    irrigated,
+                )
+                isfile(allocation_path) || error("$name did not write a soil-pool allocation")
+                allocation_fingerprint = _file_fingerprint(allocation_path)
+                calibration_output_directory = calibration.output_directory
+                _write_batch_status(
+                    status_path;
+                    status = "calibration_completed", name, cft_id, irrigated,
+                    calibration_config, production_config, production_output,
+                    calibration_output_directory,
+                    production_output_directory = production_directory,
+                    allocation_path, production_config_fingerprint,
+                    allocation_fingerprint,
+                    calibration_completed = true,
+                )
+                calibration_completed = true
+            else
+                println("resuming production after completed calibration for $name")
+                allocation_fingerprint = calibration_resume["allocation_fingerprint"]
+                calibration_output_directory = calibration_resume["calibration_output_directory"]
+                calibration_completed = true
+            end
+            result = run_global_wheat(production_config; backend_override, cft_id, irrigated)
+            isfile(production_output) || error("$name did not write production output")
+            status = Dict{String, Any}(
+                "schema_version" => _CFT_BATCH_MANIFEST_SCHEMA_VERSION,
+                "status" => "completed",
+                "name" => name,
+                "cft_id" => cft_id,
+                "irrigated" => irrigated,
+                "calibration_config" => abspath(calibration_config),
+                "production_config" => abspath(production_config),
+                "production_output" => abspath(production_output),
+                "calibration_output_directory" => abspath(calibration_output_directory),
+                "production_output_directory" => abspath(result.output_directory),
+                "pool_allocation" => abspath(allocation_path),
+                "production_config_fingerprint" => production_config_fingerprint,
+                "allocation_fingerprint" => allocation_fingerprint,
+                "production_output_bytes" => filesize(production_output),
+                "production_warmup_years" => result.warmup_years,
+                "production_warmup_converged" => result.warmup_converged,
+                "updated_at" => string(now()),
+            )
+            write_report(status_path, status)
+            push!(batch_manifest, status)
+        catch exception
+            _write_batch_status(
+                status_path;
+                status = "failed", name, cft_id, irrigated,
+                calibration_config, production_config, production_output,
+                calibration_output_directory = calibration_directory,
+                production_output_directory = production_directory,
+                allocation_path, production_config_fingerprint,
+                calibration_completed,
+                error = sprint(showerror, exception),
+            )
+            rethrow()
+        end
     end
     manifest_path = joinpath(output_directory, "cft_batch_manifest.toml")
-    write_report(manifest_path, Dict("batches" => batch_manifest))
+    write_report(manifest_path, Dict(
+        "schema_version" => _CFT_BATCH_MANIFEST_SCHEMA_VERSION,
+        "repository_commit" => _repository_commit(),
+        "config_path" => abspath(config_path),
+        "config_fingerprint" => _file_fingerprint(config_path),
+        "simulation_start_year" => first(simulation_years),
+        "simulation_end_year" => last(simulation_years),
+        "created_at" => string(now()),
+        "batches" => batch_manifest,
+    ))
     return manifest_path
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    length(ARGS) == 1 || error("usage: run_global_cfts_cpu.jl CONFIG_TOML")
-    println(run_global_cfts(abspath(ARGS[1]); backend_override = :cpu))
+    length(ARGS) in (1, 3) || error(
+        "usage: run_global_cfts_cpu.jl CONFIG_TOML [CFT_ID rainfed|irrigated]",
+    )
+    cft_id = length(ARGS) == 3 ? parse(Int, ARGS[2]) : nothing
+    irrigated = length(ARGS) == 3 ?
+        Symbol(lowercase(ARGS[3])) === :irrigated : nothing
+    length(ARGS) == 3 && Symbol(lowercase(ARGS[3])) in (:rainfed, :irrigated) ||
+        length(ARGS) == 1 || error("water system must be rainfed or irrigated")
+    println(run_global_cfts(
+        abspath(ARGS[1]); backend_override = :cpu, cft_id, irrigated,
+    ))
 end

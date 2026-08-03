@@ -52,6 +52,19 @@ Both drivers execute the selected homogeneous CFT/water-system batches
 sequentially. This preserves backend-equivalent process execution during the
 current validation stage; it is not yet a fused compact multi-patch GPU domain.
 
+To run exactly one patch in a scheduler array or rerun one failed patch, pass
+its CFT identifier and water system on the command line:
+
+```bash
+julia --project=. examples/scripts/run_global_cfts_gpu.jl \
+  /absolute/path/global_crops.toml 1 rainfed
+```
+
+With `resume_completed_batches = true` under `[run]`, a valid completed batch
+is skipped. If calibration completed but the later free warm-up or production
+stage stopped, the driver verifies the recorded allocation fingerprint and
+resumes at production rather than recalibrating the 600-year allocation.
+
 The extracted management files are ordered as rainfed CFTs `1:12`, irrigated
 CFTs `13:24`, and 12 residue bands shared by the two water systems. Before a
 run, the selected land fractions are checked so that their sum cannot exceed

@@ -25,6 +25,7 @@ water_systems = ["rainfed", "irrigated"]
 # a fixed 600-year target-constrained calibration. The runner enforces these
 # values and writes batches/<name>/calibration/warmup_soil_pool_allocation.nc.
 [run]
+resume_completed_batches = true
 backend = "cuda"
 device_id = 0
 memory_safety_factor = 1.2

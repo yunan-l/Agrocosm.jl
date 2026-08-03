@@ -432,7 +432,7 @@ function run_simulation!(
     return simulation
 end
 
-const _CHECKPOINT_FORMAT_VERSION = 4
+const _CHECKPOINT_FORMAT_VERSION = 5
 
 _checkpoint_snapshot(values::AbstractArray) = Array(values)
 _checkpoint_snapshot(values::NamedTuple) = map(_checkpoint_snapshot, values)
@@ -485,6 +485,7 @@ function _simulation_checkpoint(simulation::CropSimulation)
     return (
         format_version = _CHECKPOINT_FORMAT_VERSION,
         metadata = (
+            state_schema_version = 1,
             precision = string(simulation.config.T),
             cells = cells,
             cell_ids = copy(simulation.config.execution.domain.cell_ids),
@@ -496,6 +497,10 @@ function _simulation_checkpoint(simulation::CropSimulation)
             fertilizer = simulation.config.fertilizer,
             with_tillage = simulation.config.with_tillage,
             nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
+            parameter_fingerprint = _checkpoint_fingerprint((
+                cft = simulation.cft,
+                model_parameters = simulation.model_parameters,
+            )),
         ),
         simulated_days = simulation.simulated_days,
         cft = simulation.cft,
@@ -511,6 +516,11 @@ function _simulation_checkpoint(simulation::CropSimulation)
         ),
         diagnostics = _checkpoint_snapshot(simulation.diagnostics),
     )
+end
+
+"""Return a stable digest for immutable checkpoint metadata."""
+function _checkpoint_fingerprint(value)
+    return bytes2hex(sha256(codeunits(repr(value))))
 end
 
 """
@@ -535,6 +545,7 @@ function _validate_checkpoint_target(simulation::CropSimulation, checkpoint)
     ))
     metadata = checkpoint.metadata
     checks = (
+        ("state schema version", metadata.state_schema_version, 1),
         ("precision", metadata.precision, string(simulation.config.T)),
         ("cell count", metadata.cells, length(simulation.managed_land.latitude)),
         ("cell ids", metadata.cell_ids, simulation.config.execution.domain.cell_ids),
@@ -547,6 +558,11 @@ function _validate_checkpoint_target(simulation::CropSimulation, checkpoint)
         ("tillage", metadata.with_tillage, simulation.config.with_tillage),
         ("nitrogen Vcmax limitation", metadata.nitrogen_limit_vcmax,
          simulation.config.nitrogen_limit_vcmax),
+        ("parameter fingerprint", metadata.parameter_fingerprint,
+         _checkpoint_fingerprint((
+             cft = simulation.cft,
+             model_parameters = simulation.model_parameters,
+         ))),
     )
     for (label, saved, target) in checks
         saved == target || throw(ArgumentError(

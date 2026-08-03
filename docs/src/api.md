@@ -1,5 +1,11 @@
 # API reference
 
+The simulation interface below is the supported programmatic API. Process
+kernels and concrete state fields are advanced interfaces used internally by
+the daily driver; callers should prefer `initialize_simulation`,
+`run_simulation!`, and checkpoint/restart functions unless implementing a
+new model process.
+
 ## Simulation interface
 
 ```@docs

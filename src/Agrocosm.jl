@@ -10,7 +10,8 @@ using KernelAbstractions # GPU/CPU parallelization
 using Adapt
 
 # INPUT OUTPUT
-using DataFrames, NCDatasets, Random, Dates
+using NCDatasets, Dates
+using SHA
 import JLD2: @load, @save, jldsave, load
 
 # PARAMETER HANDLING
