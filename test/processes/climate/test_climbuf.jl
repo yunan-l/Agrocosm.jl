@@ -51,3 +51,20 @@ using Test
     @test climbuf.V_req ≈ expected_vreq
     @test climbuf.atemp_mean ≈ expected_annual_mean
 end
+
+@testset "Fixed prescribed management freezes V_req but not climate history" begin
+    daily = fill(5.0f0, 365, 1)
+    climbuf = init_climbuf(1, identity)
+    annual_climbuf!(daily, climbuf, cft1)
+    vreq = copy(climbuf.V_req)
+    vreq_a = copy(climbuf.V_req_a)
+
+    annual_climbuf!(
+        fill(15.0f0, 365, 1), climbuf, cft1;
+        update_vernalization_requirement = false,
+    )
+
+    @test climbuf.V_req == vreq
+    @test climbuf.V_req_a == vreq_a
+    @test climbuf.mtemp20 != fill(5.0f0, 12, 1)
+end

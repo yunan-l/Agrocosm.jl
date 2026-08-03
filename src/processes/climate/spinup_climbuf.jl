@@ -27,11 +27,15 @@ Update climate-buffer and PET diagnostics during daily simulation.
 function update_climbuf!(CFT::CFTParameters,
                          temp::AbstractArray{T},
                          climbuf::ClimBuf,
-                         day::Integer
+                         day::Integer;
+                         update_vernalization_requirement::Bool = true,
 )where {T <: AbstractFloat}
 
     if day > 1 && day % 365 == 1
-        annual_climbuf!(climbuf.atemp, climbuf, CFT)
+        annual_climbuf!(
+            climbuf.atemp, climbuf, CFT;
+            update_vernalization_requirement,
+        )
     end
     
     if day % 365 == 0

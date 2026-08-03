@@ -18,6 +18,7 @@ function _daily_crop!(
     fertilizer = :auto,
     with_tillage = true,
     nitrogen_limit_vcmax = false,
+    update_vernalization_requirement::Bool = true,
     water_balance = nothing,
     nitrogen_balance = nothing,
     carbon_balance = nothing,
@@ -86,7 +87,10 @@ function _daily_crop!(
         # --- Discrete establishment event ---------------------------------
         # Today's climate must enter history before sowing decisions. This is
         # intentionally separate from continuous crop/soil process kernels.
-        update_climbuf!(cftparameters, dailyWeather.temp, climbuf, day)
+        update_climbuf!(
+            cftparameters, dailyWeather.temp, climbuf, day;
+            update_vernalization_requirement,
+        )
         cultivate!(
             state, managed_land, state, day_of_year;
             manure,

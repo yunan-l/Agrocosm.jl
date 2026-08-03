@@ -9,7 +9,8 @@ function annual_climbuf!(daily_temp::AbstractArray{T},
                          climbuf::ClimBuf,
                          CFT::CFTParameters;
                          n::Int = 5,
-                         kk = T(0.05)
+                         kk = T(0.05),
+                         update_vernalization_requirement::Bool = true,
 ) where {T <: AbstractFloat}
     kk = T(kk)
     # Calculate the average temperature for each month.
@@ -42,6 +43,7 @@ function annual_climbuf!(daily_temp::AbstractArray{T},
         CFT,
         n,
         kk,
+        update_vernalization_requirement,
     )
 
 end
@@ -74,6 +76,7 @@ end
     CFT::CFTParameters,
     n::Integer,
     kk::T,
+    update_vernalization_requirement::Bool,
 ) where {T <: AbstractFloat}
     cell = @index(Global)
     @unpack tv_opt, pvd_max = CFT
@@ -103,11 +106,13 @@ end
                 (one(T) - (temperature - tv_opt.low) / (tv_opt.high - tv_opt.low))
         end
     end
-    climbuf_V_req_a[cell] = sum_v_req
-    if climbuf_V_req[cell] < -9998
-        climbuf_V_req[cell] = sum_v_req
-    else
-        climbuf_V_req[cell] = (one(T) - kk) * climbuf_V_req[cell] + kk * sum_v_req
+    if update_vernalization_requirement
+        climbuf_V_req_a[cell] = sum_v_req
+        if climbuf_V_req[cell] < -9998
+            climbuf_V_req[cell] = sum_v_req
+        else
+            climbuf_V_req[cell] = (one(T) - kk) * climbuf_V_req[cell] + kk * sum_v_req
+        end
     end
 
     annual_temperature = zero(T)

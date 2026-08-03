@@ -44,7 +44,7 @@ include("../../helpers/crop_lifecycle_fixture.jl")
     for (container, fields) in (
         (crop_state.phenology, (:vdsum, :husum, :growing_days, :is_growing)),
         (crop_auxiliary.phenology, (:fphu,)),
-        (crop_state.canopy, (:lai, :laimax_adjusted, :lai_npp_deficit)),
+        (crop_state.canopy, (:lai, :lai_previous_potential, :laimax_adjusted, :lai_npp_deficit)),
         (crop_auxiliary.canopy,
          (:actual_lai, :flaimax, :fpar, :apar, :canopy_conductance, :canopy_wet)),
         (crop_state.carbon,

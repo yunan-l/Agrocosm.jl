@@ -10,6 +10,7 @@ function lai_crop!(crop,
     launch_1D!(
         lai_crop_kernel!,
         crop_prognostic(crop).canopy.lai,
+        crop_prognostic(crop).canopy.lai_previous_potential,
         crop_prognostic(crop).phenology.senescence,
         crop_prognostic(crop).phenology.senescence_previous,
         crop_prognostic(crop).water.sufficiency,
@@ -24,6 +25,7 @@ end
 
 @kernel inbounds = true function lai_crop_kernel!(
                                   crop_lai::AbstractArray{T},
+                                  crop_lai_previous_potential::AbstractArray{T},
                                   crop_senescence::AbstractArray{B},
                                   crop_senescence0::AbstractArray{B},
                                   crop_wscal::AbstractArray{T},
@@ -41,10 +43,14 @@ end
     if crop_isgrowing[cell] == 1
         lai0 = crop_lai[cell]
         if !crop_senescence[cell]
-            crop_lai[cell] = crop_flaimax[cell] * laimax
-            # LPJmL phenology_crop: scale the potential daily LAI increment
-            # by the prior-day water and nitrogen multipliers, both in 0--1.
-            lai_inc = (crop_lai[cell] - lai0) * min(crop_wscal[cell], crop_vscal[cell])
+            potential_lai = crop_flaimax[cell] * laimax
+            # LPJmL's `lai000` stores the previous *potential* LAI, distinct
+            # from the actual leaf area retained after water/N limitation.
+            # Keeping that state prevents a newly sown winter crop from losing
+            # its seed LAI while vernalization keeps potential LAI at zero.
+            lai_inc = (potential_lai - crop_lai_previous_potential[cell]) *
+                min(crop_wscal[cell], crop_vscal[cell])
+            crop_lai_previous_potential[cell] = potential_lai
             crop_lai[cell] = lai_inc + lai0
         else
             if !crop_senescence0[cell]
@@ -54,6 +60,7 @@ end
         end
     else
         crop_lai[cell] = zero(T)
+        crop_lai_previous_potential[cell] = zero(T)
         crop_laimax_adjusted[cell] = zero(T)
     end
 end

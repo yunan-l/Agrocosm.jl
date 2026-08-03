@@ -40,6 +40,7 @@ function cultivate!(crop,
         prescribed_phu,
         prescribed_winter_type,
         crop_prognostic(crop).canopy.lai,
+        crop_prognostic(crop).canopy.lai_previous_potential,
         crop_canopy_auxiliary(crop).flaimax,
         crop_prognostic(crop).canopy.laimax_adjusted,
         crop_prognostic(crop).canopy.lai_npp_deficit,
@@ -94,6 +95,7 @@ end
     prescribed_phu::AbstractVector{T},
     prescribed_winter_type::AbstractVector{B},
     lai::AbstractVector{T},
+    lai_previous_potential::AbstractVector{T},
     flaimax::AbstractVector{T},
     laimax_adjusted::AbstractVector{T},
     lai_npp_deficit::AbstractVector{T},
@@ -138,6 +140,7 @@ end
         phu[cell] = prescribed_phu[cell]
         winter_type[cell] = prescribed_winter_type[cell]
         lai[cell] = seed_lai
+        lai_previous_potential[cell] = seed_lai
         flaimax[cell] = seed_flaimax
         laimax_adjusted[cell] = one(T)
         lai_npp_deficit[cell] = zero(T)
@@ -175,7 +178,11 @@ end
         water_deficit[cell] = zero(T)
         water_demand_sum[cell] = zero(T)
         water_supply_sum[cell] = zero(T)
-        water_stress[cell] = one(T)
+        # LPJmL `newpft()` starts a newly cultivated crop with `wscal = 0`.
+        # The following water-stress calculation supplies the first actual
+        # stress factor. This also preserves seed LAI while winter
+        # vernalization keeps potential LAI at zero.
+        water_stress[cell] = zero(T)
     else
         seed_input[cell] = zero(T)
     end

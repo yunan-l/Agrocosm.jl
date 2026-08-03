@@ -43,6 +43,8 @@ using Test
         @test !crop.state.phenology.senescence_previous[1]
         @test crop.auxiliary.canopy.flaimax[1] == T(0.000083)
         @test crop.state.canopy.lai[1] == T(0.000083) * T(cft1.laimax)
+        @test crop.state.canopy.lai_previous_potential[1] ==
+              T(0.000083) * T(cft1.laimax)
         @test crop.state.canopy.laimax_adjusted[1] == one(T)
         @test crop.state.nitrogen.total[1] == T(0.7)
         @test crop.state.nitrogen.leaf[1] > zero(T)
@@ -58,13 +60,39 @@ using Test
         @test crop.state.nitrogen.sufficiency[1] == one(T)
         @test crop.state.water.demand_sum[1] == zero(T)
         @test crop.state.water.supply_sum[1] == zero(T)
-        @test crop.state.water.sufficiency[1] == one(T)
+        @test crop.state.water.sufficiency[1] == zero(T)
 
         # Cultivation rebuilds only the new crop; soil memory persists.
         @test soil.carbon.slow == soil_carbon_before
         @test crop.state.phenology.husum[2] == T(9)
         @test crop.state.nitrogen.pending_fertilizer[2] == T(9)
     end
+end
+
+@testset "Winter-crop vernalization retains LPJmL seed LAI" begin
+    crop = init_crop(Float32, 1, identity)
+    soil = init_soil(Float32, 1, soilparams.soildepth, identity)
+    managed_land = init_managed_land(Float32, 1, identity)
+    state = test_model_state(crop, soil; managed_land)
+    crop.auxiliary.calendar.sowing_date .= Int32(1)
+
+    cultivate!(
+        state, managed_land, state, 1;
+        apply_prescribed_fertilizer = false,
+        prescribed_phu = Float32[700],
+        prescribed_winter_type = Bool[true],
+        cftparameters = cft1,
+    )
+    seed_lai = only(crop.state.canopy.lai)
+
+    # At 5 °C, the first vernalization day has fPHU = 0. LPJmL retains the
+    # seed LAI because `lai000` is the previous potential LAI, not actual LAI.
+    phenology_crop!(state, Float32[60], cft1, Float32[5], Float32[10])
+
+    @test only(crop.state.phenology.vdsum) == 1f0
+    @test only(crop.auxiliary.phenology.fphu) == 0f0
+    @test only(crop.state.canopy.lai) == seed_lai
+    @test only(crop.state.canopy.lai_previous_potential) == 0f0
 end
 
 @testset "Cultivation initializes CFT-specific seed carbon and nitrogen" begin
@@ -143,7 +171,7 @@ end
         (simulation.state.prognostic.crop.phenology,
          (:vdsum, :husum, :growing_days, :is_growing)),
         (simulation.state.prognostic.crop.canopy,
-         (:lai, :laimax_adjusted, :lai_npp_deficit)),
+         (:lai, :lai_previous_potential, :laimax_adjusted, :lai_npp_deficit)),
         (simulation.state.auxiliary.crop.phenology, (:fphu,)),
         (simulation.state.auxiliary.crop.canopy,
          (:actual_lai, :flaimax, :fpar, :apar, :canopy_conductance, :canopy_wet)),

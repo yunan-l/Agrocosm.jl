@@ -199,6 +199,8 @@ function create_simulation(initial_data, selection, config, days, device, cft_id
         manure = management["manure"],
         fertilizer = Symbol(management["fertilizer"]),
         with_tillage = management["with_tillage"],
+        # LPJmL keeps V_req fixed once prescribed crop dates/PHU are fixed.
+        freeze_vernalization_requirement = Symbol(management["mode"]) === :fixed,
     )
 end
 

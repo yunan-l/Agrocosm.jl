@@ -116,6 +116,7 @@ function initialize_simulation(
     fertilizer = :auto,
     with_tillage::Bool = true,
     nitrogen_limit_vcmax::Bool = false,
+    freeze_vernalization_requirement::Bool = false,
     mineral_nitrogen_initialization::Symbol = :lpjml_initsoil,
     c_shift_initialization::Symbol = :auto,
 )
@@ -146,6 +147,7 @@ function initialize_simulation(
         fertilizer,
         with_tillage,
         nitrogen_limit_vcmax,
+        freeze_vernalization_requirement,
     )
     validate_state_schema(state, cells)
     balances = diagnostics ? (
@@ -236,6 +238,7 @@ function _transition_range!(
         fertilizer = simulation.config.fertilizer,
         with_tillage = simulation.config.with_tillage,
         nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
+        update_vernalization_requirement = !simulation.config.freeze_vernalization_requirement,
         water_balance = simulation.water_balance,
         nitrogen_balance = simulation.nitrogen_balance,
         carbon_balance = simulation.carbon_balance,

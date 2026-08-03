@@ -1,8 +1,9 @@
 """Checkpointed canopy variables needed by the next daily transition."""
 mutable struct CropCanopyState{A}
-    lai::A                # Potential phenological leaf-area index (m² leaf m⁻² ground).
-    laimax_adjusted::A    # Maximum LAI retained at onset of senescence (m² m⁻²).
-    lai_npp_deficit::A    # LAI not supported by available plant carbon (m² m⁻²).
+    lai::A                    # Phenological leaf-area index (m² leaf m⁻² ground).
+    lai_previous_potential::A # Previous potential LAI (`lai000` in LPJmL).
+    laimax_adjusted::A        # Maximum LAI retained at onset of senescence (m² m⁻²).
+    lai_npp_deficit::A        # LAI not supported by available plant carbon (m² m⁻²).
 end
 
 """Current-day canopy radiation, geometry, and conductance diagnostics."""
@@ -18,7 +19,7 @@ end
 
 function init_crop_canopy_state(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
     float_state() = device(zeros(T, cell_size))
-    return CropCanopyState(ntuple(_ -> float_state(), 3)...)
+    return CropCanopyState(ntuple(_ -> float_state(), 4)...)
 end
 
 function init_crop_canopy_auxiliary(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}

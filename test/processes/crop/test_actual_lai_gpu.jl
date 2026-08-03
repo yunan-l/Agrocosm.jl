@@ -15,6 +15,7 @@ CUDA.allowscalar(false)
     crop.state.phenology.growing_days .= Int32(20)
     crop.state.phenology.senescence .= true
     crop.state.canopy.lai .= 0.1f0
+    crop.state.canopy.lai_previous_potential .= 0.1f0
     crop.state.canopy.lai_npp_deficit .= 0.3f0
     crop.state.carbon.biomass .= 10.0f0
     crop.state.carbon.leaf .= 1.0f0
@@ -39,4 +40,16 @@ CUDA.allowscalar(false)
     @test all(iszero, Array(crop.auxiliary.canopy.apar))
     @test all(iszero, Array(crop.auxiliary.canopy.canopy_wet))
     @test all(iszero, Array(crop.fluxes.water.interception))
+
+    # Exercise the non-senescence branch that uses LPJmL's `lai000` state.
+    crop.state.phenology.senescence .= false
+    crop.state.canopy.lai .= 1.0f0
+    crop.state.canopy.lai_previous_potential .= 1.0f0
+    crop.auxiliary.canopy.flaimax .= 0.8f0
+    crop.state.water.sufficiency .= 0.6f0
+    crop.state.nitrogen.sufficiency .= 0.9f0
+    lai_crop!(state, cft1)
+    synchronize()
+    expected = 1.0f0 + (0.8f0 * cft1.laimax - 1.0f0) * 0.6f0
+    @test all(≈(expected), Array(crop.state.canopy.lai))
 end

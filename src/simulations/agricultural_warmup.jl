@@ -443,6 +443,11 @@ function agricultural_warmup!(
             pathway_value(simulation.processes.pathway),
             start_day, end_day, simulation.processes, prepared_climate, simulation.state;
             simulation_day_offset = 365 * (year - 1) + 1 - start_day,
+            # LPJmL updates V_req while crop dates/PHU are being established,
+            # then freezes it for prescribed fixed-date production. Day one of
+            # forcing year N+1 closes year N, hence the extra year here.
+            update_vernalization_requirement =
+                !simulation.config.freeze_vernalization_requirement || year <= forcing_years + 1,
             common...,
         )
         correction = if target_constrained
@@ -472,7 +477,10 @@ function agricultural_warmup!(
     # `update_climbuf!` normally closes a year on the following day 1. The
     # production clock intentionally restarts at day 1, so close the final
     # warm-up year explicitly before returning.
-    annual_climbuf!(simulation.climbuf.atemp, simulation.climbuf, simulation.cft)
+    annual_climbuf!(
+        simulation.climbuf.atemp, simulation.climbuf, simulation.cft;
+        update_vernalization_requirement = !simulation.config.freeze_vernalization_requirement,
+    )
     clear_output_timeseries!(simulation.output)
     calibrated_c_shift = _warmup_c_shift_report(c_shift_workspace)
     return (
@@ -609,6 +617,8 @@ function agricultural_warmup!(
                 local_start, local_end, simulation.processes, prepared_climate,
                 simulation.state;
                 simulation_day_offset = warmup_day + 1 - local_start,
+                update_vernalization_requirement =
+                    !simulation.config.freeze_vernalization_requirement || year <= forcing_years + 1,
                 prescribed...,
                 common...,
             )
@@ -638,7 +648,10 @@ function agricultural_warmup!(
         end
     end
 
-    annual_climbuf!(simulation.climbuf.atemp, simulation.climbuf, simulation.cft)
+    annual_climbuf!(
+        simulation.climbuf.atemp, simulation.climbuf, simulation.cft;
+        update_vernalization_requirement = !simulation.config.freeze_vernalization_requirement,
+    )
     clear_output_timeseries!(simulation.output)
     calibrated_c_shift = _warmup_c_shift_report(c_shift_workspace)
     return (

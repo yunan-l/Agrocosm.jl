@@ -2,7 +2,9 @@ using Agrocosm
 using JLD2
 using Test
 
-include(joinpath(@__DIR__, "..", "..", "lib", "AgrocosmData", "src", "AgrocosmData.jl"))
+if !isdefined(@__MODULE__, :AgrocosmData)
+    include(joinpath(@__DIR__, "..", "..", "lib", "AgrocosmData", "src", "AgrocosmData.jl"))
+end
 import .AgrocosmData
 
 function fixture_array_snapshot(value, path = "")

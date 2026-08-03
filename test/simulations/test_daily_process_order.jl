@@ -21,8 +21,15 @@ using Test
     @test position("pedotransfer!") <
           position("update_surface_litter_properties!") <
           position("soil_temperature!")
+    @test position("soil_temperature!") < position("soil_cn_decomposition!")
     @test position("cultivate!") < position("phenology_crop!") < position("harvest_crop!")
-    @test position("harvest_crop!") < position("route_harvest_residues!")
-    @test position("crop_carbon!") < position("terminate_failed_crop!")
-    @test position("terminate_failed_crop!") < position("post_crop_nitrogen_losses!")
+    @test position("harvest_crop!") < position("route_harvest_residues!") <
+          position("interception!") < position("soil_infiltration!")
+    @test position("soil_infiltration!") < position("_pathway_apar!") <
+          position("temp_stress") < position("photosynthesis!") <
+          position("transpiration!") < position("solve_lambda!")
+    @test position("solve_lambda!") < position("crop_carbon!") <
+          position("terminate_failed_crop!") < position("evaporation!")
+    @test position("evaporation!") <
+          position("soil_evapotranspiration!") < position("post_crop_nitrogen_losses!")
 end

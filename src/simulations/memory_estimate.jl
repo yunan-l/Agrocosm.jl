@@ -58,7 +58,7 @@ function _stream_output_bytes(
     return daily_bytes + annual_bytes + accumulator_bytes
 end
 
-const _PERSISTENT_FLOAT_VALUES_PER_CELL = 855
+const _PERSISTENT_FLOAT_VALUES_PER_CELL = 856
 const _PERSISTENT_NONFLOAT_BYTES_PER_CELL = 26
 const _PERSISTENT_FIXED_FLOAT_VALUES = 26
 

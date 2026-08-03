@@ -46,6 +46,9 @@ end
         crop.state.phenology.is_growing .= Int32(1)
         crop.state.phenology.senescence .= false
         crop.state.canopy.lai .= T(1)
+        # `lai_previous_potential` is LPJmL's `lai000`; establish a
+        # self-consistent state for this isolated growth-step test.
+        crop.state.canopy.lai_previous_potential .= T(1)
         crop.auxiliary.canopy.flaimax .= T(0.8)
         crop.state.water.sufficiency .= T(0.6)
         crop.state.nitrogen.sufficiency .= T(0.9)

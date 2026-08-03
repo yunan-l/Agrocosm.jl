@@ -59,6 +59,7 @@ struct SimulationConfiguration{T <: AbstractFloat, D, E}
     fertilizer::Symbol
     with_tillage::Bool
     nitrogen_limit_vcmax::Bool
+    freeze_vernalization_requirement::Bool
     execution::E
 end
 
@@ -71,6 +72,7 @@ function SimulationConfiguration(
     fertilizer::Symbol = :auto,
     with_tillage::Bool = true,
     nitrogen_limit_vcmax::Bool = false,
+    freeze_vernalization_requirement::Bool = false,
 ) where {T <: AbstractFloat}
     days > 0 || throw(ArgumentError("days must be positive"))
     execution = ExecutionContext(T, device, active_indices; cell_ids)
@@ -79,7 +81,7 @@ function SimulationConfiguration(
         T, typeof(device), typeof(execution),
     }(
         source_indices, device, T, Int(days), irrigation, manure, fertilizer,
-        with_tillage, nitrogen_limit_vcmax, execution,
+        with_tillage, nitrogen_limit_vcmax, freeze_vernalization_requirement, execution,
     )
 end
 
