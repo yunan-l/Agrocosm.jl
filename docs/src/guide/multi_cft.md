@@ -61,21 +61,16 @@ one in any geographic cell.
 
 Each calibration/free-equilibrium batch writes separately below
 `batches/cft_XX_rainfed/{calibration,production}` or
-`batches/cft_XX_irrigated/{calibration,production}`. The combined file
-`global_cft_yield_START_END.nc` contains:
+`batches/cft_XX_irrigated/{calibration,production}`. The production NetCDF in
+each batch is the authoritative yield output; it is deliberately unweighted
+and is not merged or multiplied by `landfrac`. `cft_batch_manifest.toml`
+records the allocation, production directory, and production NetCDF path for
+every batch. This keeps each crop--soil patch independent and avoids inventing
+a cross-CFT aggregation rule at the model-output boundary.
 
-```text
-yield(longitude, latitude, band, time)
-landfrac(longitude, latitude, band, time)
-cft_id(band)
-irrigated(band)  # 0 = rainfed; 1 = irrigated
-landfrac_sum(longitude, latitude, time)
-```
-
-`yield` is deliberately unweighted: it is a per-patch yield and is not summed
-or multiplied by `landfrac`; `landfrac_sum` is retained only as a coverage QC.
-`cft_batch_manifest.toml` records the allocation and production paths for every
-batch. Full irrigation resets rooted soil layers to field capacity daily, so
+`landfrac` is still read during input selection to identify active cells. It is
+not used to rescale the process calculations or to construct a combined yield
+file. Full irrigation resets rooted soil layers to field capacity daily, so
 water-balance closure is reported only for rainfed batches.
 
 Each batch writes `warmup_soil_pool_allocation.nc`. Its allocation fields have

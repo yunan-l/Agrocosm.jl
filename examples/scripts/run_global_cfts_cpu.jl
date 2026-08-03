@@ -1,4 +1,3 @@
-using NCDatasets
 using TOML
 
 include(joinpath(@__DIR__, "run_global_wheat_cpu.jl"))
@@ -70,77 +69,6 @@ function write_batch_config(path, config; output_directory, pool_allocation = no
     return path
 end
 
-function patch_landfrac(catalog, grid, systems, source_years)
-    total = zeros(Float32, length(source_years), length(grid.cell_ids))
-    fractions = Vector{Any}(undef, length(systems))
-    for (index, (cft_id, irrigated)) in pairs(systems)
-        landuse = read_management(
-            catalog, :landuse, grid, cft_id;
-            simulation_years = source_years, T = Float32, irrigated,
-        )
-        total .+= landuse.values
-        fractions[index] = landuse
-    end
-    maximum(total) <= 1.0f0 + 1.0f-6 || error(
-        "selected CFT patch land fractions exceed one in at least one grid cell",
-    )
-    return fractions
-end
-
-function write_cft_yield(path, batch_paths, systems, patch_fractions, grid)
-    first_path = first(batch_paths)
-    NCDataset(first_path, "r") do reference
-        longitude = reference["longitude"][:]
-        latitude = reference["latitude"][:]
-        time = reference["time"][:]
-        NCDataset(path, "c") do output
-            defDim(output, "longitude", length(longitude))
-            defDim(output, "latitude", length(latitude))
-            defDim(output, "band", length(systems))
-            defDim(output, "time", length(time))
-            defVar(output, "longitude", eltype(longitude), ("longitude",))[:] = longitude
-            defVar(output, "latitude", eltype(latitude), ("latitude",))[:] = latitude
-            defVar(output, "time", eltype(time), ("time",))[:] = time
-            defVar(output, "band", Int32, ("band",))[:] = Int32.(1:length(systems))
-            defVar(output, "cft_id", Int32, ("band",))[:] = Int32[first(system) for system in systems]
-            defVar(output, "irrigated", Int8, ("band",))[:] = Int8[last(system) for system in systems]
-            yield = defVar(output, "yield", Float32, ("longitude", "latitude", "band", "time"))
-            yield.attrib["long_name"] = "unweighted crop yield by CFT and water system"
-            yield.attrib["aggregation"] = "none"
-            landfrac = defVar(output, "landfrac", Float32, ("longitude", "latitude", "band", "time"))
-            landfrac.attrib["long_name"] = "crop land fraction by CFT and water system"
-            landfrac_sum = defVar(output, "landfrac_sum", Float32, ("longitude", "latitude", "time"))
-            landfrac_sum.attrib["long_name"] = "sum of simulated crop land fractions"
-            total_fraction = zeros(Float32, length(longitude), length(latitude), length(time))
-            for (band, batch_path) in pairs(batch_paths)
-                NCDataset(batch_path, "r") do input
-                    input["longitude"][:] == longitude || error("longitude differs across crop batches")
-                    input["latitude"][:] == latitude || error("latitude differs across crop batches")
-                    input["time"][:] == time || error("time differs across crop batches")
-                    fraction_data = patch_fractions[band]
-                    fraction_data.time == Int.(time) || error("landfrac years differ across crop batches")
-                    batch_yield = input["crop_yield"][:, :, :]
-                    for time_index in eachindex(time)
-                        fraction = expand_to_grid(
-                            vec(fraction_data.values[time_index, :]), grid; fill_value = 0.0f0,
-                        )
-                        valid = isfinite.(batch_yield[:, :, time_index])
-                        fraction[.!valid] .= 0.0f0
-                        landfrac[:, :, band, time_index] = fraction
-                        total_fraction[:, :, time_index] .+= fraction
-                    end
-                    yield[:, :, band, :] = batch_yield
-                end
-            end
-            maximum(total_fraction) <= 1.0f0 + 1.0f-6 || error(
-                "valid CFT patch land fractions exceed one in the reconstructed output",
-            )
-            landfrac_sum[:, :, :] = total_fraction
-        end
-    end
-    return path
-end
-
 function run_global_cfts(config_path; backend_override = :cpu)
     config = TOML.parsefile(config_path)
     haskey(config["paths"], "pool_allocation") && error(
@@ -154,13 +82,9 @@ function run_global_cfts(config_path; backend_override = :cpu)
     )
     free_warmup_options = get(config, "free_warmup",
         get(config, "allocation_validation", nothing))
-    catalog = catalog_from_config(config)
-    grid = read_grid(dataset(catalog, :grid); T = Float32)
     simulation_years = Int(config["run"]["simulation_start_year"]):Int(
         config["run"]["simulation_end_year"],
     )
-    patch_fractions = patch_landfrac(catalog, grid, systems, management_source_years(config, simulation_years))
-    batch_paths = String[]
     batch_manifest = Dict{String, Any}[]
     for (cft_id, irrigated) in systems
         name = batch_name(cft_id, irrigated)
@@ -191,10 +115,10 @@ function run_global_cfts(config_path; backend_override = :cpu)
             warmup_options = free_warmup_options,
         )
         result = run_global_wheat(production_config; backend_override, cft_id, irrigated)
-        push!(batch_paths, joinpath(
+        production_output = joinpath(
             result.output_directory,
             "global_wheat_$(first(simulation_years))_$(last(simulation_years)).nc",
-        ))
+        )
         push!(batch_manifest, Dict(
             "name" => name,
             "cft_id" => cft_id,
@@ -202,16 +126,14 @@ function run_global_cfts(config_path; backend_override = :cpu)
             "calibration_output_directory" => calibration.output_directory,
             "pool_allocation" => allocation_path,
             "production_output_directory" => result.output_directory,
+            "production_output" => production_output,
             "production_warmup_years" => result.warmup_years,
             "production_warmup_converged" => result.warmup_converged,
         ))
     end
-    output_path = joinpath(
-        output_directory,
-        "global_cft_yield_$(first(simulation_years))_$(last(simulation_years)).nc",
-    )
-    write_report(joinpath(output_directory, "cft_batch_manifest.toml"), Dict("batches" => batch_manifest))
-    return write_cft_yield(output_path, batch_paths, systems, patch_fractions, grid)
+    manifest_path = joinpath(output_directory, "cft_batch_manifest.toml")
+    write_report(manifest_path, Dict("batches" => batch_manifest))
+    return manifest_path
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

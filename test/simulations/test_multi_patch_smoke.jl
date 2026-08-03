@@ -1,8 +1,6 @@
-using NCDatasets
-
 include(joinpath(@__DIR__, "..", "..", "examples", "scripts", "run_global_cfts_cpu.jl"))
 
-@testset "multi-CFT patch selection, state isolation, and yield bands" begin
+@testset "multi-CFT patch selection, state isolation, and batch configuration" begin
     high_throughput_closure = percolation_energy_closure(
         Float32[10], Float32[2.0e6], Float32[0], Float32[0], Float32[0];
         absolute_tolerance = 5.0f0, relative_tolerance = 5.0f-6,
@@ -83,41 +81,6 @@ include(joinpath(@__DIR__, "..", "..", "examples", "scripts", "run_global_cfts_c
         @test free_run["warmup_minimum_years"] == 600
         @test free_run["warmup_maximum_years"] == 1500
         @test free_run["require_warmup_convergence"]
-
-        batch_paths = String[]
-        grid = GridIndex(
-            Float32[0, 1], Float32[0], reshape(Int32[1, 2], 2, 1),
-            Int32[1, 2], Int32[1, 2], Int32[1, 1],
-        )
-        patch_fractions = [
-            (time = Int32[2015], values = reshape(Float32[0.25, 0.5], 1, 2)),
-            (time = Int32[2015], values = reshape(Float32[0.25, 0.25], 1, 2)),
-        ]
-        for (index, values) in enumerate((Float32[1 2], Float32[3 4]))
-            path = joinpath(directory, "batch_$index.nc")
-            NCDataset(path, "c") do dataset
-                defDim(dataset, "longitude", 2)
-                defDim(dataset, "latitude", 1)
-                defDim(dataset, "time", 1)
-                defVar(dataset, "longitude", Float32, ("longitude",))[:] = Float32[0, 1]
-                defVar(dataset, "latitude", Float32, ("latitude",))[:] = Float32[0]
-                defVar(dataset, "time", Int32, ("time",))[:] = Int32[2015]
-                defVar(dataset, "crop_yield", Float32, ("longitude", "latitude", "time"))[:, :, :] =
-                    reshape(values, 2, 1, 1)
-            end
-            push!(batch_paths, path)
-        end
-        output = write_cft_yield(
-            joinpath(directory, "yield.nc"), batch_paths, [(1, false), (1, true)],
-            patch_fractions, grid,
-        )
-        NCDataset(output, "r") do dataset
-            @test size(dataset["yield"]) == (2, 1, 2, 1)
-            @test dataset["yield"][:, :, 1, :] == reshape(Float32[1, 2], 2, 1, 1)
-            @test dataset["yield"][:, :, 2, :] == reshape(Float32[3, 4], 2, 1, 1)
-            @test dataset["cft_id"][:] == Int32[1, 1]
-            @test dataset["irrigated"][:] == Int8[0, 1]
-            @test dataset["landfrac_sum"][:, :, :] == reshape(Float32[0.5, 0.75], 2, 1, 1)
-        end
     end
+
 end
