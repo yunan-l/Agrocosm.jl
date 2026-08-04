@@ -129,6 +129,18 @@ const _OUTPUT_VARIABLE_METADATA = Dict{Tuple{Symbol, Symbol}, NamedTuple}(
     (:crop, :fphu) => (units = "1", description = "Fraction of potential heat units"),
     (:crop, :water_deficit) => (units = "%", description = "Crop water deficit"),
     (:crop, :growing_mask) => (units = "1", description = "Active crop-stand mask"),
+    (:soil, :ecosystem_respiration) => (
+        units = "gC m-2 day-1",
+        description = "Ecosystem respiration: plant plus heterotrophic soil respiration",
+    ),
+    (:soil, :heterotrophic_respiration) => (
+        units = "gC m-2 day-1",
+        description = "Heterotrophic litter and soil respiration",
+    ),
+    (:soil, :evapotranspiration) => (
+        units = "mm day-1",
+        description = "Total land-surface evapotranspiration",
+    ),
     (:calendar, :harvesting_mask) => (units = "1", description = "Harvest condition mask"),
     (:calendar, :harvesting_year) => (units = "year", description = "Simulation harvest year"),
     (:calendar, :harvest_date) => (units = "day_of_year", description = "Harvest day of year"),

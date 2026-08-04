@@ -34,10 +34,28 @@ with at least two threads for actual overlap.
 
 ## Output groups
 
-- `simulation.output.crop`: GPP, NPP, LAI, biomass, yield, Vcmax, respiration,
-  vegetation C/N, and water deficit.
-- `simulation.output.soil`: soil water, soil/litter C and N, ecosystem and
-  heterotrophic respiration, and evapotranspiration.
+- `simulation.output.crop`: GPP, NPP, LAI, biomass, yield, Vcmax, plant
+  respiration, vegetation C/N, and water deficit. `crop.gpp` is the daily
+  gross-assimilation flux in `gC m-2 day-1`.
+- `simulation.output.soil`: soil water, soil/litter C and N, and the daily
+  ecosystem flux diagnostics below.
+
+### Daily ecosystem flux diagnostics
+
+The daily variables below are model diagnostics; they do not alter any process
+calculation.
+
+- `soil.ecosystem_respiration` is modeled **RECO** in `gC m-2 day-1`:
+  `crop.respiration + soil.heterotrophic_respiration`.
+- `soil.heterotrophic_respiration` is the litter and soil microbial component
+  of RECO in `gC m-2 day-1`.
+- `soil.evapotranspiration` is modeled **ET_total** in `mm day-1`: layered
+  crop transpiration, bare-soil evaporation, surface-litter evaporation, and
+  canopy-interception evaporation.
+- `crop.yield` is emitted annually in `gC m-2 year-1`, at the calendar-year
+  boundary. `calendar.harvest_date` and `calendar.harvesting_year` identify
+  the harvest event used for that annual record, including a winter crop whose
+  sowing and harvest occur in different calendar years.
 - `simulation.output.climate`: selected processed climate variables.
 - `simulation.output.calendar`: sowing/harvest events and harvest dates.
 

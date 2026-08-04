@@ -235,6 +235,9 @@ end
 production_output_variables() = [
     OutputVariable(:crop, :gpp; reduction = :sum),
     OutputVariable(:crop, :npp; reduction = :sum),
+    OutputVariable(:soil, :ecosystem_respiration; reduction = :sum),
+    OutputVariable(:soil, :heterotrophic_respiration; reduction = :sum),
+    OutputVariable(:soil, :evapotranspiration; reduction = :sum),
     OutputVariable(:crop, :lai; reduction = :mean),
     OutputVariable(:crop, :yield),
 ]

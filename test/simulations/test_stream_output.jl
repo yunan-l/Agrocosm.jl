@@ -39,6 +39,9 @@ end
             OutputVariable(:crop, :gpp),
             OutputVariable(:crop, :npp),
             OutputVariable(:crop, :lai),
+            OutputVariable(:soil, :ecosystem_respiration),
+            OutputVariable(:soil, :heterotrophic_respiration),
+            OutputVariable(:soil, :evapotranspiration),
             OutputVariable(:crop, :yield),
         ];
         frequency = :daily,
@@ -60,10 +63,20 @@ end
         Array(baseline.output.crop.npp)
     @test reduce(vcat, [chunk.values[:crop_lai] for chunk in daily_chunks]) ==
         Array(baseline.output.crop.lai)
+    @test reduce(vcat, [chunk.values[:soil_ecosystem_respiration] for chunk in daily_chunks]) ==
+        Array(baseline.output.soil.ecosystem_respiration)
+    @test reduce(vcat, [chunk.values[:soil_heterotrophic_respiration] for chunk in daily_chunks]) ==
+        Array(baseline.output.soil.heterotrophic_respiration)
+    @test reduce(vcat, [chunk.values[:soil_evapotranspiration] for chunk in daily_chunks]) ==
+        Array(baseline.output.soil.evapotranspiration)
     @test reduce(vcat, [chunk.values[:crop_yield] for chunk in annual_chunks]) ==
         Array(baseline.output.crop.yield)
     @test all(length(chunk.time) <= 73 for chunk in daily_chunks)
-    @test all(Set(keys(chunk.values)) == Set((:crop_gpp, :crop_npp, :crop_lai))
+    @test all(Set(keys(chunk.values)) == Set((
+        :crop_gpp, :crop_npp, :crop_lai,
+        :soil_ecosystem_respiration, :soil_heterotrophic_respiration,
+        :soil_evapotranspiration,
+    ))
               for chunk in daily_chunks)
     @test Agrocosm._output_timeseries_empty(streamed.output)
 

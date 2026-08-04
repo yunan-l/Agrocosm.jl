@@ -257,6 +257,7 @@ function _daily_crop!(
 
         evaporation!(pet.eeq, state, state; lpjmlparams = global_params)
         soil_evapotranspiration!(state, state; irrigation)
+        record_ecosystem_flux_outputs!(output, state, state; output_row)
         post_crop_nitrogen_losses!(
             state;
             air_temperature = dailyWeather.temp,

@@ -88,7 +88,7 @@ end
     @test estimate.days == 4
     @test estimate.backend == :cpu
     @test estimate.diagnostics_bytes == 0
-    @test estimate.projected_output_bytes == 264
+    @test estimate.projected_output_bytes == 312
     @test preallocation == estimate
     @test estimate_memory(
         1, 1; T = Float64, diagnostics = false, block_days = 1,
@@ -177,6 +177,42 @@ end
     @test simulation.simulated_days == 3
     @test size(simulation.output.crop.npp) == (3, 1)
     @test all(isfinite, simulation.output.crop.npp)
+end
+
+@testset "Daily ecosystem flux outputs close to their process fluxes" begin
+    initial, climate = simulation_api_fixture(Float32)
+    simulation = initialize_simulation(
+        cft1, initial; indices = [1], T = Float32, days = 3, fertilizer = :no,
+    )
+    run_simulation!(simulation, climate; spinup = false)
+    crop = simulation.state
+    @test size(simulation.output.soil.ecosystem_respiration) == (3, 1)
+    @test size(simulation.output.soil.heterotrophic_respiration) == (3, 1)
+    @test size(simulation.output.soil.evapotranspiration) == (3, 1)
+    @test simulation.output.soil.ecosystem_respiration[end, 1] ≈
+          Agrocosm.crop_fluxes(crop).carbon.respiration[1] +
+          Agrocosm.soil_carbon_fluxes(crop).heterotrophic_respiration[1]
+    expected_et = Agrocosm.crop_fluxes(crop).water.interception[1] +
+        Agrocosm.soil_surface_litter_fluxes(crop).evaporation[1] +
+        sum(Agrocosm.crop_fluxes(crop).water.transpiration_layer[:, 1]) +
+        sum(Agrocosm.soil_water_fluxes(crop).evaporation[:, 1])
+    @test simulation.output.soil.evapotranspiration[end, 1] ≈ expected_et
+    reco_spec, reco_frequency = output_variable_spec(:soil, :ecosystem_respiration)
+    @test reco_spec.units == "gC m-2 day-1"
+    @test reco_frequency === :daily
+
+    chunks = OutputChunk[]
+    streamed = initialize_simulation(
+        cft1, initial;
+        indices = [1], T = Float32, days = 3, diagnostics = false, fertilizer = :no,
+    )
+    stream = OutputStream(
+        [OutputVariable(:soil, :evapotranspiration)];
+        writer = chunk -> push!(chunks, chunk), cell_ids = Int32[1],
+    )
+    run_simulation!(streamed, [climate]; spinup = false, output_stream = stream)
+    @test only(chunks).values[:soil_evapotranspiration] ==
+          simulation.output.soil.evapotranspiration
 end
 
 @testset "Annual management is applied at sowing" begin

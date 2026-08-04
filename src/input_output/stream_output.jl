@@ -1,5 +1,6 @@
 const _STREAM_DAILY_FIELDS = (
     crop = (_DAILY_CROP_FLOAT_OUTPUT_FIELDS..., _DAILY_CROP_INTEGER_OUTPUT_FIELDS...),
+    soil = _DAILY_SOIL_FLOAT_OUTPUT_FIELDS,
     calendar = _DAILY_CALENDAR_INTEGER_OUTPUT_FIELDS,
 )
 const _STREAM_ANNUAL_FIELDS = (
@@ -19,7 +20,10 @@ function OutputVariable(group::Symbol, field::Symbol; reduction::Union{Nothing, 
     annual = group in keys(_STREAM_ANNUAL_FIELDS) && field in getproperty(_STREAM_ANNUAL_FIELDS, group)
     (daily || annual) || throw(ArgumentError("unsupported output variable $group.$field"))
     output_variable_spec(group, field)
-    default_reduction = field in (:gpp, :npp, :respiration, :sowing_event, :harvest_event) ?
+    default_reduction = field in (
+        :gpp, :npp, :respiration, :ecosystem_respiration,
+        :heterotrophic_respiration, :evapotranspiration, :sowing_event, :harvest_event,
+    ) ?
         :sum : field in (:biomass, :storage_carbon, :growing_mask, :harvesting_mask) ?
         :last : :mean
     selected_reduction = something(reduction, default_reduction)

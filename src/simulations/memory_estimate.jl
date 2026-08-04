@@ -20,7 +20,8 @@ _array_storage_bytes(value) = _array_storage_bytes(value, IdDict{Any, Nothing}()
 
 function _projected_output_bytes(cells::Int, days::Int, ::Type{T}) where {T}
     annual_rows = fld(days, 365)
-    daily_float_fields = length(_DAILY_CROP_FLOAT_OUTPUT_FIELDS)
+    daily_float_fields = length(_DAILY_CROP_FLOAT_OUTPUT_FIELDS) +
+        length(_DAILY_SOIL_FLOAT_OUTPUT_FIELDS)
     daily_int_fields = length(_DAILY_CROP_INTEGER_OUTPUT_FIELDS) +
         length(_DAILY_CALENDAR_INTEGER_OUTPUT_FIELDS)
     annual_float_fields = length(_ANNUAL_CROP_FLOAT_OUTPUT_FIELDS)

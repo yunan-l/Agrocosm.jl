@@ -29,7 +29,7 @@ mutable struct SoilOutput{A, M}
     fast_nitrogen::M           # Fast soil-organic-nitrogen stock by layer (gN m⁻²).
     slow_nitrogen::M           # Slow soil-organic-nitrogen stock by layer (gN m⁻²).
     heterotrophic_respiration::A # Litter and soil respiration (gC m⁻² day⁻¹).
-    evapotranspiration::A      # Soil evaporation plus crop transpiration (mm day⁻¹).
+    evapotranspiration::A      # Total land-surface ET: canopy interception, litter/soil evaporation, and crop transpiration (mm day⁻¹).
 end
 
 """Time-series outputs for climate forcing and potential evaporation."""
@@ -69,6 +69,9 @@ const _DAILY_CROP_FLOAT_OUTPUT_FIELDS = (
     :storage_carbon, :fphu, :water_deficit,
 )
 const _DAILY_CROP_INTEGER_OUTPUT_FIELDS = (:growing_mask,)
+const _DAILY_SOIL_FLOAT_OUTPUT_FIELDS = (
+    :ecosystem_respiration, :heterotrophic_respiration, :evapotranspiration,
+)
 const _DAILY_CALENDAR_INTEGER_OUTPUT_FIELDS = (
     :harvesting_mask, :sowing_event, :harvest_event,
 )
@@ -179,6 +182,14 @@ function prepare_output_block!(output::Output,
             resize_rows(getproperty(output.crop, field), rows),
         )
     end
+    for field in _DAILY_SOIL_FLOAT_OUTPUT_FIELDS
+        rows = isnothing(selected) || (:soil, field) in selected ? daily_rows : 0
+        setproperty!(
+            output.soil,
+            field,
+            resize_rows(getproperty(output.soil, field), rows),
+        )
+    end
     for field in _DAILY_CALENDAR_INTEGER_OUTPUT_FIELDS
         rows = isnothing(selected) || (:calendar, field) in selected ? daily_rows : 0
         setproperty!(
@@ -213,4 +224,63 @@ function _append_output_row(array::AbstractMatrix, source::AbstractVector)
     extended = _extend_output_rows(array, 1)
     _write_output_row!(extended, row, source)
     return extended
+end
+
+"""
+    record_ecosystem_flux_outputs!(output, crop, soil; output_row)
+
+Write daily ecosystem flux diagnostics after the water and soil-carbon fluxes
+are available. `ecosystem_respiration` is total ecosystem respiration and
+`evapotranspiration` is total land-surface ET.
+"""
+function record_ecosystem_flux_outputs!(output::Output, crop, soil;
+                                        output_row::Integer)
+    plant_respiration = crop_fluxes(crop).carbon.respiration
+    backend = KernelAbstractions.get_backend(plant_respiration)
+    kernel = record_ecosystem_flux_outputs_kernel!(backend)
+    kernel(
+        output.soil.ecosystem_respiration,
+        output.soil.heterotrophic_respiration,
+        output.soil.evapotranspiration,
+        plant_respiration,
+        soil_carbon_fluxes(soil).heterotrophic_respiration,
+        crop_fluxes(crop).water.interception,
+        crop_fluxes(crop).water.transpiration_layer,
+        soil_water_fluxes(soil).evaporation,
+        soil_surface_litter_fluxes(soil).evaporation,
+        output_row,
+        size(crop_fluxes(crop).water.transpiration_layer, 1),
+        ndrange = length(plant_respiration),
+    )
+    return nothing
+end
+
+@kernel inbounds = true function record_ecosystem_flux_outputs_kernel!(
+    ecosystem_respiration::AbstractMatrix{T},
+    heterotrophic_respiration::AbstractMatrix{T},
+    evapotranspiration::AbstractMatrix{T},
+    plant_respiration::AbstractVector{T},
+    soil_heterotrophic_respiration::AbstractVector{T},
+    canopy_interception::AbstractVector{T},
+    transpiration_layer::AbstractMatrix{T},
+    soil_evaporation::AbstractMatrix{T},
+    litter_evaporation::AbstractVector{T},
+    output_row::Integer,
+    layers::Integer,
+) where {T <: AbstractFloat}
+    cell = @index(Global)
+    heterotrophic = soil_heterotrophic_respiration[cell]
+    if output_row <= size(ecosystem_respiration, 1)
+        ecosystem_respiration[output_row, cell] = plant_respiration[cell] + heterotrophic
+    end
+    if output_row <= size(heterotrophic_respiration, 1)
+        heterotrophic_respiration[output_row, cell] = heterotrophic
+    end
+    if output_row <= size(evapotranspiration, 1)
+        total_et = canopy_interception[cell] + litter_evaporation[cell]
+        for layer in 1:layers
+            total_et += transpiration_layer[layer, cell] + soil_evaporation[layer, cell]
+        end
+        evapotranspiration[output_row, cell] = total_et
+    end
 end
