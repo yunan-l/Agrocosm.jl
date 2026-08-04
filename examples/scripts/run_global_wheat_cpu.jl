@@ -3,8 +3,15 @@ using Dates
 using NCDatasets
 using TOML
 
-include(joinpath(@__DIR__, "..", "..", "lib", "AgrocosmData", "src", "AgrocosmData.jl"))
-using .AgrocosmData
+if !isdefined(@__MODULE__, :AgrocosmData)
+    include(joinpath(@__DIR__, "..", "..", "lib", "AgrocosmData", "src", "AgrocosmData.jl"))
+end
+import .AgrocosmData: CFTRegistry, DATA_SCHEMA_VERSION, DatasetCatalog, DatasetSpec,
+    HWSD_CN_PREPROCESSING_VERSION, PatchDomain, SoilCNTargets, SoilPoolAllocation,
+    build_crop_mask, cft_index, climate_blocks, climate_days, climate_forcings,
+    combine_patch_domains, dataset, expand_to_grid, management_schedule,
+    read_climate_block, read_grid, read_management, read_soil_cn_targets,
+    read_soil_data, read_soil_pool_allocation, select_cells, write_soil_pool_allocation
 
 function execution_backend(config; override = nothing)
     configured = Symbol(lowercase(String(get(config["run"], "backend", "cpu"))))

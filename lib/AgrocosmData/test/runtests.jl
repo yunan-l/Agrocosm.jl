@@ -170,7 +170,7 @@ include("test_prepare_global_wheat_subset.jl")
         @test soil.ph == Float32[6, 7, 8, 9]
         @test soil.sand == Float32[0.22, 0.58, 0.58, 0.99]
         @test size(soil.saturation) == (5, 4)
-        @test soilparams(soil).soilph === soil.ph
+        @test soil_properties(soil).soilph === soil.ph
 
         selected_soil = read_soil_data(
             catalog, grid; selection = crop_mask.selection,

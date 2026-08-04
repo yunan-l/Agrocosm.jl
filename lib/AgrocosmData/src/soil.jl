@@ -84,8 +84,8 @@ function read_soil_data(
     return read_soil_data(dataset(catalog, :soilcode), dataset(catalog, :soilph), grid; kwargs...)
 end
 
-"""Return the `soilparam` NamedTuple consumed by Agrocosm's current loader."""
-function soilparams(soil::SoilData)
+"""Return the soil-property NamedTuple consumed by Agrocosm's current loader."""
+function soil_properties(soil::SoilData)
     return (
         soilcode = soil.soilcode,
         soilph = soil.ph,

@@ -26,7 +26,7 @@ export load_catalog, dataset, cft_index, cft_name
 export read_grid, all_cells, select_cells, compact_spatial, expand_to_grid
 export read_compact_variable, read_static_cell
 export build_crop_mask, build_patch_domain, combine_patch_domains
-export default_soil_lookup, soil_data_from_values, read_soil_data, soilparams
+export default_soil_lookup, soil_data_from_values, read_soil_data, soil_properties
 export hwsd_layer_stocks, mix_hwsd_components, remap_hwsd_layers
 export hwsd_tile_mapping
 export init_soil_cn_aggregator, accumulate_soil_cn!, finish_soil_cn
