@@ -159,6 +159,7 @@ function run_global_cfts(
     )
     free_warmup_options = get(config, "free_warmup",
         get(config, "allocation_validation", nothing))
+    calibration_only = Bool(get(config["run"], "calibration_only", false))
     simulation_years = Int(config["run"]["simulation_start_year"]):Int(
         config["run"]["simulation_end_year"],
     )
@@ -238,6 +239,13 @@ function run_global_cfts(
                 allocation_fingerprint = calibration_resume["allocation_fingerprint"]
                 calibration_output_directory = calibration_resume["calibration_output_directory"]
                 calibration_completed = true
+            end
+            if calibration_only
+                calibration_status = TOML.parsefile(status_path)
+                push!(batch_manifest, Dict{String, Any}(
+                    String(key) => value for (key, value) in pairs(calibration_status)
+                ))
+                continue
             end
             result = run_global_wheat(production_config; backend_override, cft_id, irrigated)
             isfile(production_output) || error("$name did not write production output")
