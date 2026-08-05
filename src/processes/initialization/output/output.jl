@@ -236,6 +236,7 @@ are available. `ecosystem_respiration` is total ecosystem respiration and
 function record_ecosystem_flux_outputs!(output::Output, crop, soil;
                                         output_row::Integer)
     plant_respiration = crop_fluxes(crop).carbon.respiration
+    leaf_respiration = crop_fluxes(crop).carbon.leaf_respiration
     backend = KernelAbstractions.get_backend(plant_respiration)
     kernel = record_ecosystem_flux_outputs_kernel!(backend)
     kernel(
@@ -243,6 +244,7 @@ function record_ecosystem_flux_outputs!(output::Output, crop, soil;
         output.soil.heterotrophic_respiration,
         output.soil.evapotranspiration,
         plant_respiration,
+        leaf_respiration,
         soil_carbon_fluxes(soil).heterotrophic_respiration,
         crop_fluxes(crop).water.interception,
         crop_fluxes(crop).water.transpiration_layer,
@@ -260,6 +262,7 @@ end
     heterotrophic_respiration::AbstractMatrix{T},
     evapotranspiration::AbstractMatrix{T},
     plant_respiration::AbstractVector{T},
+    leaf_respiration::AbstractVector{T},
     soil_heterotrophic_respiration::AbstractVector{T},
     canopy_interception::AbstractVector{T},
     transpiration_layer::AbstractMatrix{T},
@@ -271,7 +274,8 @@ end
     cell = @index(Global)
     heterotrophic = soil_heterotrophic_respiration[cell]
     if output_row <= size(ecosystem_respiration, 1)
-        ecosystem_respiration[output_row, cell] = plant_respiration[cell] + heterotrophic
+        ecosystem_respiration[output_row, cell] =
+            plant_respiration[cell] + leaf_respiration[cell] + heterotrophic
     end
     if output_row <= size(heterotrophic_respiration, 1)
         heterotrophic_respiration[output_row, cell] = heterotrophic

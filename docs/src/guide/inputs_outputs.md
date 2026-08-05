@@ -46,7 +46,7 @@ The daily variables below are model diagnostics; they do not alter any process
 calculation.
 
 - `soil.ecosystem_respiration` is modeled **RECO** in `gC m-2 day-1`:
-  `crop.respiration + soil.heterotrophic_respiration`.
+  `crop.respiration + crop.leaf_respiration + soil.heterotrophic_respiration`.
 - `soil.heterotrophic_respiration` is the litter and soil microbial component
   of RECO in `gC m-2 day-1`.
 - `soil.evapotranspiration` is modeled **ET_total** in `mm day-1`: layered

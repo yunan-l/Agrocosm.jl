@@ -191,6 +191,7 @@ end
     @test size(simulation.output.soil.evapotranspiration) == (3, 1)
     @test simulation.output.soil.ecosystem_respiration[end, 1] ≈
           Agrocosm.crop_fluxes(crop).carbon.respiration[1] +
+          Agrocosm.crop_fluxes(crop).carbon.leaf_respiration[1] +
           Agrocosm.soil_carbon_fluxes(crop).heterotrophic_respiration[1]
     expected_et = Agrocosm.crop_fluxes(crop).water.interception[1] +
         Agrocosm.soil_surface_litter_fluxes(crop).evaporation[1] +
