@@ -149,6 +149,7 @@ function init_states!(CFT::CFTParameters,
     )
 
     crop.auxiliary.calendar.sowing_date = to_integer(sdate)
+    crop.auxiliary.calendar.prescribed_sowing_date = to_integer(sdate)
     managed_land.manure = to_float(manure)
     managed_land.fertilizer = to_float(fertilizer)
     managed_land.residue_fraction = to_float(residuefrac)

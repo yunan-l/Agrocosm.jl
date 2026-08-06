@@ -63,6 +63,27 @@ struct NuptakeKinetics{T}
     Km::T   # Half-saturation concentration (gN m-3)
 end
 
+"""LPJmL-compatible sowing-date methods and daily trigger thresholds.
+
+The method values follow LPJmL's ``NO_CALC_SDATE``, ``PREC_CALC_SDATE``,
+``TEMP_WTYP_CALC_SDATE``, ``TEMP_PREC_CALC_SDATE`` and ``MULTICROP``
+categories. ``NO_CALC_SDATE`` and ``MULTICROP`` retain the prescribed
+initial date; the latter is reserved for future multi-crop/fallow events.
+"""
+struct SowingDateParameters{T, S <: Integer}
+    method::S          # LPJmL sowing-date method category.
+    temp_fall::T       # Cooling threshold for winter-type establishment (°C).
+    temp_spring::T     # Warming threshold for spring establishment (°C).
+    minimum_prec::T    # Minimum daily precipitation defining a wet sowing day (mm day⁻¹).
+end
+
+const SDATE_NO_CALC = Int32(0)
+const SDATE_PRECIPITATION = Int32(1)
+const SDATE_TEMPERATURE_WINTER = Int32(2)
+const SDATE_TEMPERATURE = Int32(3)
+const SDATE_TEMPERATURE_PRECIPITATION = Int32(4)
+const SDATE_MULTICROP = Int32(5)
+
 _convert_precision(::Type{T}, value::AbstractFloat) where {T <: AbstractFloat} = T(value)
 _convert_precision(::Type{T}, value::Integer) where {T <: AbstractFloat} = value
 _convert_precision(::Type{T}, value::Temp) where {T <: AbstractFloat} = Temp{T}(T(value.low), T(value.high))
@@ -77,6 +98,10 @@ _convert_precision(::Type{T}, value::ncleaf) where {T <: AbstractFloat} = ncleaf
 _convert_precision(::Type{T}, value::K_Litter10) where {T <: AbstractFloat} = K_Litter10{T}(T(value.leaf), T(value.root))
 _convert_precision(::Type{T}, value::NuptakeKinetics) where {T <: AbstractFloat} =
     NuptakeKinetics{T}(T(value.vmax), T(value.kmin), T(value.Km))
+_convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractFloat} =
+    SowingDateParameters{T, typeof(value.method)}(
+        value.method, T(value.temp_fall), T(value.temp_spring), T(value.minimum_prec),
+    )
 
 @kwdef struct CFTParameters{T <: AbstractFloat, S <: Integer}
     name::S                 # Numeric crop/CFT identifier.
@@ -87,6 +112,7 @@ _convert_precision(::Type{T}, value::NuptakeKinetics) where {T <: AbstractFloat}
     temp_photos::TempPhotos{T} # Optimum photosynthesis temperature interval (°C).
     tv_eff::TvEff{T}        # Effective vernalization temperature interval (°C).
     tv_opt::TvOpt{T}        # Optimum vernalization temperature interval (°C).
+    sowing_date::SowingDateParameters{T, S} # Dynamic-sowing thresholds and daily trigger.
     psens::T                # Photoperiod sensitivity coefficient.
     pb::T                   # Lower/short-day photoperiod threshold (h).
     ps::T                   # Upper/long-day photoperiod threshold (h).
@@ -156,6 +182,7 @@ function _crop_cft(;
     psens = 1, pb = 0, ps = 24, basetemp, fphuc, flaimaxc, fphuk, flaimaxk = 0.95,
     fphusen, flaimaxharvest, laimax, laimin, hlimit, pvd_max = 0, beta_root,
     longevity, emax, gmin, shapesenescencenorm, storage_ratio, hiopt, himin,
+    sowing_method = SDATE_NO_CALC, temp_fall = 1000, temp_spring = 1000,
 )
     T = Float32
     return CFTParameters{T, Int32}(
@@ -167,6 +194,9 @@ function _crop_cft(;
         temp_photos = TempPhotos{T}(temp_photos...),
         tv_eff = TvEff{T}(tv_eff...),
         tv_opt = TvOpt{T}(tv_opt...),
+        sowing_date = SowingDateParameters{T, Int32}(
+            Int32(sowing_method), T(temp_fall), T(temp_spring), T(0.1),
+        ),
         psens = psens,
         pb = pb,
         ps = ps,
@@ -211,17 +241,20 @@ end
 # variants share the same biological parameter set.
 const cft1 = _crop_cft(id=1, path=1, temp_co2=(0, 40), temp_photos=(12, 17),
     tv_eff=(-4, 17), tv_opt=(3, 10), pb=8, ps=20, basetemp=0,
+    sowing_method=SDATE_TEMPERATURE_WINTER, temp_fall=12, temp_spring=5,
     fphuc=.05, flaimaxc=.05, fphuk=.45, fphusen=.70, flaimaxharvest=0,
     laimax=7, laimin=2, hlimit=360, pvd_max=70, beta_root=.94,
     longevity=.50, emax=8, gmin=1, shapesenescencenorm=2, storage_ratio=.99,
     hiopt=.50, himin=.20)
 const cft2 = _crop_cft(id=2, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
-    pb=24, ps=0, basetemp=8, fphuc=.10, flaimaxc=.05, fphuk=.50,
+    pb=24, ps=0, basetemp=8, sowing_method=SDATE_PRECIPITATION, temp_spring=18,
+    fphuc=.10, flaimaxc=.05, fphuk=.50,
     fphusen=.80, flaimaxharvest=0, laimax=7, laimin=5, hlimit=288,
     beta_root=.91, longevity=.33, emax=8, gmin=1, shapesenescencenorm=2,
     storage_ratio=1.30, hiopt=.50, himin=.25)
 const cft3 = _crop_cft(id=3, path=2, temp_co2=(8, 42), temp_photos=(21, 26),
-    basetemp=5, fphuc=.10, flaimaxc=.05, fphuk=.50, fphusen=.75,
+    basetemp=5, sowing_method=SDATE_TEMPERATURE_PRECIPITATION, temp_spring=14,
+    fphuc=.10, flaimaxc=.05, fphuk=.50, fphusen=.75,
     flaimaxharvest=0, laimax=5, laimin=4, hlimit=334, beta_root=.94,
     longevity=.33, emax=10, gmin=1.2, shapesenescencenorm=2, storage_ratio=.83,
     hiopt=.50, himin=.30)
@@ -251,7 +284,8 @@ const cft8 = _crop_cft(id=8, path=1, temp_co2=(8, 42), temp_photos=(25, 32),
     longevity=.33, emax=7, gmin=1, shapesenescencenorm=2, storage_ratio=1.04,
     hiopt=.40, himin=.20)
 const cft9 = _crop_cft(id=9, path=1, temp_co2=(5, 45), temp_photos=(28, 32),
-    basetemp=7, fphuc=.15, flaimaxc=.05, fphuk=.50, fphusen=.70,
+    basetemp=7, sowing_method=SDATE_PRECIPITATION, temp_spring=13, fphuc=.15, flaimaxc=.05,
+    fphuk=.50, fphusen=.70,
     flaimaxharvest=0, laimax=5, laimin=5, hlimit=282, pvd_max=70,
     beta_root=.94, longevity=.66, emax=10, gmin=1.2, shapesenescencenorm=.5,
     storage_ratio=.42, hiopt=.40, himin=.10)
@@ -262,6 +296,7 @@ const cft10 = _crop_cft(id=10, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
     storage_ratio=.68, hiopt=.40, himin=.30)
 const cft11 = _crop_cft(id=11, path=1, temp_co2=(0, 40), temp_photos=(12, 17),
     tv_eff=(-4, 17), tv_opt=(3, 10), pb=8, ps=20, basetemp=0,
+    sowing_method=SDATE_TEMPERATURE_WINTER, temp_fall=17, temp_spring=5,
     fphuc=.05, flaimaxc=.01, fphuk=.50, fphusen=.85, flaimaxharvest=0,
     laimax=7, laimin=7, hlimit=360, pvd_max=70, beta_root=.94,
     longevity=.41, emax=7, gmin=1, shapesenescencenorm=2, storage_ratio=.76,

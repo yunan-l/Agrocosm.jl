@@ -102,7 +102,7 @@ end
         :harvesting, :harvesting_previous, :growing_days, :is_growing,
     )
     @test propertynames(crop.auxiliary.phenology) == (:phu, :winter_type, :fphu)
-    @test propertynames(crop.auxiliary.calendar) == (:sowing_date,)
+    @test propertynames(crop.auxiliary.calendar) == (:sowing_date, :prescribed_sowing_date)
     @test :sufficiency ∈ propertynames(crop.state.nitrogen)
     @test :sufficiency ∈ propertynames(crop.state.water)
 end
@@ -118,6 +118,8 @@ end
     @test :fphu ∉ propertynames(restart.state.phenology)
     @test restart.process_memory.calendar.sowing_date ===
           crop.auxiliary.calendar.sowing_date
+    @test restart.process_memory.calendar.prescribed_sowing_date ===
+          crop.auxiliary.calendar.prescribed_sowing_date
     @test :workspace ∉ propertynames(restart)
     @test :workspace ∉ fieldnames(typeof(output))
     @test propertynames(output.annual) == (:yield, :harvest_date)

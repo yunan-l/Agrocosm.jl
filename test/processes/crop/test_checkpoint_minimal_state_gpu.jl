@@ -20,6 +20,8 @@ CUDA.allowscalar(false)
     @test restart.state === crop.state
     @test restart.process_memory.phenology.phu === crop.auxiliary.phenology.phu
     @test restart.process_memory.calendar.sowing_date === crop.auxiliary.calendar.sowing_date
+    @test restart.process_memory.calendar.prescribed_sowing_date ===
+          crop.auxiliary.calendar.prescribed_sowing_date
     @test :workspace ∉ propertynames(restart)
 
     crop.state.nitrogen.pending_fertilizer .= 10.0f0

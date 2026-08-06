@@ -28,6 +28,7 @@ CUDA.allowscalar(false)
     @test crop.fluxes.nitrogen.harvest_export isa CuArray{Float32, 1}
     @test crop.fluxes.water.transpiration_layer isa CuArray{Float32, 2}
     @test crop.auxiliary.calendar.sowing_date isa CuArray{Int32, 1}
+    @test crop.auxiliary.calendar.prescribed_sowing_date isa CuArray{Int32, 1}
     @test managed_land.latitude isa CuArray{Float32, 1}
     @test crop.fluxes.carbon.gross_assimilation isa CuArray{Float32, 1}
     @test soil.properties.sand_fraction isa CuArray{Float32, 2}

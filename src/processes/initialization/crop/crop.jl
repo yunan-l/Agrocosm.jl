@@ -66,6 +66,7 @@ crop_restart_payload(crop::Crop) = (
         ),
         calendar = (
             sowing_date = crop.auxiliary.calendar.sowing_date,
+            prescribed_sowing_date = crop.auxiliary.calendar.prescribed_sowing_date,
         ),
     ),
 )

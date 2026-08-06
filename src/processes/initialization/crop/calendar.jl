@@ -1,6 +1,7 @@
 """Static crop-calendar configuration."""
 mutable struct CropCalendarAuxiliary{I}
-    sowing_date::I # Prescribed day of year on which cultivation occurs (1–365).
+    sowing_date::I            # Current daily sowing trigger (1–365; zero otherwise).
+    prescribed_sowing_date::I # Externally supplied sowing date retained across dynamic resolution.
 end
 
 """Discrete crop events that occur during the current day."""
@@ -11,7 +12,7 @@ end
 
 function init_crop_calendar_auxiliary(cell_size::Int, device)
     int_state() = device(zeros(Int32, cell_size))
-    return CropCalendarAuxiliary(int_state())
+    return CropCalendarAuxiliary(int_state(), int_state())
 end
 
 function init_crop_events(cell_size::Int, device)

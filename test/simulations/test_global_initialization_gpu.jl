@@ -44,6 +44,7 @@ CUDA.allowscalar(false)
     )
     @test simulation.state.prognostic.soil.carbon.fast isa CuArray{T, 2}
     @test simulation.state.inputs.crop.calendar.sowing_date isa CuArray{Int32, 1}
+    @test simulation.state.inputs.crop.calendar.prescribed_sowing_date isa CuArray{Int32, 1}
     @test simulation.managed_land.latitude isa CuArray{T, 1}
 
     climate = (

@@ -170,7 +170,7 @@ function model_state(climbuf, crop, pet, soil, managed_land, weather, output)
     )
     crop_inputs = (
         phenology = _fields(crop.auxiliary.phenology, (:phu, :winter_type)),
-        calendar = _fields(crop.auxiliary.calendar, (:sowing_date,)),
+        calendar = _fields(crop.auxiliary.calendar, (:sowing_date, :prescribed_sowing_date)),
         root = _fields(crop.auxiliary.root, (:distribution,)),
     )
     return ModelState(

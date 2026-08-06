@@ -194,6 +194,7 @@ end
 function create_simulation(initial_data, selection, config, days, device, cft_id;
     irrigated::Bool, diagnostics)
     management = config["management"]
+    sowing_mode = Symbol(get(management, "sowing_mode", "prescribed_sdate"))
     return initialize_simulation(
         crop_cft(cft_id), initial_data;
         days,
@@ -206,8 +207,10 @@ function create_simulation(initial_data, selection, config, days, device, cft_id
         manure = management["manure"],
         fertilizer = Symbol(management["fertilizer"]),
         with_tillage = management["with_tillage"],
+        sowing_mode,
         # LPJmL keeps V_req fixed once prescribed crop dates/PHU are fixed.
-        freeze_vernalization_requirement = Symbol(management["mode"]) === :fixed,
+        freeze_vernalization_requirement = Symbol(management["mode"]) === :fixed &&
+            sowing_mode === :prescribed_sdate,
     )
 end
 

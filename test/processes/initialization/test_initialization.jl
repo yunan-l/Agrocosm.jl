@@ -21,6 +21,7 @@ using Test
     @test isempty(fieldnames(typeof(crop.workspace)))
     @test size(crop.fluxes.water.transpiration_layer) == (5, cell_size)
     @test length(crop.auxiliary.calendar.sowing_date) == cell_size
+    @test length(crop.auxiliary.calendar.prescribed_sowing_date) == cell_size
     @test length(managed_land.latitude) == cell_size
     @test length(crop.fluxes.carbon.gross_assimilation) == cell_size
     @test length(pet.daylength) == cell_size
@@ -121,6 +122,7 @@ end
     @test eltype(thermal.energy_residual) == Float64
     @test eltype(crop.state.phenology.is_growing) == Int32
     @test eltype(crop.auxiliary.calendar.sowing_date) == Int32
+    @test eltype(crop.auxiliary.calendar.prescribed_sowing_date) == Int32
 
     cft64 = convert_precision(Float64, cft1)
     parameters64 = ModelParameters(Float64)

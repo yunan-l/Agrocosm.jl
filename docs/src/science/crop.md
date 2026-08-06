@@ -6,8 +6,14 @@ model parameter structures rather than defining a second parameter source.
 
 ## Establishment, phenology, and LAI
 
-A stand is established on its prescribed sowing date when its cultivation
-conditions are satisfied. Daily heat units are
+By default (`sowing_mode=:prescribed_sdate`), a stand is established on its
+prescribed sowing date when its cultivation conditions are satisfied. The
+optional `sowing_mode=:dynamic_sdate` resolves an annual sowing month from
+the retained climate history and then emits a one-day establishment event:
+temperature-threshold crossing for wheat and maize, or the first wet day of
+the resolved rainy-season month for rice and soybean (with a month-end
+fallback). The prescribed date remains the deterministic bootstrap month until
+the precipitation climatology is available. Daily heat units are
 
 ```math
 HU_d=\max(0,T_d-T_b).

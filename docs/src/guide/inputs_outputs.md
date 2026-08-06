@@ -24,6 +24,29 @@ Raw climate uses daily matrices `(day, cell)`:
 - `windspeed`: optional wind speed; a default is used when absent
 - `co2`: annual vector or daily matrix
 - `temp_spinup`: temperature history used only to initialize climate memory
+- `prec_spinup`: optional precipitation history aligned with `temp_spinup`;
+  required to initialize the precipitation climatology before the first
+  `:dynamic_sdate` year
+
+## Sowing mode
+
+`initialize_simulation(...; sowing_mode=:prescribed_sdate)` is the default and
+uses `crop.sdate` directly. Set `sowing_mode=:dynamic_sdate` to resolve daily
+establishment for wheat, maize, rice, or soybean from the climate buffer. This
+mode preserves `crop.sdate` as the bootstrap/reference date and never mutates
+the source management input. Rain-season timing uses the long-term monthly
+precipitation climatology currently available to Agrocosm.
+
+For the global TOML workflows, select the same mode under `[management]`:
+
+```toml
+[management]
+sowing_mode = "dynamic_sdate"
+```
+
+With fixed management, prescribed sowing retains the LPJmL-style fixed
+vernalization requirement. Dynamic sowing instead updates it from the annual
+climate buffer.
 
 Climate blocks may be passed as `NamedTuple`s, JLD2 paths, or an ordered
 vector of blocks. Output time remains continuous across blocks.
