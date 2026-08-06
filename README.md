@@ -151,8 +151,8 @@ julia --project=. test/runtests.jl
 The optional Enzyme differentiability contract is tested separately:
 
 ```bash
-julia --startup-file=no --project=test -e 'using Pkg; Pkg.instantiate()'
-julia --startup-file=no --project=test test/runtests_ad.jl
+julia --project=test -e 'using Pkg; Pkg.instantiate()'
+julia --project=test test/runtests_ad.jl
 ```
 
 GPU tests are separate because they require a functional CUDA device. For
