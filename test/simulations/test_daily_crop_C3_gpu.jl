@@ -421,14 +421,24 @@ end
     test_balance_equivalence(
         gpu.thermal, cpu.thermal;
         group = "thermal", rtol = 2.0f-3, atol = 1.0f-1,
-        # This boundary term is a layer-wise difference of O(1e8) Float32
-        # enthalpy states. Its accumulated CPU/GPU rounding needs a slightly
-        # wider relative comparison than the other thermal-balance fields.
-        field_rtol = (bottom_drainage_energy_output = 5.0f-3,),
+        # A single drainage pulse can cross a threshold on adjacent days as
+        # CPU/GPU Float32 trajectories round differently; compare its
+        # accumulated energy below rather than its daily pulse.
         field_atol = (untracked_water_energy_flux = 8.0f0,),
         # Residuals are conservation tests, not trajectory state: validate each
         # backend against its own physical ledger below.
-        skip_fields = (:energy_residual, :percolation_energy_residual),
+        skip_fields = (
+            :energy_residual,
+            :percolation_energy_residual,
+            :bottom_drainage_energy_output,
+        ),
+    )
+    test_float_equivalence(
+        sum(host_array(gpu.thermal.bottom_drainage_energy_output); dims = 1),
+        sum(host_array(cpu.thermal.bottom_drainage_energy_output); dims = 1);
+        label = "thermal.accumulated_bottom_drainage_energy_output",
+        rtol = 5.0f-3,
+        atol = 1.0f-1,
     )
     test_thermal_closure(cpu.thermal; label = "CPU")
     test_thermal_closure(gpu.thermal; label = "GPU")
