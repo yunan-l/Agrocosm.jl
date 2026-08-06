@@ -1,0 +1,180 @@
+"""Fixed-shape observation contract and optional Enzyme entry points."""
+
+const _AD_TARGETS = (:gpp, :reco, :et)
+
+"""
+    ADSeasonContext(growth_mask, valid_masks, observations, scales; calendar_days=365)
+
+Immutable station-season observation context for the differentiable adapter.
+The modeled growth-season mask is authoritative; observations outside that mask
+are never counted in the loss. The contract uses the model's no-leap calendar.
+"""
+struct ADSeasonContext{M, V, O, S, C}
+    growth_mask::M
+    valid_masks::V
+    observations::O
+    scales::S
+    counts::C
+    target_count::Int
+    calendar_days::Int
+end
+
+function ADSeasonContext(
+    growth_mask::AbstractVector{Bool},
+    valid_masks::NamedTuple,
+    observations::NamedTuple,
+    scales::NamedTuple;
+    calendar_days::Integer = 365,
+)
+    calendar_days == 365 || throw(ArgumentError(
+        "ADSeasonContext requires the 365-day no-leap calendar",
+    ))
+    days = length(growth_mask)
+    days > 0 || throw(ArgumentError("growth_mask must not be empty"))
+
+    valid_values = ntuple(length(_AD_TARGETS)) do index
+        name = _AD_TARGETS[index]
+        hasproperty(valid_masks, name) || throw(ArgumentError(
+            "valid_masks is missing target $name",
+        ))
+        mask = BitVector(getproperty(valid_masks, name))
+        length(mask) == days || throw(DimensionMismatch(
+            "valid mask $name has $(length(mask)) rows, expected $days",
+        ))
+        mask
+    end
+    observation_values = ntuple(length(_AD_TARGETS)) do index
+        name = _AD_TARGETS[index]
+        hasproperty(observations, name) || throw(ArgumentError(
+            "observations is missing target $name",
+        ))
+        values = getproperty(observations, name)
+        values isa AbstractVector || throw(ArgumentError(
+            "observations.$name must be a vector",
+        ))
+        length(values) == days || throw(DimensionMismatch(
+            "observations.$name has $(length(values)) rows, expected $days",
+        ))
+        values
+    end
+    scale_values = ntuple(length(_AD_TARGETS)) do index
+        name = _AD_TARGETS[index]
+        hasproperty(scales, name) || throw(ArgumentError(
+            "scales is missing target $name",
+        ))
+        scale = getproperty(scales, name)
+        scale isa Real && isfinite(scale) && scale > 0 || throw(ArgumentError(
+            "scales.$name must be finite and positive",
+        ))
+        scale
+    end
+
+    growth = BitVector(growth_mask)
+    for index in eachindex(observation_values)
+        valid = valid_values[index]
+        observations_for_target = observation_values[index]
+        for day in eachindex(growth)
+            if growth[day] && valid[day] && !isfinite(observations_for_target[day])
+                throw(ArgumentError(
+                    "observations.$(_AD_TARGETS[index]) contains a non-finite " *
+                    "value at a valid growth-season day",
+                ))
+            end
+        end
+    end
+
+    valid_named = NamedTuple{_AD_TARGETS}(valid_values)
+    observation_named = NamedTuple{_AD_TARGETS}(observation_values)
+    scale_named = NamedTuple{_AD_TARGETS}(scale_values)
+    counts = NamedTuple{_AD_TARGETS}(
+        ntuple(
+            index -> count(identity, growth .& getfield(valid_named, _AD_TARGETS[index])),
+            length(_AD_TARGETS),
+        ),
+    )
+    target_count = count(value -> value > 0, values(counts))
+    target_count > 0 || throw(ArgumentError(
+        "at least one target must have valid observations in the growth season",
+    ))
+    return ADSeasonContext(
+        growth,
+        valid_named,
+        observation_named,
+        scale_named,
+        counts,
+        target_count,
+        Int(calendar_days),
+    )
+end
+
+"""Fallback raised when Enzyme has not been loaded as an optional extension."""
+function enzyme_forward_directional(args...; kwargs...)
+    throw(ArgumentError(
+        "Enzyme is not loaded; add Enzyme to the active environment before " *
+        "calling enzyme_forward_directional",
+    ))
+end
+
+"""Fallback raised when Enzyme has not been loaded as an optional extension."""
+function enzyme_forward_gradient(args...; kwargs...)
+    throw(ArgumentError(
+        "Enzyme is not loaded; add Enzyme to the active environment before " *
+        "calling enzyme_forward_gradient",
+    ))
+end
+
+"""Fallback raised when Enzyme has not been loaded as an optional extension."""
+function enzyme_zero_tangent(args...; kwargs...)
+    throw(ArgumentError(
+        "Enzyme is not loaded; add Enzyme to the active environment before " *
+        "calling enzyme_zero_tangent",
+    ))
+end
+
+"""Fallback raised when Enzyme has not been loaded as an optional extension."""
+function enzyme_prepare_daily_state!(args...; kwargs...)
+    throw(ArgumentError(
+        "Enzyme is not loaded; add Enzyme to the active environment before " *
+        "calling enzyme_prepare_daily_state!",
+    ))
+end
+
+"""Fallback raised when Enzyme has not been loaded as an optional extension."""
+function enzyme_daily_transition_objective(args...; kwargs...)
+    throw(ArgumentError(
+        "Enzyme is not loaded; add Enzyme to the active environment before " *
+        "calling enzyme_daily_transition_objective",
+    ))
+end
+
+"""Fallback raised when Enzyme has not been loaded as an optional extension."""
+function enzyme_seasonal_loss(args...; kwargs...)
+    throw(ArgumentError(
+        "Enzyme is not loaded; add Enzyme to the active environment before " *
+        "calling enzyme_seasonal_loss",
+    ))
+end
+
+"""Fallback raised when Enzyme is not loaded as an optional extension."""
+function enzyme_seasonal_gradient_blockwise(args...; kwargs...)
+    throw(ArgumentError(
+        "Enzyme is not loaded; add Enzyme to the active environment before " *
+        "calling enzyme_seasonal_gradient_blockwise",
+    ))
+end
+
+"""Fallback raised when Enzyme has not been loaded as an optional extension."""
+function enzyme_seasonal_soil_loss(args...; kwargs...)
+    throw(ArgumentError(
+        "Enzyme is not loaded; add Enzyme to the active environment before " *
+        "calling enzyme_seasonal_soil_loss",
+    ))
+end
+
+"""Fallback raised when Enzyme has not been loaded as an optional extension."""
+function enzyme_seasonal_soil_gradient_blockwise(args...; kwargs...)
+    throw(ArgumentError(
+        "Enzyme is not loaded; add Enzyme to the active environment before " *
+        "calling enzyme_seasonal_soil_gradient_blockwise",
+    ))
+end

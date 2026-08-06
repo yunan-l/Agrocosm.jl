@@ -99,6 +99,15 @@ export transition_day!, run_simulation!, simulation_summary
 export save_checkpoint, restore_checkpoint!
 export estimate_memory
 
+# OPTIONAL AUTOMATIC DIFFERENTIATION
+export ADSeasonContext
+export enzyme_forward_directional, enzyme_forward_gradient, enzyme_zero_tangent
+export enzyme_prepare_daily_state!, enzyme_daily_transition_objective
+export enzyme_seasonal_loss
+export enzyme_seasonal_gradient_blockwise
+export enzyme_seasonal_soil_loss
+export enzyme_seasonal_soil_gradient_blockwise
+
 
 # process-based crop model
 # Parameters
@@ -195,9 +204,7 @@ include("input_output/stream_output.jl")
 
 # Utilities
 include("utils/kernel_launch.jl")
-include("utils/visualization.jl")
 include("utils/conversions.jl")
-include("utils/load_nc.jl")
 include("utils/tools.jl")
 
 # Daily crop simulations
@@ -205,5 +212,9 @@ include("simulations/daily_crop.jl")
 include("simulations/simulation_api.jl")
 include("simulations/agricultural_warmup.jl")
 include("simulations/memory_estimate.jl")
+
+# The Enzyme implementation is an optional package extension. This file only
+# defines the dependency-free season contract and fallback API.
+include("ad/adapter.jl")
 
 end

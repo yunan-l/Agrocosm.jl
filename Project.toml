@@ -8,6 +8,7 @@ Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 MuladdMacro = "46d2c3a1-f734-5fdb-9937-b9b9aeba4221"
@@ -18,16 +19,23 @@ SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 
+[weakdeps]
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+
+[extensions]
+AgrocosmEnzymeExt = "Enzyme"
+
 [compat]
-julia = "1.10.10"
 Adapt = "4"
 CUDA = "5"
+Enzyme = "0.13"
 JLD2 = "0.5"
 KernelAbstractions = "0.9"
 MuladdMacro = "0.2"
 NCDatasets = "0.14"
 Parameters = "0.12"
 Plots = "1"
+julia = "1.10.10"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
