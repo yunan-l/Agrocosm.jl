@@ -60,6 +60,7 @@ struct SimulationConfiguration{T <: AbstractFloat, D, E}
     with_tillage::Bool
     nitrogen_limit_vcmax::Bool
     freeze_vernalization_requirement::Bool
+    sowing_mode::Symbol
     execution::E
 end
 
@@ -73,15 +74,19 @@ function SimulationConfiguration(
     with_tillage::Bool = true,
     nitrogen_limit_vcmax::Bool = false,
     freeze_vernalization_requirement::Bool = false,
+    sowing_mode::Symbol = :prescribed_sdate,
 ) where {T <: AbstractFloat}
     days > 0 || throw(ArgumentError("days must be positive"))
+    sowing_mode in (:prescribed_sdate, :dynamic_sdate) || throw(ArgumentError(
+        "sowing_mode must be :prescribed_sdate or :dynamic_sdate",
+    ))
     execution = ExecutionContext(T, device, active_indices; cell_ids)
     source_indices = indices === nothing ? nothing : Int.(indices)
     return SimulationConfiguration{
         T, typeof(device), typeof(execution),
     }(
         source_indices, device, T, Int(days), irrigation, manure, fertilizer,
-        with_tillage, nitrogen_limit_vcmax, freeze_vernalization_requirement, execution,
+        with_tillage, nitrogen_limit_vcmax, freeze_vernalization_requirement, sowing_mode, execution,
     )
 end
 

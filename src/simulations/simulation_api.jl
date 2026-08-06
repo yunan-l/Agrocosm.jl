@@ -101,6 +101,12 @@ output. Set `diagnostics=false` to avoid allocating daily balance ledgers.
 independent prescribed-input switch. By default,
 `c_shift_initialization=:auto` restores supplied `c_shift_fast`/`c_shift_slow`
 arrays and otherwise uses LPJmL's fresh-soil distribution.
+`sowing_mode=:prescribed_sdate` uses management sowing dates. The optional
+`:dynamic_sdate` mode derives a climate-calendar candidate with the LPJmL CFT
+sowing method (winter wheat: temperature/winter type; maize:
+temperature/precipitation; rice and soybean: precipitation), then applies its
+bounded anomaly relative to the first valid climate calendar to the prescribed
+spatial date.
 """
 function initialize_simulation(
     cft::CFTParameters,
@@ -117,11 +123,19 @@ function initialize_simulation(
     with_tillage::Bool = true,
     nitrogen_limit_vcmax::Bool = false,
     freeze_vernalization_requirement::Bool = false,
+    sowing_mode::Symbol = :prescribed_sdate,
     mineral_nitrogen_initialization::Symbol = :lpjml_initsoil,
     c_shift_initialization::Symbol = :auto,
 )
     days > 0 || throw(ArgumentError("days must be positive"))
     fertilizer = fertilizer_mode(fertilizer)
+    sowing_mode in (:prescribed_sdate, :dynamic_sdate) || throw(ArgumentError(
+        "sowing_mode must be :prescribed_sdate or :dynamic_sdate",
+    ))
+    sowing_mode !== :dynamic_sdate || cft.name in (Int32(1), Int32(2), Int32(3), Int32(9)) ||
+        throw(ArgumentError(
+            ":dynamic_sdate is currently implemented for wheat, rice, maize, and soybean only",
+        ))
     prepared = _prepare_initial_data(initial_data, indices, device, T)
     cells = length(prepared.latitude)
     resolved_c_shift_initialization = if c_shift_initialization === :auto
@@ -148,6 +162,7 @@ function initialize_simulation(
         with_tillage,
         nitrogen_limit_vcmax,
         freeze_vernalization_requirement,
+        sowing_mode,
     )
     validate_state_schema(state, cells)
     balances = diagnostics ? (
@@ -180,6 +195,12 @@ function _prepare_climate(simulation::CropSimulation, climate::NamedTuple)
         )
         if hasproperty(climate, :wind)
             prepared = merge(prepared, (wind = T.(climate.wind),))
+        end
+        if hasproperty(climate, :temp_spinup)
+            prepared = merge(prepared, (temp_spinup = T.(climate.temp_spinup),))
+        end
+        if hasproperty(climate, :prec_spinup)
+            prepared = merge(prepared, (prec_spinup = T.(climate.prec_spinup),))
         end
         return _adapt_to_device(simulation.config.device, prepared)
     end
@@ -214,7 +235,11 @@ function _prepare_annual_management!(simulation::CropSimulation, management::Nam
     all(isfinite, prescribed_phu) || throw(ArgumentError(
         "annual PHU contains non-finite values",
     ))
-    crop_calendar_input(simulation.state).sowing_date .= to_integer(management.sdate)
+    calendar = crop_calendar_input(simulation.state)
+    calendar.prescribed_sowing_date .= to_integer(management.sdate)
+    if simulation.config.sowing_mode === :prescribed_sdate
+        calendar.sowing_date .= calendar.prescribed_sowing_date
+    end
     simulation.managed_land.manure .= to_float(management.manure)
     simulation.managed_land.fertilizer .= to_float(management.fertilizer)
     simulation.managed_land.residue_fraction .= to_float(management.residuefrac)
@@ -239,6 +264,7 @@ function _transition_range!(
         with_tillage = simulation.config.with_tillage,
         nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
         update_vernalization_requirement = !simulation.config.freeze_vernalization_requirement,
+        sowing_mode = simulation.config.sowing_mode,
         water_balance = simulation.water_balance,
         nitrogen_balance = simulation.nitrogen_balance,
         carbon_balance = simulation.carbon_balance,
@@ -345,6 +371,8 @@ function run_simulation!(
             simulation.cft,
             prepared_climate.temp_spinup,
             simulation.climbuf;
+            prec_spinup = hasproperty(prepared_climate, :prec_spinup) ?
+                prepared_climate.prec_spinup : nothing,
             year_spinup = spinup_years,
         )
     end
@@ -432,7 +460,7 @@ function run_simulation!(
     return simulation
 end
 
-const _CHECKPOINT_FORMAT_VERSION = 5
+const _CHECKPOINT_FORMAT_VERSION = 6
 
 _checkpoint_snapshot(values::AbstractArray) = Array(values)
 _checkpoint_snapshot(values::NamedTuple) = map(_checkpoint_snapshot, values)
@@ -485,7 +513,7 @@ function _simulation_checkpoint(simulation::CropSimulation)
     return (
         format_version = _CHECKPOINT_FORMAT_VERSION,
         metadata = (
-            state_schema_version = 1,
+            state_schema_version = 2,
             precision = string(simulation.config.T),
             cells = cells,
             cell_ids = copy(simulation.config.execution.domain.cell_ids),
@@ -497,6 +525,7 @@ function _simulation_checkpoint(simulation::CropSimulation)
             fertilizer = simulation.config.fertilizer,
             with_tillage = simulation.config.with_tillage,
             nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
+            sowing_mode = simulation.config.sowing_mode,
             parameter_fingerprint = _checkpoint_fingerprint((
                 cft = simulation.cft,
                 model_parameters = simulation.model_parameters,
@@ -545,7 +574,7 @@ function _validate_checkpoint_target(simulation::CropSimulation, checkpoint)
     ))
     metadata = checkpoint.metadata
     checks = (
-        ("state schema version", metadata.state_schema_version, 1),
+        ("state schema version", metadata.state_schema_version, 2),
         ("precision", metadata.precision, string(simulation.config.T)),
         ("cell count", metadata.cells, length(simulation.managed_land.latitude)),
         ("cell ids", metadata.cell_ids, simulation.config.execution.domain.cell_ids),
@@ -558,6 +587,7 @@ function _validate_checkpoint_target(simulation::CropSimulation, checkpoint)
         ("tillage", metadata.with_tillage, simulation.config.with_tillage),
         ("nitrogen Vcmax limitation", metadata.nitrogen_limit_vcmax,
          simulation.config.nitrogen_limit_vcmax),
+        ("sowing mode", metadata.sowing_mode, simulation.config.sowing_mode),
         ("parameter fingerprint", metadata.parameter_fingerprint,
          _checkpoint_fingerprint((
              cft = simulation.cft,

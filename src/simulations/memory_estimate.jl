@@ -59,8 +59,11 @@ function _stream_output_bytes(
     return daily_bytes + annual_bytes + accumulator_bytes
 end
 
-const _PERSISTENT_FLOAT_VALUES_PER_CELL = 856
-const _PERSISTENT_NONFLOAT_BYTES_PER_CELL = 26
+# Includes the dynamic-sowing climate calendar: monthly PET and its rolling
+# climatology (24 values), annual PET history (365 values), and four Int32
+# calendar fields per cell.
+const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1634
+const _PERSISTENT_NONFLOAT_BYTES_PER_CELL = 46
 const _PERSISTENT_FIXED_FLOAT_VALUES = 26
 
 function _estimated_persistent_state_bytes(cells::Int, ::Type{T}) where {T}

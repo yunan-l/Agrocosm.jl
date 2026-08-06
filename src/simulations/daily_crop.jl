@@ -18,6 +18,7 @@ function _daily_crop!(
     fertilizer = :auto,
     with_tillage = true,
     nitrogen_limit_vcmax = false,
+    sowing_mode::Symbol = :prescribed_sdate,
     update_vernalization_requirement::Bool = true,
     water_balance = nothing,
     nitrogen_balance = nothing,
@@ -87,10 +88,22 @@ function _daily_crop!(
         # --- Discrete establishment event ---------------------------------
         # Today's climate must enter history before sowing decisions. This is
         # intentionally separate from continuous crop/soil process kernels.
+        dynamic_winter_type = isnothing(prescribed_winter_type) ?
+            crop_phenology_input(state).winter_type : prescribed_winter_type
         update_climbuf!(
             cftparameters, dailyWeather.temp, climbuf, day;
+            prec = dailyWeather.prec,
+            dynamic_sowing = sowing_mode === :dynamic_sdate,
+            winter_type = dynamic_winter_type,
             update_vernalization_requirement,
         )
+        if sowing_mode === :dynamic_sdate
+            dynamic_sowing_date!(
+                state, climbuf, cftparameters, day_of_year;
+                irrigated = irrigation,
+                prescribed_winter_type,
+            )
+        end
         cultivate!(
             state, managed_land, state, day_of_year;
             manure,
@@ -117,6 +130,8 @@ function _daily_crop!(
             pet, day_of_year, managed_land.latitude, dailyWeather.temp,
             dailyWeather.lwr, dailyWeather.swr,
         )
+        sowing_mode === :dynamic_sdate &&
+            record_potential_evaporation!(climbuf, pet.eeq, day, global_params)
         snow!(state, dailyWeather; snowparams = snow_params, lpjmlparams = global_params)
         if water_balance !== nothing
             record_water_balance_after_snow!(

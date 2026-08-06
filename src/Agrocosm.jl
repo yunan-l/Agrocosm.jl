@@ -54,7 +54,7 @@ export CarbonBalance, init_carbon_balance
 export ThermalBalance, init_thermal_balance
 
 # CLIMATE
-export annual_climbuf!, daily_climbuf!, infil_perc!, spin_up_climbuf!, update_climbuf!, readclimate!, snow!
+export annual_climbuf!, daily_climbuf!, monthlyprec!, infil_perc!, spin_up_climbuf!, update_climbuf!, record_potential_evaporation!, readclimate!, snow!
 
 # PHYSICS FUNCTIONS
 # RADIATION
@@ -63,7 +63,7 @@ export albedo!, petpar!, apar_crop!, apar_crop_maize!
 # CROP
 export photosynthesis_C3!, photosynthesis_C4!, carbon_allocation!, respiration!
 export photosynthesis!, solve_lambda!
-export phenology_crop!, lai_crop!, cultivate!, harvest_crop!, fertilizer!
+export phenology_crop!, lai_crop!, cultivate!, dynamic_sowing_date!, update_dynamic_sowing_calendar!, harvest_crop!, fertilizer!
 export transpiration!, interception!
 export crop_carbon!, crop_nitrogen!, ndemand_crop!, nuptake_crop!
 export limit_vcmax_by_nitrogen!
@@ -152,6 +152,7 @@ include("processes/climate/snow.jl")
 
 # Crop
 include("processes/crop/cultivate.jl")
+include("processes/crop/dynamic_sowing.jl")
 include("processes/crop/phenology.jl")
 include("processes/crop/photosynthesis.jl")
 include("processes/crop/lambda_solver.jl")

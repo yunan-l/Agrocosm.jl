@@ -8,6 +8,8 @@ monthly means and vernalization requirements.
 function annual_climbuf!(daily_temp::AbstractArray{T},
                          climbuf::ClimBuf,
                          CFT::CFTParameters;
+                         daily_prec = nothing,
+                         daily_pet = nothing,
                          n::Int = 5,
                          kk = T(0.05),
                          update_vernalization_requirement::Bool = true,
@@ -28,6 +30,30 @@ function annual_climbuf!(daily_temp::AbstractArray{T},
         climbuf.mtemp,
         kk,
     )
+    if daily_prec !== nothing
+        size(daily_prec) == size(daily_temp) || throw(DimensionMismatch(
+            "daily precipitation must match daily temperature dimensions",
+        ))
+        monthlyprec!(daily_prec, climbuf.mprec)
+        launch_2D!(
+            climbuf_mtemp20_kernel!,
+            climbuf.mprec20,
+            climbuf.mprec,
+            kk,
+        )
+    end
+    if daily_pet !== nothing
+        size(daily_pet) == size(daily_temp) || throw(DimensionMismatch(
+            "daily potential evaporation must match daily temperature dimensions",
+        ))
+        monthlyprec!(daily_pet, climbuf.mpet)
+        launch_2D!(
+            climbuf_mtemp20_kernel!,
+            climbuf.mpet20,
+            climbuf.mpet,
+            kk,
+        )
+    end
     n == size(climbuf.min_temp, 1) || throw(ArgumentError(
         "n must match the first dimension of climbuf.min_temp",
     ))
@@ -46,6 +72,24 @@ function annual_climbuf!(daily_temp::AbstractArray{T},
         update_vernalization_requirement,
     )
 
+end
+
+"""Accumulate no-leap daily precipitation into 12 monthly totals."""
+function monthlyprec!(daily_prec::AbstractArray{T}, monthly_prec::AbstractArray{T}) where {T <: AbstractFloat}
+    launch_2D!(monthlyprec_kernel!, monthly_prec, daily_prec)
+end
+
+@kernel inbounds = true function monthlyprec_kernel!(
+    monthly_prec::AbstractArray{T}, daily_prec::AbstractArray{T},
+) where {T <: AbstractFloat}
+    month, cell = @index(Global, NTuple)
+    ndaymonth = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+    start_indices = (1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335)
+    total = zero(T)
+    for offset in 0:(ndaymonth[month] - 1)
+        total += daily_prec[start_indices[month] + offset, cell]
+    end
+    monthly_prec[month, cell] = total
 end
 
 
@@ -192,9 +236,11 @@ function daily_climbuf!(temp::AbstractArray{T},
                         climbuf_temp::AbstractArray{T};
                         annual_temperature::AbstractArray{T} = climbuf_temp,
                         annual_day::Integer = 0,
+                        shift_history::Bool = true,
+                        scale::T = one(T),
 ) where {T <: AbstractFloat}
 
-    kernel_params = (NDAYS = 31,)
+    kernel_params = (NDAYS = 31, shift_history)
 
     launch_1D!(
         daily_climbuf_kernel!,
@@ -202,6 +248,7 @@ function daily_climbuf!(temp::AbstractArray{T},
         climbuf_temp,
         annual_temperature,
         annual_day,
+        scale,
         kernel_params
     )
 
@@ -213,20 +260,23 @@ end
                                        climbuf_temp::AbstractArray{T},
                                        annual_temperature::AbstractArray{T},
                                        annual_day::Integer,
+                                       scale::T,
                                        kernel_params
 ) where {T <: AbstractFloat}
 
     cell = @index(Global)
 
-    @unpack NDAYS = kernel_params
+    @unpack NDAYS, shift_history = kernel_params
 
-    # Shift the rolling daily climate buffer left and append today's temperature.
-    for day in 2:NDAYS
-        climbuf_temp[day-1, cell] = climbuf_temp[day, cell]
+    if shift_history
+        # Shift the rolling daily climate buffer left and append today's value.
+        for day in 2:NDAYS
+            climbuf_temp[day-1, cell] = climbuf_temp[day, cell]
+        end
+        climbuf_temp[NDAYS, cell] = temp[cell] * scale
     end
-    climbuf_temp[NDAYS, cell] = temp[cell]
     if annual_day != 0
-        annual_temperature[annual_day, cell] = temp[cell]
+        annual_temperature[annual_day, cell] = temp[cell] * scale
     end
 
 end
