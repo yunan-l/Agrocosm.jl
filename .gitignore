@@ -1,4 +1,5 @@
 /Manifest*.toml
+/test/Manifest.toml
 /notebooks
 /docs/Manifest.toml
 /lib/AgrocosmData/Manifest.toml
