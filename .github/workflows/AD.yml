@@ -12,7 +12,6 @@ on:
       - test/ad/**
       - test/runtests_ad.jl
       - test/Project.toml
-      - test/Manifest.toml
       - .github/workflows/AD.yml
   pull_request:
     paths:
@@ -23,7 +22,6 @@ on:
       - test/ad/**
       - test/runtests_ad.jl
       - test/Project.toml
-      - test/Manifest.toml
       - .github/workflows/AD.yml
   workflow_dispatch:
 
