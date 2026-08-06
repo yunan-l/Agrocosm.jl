@@ -1,0 +1,4 @@
+[deps]
+Agrocosm = "03150e84-a77a-4da1-94e0-c2afe2ed6c45"
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
