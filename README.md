@@ -2,6 +2,7 @@
 
 [![Build Status](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![Documentation](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/Documentation.yml/badge.svg)](https://yunan-l.github.io/Agrocosm.jl/dev/)
+[![Enzyme differentiability](https://img.shields.io/github/actions/workflow/status/yunan-l/Agrocosm.jl/AD.yml?branch=main&label=Enzyme%20differentiability)](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/AD.yml?query=branch%3Amain)
 
 <!-- **🧑‍🌾 💧 ☀️ 🌾 🚀 A Julia-based crop model supporting automatic differentiation and GPU acceleration.** -->
 
@@ -145,6 +146,12 @@ Run the CPU test suite with:
 
 ```bash
 julia --project=. test/runtests.jl
+```
+
+The optional Enzyme differentiability contract is tested separately:
+
+```bash
+julia --project=. test/runtests_ad.jl
 ```
 
 GPU tests are separate because they require a functional CUDA device. For
