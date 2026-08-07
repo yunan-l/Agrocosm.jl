@@ -416,7 +416,6 @@ end
 function _enzyme_partition_soil_water_ice!(state::Agrocosm.ModelState)
     water = Agrocosm.soil_water_prognostic(state)
     auxiliary = Agrocosm.soil_water_auxiliary(state)
-    T = eltype(water.storage)
     for cell in eachindex(Agrocosm.crop_fluxes(state).carbon.gross_assimilation)
         _enzyme_partition_soil_water_ice_layer!(water, auxiliary, 1, cell)
         _enzyme_partition_soil_water_ice_layer!(water, auxiliary, 2, cell)
@@ -448,19 +447,31 @@ function _enzyme_partition_soil_water_ice_layer!(water, auxiliary, layer, cell)
     return nothing
 end
 
-function _enzyme_soil_evapotranspiration!(state::Agrocosm.ModelState)
-    storage = Agrocosm.soil_water_prognostic(state).storage
+function _enzyme_soil_evapotranspiration!(
+    state::Agrocosm.ModelState;
+    irrigation::Bool = false,
+)
+    water = Agrocosm.soil_water_prognostic(state)
+    storage = water.storage
     transpiration = Agrocosm.crop_fluxes(state).water.transpiration_layer
     evaporation = Agrocosm.soil_water_fluxes(state).evaporation
-    for cell in eachindex(Agrocosm.crop_fluxes(state).carbon.gross_assimilation)
-        storage[1, cell] -= transpiration[1, cell] + evaporation[1, cell]
-        storage[2, cell] -= transpiration[2, cell] + evaporation[2, cell]
-        storage[3, cell] -= transpiration[3, cell] + evaporation[3, cell]
-        storage[4, cell] -= transpiration[4, cell] + evaporation[4, cell]
-        storage[5, cell] -= transpiration[5, cell] + evaporation[5, cell]
+    if irrigation
+        field_capacity = Agrocosm.soil_water_auxiliary(state).field_capacity
+        layer_depth = Agrocosm.soil_properties(state).layer_depth
+        for cell in axes(storage, 2), layer in axes(storage, 1)
+            storage[layer, cell] = field_capacity[layer, cell] * layer_depth[layer]
+        end
+    else
+        for cell in eachindex(Agrocosm.crop_fluxes(state).carbon.gross_assimilation)
+            storage[1, cell] -= transpiration[1, cell] + evaporation[1, cell]
+            storage[2, cell] -= transpiration[2, cell] + evaporation[2, cell]
+            storage[3, cell] -= transpiration[3, cell] + evaporation[3, cell]
+            storage[4, cell] -= transpiration[4, cell] + evaporation[4, cell]
+            storage[5, cell] -= transpiration[5, cell] + evaporation[5, cell]
+        end
     end
     _enzyme_partition_soil_water_ice!(state)
-    return nothing
+    return state
 end
 
 """Keep the AD root profile linked to the active CFT beta_root parameter.
@@ -519,6 +530,7 @@ function _enzyme_continuous_transition!(
     day::Integer,
     observable::Symbol,
     layer_depth,
+    irrigation::Bool = false,
 )
     T = eltype(Agrocosm.crop_prognostic(state).canopy.lai)
     _enzyme_apply_root_distribution!(state, cft.beta_root)
@@ -587,7 +599,6 @@ function _enzyme_continuous_transition!(
         state,
         state,
         daily_weather.prec;
-        irrigation = false,
         snowmelt = Agrocosm.soil_snow_fluxes(state).melt,
         air_temperature = daily_weather.temp,
         lpjmlparams = global_params,
@@ -668,7 +679,7 @@ function _enzyme_continuous_transition!(
         lpjmlparams = global_params,
     )
     _enzyme_evaporation!(state, pet.eeq, global_params, layer_depth)
-    _enzyme_soil_evapotranspiration!(state)
+    state = _enzyme_soil_evapotranspiration!(state; irrigation)
     Agrocosm.post_crop_nitrogen_losses!(
         state;
         air_temperature = daily_weather.temp,
@@ -954,29 +965,32 @@ function Agrocosm.enzyme_seasonal_loss(
     parameter_names::Tuple,
     days::Tuple,
     layer_depth,
-    context::Agrocosm.ADSeasonContext,
+    context::Agrocosm.ADSeasonContext;
+    irrigation::Bool = false,
 ) where {T <: AbstractFloat}
     cft = _replace_cft_parameters(base_cft, theta, parameter_names)
     gpp_loss = zero(T)
     reco_loss = zero(T)
     et_loss = zero(T)
+    working_state = state
     day_index = 1
     while day_index <= length(days)
-        _enzyme_continuous_transition!(
-            state,
+        working_state = _enzyme_continuous_transition!(
+            working_state,
             cft,
             global_parameters,
             climate,
             days[day_index],
             :et,
             layer_depth,
+            irrigation,
         )
         if context.growth_mask[day_index]
-            crop_flux = Agrocosm.crop_fluxes(state)
-            soil_carbon_flux = Agrocosm.soil_carbon_fluxes(state)
+            crop_flux = Agrocosm.crop_fluxes(working_state)
+            soil_carbon_flux = Agrocosm.soil_carbon_fluxes(working_state)
             crop_water_flux = crop_flux.water
-            soil_water_flux = Agrocosm.soil_water_fluxes(state)
-            litter_flux = Agrocosm.soil_surface_litter_fluxes(state)
+            soil_water_flux = Agrocosm.soil_water_fluxes(working_state)
+            litter_flux = Agrocosm.soil_surface_litter_fluxes(working_state)
             gpp = crop_flux.carbon.gross_assimilation[1]
             reco = crop_flux.carbon.respiration[1] +
                 crop_flux.carbon.leaf_respiration[1] +
@@ -1083,20 +1097,23 @@ function _enzyme_seasonal_loss_block(
     layer_depth,
     context::Agrocosm.ADSeasonContext,
     day_range::UnitRange{Int},
+    irrigation::Bool,
 ) where {T <: AbstractFloat}
     cft = _replace_cft_parameters(base_cft, theta, parameter_names)
     losses = _ADSeasonalLossAccumulator(zero(T), zero(T), zero(T))
+    working_state = state
     for index in day_range
-        _enzyme_continuous_transition!(
-            state,
+        working_state = _enzyme_continuous_transition!(
+            working_state,
             cft,
             global_parameters,
             climate,
             days[index],
             :et,
             layer_depth,
+            irrigation,
         )
-        _enzyme_add_seasonal_loss!(losses, state, index, context)
+        _enzyme_add_seasonal_loss!(losses, working_state, index, context)
     end
     return _enzyme_seasonal_loss_value(losses, context)
 end
@@ -1120,23 +1137,26 @@ function Agrocosm.enzyme_seasonal_soil_loss(
     climate,
     days::Tuple,
     layer_depth,
-    context::Agrocosm.ADSeasonContext,
+    context::Agrocosm.ADSeasonContext;
+    irrigation::Bool = false,
 ) where {T <: AbstractFloat}
     model_parameters = _replace_model_parameters(
         base_parameters, theta_soil, soil_parameter_names,
     )
     losses = _ADSeasonalLossAccumulator(zero(T), zero(T), zero(T))
+    working_state = state
     for index in eachindex(days)
-        _enzyme_continuous_transition!(
-            state,
+        working_state = _enzyme_continuous_transition!(
+            working_state,
             base_cft,
             model_parameters,
             climate,
             days[index],
             :et,
             layer_depth,
+            irrigation,
         )
-        _enzyme_add_seasonal_loss!(losses, state, index, context)
+        _enzyme_add_seasonal_loss!(losses, working_state, index, context)
     end
     return _enzyme_seasonal_loss_value(losses, context)
 end
@@ -1152,22 +1172,25 @@ function _enzyme_seasonal_soil_loss_block(
     layer_depth,
     context::Agrocosm.ADSeasonContext,
     day_range::UnitRange{Int},
+    irrigation::Bool,
 ) where {T <: AbstractFloat}
     model_parameters = _replace_model_parameters(
         base_parameters, theta_soil, soil_parameter_names,
     )
     losses = _ADSeasonalLossAccumulator(zero(T), zero(T), zero(T))
+    working_state = state
     for index in day_range
-        _enzyme_continuous_transition!(
-            state,
+        working_state = _enzyme_continuous_transition!(
+            working_state,
             base_cft,
             model_parameters,
             climate,
             days[index],
             :et,
             layer_depth,
+            irrigation,
         )
-        _enzyme_add_seasonal_loss!(losses, state, index, context)
+        _enzyme_add_seasonal_loss!(losses, working_state, index, context)
     end
     return _enzyme_seasonal_loss_value(losses, context)
 end
@@ -1184,6 +1207,7 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
     layer_depth,
     context::Agrocosm.ADSeasonContext;
     block_days::Integer = 30,
+    irrigation::Bool = false,
 ) where {T <: AbstractFloat, F}
     length(days) == length(context.growth_mask) || throw(DimensionMismatch(
         "days and context must have identical lengths",
@@ -1208,6 +1232,7 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
             layer_depth,
             context,
             day_range,
+            irrigation,
         )
     end
 
@@ -1233,6 +1258,7 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
             Enzyme.Const(layer_depth),
             Enzyme.Const(context),
             Enzyme.Const(day_range),
+            Enzyme.Const(irrigation),
         )
         reverse_primal += result[2]
         gradient .+= block_gradient
@@ -1283,6 +1309,7 @@ function Agrocosm.enzyme_seasonal_gradient_blockwise(
     layer_depth,
     context::Agrocosm.ADSeasonContext;
     block_days::Integer = 30,
+    irrigation::Bool = false,
 ) where {T <: AbstractFloat, F}
     length(days) == length(context.growth_mask) || throw(DimensionMismatch(
         "days and context must have identical lengths",
@@ -1307,6 +1334,7 @@ function Agrocosm.enzyme_seasonal_gradient_blockwise(
             layer_depth,
             context,
             day_range,
+            irrigation,
         )
     end
 
@@ -1332,6 +1360,7 @@ function Agrocosm.enzyme_seasonal_gradient_blockwise(
             Enzyme.Const(layer_depth),
             Enzyme.Const(context),
             Enzyme.Const(day_range),
+            Enzyme.Const(irrigation),
         )
         reverse_primal += result[2]
         gradient .+= block_gradient
@@ -1367,11 +1396,13 @@ function Agrocosm.enzyme_daily_transition_objective(
     parameter_names::Tuple,
     day::Integer,
     observable::Symbol,
-    layer_depth,
+    layer_depth;
+    irrigation::Bool = false,
 ) where {T <: AbstractFloat}
     cft = _replace_cft_parameters(base_cft, theta, parameter_names)
-    _enzyme_continuous_transition!(
+    state = _enzyme_continuous_transition!(
         state, cft, global_parameters, climate, day, observable, layer_depth,
+        irrigation,
     )
     return _daily_transition_observable(state, observable)
 end
