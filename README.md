@@ -68,15 +68,6 @@ Agrocosm currently focuses on daily, gridded simulations of a single crop.
   </tbody>
 </table>
 
-<!-- ## What Agrocosm is not yet
-
-The following are planned, but not yet part of the current model:
-
-- **Near-term:** global simulations, streamed agricultural warm-up, and
-  annual land-use activation.
-- **Next model generation:** multi-crop stands, rotations, and dynamic sowing.
-- **Long-term:** end-to-end differentiable process pathways, global validation, and hybrid process--machine-learning applications. -->
-
 ## Installation
 
 Agrocosm is not yet registered in the Julia General registry. Clone the source
@@ -162,18 +153,6 @@ example:
 julia --project=. test/simulations/test_daily_crop_C3_precision_gpu.jl
 julia --project=. test/processes/soil/test_soil_process_kernels_gpu.jl
 ```
-
-<!-- ## Long-term goals
-
-The detailed development plan is maintained in the [project roadmap](docs/roadmap.md).
-
-When the roadmap is complete, Agrocosm should support:
-
-- Large-domain, high-resolution crop simulation on both CPUs and GPUs
-- Gradient-based calibration of cultivar and physiological parameters
-- Assimilation of remotely sensed LAI, GPP, evapotranspiration, and biomass
-- Combination with data-driven models to surpport hybrid modelling
-- Sensitivity analysis of climate change and crop management strategies -->
 
 ## Contributing
 
