@@ -2,6 +2,7 @@
 
 [![documentation](https://img.shields.io/badge/documentation-latest%20release-blue)](https://yunan-l.github.io/Agrocosm.jl/dev/)
 [![Agrocosm](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![AgrocosmData](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/AgrocosmData.yml/badge.svg?branch=main)](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/AgrocosmData.yml?query=branch%3Amain)
 [![Enzyme differentiability](https://img.shields.io/github/actions/workflow/status/yunan-l/Agrocosm.jl/AD.yml?branch=main&label=Enzyme%20differentiability)](https://github.com/yunan-l/Agrocosm.jl/actions/workflows/AD.yml?query=branch%3Amain)
 
 <!-- **🧑‍🌾 💧 ☀️ 🌾 🚀 A Julia-based crop model supporting automatic differentiation and GPU acceleration.** -->
