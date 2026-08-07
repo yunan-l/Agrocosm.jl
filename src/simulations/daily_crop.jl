@@ -181,7 +181,6 @@ function _daily_crop!(
         pedotransfer!(state; lpjmlparams = global_params)
         soil_infiltration!(
             state, state, dailyWeather.prec;
-            irrigation,
             snowmelt = soil_snow_fluxes(state).melt,
             air_temperature = dailyWeather.temp,
             lpjmlparams = global_params,

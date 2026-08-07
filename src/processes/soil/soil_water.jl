@@ -1,21 +1,25 @@
 """
-    soil_infiltration!(soil, crop, precipitation; irrigation=false)
+    soil_infiltration!(soil, crop, precipitation)
 
 Apply throughfall infiltration and percolation before the daily plant water-stress calculation.
-For rainfed simulations, the resulting layer balance is immediately
-added to absolute soil water storage.
+Rainfed and full-irrigation simulations share this hydrologic and thermal
+update. Full irrigation differs only later in `soil_evapotranspiration!`,
+where storage is restored to field capacity after evapotranspiration.
 """
 function soil_infiltration!(soil,
                             crop,
                             prec::AbstractArray{T};
-                            irrigation = false,
                             snowmelt::Union{Nothing, AbstractArray{T}} = nothing,
                             air_temperature::Union{Nothing, AbstractArray{T}} = nothing,
                             lpjmlparams::LPJmLParams = lpjmlparams,
                             thermalparams::SoilThermalParams{T} = SoilThermalParams{T}(),
 ) where {T <: AbstractFloat}
     surface_litter_interception!(soil, prec, crop_fluxes(crop).water.interception)
-    transfer_heat = !irrigation && snowmelt !== nothing && air_temperature !== nothing
+    # Full irrigation is an unlimited water-supply boundary condition, not a
+    # separate infiltration physics. Keep rainfall, snowmelt, percolation, and
+    # their enthalpy transport identical to the rainfed path before the later
+    # field-capacity restoration.
+    transfer_heat = snowmelt !== nothing && air_temperature !== nothing
     if transfer_heat
         infil_perc!(
             soil, prec, snowmelt, air_temperature;
@@ -26,15 +30,13 @@ function soil_infiltration!(soil,
         infil_perc!(soil; lpjmlparams = lpjmlparams)
     end
 
-    if !irrigation
-        launch_custom!(
-            add_layer_flux_kernel!,
-            soil_water_prognostic(soil).storage,
-            size(soil_water_prognostic(soil).storage, 2),
-            soil_water_fluxes(soil).percolation,
-            size(soil_water_prognostic(soil).storage, 1),
-        )
-    end
+    launch_custom!(
+        add_layer_flux_kernel!,
+        soil_water_prognostic(soil).storage,
+        size(soil_water_prognostic(soil).storage, 2),
+        soil_water_fluxes(soil).percolation,
+        size(soil_water_prognostic(soil).storage, 1),
+    )
     if transfer_heat
         # LPJmL may reconcile temperature every two infiltration iterations.
         # Agrocosm preserves the same water/energy ledger but applies it once
