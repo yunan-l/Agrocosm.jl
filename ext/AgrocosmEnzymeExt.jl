@@ -471,7 +471,7 @@ function _enzyme_soil_evapotranspiration!(
         end
     end
     _enzyme_partition_soil_water_ice!(state)
-    return state
+    return nothing
 end
 
 """Keep the AD root profile linked to the active CFT beta_root parameter.
@@ -679,7 +679,7 @@ function _enzyme_continuous_transition!(
         lpjmlparams = global_params,
     )
     _enzyme_evaporation!(state, pet.eeq, global_params, layer_depth)
-    state = _enzyme_soil_evapotranspiration!(state; irrigation)
+    _enzyme_soil_evapotranspiration!(state; irrigation)
     Agrocosm.post_crop_nitrogen_losses!(
         state;
         air_temperature = daily_weather.temp,
