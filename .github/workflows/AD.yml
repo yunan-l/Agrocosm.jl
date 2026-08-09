@@ -37,7 +37,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
         with:
-          version: '1.10'
+          version: '1.10.10'
       - uses: julia-actions/julia-buildpkg@v1
       - name: Instantiate AD test environment
         run: julia --startup-file=no --project=test -e 'using Pkg; Pkg.develop(Pkg.PackageSpec(path=".")); Pkg.instantiate()'
