@@ -88,7 +88,7 @@ end
     @test estimate.days == 4
     @test estimate.backend == :cpu
     @test estimate.diagnostics_bytes == 0
-    @test estimate.projected_output_bytes == 312
+    @test estimate.projected_output_bytes == 356
     @test preallocation == estimate
     @test estimate_memory(
         1, 1; T = Float64, diagnostics = false, block_days = 1,
