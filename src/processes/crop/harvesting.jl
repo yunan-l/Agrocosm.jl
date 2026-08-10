@@ -23,6 +23,17 @@ function harvest_crop!(crop,
         crop_fluxes(crop).carbon.yield,
         crop_fluxes(crop).carbon.harvest_export,
         output.annual.yield,
+        output.annual.season_gpp,
+        output.annual.season_lai_days,
+        output.annual.season_length,
+        output.annual.season_water_deficit,
+        output.annual.season_evapotranspiration,
+        output.annual.harvest_aboveground_carbon,
+        output.annual.active_gpp,
+        output.annual.active_lai_days,
+        output.annual.active_length,
+        output.annual.active_water_deficit,
+        output.annual.active_evapotranspiration,
         crop_prognostic(crop).carbon.storage,
         crop_prognostic(crop).carbon.leaf,
         crop_prognostic(crop).carbon.pool,
@@ -38,6 +49,12 @@ function harvest_crop!(crop,
         soil_properties(soil).layer_depth,
         residue_frac,
         output.crop.yield,
+        output.crop.season_gpp,
+        output.crop.season_lai_days,
+        output.crop.season_length,
+        output.crop.season_water_deficit,
+        output.crop.season_evapotranspiration,
+        output.crop.harvest_aboveground_carbon,
         output.calendar.harvest_date,
         output.calendar.harvesting_year,
         annual_row,
@@ -76,6 +93,15 @@ function harvest_crop!(crop,
             output.calendar.harvest_date, output.annual.harvest_date,
         )
         output.crop.yield = _append_output_row(output.crop.yield, annual_yield)
+        for field in (
+            :season_gpp, :season_lai_days, :season_length,
+            :season_water_deficit, :season_evapotranspiration,
+            :harvest_aboveground_carbon,
+        )
+            output_values = getproperty(output.crop, field)
+            accumulator_values = getproperty(output.annual, field)
+            setproperty!(output.crop, field, _append_output_row(output_values, accumulator_values))
+        end
         output.calendar.harvesting_year = _append_output_row(
             output.calendar.harvesting_year, harvesting_year,
         )
@@ -83,6 +109,12 @@ function harvest_crop!(crop,
             reset_annual_harvest_kernel!,
             output.annual.yield,
             output.annual.harvest_date,
+            output.annual.season_gpp,
+            output.annual.season_lai_days,
+            output.annual.season_length,
+            output.annual.season_water_deficit,
+            output.annual.season_evapotranspiration,
+            output.annual.harvest_aboveground_carbon,
         )
     end
 end
@@ -275,10 +307,21 @@ end
     harvesting_previous::AbstractVector{B},
     harvesting::AbstractVector{B},
     is_growing::AbstractVector{S},
-    crop_yield::AbstractVector{T},
-    carbon_harvest_export::AbstractVector{T},
-    annual_yield::AbstractVector{T},
-    storage_carbon::AbstractVector{T},
+        crop_yield::AbstractVector{T},
+        carbon_harvest_export::AbstractVector{T},
+        annual_yield::AbstractVector{T},
+        annual_season_gpp::AbstractVector{T},
+        annual_season_lai_days::AbstractVector{T},
+        annual_season_length::AbstractVector{T},
+        annual_season_water_deficit::AbstractVector{T},
+        annual_season_evapotranspiration::AbstractVector{T},
+        annual_harvest_aboveground_carbon::AbstractVector{T},
+        active_gpp::AbstractVector{T},
+        active_lai_days::AbstractVector{T},
+        active_length::AbstractVector{T},
+        active_water_deficit::AbstractVector{T},
+        active_evapotranspiration::AbstractVector{T},
+        storage_carbon::AbstractVector{T},
     leaf_carbon::AbstractVector{T},
     pool_carbon::AbstractVector{T},
     root_carbon::AbstractVector{T},
@@ -291,9 +334,15 @@ end
     nitrogen_input::AbstractMatrix{T},
     soil_water_storage::AbstractMatrix{T},
     soil_layer_depth::AbstractVector{T},
-    residue_fraction::AbstractVector{T},
-    output_yield::AbstractMatrix{T},
-    output_harvest_date::AbstractMatrix{S},
+        residue_fraction::AbstractVector{T},
+        output_yield::AbstractMatrix{T},
+        output_season_gpp::AbstractMatrix{T},
+        output_season_lai_days::AbstractMatrix{T},
+        output_season_length::AbstractMatrix{T},
+        output_season_water_deficit::AbstractMatrix{T},
+        output_season_evapotranspiration::AbstractMatrix{T},
+        output_harvest_aboveground_carbon::AbstractMatrix{T},
+        output_harvest_date::AbstractMatrix{S},
     output_harvesting_year::AbstractMatrix{S},
     annual_output_row::Integer,
     day::Integer,
@@ -311,6 +360,18 @@ end
         is_growing[cell] = zero(S)
         crop_yield[cell] = storage_carbon[cell]
         annual_yield[cell] += crop_yield[cell]
+        annual_season_gpp[cell] += active_gpp[cell]
+        annual_season_lai_days[cell] += active_lai_days[cell]
+        annual_season_length[cell] += active_length[cell]
+        annual_season_water_deficit[cell] += active_water_deficit[cell]
+        annual_season_evapotranspiration[cell] += active_evapotranspiration[cell]
+        annual_harvest_aboveground_carbon[cell] +=
+            storage_carbon[cell] + aboveground_carbon
+        active_gpp[cell] = zero(T)
+        active_lai_days[cell] = zero(T)
+        active_length[cell] = zero(T)
+        active_water_deficit[cell] = zero(T)
+        active_evapotranspiration[cell] = zero(T)
         carbon_harvest_export[cell] = crop_yield[cell] +
             aboveground_carbon - carbon_residue
         harvest_nitrogen[cell] = storage_nitrogen[cell] +
@@ -334,12 +395,30 @@ end
         emitted_yield = max(annual_yield[cell], zero(T))
         size(output_yield, 1) != 0 &&
             (output_yield[annual_output_row, cell] = emitted_yield)
+        size(output_season_gpp, 1) != 0 &&
+            (output_season_gpp[annual_output_row, cell] = annual_season_gpp[cell])
+        size(output_season_lai_days, 1) != 0 &&
+            (output_season_lai_days[annual_output_row, cell] = annual_season_lai_days[cell])
+        size(output_season_length, 1) != 0 &&
+            (output_season_length[annual_output_row, cell] = annual_season_length[cell])
+        size(output_season_water_deficit, 1) != 0 &&
+            (output_season_water_deficit[annual_output_row, cell] = annual_season_water_deficit[cell])
+        size(output_season_evapotranspiration, 1) != 0 &&
+            (output_season_evapotranspiration[annual_output_row, cell] = annual_season_evapotranspiration[cell])
+        size(output_harvest_aboveground_carbon, 1) != 0 &&
+            (output_harvest_aboveground_carbon[annual_output_row, cell] = annual_harvest_aboveground_carbon[cell])
         size(output_harvest_date, 1) != 0 &&
             (output_harvest_date[annual_output_row, cell] = harvest_date[cell])
         size(output_harvesting_year, 1) != 0 &&
             (output_harvesting_year[annual_output_row, cell] =
                 emitted_yield != zero(T) ? one(S) : zero(S))
         annual_yield[cell] = zero(T)
+        annual_season_gpp[cell] = zero(T)
+        annual_season_lai_days[cell] = zero(T)
+        annual_season_length[cell] = zero(T)
+        annual_season_water_deficit[cell] = zero(T)
+        annual_season_evapotranspiration[cell] = zero(T)
+        annual_harvest_aboveground_carbon[cell] = zero(T)
         harvest_date[cell] = zero(S)
     end
 end
@@ -347,8 +426,20 @@ end
 @kernel inbounds = true function reset_annual_harvest_kernel!(
     annual_yield::AbstractVector{T},
     harvest_date::AbstractVector{S},
+    annual_season_gpp::AbstractVector{T},
+    annual_season_lai_days::AbstractVector{T},
+    annual_season_length::AbstractVector{T},
+    annual_season_water_deficit::AbstractVector{T},
+    annual_season_evapotranspiration::AbstractVector{T},
+    annual_harvest_aboveground_carbon::AbstractVector{T},
 ) where {T <: AbstractFloat, S <: Integer}
     cell = @index(Global)
     annual_yield[cell] = zero(T)
     harvest_date[cell] = zero(S)
+    annual_season_gpp[cell] = zero(T)
+    annual_season_lai_days[cell] = zero(T)
+    annual_season_length[cell] = zero(T)
+    annual_season_water_deficit[cell] = zero(T)
+    annual_season_evapotranspiration[cell] = zero(T)
+    annual_harvest_aboveground_carbon[cell] = zero(T)
 end

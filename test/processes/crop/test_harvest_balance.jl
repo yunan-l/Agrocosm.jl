@@ -47,6 +47,50 @@ using Test
     @test crop.state.phenology.is_growing[1] == 0
 end
 
+@testset "Harvest-season diagnostics are accumulated and emitted annually" begin
+    crop = init_crop(1, identity)
+    soil = init_soil(1, soilparams.soildepth, identity)
+    output = init_output(1, identity)
+    state = test_model_state(crop, soil; output)
+    Agrocosm.prepare_output_block!(output, 1, 1)
+
+    crop.events.sowing .= Int32(1)
+    crop.state.phenology.is_growing .= Int32(1)
+    crop.fluxes.carbon.gross_assimilation .= 4.0f0
+    crop.auxiliary.canopy.actual_lai .= 2.0f0
+    crop.auxiliary.stress.water_deficit .= 3.0f0
+    crop.fluxes.water.interception .= 0.5f0
+    crop.fluxes.water.transpiration_layer .= 0.1f0
+    soil.water.evaporation .= 0.2f0
+    soil.surface_litter.evaporation .= 0.3f0
+
+    Agrocosm.accumulate_season_process_diagnostics!(output, state, state)
+    crop.events.sowing .= Int32(0)
+    Agrocosm.accumulate_season_process_diagnostics!(output, state, state)
+
+    @test output.annual.active_gpp[1] == 8.0f0
+    @test output.annual.active_lai_days[1] == 4.0f0
+    @test output.annual.active_length[1] == 2.0f0
+    @test output.annual.active_water_deficit[1] == 6.0f0
+    @test output.annual.active_evapotranspiration[1] ≈ 4.6f0
+
+    crop.state.carbon.leaf .= 2.0f0
+    crop.state.carbon.pool .= 3.0f0
+    crop.state.carbon.storage .= 5.0f0
+    crop.state.phenology.harvesting_previous .= false
+    crop.state.phenology.harvesting .= true
+    harvest_crop!(state, state, output, Float32[0.6], 365;
+                  output_row = 1, annual_output_row = 1)
+
+    @test output.crop.yield[1, 1] == 5.0f0
+    @test output.crop.season_gpp[1, 1] == 8.0f0
+    @test output.crop.season_lai_days[1, 1] == 4.0f0
+    @test output.crop.season_length[1, 1] == 2.0f0
+    @test output.crop.season_water_deficit[1, 1] == 6.0f0
+    @test output.crop.season_evapotranspiration[1, 1] ≈ 4.6f0
+    @test output.crop.harvest_aboveground_carbon[1, 1] == 10.0f0
+end
+
 @testset "Negative biomass terminates the failed crop conservatively" begin
     crop = init_crop(1, identity)
     soil = init_soil(1, soilparams.soildepth, identity)

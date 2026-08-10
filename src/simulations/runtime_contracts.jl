@@ -131,6 +131,12 @@ const _OUTPUT_VARIABLE_METADATA = Dict{Tuple{Symbol, Symbol}, NamedTuple}(
     (:crop, :lai) => (units = "m2 m-2", description = "Leaf area index"),
     (:crop, :storage_carbon) => (units = "gC m-2", description = "Storage-organ carbon"),
     (:crop, :yield) => (units = "gC m-2 year-1", description = "Harvested storage-organ carbon"),
+    (:crop, :season_gpp) => (units = "gC m-2", description = "Harvest-season cumulative gross primary production"),
+    (:crop, :season_lai_days) => (units = "m2 m-2 day", description = "Harvest-season cumulative leaf area index"),
+    (:crop, :season_length) => (units = "day", description = "Active crop days in the harvested season"),
+    (:crop, :season_water_deficit) => (units = "% day", description = "Harvest-season cumulative crop water deficit"),
+    (:crop, :season_evapotranspiration) => (units = "mm", description = "Harvest-season cumulative evapotranspiration"),
+    (:crop, :harvest_aboveground_carbon) => (units = "gC m-2", description = "Live above-ground crop carbon immediately before harvest"),
     (:crop, :fphu) => (units = "1", description = "Fraction of potential heat units"),
     (:crop, :water_deficit) => (units = "%", description = "Crop water deficit"),
     (:crop, :growing_mask) => (units = "1", description = "Active crop-stand mask"),
@@ -156,7 +162,11 @@ const _OUTPUT_VARIABLE_METADATA = Dict{Tuple{Symbol, Symbol}, NamedTuple}(
 function output_variable_spec(group::Symbol, field::Symbol)
     metadata = get(_OUTPUT_VARIABLE_METADATA, (group, field), nothing)
     isnothing(metadata) && throw(ArgumentError("missing metadata for output variable $group.$field"))
-    frequency = field in (:yield, :harvest_date, :harvesting_year) ? :annual : :daily
+    frequency = field in (
+        :yield, :season_gpp, :season_lai_days, :season_length,
+        :season_water_deficit, :season_evapotranspiration,
+        :harvest_aboveground_carbon, :harvest_date, :harvesting_year,
+    ) ? :annual : :daily
     return VariableSpec(
         (:output, group, field), :output, (:time, :cell),
         metadata.units, metadata.description,

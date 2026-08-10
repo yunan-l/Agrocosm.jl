@@ -26,7 +26,7 @@ function _projected_output_bytes(cells::Int, days::Int, ::Type{T}) where {T}
         length(_DAILY_CALENDAR_INTEGER_OUTPUT_FIELDS)
     annual_float_fields = length(_ANNUAL_CROP_FLOAT_OUTPUT_FIELDS)
     annual_int_fields = length(_ANNUAL_CALENDAR_INTEGER_OUTPUT_FIELDS)
-    accumulator_bytes = cells * (sizeof(T) + sizeof(Int32))
+    accumulator_bytes = cells * (12 * sizeof(T) + sizeof(Int32))
     return cells * (
         days * (daily_float_fields * sizeof(T) + daily_int_fields * sizeof(Int32)) +
         annual_rows * (annual_float_fields * sizeof(T) + annual_int_fields * sizeof(Int32))
