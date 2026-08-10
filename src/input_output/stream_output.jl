@@ -46,6 +46,7 @@ mutable struct OutputStream{W}
     frequency::Symbol
     writer::W
     cell_ids::Vector{Int32}
+    first_output_day::Int
     chunk_index::Int
     period_end_day::Int
     period_count::Int
@@ -54,11 +55,18 @@ mutable struct OutputStream{W}
     written_paths::Vector{String}
 end
 
+"""
+    OutputStream(variables; frequency=:daily, writer, cell_ids, first_output_day=1)
+
+Stream selected diagnostics beginning on the first day of a 365-day simulation
+year. The model still advances continuously before `first_output_day`.
+"""
 function OutputStream(
     variables::AbstractVector{OutputVariable};
     frequency::Symbol = :daily,
     writer = (_ -> nothing),
     cell_ids::AbstractVector{<:Integer},
+    first_output_day::Integer = 1,
 )
     isempty(variables) && throw(ArgumentError("at least one output variable is required"))
     frequency in (:daily, :monthly, :annual) || throw(ArgumentError(
@@ -66,8 +74,12 @@ function OutputStream(
     ))
     length(unique((variable.group, variable.field) for variable in variables)) == length(variables) ||
         throw(ArgumentError("output variables must be unique"))
+    first_output_day >= 1 || throw(ArgumentError("first_output_day must be positive"))
+    (first_output_day - 1) % 365 == 0 || throw(ArgumentError(
+        "first_output_day must be the first day of a 365-day simulation year",
+    ))
     return OutputStream(
-        collect(variables), frequency, writer, Int32.(cell_ids), 0, 0, 0,
+        collect(variables), frequency, writer, Int32.(cell_ids), Int(first_output_day), 0, 0, 0,
         Dict{Symbol, Any}(), Dict{Int, Dict{Symbol, Any}}(), String[],
     )
 end
@@ -242,21 +254,30 @@ function consume_output!(
     annual_rows == length(annual_end_days) || throw(DimensionMismatch(
         "found $annual_rows annual rows for $(length(annual_end_days)) year boundaries",
     ))
+    first_row = max(1, stream.first_output_day - Int(first_day) + 1)
+    first_row > output_rows && return stream
     for (row, day) in enumerate(annual_end_days)
-        stream.pending_annual[day] = Dict(
-            key => value[row:row, :] for (key, value) in annual
-        )
+        if day >= stream.first_output_day
+            stream.pending_annual[day] = Dict(
+                key => value[row:row, :] for (key, value) in annual
+            )
+        end
     end
 
     if stream.frequency === :daily
-        _emit_daily_chunk!(stream, Int(first_day), output_rows, daily)
+        selected_daily = Dict{Symbol, Any}(
+            key => value[first_row:output_rows, :] for (key, value) in daily
+        )
+        _emit_daily_chunk!(stream, Int(first_day) + first_row - 1,
+                           output_rows - first_row + 1, selected_daily)
         for day in annual_end_days
+            day >= stream.first_output_day || continue
             _emit_chunk!(stream, :annual, day, pop!(stream.pending_annual, day))
         end
         return stream
     end
 
-    for row in 1:output_rows
+    for row in first_row:output_rows
         day = Int(first_day) + row - 1
         period_end = _period_end(day, stream.frequency)
         if stream.period_end_day != 0 && stream.period_end_day != period_end
@@ -272,6 +293,7 @@ function consume_output!(
 
     if stream.frequency === :monthly
         for day in annual_end_days
+            day >= stream.first_output_day || continue
             _emit_chunk!(stream, :annual, day, pop!(stream.pending_annual, day))
         end
     end

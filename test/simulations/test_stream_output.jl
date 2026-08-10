@@ -126,6 +126,12 @@ end
         [
             OutputVariable(:crop, :npp; reduction = :sum),
             OutputVariable(:crop, :yield),
+            OutputVariable(:crop, :season_gpp),
+            OutputVariable(:crop, :season_lai_days),
+            OutputVariable(:crop, :season_length),
+            OutputVariable(:crop, :season_water_deficit),
+            OutputVariable(:crop, :season_evapotranspiration),
+            OutputVariable(:crop, :harvest_aboveground_carbon),
         ];
         frequency = :annual,
         writer = chunk -> push!(annual_chunks, chunk),
@@ -135,12 +141,25 @@ end
     Agrocosm.prepare_output_block!(output, 365, 1)
     output.crop.npp .= 1
     output.crop.yield .= reshape(Float32[10, 20], 1, :)
+    output.crop.season_gpp .= reshape(Float32[11, 21], 1, :)
+    output.crop.season_lai_days .= reshape(Float32[12, 22], 1, :)
+    output.crop.season_length .= reshape(Float32[13, 23], 1, :)
+    output.crop.season_water_deficit .= reshape(Float32[14, 24], 1, :)
+    output.crop.season_evapotranspiration .= reshape(Float32[15, 25], 1, :)
+    output.crop.harvest_aboveground_carbon .= reshape(Float32[16, 26], 1, :)
     consume_output!(annual, output, 1)
     finish_output_stream!(annual, 365)
     @test length(annual_chunks) == 1
     @test annual_chunks[1].time == [365]
     @test annual_chunks[1].values[:crop_npp] == fill(365.0f0, 1, 2)
     @test annual_chunks[1].values[:crop_yield] == reshape(Float32[10, 20], 1, :)
+    @test annual_chunks[1].values[:crop_season_gpp] == reshape(Float32[11, 21], 1, :)
+    @test annual_chunks[1].values[:crop_season_lai_days] == reshape(Float32[12, 22], 1, :)
+    @test annual_chunks[1].values[:crop_season_length] == reshape(Float32[13, 23], 1, :)
+    @test annual_chunks[1].values[:crop_season_water_deficit] == reshape(Float32[14, 24], 1, :)
+    @test annual_chunks[1].values[:crop_season_evapotranspiration] == reshape(Float32[15, 25], 1, :)
+    @test annual_chunks[1].values[:crop_harvest_aboveground_carbon] ==
+        reshape(Float32[16, 26], 1, :)
 end
 
 @testset "stream block writers" begin
@@ -177,4 +196,30 @@ end
     @test all(iszero, output.crop.gpp)
     Agrocosm.prepare_output_block!(output, 30, 0; reuse = true)
     @test size(output.crop.gpp) == (30, 2)
+end
+
+@testset "stream output can begin on a later simulation year" begin
+    chunks = OutputChunk[]
+    stream = OutputStream(
+        [OutputVariable(:crop, :gpp; reduction = :sum), OutputVariable(:crop, :yield)];
+        frequency = :annual,
+        writer = chunk -> push!(chunks, chunk),
+        cell_ids = 1:2,
+        first_output_day = 366,
+    )
+    output = init_output(Float32, 2, identity)
+    Agrocosm.prepare_output_block!(output, 730, 2)
+    output.crop.gpp .= 1
+    output.crop.yield .= Float32[10 20; 30 40]
+
+    consume_output!(stream, output, 1; rows = 730)
+    finish_output_stream!(stream, 730)
+
+    @test length(chunks) == 1
+    @test chunks[1].time == [730]
+    @test chunks[1].values[:crop_gpp] == fill(365.0f0, 1, 2)
+    @test chunks[1].values[:crop_yield] == reshape(Float32[30, 40], 1, :)
+    @test_throws ArgumentError OutputStream(
+        [OutputVariable(:crop, :yield)]; cell_ids = 1:2, first_output_day = 365,
+    )
 end
