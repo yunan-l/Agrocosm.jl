@@ -696,6 +696,15 @@ end
 ) where {T, S, parameter_names}
     fields = fieldnames(Agrocosm.CFTParameters)
     values = map(fields) do field
+        if field === :basetemp
+            index = findfirst(==(:basetemp_low), parameter_names)
+            return index === nothing ?
+                :(getfield(base_cft, :basetemp)) :
+                :(Agrocosm.BaseTemp{$T}(
+                    theta[$index],
+                    getfield(getfield(base_cft, :basetemp), :high),
+                ))
+        end
         index = findfirst(==(field), parameter_names)
         index === nothing ? :(getfield(base_cft, $(QuoteNode(field)))) : :(theta[$index])
     end
@@ -709,6 +718,15 @@ end
 ) where {T, S, parameter_names}
     fields = fieldnames(Agrocosm.CFTParameters)
     values = map(fields) do field
+        if field === :basetemp
+            index = findfirst(==(:basetemp_low), parameter_names)
+            return index === nothing ?
+                :(getfield(zero_cft, :basetemp)) :
+                :(Agrocosm.BaseTemp{$T}(
+                    dtheta[$index],
+                    getfield(getfield(zero_cft, :basetemp), :high),
+                ))
+        end
         index = findfirst(==(field), parameter_names)
         index === nothing ? :(getfield(zero_cft, $(QuoteNode(field)))) : :(dtheta[$index])
     end
