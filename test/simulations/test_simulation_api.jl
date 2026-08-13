@@ -148,6 +148,11 @@ end
 end
 
 @testset "Nitrogen limitation remains explicit" begin
+    default_configuration = SimulationConfiguration(
+        Float32, identity, 1, Int64[1], Int32[1],
+    )
+    @test !default_configuration.nitrogen_limit_vcmax
+
     configuration = SimulationConfiguration(
         Float32, identity, 1, Int64[1], Int32[1];
         nitrogen_limit_vcmax = true,

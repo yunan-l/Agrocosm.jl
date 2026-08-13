@@ -72,7 +72,7 @@ function SimulationConfiguration(
     manure::Bool = false,
     fertilizer::Symbol = :auto,
     with_tillage::Bool = true,
-    nitrogen_limit_vcmax::Bool = true,
+    nitrogen_limit_vcmax::Bool = false,
     freeze_vernalization_requirement::Bool = false,
     sowing_mode::Symbol = :prescribed_sdate,
 ) where {T <: AbstractFloat}

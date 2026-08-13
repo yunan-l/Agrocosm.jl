@@ -545,6 +545,7 @@ function _enzyme_continuous_transition!(
     observable::Symbol,
     layer_depth,
     irrigation::Bool = false,
+    nitrogen_limit_vcmax::Bool = false,
 )
     T = eltype(Agrocosm.crop_prognostic(state).canopy.lai)
     _enzyme_apply_root_distribution!(state, cft.beta_root)
@@ -673,24 +674,26 @@ function _enzyme_continuous_transition!(
         global_params,
         photo_params,
     )
-    # Match the nitrogen-limited production path: derive demand and acquire
-    # nitrogen from the potential capacity before applying the leaf-N Vcmax
-    # constraint to the final photosynthesis evaluation.
-    Agrocosm.crop_nitrogen!(
-        state,
-        cft,
-        state,
-        Agrocosm.crop_photosynthesis_auxiliary(state).potential_vcmax,
-        daily_weather.temp;
-        auto_fertilizer = false,
-        lpjmlparams = global_params,
-    )
-    Agrocosm.limit_vcmax_by_nitrogen!(
-        state,
-        cft,
-        daily_weather.temp;
-        lpjmlparams = global_params,
-    )
+    if nitrogen_limit_vcmax
+        # Match the nitrogen-limited production path: derive demand and acquire
+        # nitrogen from the potential capacity before applying the leaf-N Vcmax
+        # constraint to the final photosynthesis evaluation.
+        Agrocosm.crop_nitrogen!(
+            state,
+            cft,
+            state,
+            Agrocosm.crop_photosynthesis_auxiliary(state).potential_vcmax,
+            daily_weather.temp;
+            auto_fertilizer = false,
+            lpjmlparams = global_params,
+        )
+        Agrocosm.limit_vcmax_by_nitrogen!(
+            state,
+            cft,
+            daily_weather.temp;
+            lpjmlparams = global_params,
+        )
+    end
     Agrocosm.photosynthesis!(
         Val(:C3),
         cft,
@@ -710,9 +713,21 @@ function _enzyme_continuous_transition!(
         Agrocosm.soil_thermal_prognostic(state).temperature,
         global_params,
     )
-    # Carbon allocation changes organ weights; redistribute the acquired total
-    # plant nitrogen exactly where the production driver does.
-    Agrocosm.allocate_crop_nitrogen!(state, cft)
+    if nitrogen_limit_vcmax
+        # Carbon allocation changes organ weights; redistribute the acquired
+        # total plant nitrogen exactly where the production driver does.
+        Agrocosm.allocate_crop_nitrogen!(state, cft)
+    else
+        Agrocosm.crop_nitrogen!(
+            state,
+            cft,
+            state,
+            Agrocosm.crop_photosynthesis_auxiliary(state).vcmax,
+            daily_weather.temp;
+            auto_fertilizer = false,
+            lpjmlparams = global_params,
+        )
+    end
     _enzyme_evaporation!(state, pet.eeq, global_params, layer_depth)
     _enzyme_soil_evapotranspiration!(state; irrigation)
     Agrocosm.post_crop_nitrogen_losses!(
