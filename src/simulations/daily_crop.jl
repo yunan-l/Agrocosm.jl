@@ -17,7 +17,7 @@ function _daily_crop!(
     manure = false,
     fertilizer = :auto,
     with_tillage = true,
-    nitrogen_limit_vcmax = false,
+    nitrogen_limit_vcmax = true,
     sowing_mode::Symbol = :prescribed_sdate,
     update_vernalization_requirement::Bool = true,
     water_balance = nothing,

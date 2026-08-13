@@ -52,17 +52,35 @@ function catalog_from_config(config)
         :manure => multi_cft("manure_24cfts_2015.nc", "manure"),
         :residue_fraction => multi_cft("residue_12cfts_2015.nc", "residuefrac"; residue = true),
     )
+    has_no3_deposition = haskey(climate, "no3_deposition_file")
+    has_nh4_deposition = haskey(climate, "nh4_deposition_file")
+    has_no3_deposition == has_nh4_deposition || error(
+        "configure both climate.no3_deposition_file and climate.nh4_deposition_file",
+    )
+    climate_specs = Dict{Symbol, DatasetSpec}(
+        :grid => DatasetSpec(joinpath(soil_directory, "grid.nc"), "cellid"),
+        :soilcode => DatasetSpec(joinpath(soil_directory, "soil_30arcmin_13_types.nc"), "soilcode"),
+        :soilph => DatasetSpec(joinpath(soil_directory, "soil_pH30arcmin.nc"), "soilph"),
+        :temp => DatasetSpec(climate_path("temperature_file", "temp_2015_2016.nc"), "temp"),
+        :prec => DatasetSpec(climate_path("precipitation_file", "prec_2015_2016.nc"), "prec"),
+        :lwnet => DatasetSpec(climate_path("longwave_file", "lwnet_2015_2016.nc"), "lwnet"),
+        :swdown => DatasetSpec(climate_path("shortwave_file", "swdown_2015_2016.nc"), "swdown"),
+        :co2 => DatasetSpec(climate_path("co2_file", "co2_2015_2016.txt"), "co2"),
+    )
+    if has_no3_deposition
+        climate_specs[:no3_deposition] = DatasetSpec(
+            climate_path("no3_deposition_file", ""),
+            String(get(climate, "no3_deposition_variable", "noy"));
+            units = "g/m2/day",
+        )
+        climate_specs[:nh4_deposition] = DatasetSpec(
+            climate_path("nh4_deposition_file", ""),
+            String(get(climate, "nh4_deposition_variable", "nhx"));
+            units = "g/m2/day",
+        )
+    end
     return DatasetCatalog(
-        merge(management, Dict{Symbol, DatasetSpec}(
-            :grid => DatasetSpec(joinpath(soil_directory, "grid.nc"), "cellid"),
-            :soilcode => DatasetSpec(joinpath(soil_directory, "soil_30arcmin_13_types.nc"), "soilcode"),
-            :soilph => DatasetSpec(joinpath(soil_directory, "soil_pH30arcmin.nc"), "soilph"),
-            :temp => DatasetSpec(climate_path("temperature_file", "temp_2015_2016.nc"), "temp"),
-            :prec => DatasetSpec(climate_path("precipitation_file", "prec_2015_2016.nc"), "prec"),
-            :lwnet => DatasetSpec(climate_path("longwave_file", "lwnet_2015_2016.nc"), "lwnet"),
-            :swdown => DatasetSpec(climate_path("shortwave_file", "swdown_2015_2016.nc"), "swdown"),
-            :co2 => DatasetSpec(climate_path("co2_file", "co2_2015_2016.txt"), "co2"),
-        )),
+        merge(management, climate_specs),
         registry,
     )
 end
@@ -207,6 +225,7 @@ function create_simulation(initial_data, selection, config, days, device, cft_id
         manure = management["manure"],
         fertilizer = Symbol(management["fertilizer"]),
         with_tillage = management["with_tillage"],
+        nitrogen_limit_vcmax = Bool(get(config["run"], "nitrogen_limit_vcmax", true)),
         sowing_mode,
         # LPJmL keeps V_req fixed once prescribed crop dates/PHU are fixed.
         freeze_vernalization_requirement = Symbol(management["mode"]) === :fixed &&

@@ -123,7 +123,7 @@ function initialize_simulation(
     manure::Bool = false,
     fertilizer = :auto,
     with_tillage::Bool = true,
-    nitrogen_limit_vcmax::Bool = false,
+    nitrogen_limit_vcmax::Bool = true,
     freeze_vernalization_requirement::Bool = false,
     sowing_mode::Symbol = :prescribed_sdate,
     mineral_nitrogen_initialization::Symbol = :from_slow_organic_nitrogen,
