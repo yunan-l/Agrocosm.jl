@@ -147,6 +147,45 @@ end
     @test predicted == allocated
 end
 
+@testset "Nitrogen limitation remains explicit" begin
+    configuration = SimulationConfiguration(
+        Float32, identity, 1, Int64[1], Int32[1];
+        nitrogen_limit_vcmax = true,
+    )
+    @test configuration.nitrogen_limit_vcmax
+end
+
+@testset "Nitrogen-limited daily driver accepts deposition forcing" begin
+    initial, climate = simulation_api_fixture(Float32)
+    simulation = initialize_simulation(
+        cft1, initial;
+        indices = [1], T = Float32, days = 3, fertilizer = :no,
+        nitrogen_limit_vcmax = true,
+    )
+    deposition_climate = merge(
+        climate,
+        (
+            no3_deposition = fill(0.01f0, 3, 1),
+            nh4_deposition = fill(0.02f0, 3, 1),
+        ),
+    )
+    run_simulation!(simulation, deposition_climate; spinup = false)
+
+    @test simulation.simulated_days == 3
+    @test all(isfinite, simulation.daily_weather.no3_deposition)
+    @test all(isfinite, simulation.daily_weather.nh4_deposition)
+
+    diagnosed = initialize_simulation(
+        cft1, initial;
+        indices = [1], T = Float32, days = 3, fertilizer = :no,
+        nitrogen_limit_vcmax = true, diagnostics = true,
+    )
+    run_simulation!(diagnosed, deposition_climate; spinup = false)
+    balance = diagnosed.nitrogen_balance
+    @test balance.atmospheric_deposition[:, 1] == fill(0.03f0, 3)
+    @test maximum(abs, balance.residual[:, 1]) < 1.0f-4
+end
+
 @testset "Daily global CO₂ remains aligned across climate blocks" begin
     initial, _ = simulation_api_fixture(Float32)
     simulation = initialize_simulation(

@@ -567,6 +567,11 @@ function _enzyme_continuous_transition!(
         day;
         update_vernalization_requirement = false,
     )
+    # The production driver applies its configured tillage treatment before
+    # daily litter mixing. The fixed-event AD path uses the same daily
+    # management treatment; sowing and harvest remain outer events.
+    Agrocosm.litter_tillage!(state, state)
+    Agrocosm.tillage_hydraulics!(state; lpjmlparams = global_params)
     Agrocosm.litter_bioturbation!(state; lpjmlparams = global_params)
 
     Agrocosm.albedo!(cft, state, state, pet)
@@ -668,6 +673,24 @@ function _enzyme_continuous_transition!(
         global_params,
         photo_params,
     )
+    # Match the nitrogen-limited production path: derive demand and acquire
+    # nitrogen from the potential capacity before applying the leaf-N Vcmax
+    # constraint to the final photosynthesis evaluation.
+    Agrocosm.crop_nitrogen!(
+        state,
+        cft,
+        state,
+        Agrocosm.crop_photosynthesis_auxiliary(state).potential_vcmax,
+        daily_weather.temp;
+        auto_fertilizer = false,
+        lpjmlparams = global_params,
+    )
+    Agrocosm.limit_vcmax_by_nitrogen!(
+        state,
+        cft,
+        daily_weather.temp;
+        lpjmlparams = global_params,
+    )
     Agrocosm.photosynthesis!(
         Val(:C3),
         cft,
@@ -687,18 +710,9 @@ function _enzyme_continuous_transition!(
         Agrocosm.soil_thermal_prognostic(state).temperature,
         global_params,
     )
-    # Complete the continuous transition even when the caller requests only
-    # one scalar observable. Subsequent days must inherit nitrogen and water
-    # state updates from the same daily process.
-    Agrocosm.crop_nitrogen!(
-        state,
-        cft,
-        state,
-        Agrocosm.crop_photosynthesis_auxiliary(state).vcmax,
-        daily_weather.temp;
-        auto_fertilizer = false,
-        lpjmlparams = global_params,
-    )
+    # Carbon allocation changes organ weights; redistribute the acquired total
+    # plant nitrogen exactly where the production driver does.
+    Agrocosm.allocate_crop_nitrogen!(state, cft)
     _enzyme_evaporation!(state, pet.eeq, global_params, layer_depth)
     _enzyme_soil_evapotranspiration!(state; irrigation)
     Agrocosm.post_crop_nitrogen_losses!(
