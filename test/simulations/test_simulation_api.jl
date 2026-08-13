@@ -32,7 +32,7 @@ function simulation_api_fixture(::Type{T}) where {T <: AbstractFloat}
             litn = reshape(T[0.0047, 6.47, 9.47], 3, cells),
             fastn = fill(T(1), layers, cells),
             slown = fill(T(10), layers, cells),
-        ),),
+        ),
     )
     climate = (
         temp_spinup = fill(T(10), 365, cells),
