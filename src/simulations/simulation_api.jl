@@ -123,6 +123,7 @@ function initialize_simulation(
     manure::Bool = false,
     fertilizer = :auto,
     with_tillage::Bool = true,
+    crop_resp_fix::Bool = false,
     nitrogen_limit_vcmax::Bool = false,
     freeze_vernalization_requirement::Bool = false,
     sowing_mode::Symbol = :prescribed_sdate,
@@ -162,6 +163,7 @@ function initialize_simulation(
         manure,
         fertilizer,
         with_tillage,
+        crop_resp_fix,
         nitrogen_limit_vcmax,
         freeze_vernalization_requirement,
         sowing_mode,
@@ -272,6 +274,7 @@ function _transition_range!(
         manure = simulation.config.manure,
         fertilizer = simulation.config.fertilizer,
         with_tillage = simulation.config.with_tillage,
+        crop_resp_fix = simulation.config.crop_resp_fix,
         nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
         update_vernalization_requirement = !simulation.config.freeze_vernalization_requirement,
         sowing_mode = simulation.config.sowing_mode,
@@ -470,7 +473,7 @@ function run_simulation!(
     return simulation
 end
 
-const _CHECKPOINT_FORMAT_VERSION = 6
+const _CHECKPOINT_FORMAT_VERSION = 7
 
 _checkpoint_snapshot(values::AbstractArray) = Array(values)
 _checkpoint_snapshot(values::NamedTuple) = map(_checkpoint_snapshot, values)
@@ -534,6 +537,7 @@ function _simulation_checkpoint(simulation::CropSimulation)
             manure = simulation.config.manure,
             fertilizer = simulation.config.fertilizer,
             with_tillage = simulation.config.with_tillage,
+            crop_resp_fix = simulation.config.crop_resp_fix,
             nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
             sowing_mode = simulation.config.sowing_mode,
             parameter_fingerprint = _checkpoint_fingerprint((
@@ -595,6 +599,8 @@ function _validate_checkpoint_target(simulation::CropSimulation, checkpoint)
         ("manure", metadata.manure, simulation.config.manure),
         ("fertilizer", metadata.fertilizer, simulation.config.fertilizer),
         ("tillage", metadata.with_tillage, simulation.config.with_tillage),
+        ("fixed crop respiration ratio", metadata.crop_resp_fix,
+         simulation.config.crop_resp_fix),
         ("nitrogen Vcmax limitation", metadata.nitrogen_limit_vcmax,
          simulation.config.nitrogen_limit_vcmax),
         ("sowing mode", metadata.sowing_mode, simulation.config.sowing_mode),

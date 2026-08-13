@@ -9,6 +9,7 @@ function crop_carbon!(crop,
                       air_temperature::AbstractVector{T},
                       soil_temperature::AbstractMatrix{T};
                       output_row::Union{Nothing, Integer} = nothing,
+                      crop_resp_fix::Bool = false,
                       lpjmlparams::LPJmLParams = lpjmlparams,
 ) where {T <: AbstractFloat} # directly translated from LPJmL
 
@@ -17,6 +18,7 @@ function crop_carbon!(crop,
         crop, CFT, air_temperature, soil_temperature,
         crop_fluxes(crop).carbon.gross_assimilation,
         crop_fluxes(crop).carbon.leaf_respiration;
+        crop_resp_fix,
         lpjmlparams = lpjmlparams,
     )
 

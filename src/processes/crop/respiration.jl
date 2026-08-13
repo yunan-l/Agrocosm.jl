@@ -11,6 +11,7 @@ function respiration!(crop,
                       soil_temperature::AbstractMatrix{T},
                       gross_assimilation::AbstractArray{T},
                       leaf_respiration::AbstractArray{T};
+                      crop_resp_fix::Bool = false,
                       lpjmlparams::LPJmLParams = lpjmlparams
 ) where {T <: AbstractFloat}
     launch_1D!(
@@ -29,6 +30,7 @@ function respiration!(crop,
         leaf_respiration,
         CFT,
         lpjmlparams,
+        crop_resp_fix,
     )
     return nothing
 end
@@ -40,10 +42,11 @@ function respiration!(crop,
                       air_temperature::AbstractVector{T},
                       gross_assimilation::AbstractArray{T},
                       leaf_respiration::AbstractArray{T};
+                      crop_resp_fix::Bool = false,
                       lpjmlparams::LPJmLParams = lpjmlparams) where {T <: AbstractFloat}
     return respiration!(
         crop, CFT, air_temperature, reshape(air_temperature, 1, :),
-        gross_assimilation, leaf_respiration; lpjmlparams = lpjmlparams,
+        gross_assimilation, leaf_respiration; crop_resp_fix, lpjmlparams = lpjmlparams,
     )
 end
 
@@ -119,10 +122,11 @@ end
     leaf_respiration::AbstractVector{T},
     CFT::CFTParameters,
     lpjmlparams::LPJmLParams,
+    crop_resp_fix::Bool,
 ) where {T <: AbstractFloat, I <: Integer}
     cell = @index(Global)
     @unpack respcoeff, nc_ratio, ncleaf, ratio = CFT
-    @unpack k, r_growth, e0, temp_response, crop_resp_fix = lpjmlparams
+    @unpack k, r_growth, e0, temp_response = lpjmlparams
 
     gtemp_air = compute_respiration_temperature_response(
         air_temperature[cell], T(e0), T(temp_response),

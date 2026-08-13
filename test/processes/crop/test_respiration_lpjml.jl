@@ -70,9 +70,12 @@ end
     soil = reshape(T[10], 1, :)
     gross = T[12]
     leaf = T[2]
-    fixed = LPJmLParams{T}(; crop_resp_fix = true)
+    fixed = LPJmLParams{T}()
 
-    respiration!(state, cft1, air, soil, gross, leaf; lpjmlparams = fixed)
+    respiration!(
+        state, cft1, air, soil, gross, leaf;
+        crop_resp_fix = true, lpjmlparams = fixed,
+    )
 
     g(temp) = exp(T(fixed.e0) * (one(T) / (T(fixed.temp_response) + T(10)) -
                                   one(T) / (temp + T(fixed.temp_response))))

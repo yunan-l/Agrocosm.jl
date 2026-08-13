@@ -17,6 +17,7 @@ function _daily_crop!(
     manure = false,
     fertilizer = :auto,
     with_tillage = true,
+    crop_resp_fix = false,
     nitrogen_limit_vcmax = false,
     sowing_mode::Symbol = :prescribed_sdate,
     update_vernalization_requirement::Bool = true,
@@ -248,7 +249,7 @@ function _daily_crop!(
         crop_carbon!(
             state, output, cftparameters, dailyWeather.temp,
             soil_thermal_prognostic(state).temperature;
-            output_row, lpjmlparams = global_params,
+            output_row, crop_resp_fix, lpjmlparams = global_params,
         )
         # --- Discrete failed-crop termination event -----------------------
         # This remains separate from calendar harvest: it is only triggered

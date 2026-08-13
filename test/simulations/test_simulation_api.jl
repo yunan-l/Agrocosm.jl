@@ -160,6 +160,19 @@ end
     @test configuration.nitrogen_limit_vcmax
 end
 
+@testset "Crop respiration mode remains explicit" begin
+    default_configuration = SimulationConfiguration(
+        Float32, identity, 1, Int64[1], Int32[1],
+    )
+    @test !default_configuration.crop_resp_fix
+
+    configuration = SimulationConfiguration(
+        Float32, identity, 1, Int64[1], Int32[1];
+        crop_resp_fix = true,
+    )
+    @test configuration.crop_resp_fix
+end
+
 @testset "Nitrogen-limited daily driver accepts deposition forcing" begin
     initial, climate = simulation_api_fixture(Float32)
     simulation = initialize_simulation(

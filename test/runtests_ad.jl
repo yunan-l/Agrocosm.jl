@@ -8,6 +8,7 @@ using Test
     include("ad/test_enzyme_daily_transition.jl")
     include("ad/test_enzyme_seasonal_loss.jl")
     include("ad/test_enzyme_reverse.jl")
+    include("ad/test_enzyme_model_parameter_reverse.jl")
     include("ad/test_enzyme_365day.jl")
     include("ad/test_enzyme_blockwise.jl")
 end
