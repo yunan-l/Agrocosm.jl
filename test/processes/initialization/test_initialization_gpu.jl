@@ -87,11 +87,11 @@ CUDA.allowscalar(false)
         soil_NH4 = CUDA.fill(8000.0f0, 5, cell_size),
     )
     soil.nitrogen.slow .= 100.0f0
-    Agrocosm.initialize_soil_mineral_nitrogen!(soil, u0, :lpjml_initsoil)
+    Agrocosm.initialize_soil_mineral_nitrogen!(soil, u0, :from_slow_organic_nitrogen)
     @test all(Array(soil.nitrogen.nitrate) .== 1.0f0)
     @test all(Array(soil.nitrogen.ammonium) .== 1.0f0)
 
-    Agrocosm.initialize_soil_c_shift!(soil, (u0 = nothing,), :lpjml_initsoil)
+    Agrocosm.initialize_soil_c_shift!(soil, (u0 = nothing,), :default)
     expected_shift = Float32[0.55, 0.1125, 0.1125, 0.1125, 0.1125]
     @test Array(soil.decomposition.shift_fast) == repeat(expected_shift, 1, cell_size)
     @test Array(soil.decomposition.shift_slow) == repeat(expected_shift, 1, cell_size)

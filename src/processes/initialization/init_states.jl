@@ -66,9 +66,9 @@ end
 """
 initialize_soil_mineral_nitrogen!(soil, u0, strategy)
 
-Initialize soil NO₃ and NH₄ using either restart values or the LPJmL
-`initsoil.c` rule. In LPJmL's fresh-soil initialization, each mineral pool in
-each layer is initialized to one percent of that layer's slow organic-N pool.
+Initialize soil NO₃ and NH₄ using either restart values or the default rule.
+The default initializes each mineral pool in each layer to one percent of that
+layer's slow organic-N pool.
 """
 function initialize_soil_mineral_nitrogen!(soil::Soil,
                                            u0::NamedTuple,
@@ -81,11 +81,11 @@ function initialize_soil_mineral_nitrogen!(soil::Soil,
                 "with load_mineral_nitrogen_restart=true",
             ))
         end
-    elseif strategy === :lpjml_initsoil
+    elseif strategy === :from_slow_organic_nitrogen
     else
         throw(ArgumentError(
             "unknown mineral nitrogen initialization strategy: $strategy; " *
-            "use :restart or :lpjml_initsoil",
+            "use :restart or :from_slow_organic_nitrogen",
         ))
     end
     slow_n_fraction = convert(eltype(soil.nitrogen.slow), 0.01)
@@ -103,7 +103,7 @@ end
 """
 init_states!(CFT, InitialData, cell_size, device;
              lpjmlparams=lpjmlparams,
-             mineral_nitrogen_initialization=:lpjml_initsoil)
+             mineral_nitrogen_initialization=:from_slow_organic_nitrogen)
 
 Initialize and populate all runtime state structs from static parameters and
 input data for one simulation domain.
@@ -117,8 +117,8 @@ function init_states!(CFT::CFTParameters,
                        device;
                        T::Type{<:AbstractFloat} = Float32,
                        lpjmlparams::LPJmLParams = lpjmlparams,
-                       mineral_nitrogen_initialization::Symbol = :lpjml_initsoil,
-                       c_shift_initialization::Symbol = :lpjml_initsoil
+                       mineral_nitrogen_initialization::Symbol = :from_slow_organic_nitrogen,
+                       c_shift_initialization::Symbol = :default
 )
 
     @unpack residue_frac = lpjmlparams
@@ -211,16 +211,16 @@ end
 Initialize the normalized vertical distribution used to route decomposed
 litter into fast and slow soil pools.
 
-`:lpjml_initsoil` reproduces LPJmL's fresh-soil initialization: 0.55 in the
-top layer and 0.45 distributed uniformly over all remaining layers. `:restart`
-restores the fast and slow distributions supplied in `model_state`.
+`:default` uses 0.55 in the top layer and 0.45 distributed uniformly over all
+remaining layers. `:restart` restores the fast and slow distributions supplied
+in `model_state`.
 """
 function initialize_soil_c_shift!(soil::Soil,
                                   model_state::NamedTuple,
                                   strategy::Symbol)
-    if strategy === :lpjml_initsoil
+    if strategy === :default
         layers = size(soil.decomposition.shift_fast, 1)
-        layers > 1 || throw(ArgumentError("LPJmL c_shift initialization requires at least two soil layers"))
+        layers > 1 || throw(ArgumentError("default c_shift initialization requires at least two soil layers"))
         T = eltype(soil.decomposition.shift_fast)
         lower_layer_fraction = T(0.45) / T(layers - 1)
 

@@ -241,7 +241,7 @@ Interim direct-initialization status: equilibrium spin-up is deferred.
 conservatively partitions HWSD SOC and total N into the current fast/slow
 pools, initializes litter to zero, accounts for the default initial mineral-N
 pools, and initializes water at field capacity. New data use the neutral
-top-level `initial_state` contract; `initialLPJmL.u0` remains a legacy fixture
+top-level `initial_state` contract.
 compatibility path only.
 
 `agricultural_warmup!` now cycles the configured 1901–1930 forcing for five
@@ -257,7 +257,7 @@ Deliverables:
 - loading and writing native Agrocosm spin-up checkpoints;
 - HWSD SOC/N targets, field-capacity water initialization, and convergence
   diagnostics exposed through a stable handoff contract;
-- removal of the runtime requirement for `initialLPJmL.u0` after equivalence
+- no runtime dependency on a legacy external initial-state schema
   and restart tests pass;
 - server deployment documentation, data catalog examples, and performance
   benchmarks for representative CFT masks.

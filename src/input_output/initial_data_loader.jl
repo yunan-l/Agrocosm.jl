@@ -4,17 +4,14 @@ InitialDataLoader(data, data_index, device;
                   load_c_shift_restart=false)
 
 Build initial model-state inputs from forcing/parameter datasets. New inputs
-use the top-level `initial_state`; the legacy `initialLPJmL.u0` layout remains
-readable for existing fixtures. Mineral-N restart pools are omitted by default
-because `init_states!` reconstructs NO₃ and NH₄ from slow organic N using the
-LPJmL fresh-soil initialization rule.
+use the top-level `initial_state`. Mineral-N restart pools are omitted by
+default because `init_states!` reconstructs NO₃ and NH₄ from slow organic N.
 Set `load_mineral_nitrogen_restart=true` only when explicitly restoring a
 nitrogen-limited restart state.
 
-`c_shift` is also omitted by default. `init_states!` then constructs LPJmL's
-fresh-soil distribution internally (0.55 in the top layer and 0.45 shared by
-the remaining layers). Set `load_c_shift_restart=true` only when restoring a
-post-spin-up or restart distribution.
+`c_shift` is also omitted by default. Set `load_c_shift_restart=true` only
+when the supplied `initial_state` contains a calibrated or restart routing
+distribution.
 """
 function InitialDataLoader(data::NamedTuple,
                            data_index::Vector{Int},
@@ -26,13 +23,10 @@ function InitialDataLoader(data::NamedTuple,
 
 
     @unpack latitude, crop, soilparam = data
-    initial_state = if hasproperty(data, :initial_state)
-        data.initial_state
-    elseif hasproperty(data, :initialLPJmL)
-        data.initialLPJmL.u0
-    else
-        throw(ArgumentError("initial data require `initial_state`"))
-    end
+    hasproperty(data, :initial_state) || throw(ArgumentError(
+        "initial data require the top-level `initial_state` field",
+    ))
+    initial_state = data.initial_state
 
     latitude_set = T.(latitude[data_index]) |> device
 
@@ -74,13 +68,14 @@ function InitialDataLoader(data::NamedTuple,
 
     model_state = (crop = crop, u0 = u0_set)
     if load_c_shift_restart
-        shift_source = if hasproperty(data, :c_shift_fast) && hasproperty(data, :c_shift_slow)
+        shift_source = if hasproperty(initial_state, :c_shift_fast) &&
+                          hasproperty(initial_state, :c_shift_slow)
+            initial_state
+        elseif hasproperty(data, :c_shift_fast) && hasproperty(data, :c_shift_slow)
             data
-        elseif hasproperty(data, :initialLPJmL)
-            data.initialLPJmL
         else
             throw(ArgumentError(
-                "load_c_shift_restart=true requires c_shift_fast and c_shift_slow",
+                "load_c_shift_restart=true requires initial_state.c_shift_fast and initial_state.c_shift_slow",
             ))
         end
         model_state = merge(model_state, (

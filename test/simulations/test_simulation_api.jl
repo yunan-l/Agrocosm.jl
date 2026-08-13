@@ -24,7 +24,7 @@ function simulation_api_fixture(::Type{T}) where {T <: AbstractFloat}
             tdiff_15 = T[0.75],
             soildepth = T[200, 300, 500, 1000, 1000],
         ),
-        initialLPJmL = (u0 = (
+        initial_state = (
             swc = reshape(T[57.41, 55.32, 126.13, 274.59, 285.71], layers, cells),
             litc = reshape(T[0.13, 187.5, 225.36], 3, cells),
             fastc = fill(T(10), layers, cells),
@@ -315,6 +315,17 @@ end
     @test simulation.config.indices === nothing
     @test simulation.simulated_days == 3
     @test eltype(simulation.managed_land.latitude) == Float64
+end
+
+@testset "Backend-neutral initial data honor an optional selection" begin
+    initial, _ = simulation_api_fixture(Float32)
+    backend_neutral = merge(initial, (backend_neutral = true,))
+    simulation = initialize_simulation(
+        cft1, backend_neutral;
+        indices = [1], T = Float32, days = 3, fertilizer = :no,
+    )
+    @test length(simulation.managed_land.latitude) == 1
+    @test simulation.config.indices == [1]
 end
 
 @testset "Annual CO₂ forcing length is validated before kernel launch" begin

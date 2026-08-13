@@ -180,12 +180,12 @@ end
     @test eltype(output64.crop.npp) == Float64
 end
 
-@testset "LPJmL c_shift initialization strategies" begin
+@testset "Soil c_shift initialization strategies" begin
     cells = 2
     soil = init_soil(cells, soilparams.soildepth, identity)
     model_state = (u0 = nothing,)
 
-    Agrocosm.initialize_soil_c_shift!(soil, model_state, :lpjml_initsoil)
+    Agrocosm.initialize_soil_c_shift!(soil, model_state, :default)
     expected = Float32[0.55, 0.1125, 0.1125, 0.1125, 0.1125]
     @test soil.decomposition.shift_fast == repeat(expected, 1, cells)
     @test soil.decomposition.shift_slow == repeat(expected, 1, cells)
@@ -218,7 +218,7 @@ end
         fastn = fill(1.0f0, layers, cells),
         slown = fill(10.0f0, layers, cells),
     )
-    initial_without_shift = (u0 = u0,)
+    initial_without_shift = u0
     data_without_shift = (
         latitude = Float32[45, 46],
         crop = (
@@ -237,7 +237,7 @@ end
             tdiff_15 = fill(0.5f0, cells),
             soildepth = Float32[200, 300, 500, 700, 1300],
         ),
-        initialLPJmL = initial_without_shift,
+        initial_state = initial_without_shift,
     )
 
     loaded = InitialDataLoader(data_without_shift, [1, 2], identity)
@@ -255,7 +255,7 @@ end
     fast_shift = repeat(Float32[0.4, 0.25, 0.15, 0.1, 0.1], 1, cells)
     slow_shift = repeat(Float32[0.5, 0.2, 0.15, 0.1, 0.05], 1, cells)
     data_with_shift = merge(data_without_shift, (
-        initialLPJmL = merge(initial_without_shift, (
+        initial_state = merge(initial_without_shift, (
             c_shift_fast = fast_shift,
             c_shift_slow = slow_shift,
         )),
@@ -274,7 +274,7 @@ end
     @test simulation.state.inputs.soil.decomposition.shift_slow == slow_shift
 end
 
-@testset "LPJmL mineral-N initialization strategies" begin
+@testset "Mineral-N initialization strategies" begin
     slow_n = reshape(Float32[100, 200, 300, 400, 500], 5, 1)
     u0 = (
         soil_NO3 = fill(9000.0f0, 5, 1),
@@ -287,7 +287,7 @@ end
     @test soil.nitrogen.nitrate == u0.soil_NO3
     @test soil.nitrogen.ammonium == u0.soil_NH4
 
-    Agrocosm.initialize_soil_mineral_nitrogen!(soil, u0, :lpjml_initsoil)
+    Agrocosm.initialize_soil_mineral_nitrogen!(soil, u0, :from_slow_organic_nitrogen)
     @test soil.nitrogen.nitrate ≈ slow_n ./ 100
     @test soil.nitrogen.ammonium ≈ slow_n ./ 100
     @test_throws ArgumentError Agrocosm.initialize_soil_mineral_nitrogen!(

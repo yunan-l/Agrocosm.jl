@@ -62,10 +62,10 @@ function Base.propertynames(::CropSimulation, private::Bool = false)
 end
 
 function _has_c_shift_restart(data::NamedTuple)
-    return (hasproperty(data, :c_shift_fast) && hasproperty(data, :c_shift_slow)) ||
-        (hasproperty(data, :initialLPJmL) &&
-         hasproperty(data.initialLPJmL, :c_shift_fast) &&
-         hasproperty(data.initialLPJmL, :c_shift_slow))
+    return (hasproperty(data, :initial_state) &&
+            hasproperty(data.initial_state, :c_shift_fast) &&
+            hasproperty(data.initial_state, :c_shift_slow)) ||
+        (hasproperty(data, :c_shift_fast) && hasproperty(data, :c_shift_slow))
 end
 
 function _prepare_initial_data(data::NamedTuple, indices, device, T)
@@ -74,8 +74,10 @@ function _prepare_initial_data(data::NamedTuple, indices, device, T)
     end
     if hasproperty(data, :backend_neutral) && data.backend_neutral
         restore_c_shift = _has_c_shift_restart(data)
+        selected_indices = indices === nothing ? collect(1:length(data.latitude)) :
+            collect(Int, indices)
         return InitialDataLoader(
-            data, collect(1:length(data.latitude)), device;
+            data, selected_indices, device;
             T = T,
             load_c_shift_restart = restore_c_shift,
         )
@@ -100,7 +102,7 @@ output. Set `diagnostics=false` to avoid allocating daily balance ledgers.
 `fertilizer` follows LPJmL's `:no`, `:yes`, and `:auto` modes; `manure` is an
 independent prescribed-input switch. By default,
 `c_shift_initialization=:auto` restores supplied `c_shift_fast`/`c_shift_slow`
-arrays and otherwise uses LPJmL's fresh-soil distribution.
+arrays and otherwise uses the model default vertical distribution.
 `sowing_mode=:prescribed_sdate` uses management sowing dates. The optional
 `:dynamic_sdate` mode derives a climate-calendar candidate with the LPJmL CFT
 sowing method (winter wheat: temperature/winter type; maize:
@@ -124,7 +126,7 @@ function initialize_simulation(
     nitrogen_limit_vcmax::Bool = false,
     freeze_vernalization_requirement::Bool = false,
     sowing_mode::Symbol = :prescribed_sdate,
-    mineral_nitrogen_initialization::Symbol = :lpjml_initsoil,
+    mineral_nitrogen_initialization::Symbol = :from_slow_organic_nitrogen,
     c_shift_initialization::Symbol = :auto,
 )
     days > 0 || throw(ArgumentError("days must be positive"))
@@ -139,7 +141,7 @@ function initialize_simulation(
     prepared = _prepare_initial_data(initial_data, indices, device, T)
     cells = length(prepared.latitude)
     resolved_c_shift_initialization = if c_shift_initialization === :auto
-        hasproperty(prepared.ModelState, :c_shift_fast) ? :restart : :lpjml_initsoil
+        hasproperty(prepared.ModelState, :c_shift_fast) ? :restart : :default
     else
         c_shift_initialization
     end

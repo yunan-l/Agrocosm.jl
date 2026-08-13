@@ -32,18 +32,18 @@ function test_fixture_arrays_equal(new_value, old_value)
     end
 end
 
-@testset "AgrocosmData ten-cell fixture matches legacy loaders" begin
+@testset "AgrocosmData ten-cell fixture matches the direct input contract" begin
     initial = load(joinpath(@__DIR__, "..", "..", "examples", "initial_wheat.jld2"), "initial_data")
     climate = load(joinpath(@__DIR__, "..", "..", "examples", "climate_2000_2009.jld2"), "climate")
     cells = length(initial.latitude)
     days = 365
     indices = collect(1:cells)
 
-    legacy = initialize_simulation(
+    fixture_simulation = initialize_simulation(
         cft1, initial;
         indices, T = Float32, days, fertilizer = :yes,
     )
-    run_simulation!(legacy, climate; end_day = days, spinup = false)
+    run_simulation!(fixture_simulation, climate; end_day = days, spinup = false)
 
     selection = FixtureAgrocosmData.CellSelection(indices, Int32.(0:(cells - 1)))
     grid = FixtureAgrocosmData.GridIndex(
@@ -69,11 +69,11 @@ end
     )
     state_fields = (:swc, :litc, :fastc, :slowc, :litn, :fastn, :slown)
     initial_state = NamedTuple{state_fields}(map(
-        name -> copy(getproperty(initial.initialLPJmL.u0, name)), state_fields,
+        name -> copy(getproperty(initial.initial_state, name)), state_fields,
     ))
     initial_state = merge(initial_state, (
-        c_shift_fast = copy(initial.initialLPJmL.c_shift_fast),
-        c_shift_slow = copy(initial.initialLPJmL.c_shift_slow),
+        c_shift_fast = copy(initial.initial_state.c_shift_fast),
+        c_shift_slow = copy(initial.initial_state.c_shift_slow),
     ))
     prepared = model_initial_data(grid, soil, initial.crop, initial_state)
     adapted = initialize_simulation(
@@ -99,19 +99,19 @@ end
     end
     run_simulation!(adapted, FixtureAgrocosmData.climate_forcings(blocks); spinup = false)
 
-    @test adapted.simulated_days == legacy.simulated_days == days
-    test_fixture_arrays_equal(adapted.state.prognostic, legacy.state.prognostic)
-    test_fixture_arrays_equal(adapted.state.fluxes, legacy.state.fluxes)
-    test_fixture_arrays_equal(adapted.state.auxiliary, legacy.state.auxiliary)
-    test_fixture_arrays_equal(adapted.state.events, legacy.state.events)
-    test_fixture_arrays_equal(adapted.state.inputs.crop, legacy.state.inputs.crop)
-    test_fixture_arrays_equal(adapted.state.inputs.soil, legacy.state.inputs.soil)
-    test_fixture_arrays_equal(adapted.state.inputs.management, legacy.state.inputs.management)
-    test_fixture_arrays_equal(adapted.state.output, legacy.state.output)
-    test_fixture_arrays_equal(adapted.diagnostics, legacy.diagnostics)
-    @test adapted.daily_weather.temp == legacy.daily_weather.temp
-    @test adapted.daily_weather.prec == legacy.daily_weather.prec
-    @test adapted.daily_weather.swr == legacy.daily_weather.swr
-    @test adapted.daily_weather.lwr == legacy.daily_weather.lwr
-    @test adapted.daily_weather.annual_co2 == legacy.daily_weather.annual_co2
+    @test adapted.simulated_days == fixture_simulation.simulated_days == days
+    test_fixture_arrays_equal(adapted.state.prognostic, fixture_simulation.state.prognostic)
+    test_fixture_arrays_equal(adapted.state.fluxes, fixture_simulation.state.fluxes)
+    test_fixture_arrays_equal(adapted.state.auxiliary, fixture_simulation.state.auxiliary)
+    test_fixture_arrays_equal(adapted.state.events, fixture_simulation.state.events)
+    test_fixture_arrays_equal(adapted.state.inputs.crop, fixture_simulation.state.inputs.crop)
+    test_fixture_arrays_equal(adapted.state.inputs.soil, fixture_simulation.state.inputs.soil)
+    test_fixture_arrays_equal(adapted.state.inputs.management, fixture_simulation.state.inputs.management)
+    test_fixture_arrays_equal(adapted.state.output, fixture_simulation.state.output)
+    test_fixture_arrays_equal(adapted.diagnostics, fixture_simulation.diagnostics)
+    @test adapted.daily_weather.temp == fixture_simulation.daily_weather.temp
+    @test adapted.daily_weather.prec == fixture_simulation.daily_weather.prec
+    @test adapted.daily_weather.swr == fixture_simulation.daily_weather.swr
+    @test adapted.daily_weather.lwr == fixture_simulation.daily_weather.lwr
+    @test adapted.daily_weather.annual_co2 == fixture_simulation.daily_weather.annual_co2
 end

@@ -7,7 +7,7 @@
 - `latitude`
 - `crop`: `sdate`, `phu`, `manure`, `fertilizer`, `residuefrac`
 - `soilparam`: `soilph`, `w_sat`, `sand`, `clay`, `tdiff_0`, `tdiff_15`, `soildepth`
-- `initialLPJmL.u0`: `swc`, `litc`, `fastc`, `slowc`, `litn`, `fastn`, `slown`
+- `initial_state`: `swc`, `litc`, `fastc`, `slowc`, `litn`, `fastn`, `slown`
 
 Mineral nitrate/ammonium are initialized from slow organic N by default.
 Explicit restart pools and post-spin-up routing are available through the
