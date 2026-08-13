@@ -22,6 +22,8 @@ using Test
           position("update_surface_litter_properties!") <
           position("soil_temperature!")
     @test position("soil_temperature!") < position("soil_cn_decomposition!")
+    @test position("soil_cn_decomposition!") < position("nitrogen_deposition!") <
+          position("phenology_crop!")
     @test position("cultivate!") < position("phenology_crop!") < position("harvest_crop!")
     @test position("harvest_crop!") < position("route_harvest_residues!") <
           position("interception!") < position("soil_infiltration!")

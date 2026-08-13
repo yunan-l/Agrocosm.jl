@@ -5,6 +5,8 @@ mutable struct DailyWeather{A}
     swr::A        # Downward shortwave radiation (W m⁻²).
     lwr::A        # Net/downward longwave radiation forcing (W m⁻²).
     wind::A       # Near-surface wind speed (m s⁻¹).
+    no3_deposition::A # Atmospheric nitrate-N deposition (gN m⁻² day⁻¹).
+    nh4_deposition::A # Atmospheric ammonium-N deposition (gN m⁻² day⁻¹).
     daily_co2::A  # Atmospheric CO₂ used on the current day (Pa).
     annual_co2::A # Annual atmospheric CO₂ forcing buffer (Pa).
 end
@@ -45,6 +47,8 @@ function init_weather(::Type{T}, cell_size::Int, device) where {T <: AbstractFlo
     return DailyWeather(
         ntuple(_ -> cell_state(), 4)...,
         device(fill(T(lpjmlparams.volatil_wind), cell_size)),
+        cell_state(),
+        cell_state(),
         cell_state(),
         device(zeros(T, 1)),
     )

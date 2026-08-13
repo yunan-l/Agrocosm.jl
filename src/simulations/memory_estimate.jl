@@ -62,7 +62,7 @@ end
 # Includes the dynamic-sowing climate calendar: monthly PET and its rolling
 # climatology (24 values), annual PET history (365 values), and four Int32
 # calendar fields per cell.
-const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1634
+const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1636
 const _PERSISTENT_NONFLOAT_BYTES_PER_CELL = 46
 const _PERSISTENT_FIXED_FLOAT_VALUES = 26
 
@@ -111,8 +111,9 @@ function _memory_estimate(
     output_growth_bytes = isnothing(output_stream) ?
         days * cells * max(sizeof(T), sizeof(Int32)) : 0
     host_output_chunk_bytes = isnothing(output_stream) ? 0 : output_bytes
-    # Four time×cell forcing fields plus one daily global CO₂ vector.
-    forcing_block_bytes = (4 * block_days * cells + block_days) * sizeof(T)
+    # Six time×cell forcing fields (including nitrate and ammonium deposition)
+    # plus one daily global CO₂ vector.
+    forcing_block_bytes = (6 * block_days * cells + block_days) * sizeof(T)
     host_forcing_bytes = forcing_block_bytes * (2 + Int(prefetch))
     # Ten annual soil summaries plus carbon/nitrogen target corrections.
     warmup_history_bytes = warmup_years * cells * 12 * sizeof(T)

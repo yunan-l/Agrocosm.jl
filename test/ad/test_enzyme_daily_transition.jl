@@ -50,6 +50,8 @@ function _daily_transition_fixture(climate_days::Int = 16, initial_end_day::Int 
         sw = fill(T(180), days, cells),
         lw = fill(T(-40), days, cells),
         wind = fill(T(2), days, cells),
+        no3_deposition = fill(T(0.01), days, cells),
+        nh4_deposition = fill(T(0.02), days, cells),
         co2 = T[400],
     )
     state = model_state(climbuf, crop, pet, soil, managed_land, weather, output)

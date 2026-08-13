@@ -84,6 +84,25 @@ using Test
     @test balance.residual[4, 1] ≈ 0.0f0 atol = 1.0f-6
 end
 
+@testset "Atmospheric deposition nitrogen-balance input" begin
+    crop = init_crop(1, identity)
+    soil = init_soil(1, soilparams.soildepth, identity)
+    state = test_model_state(crop, soil)
+    balance = init_nitrogen_balance(1, 1, identity)
+
+    Agrocosm.record_nitrogen_balance_start!(balance, 1, state, state)
+    soil.nitrogen.nitrate[1, 1] += 0.11f0
+    soil.nitrogen.ammonium[1, 1] += 0.09f0
+    Agrocosm.record_nitrogen_balance_end!(
+        balance, 1, state, state;
+        nitrate_deposition = Float32[0.11],
+        ammonium_deposition = Float32[0.09],
+    )
+
+    @test balance.atmospheric_deposition[1, 1] == 0.2f0
+    @test balance.residual[1, 1] ≈ 0.0f0 atol = 2.0f-6
+end
+
 @testset "Conservative baseline soil-N mineralization" begin
     crop = init_crop(1, identity)
     soil = init_soil(1, soilparams.soildepth, identity)

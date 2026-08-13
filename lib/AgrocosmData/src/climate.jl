@@ -1,4 +1,7 @@
 const _CLIMATE_DATASETS = (:temp, :prec, :lwnet, :swdown)
+const _NITROGEN_DEPOSITION_DATASETS = (:no3_deposition, :nh4_deposition)
+const _NOLEAP_MONTH_LENGTHS = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+const _LPJML_MONTH_CENTRE_INTERVALS = (30, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
 
 """Lazy, restartable iterator over bounded daily climate blocks."""
 struct ClimateBlockReader{T <: AbstractFloat, TT, G, S, C}
@@ -171,8 +174,80 @@ function _normalize_climate_units(name::Symbol, values::Matrix{T}, units::Abstra
         if normalized in ("w/m2", "wm-2", "wm^-2")
             return values, "W/m2"
         end
+    elseif name in _NITROGEN_DEPOSITION_DATASETS
+        if normalized in (
+            "g/m2/day", "gm-2day-1", "gm^-2day^-1", "gm-2d-1", "gm^-2d^-1",
+        )
+            return values, "g/m2/day"
+        end
     end
     throw(ArgumentError("unsupported $name units '$units'"))
+end
+
+function _monthly_deposition_positions(spec::DatasetSpec, years::Vector{Int})
+    source_time = _time_coordinate(spec, Colon())
+    all(!isnothing(_date_month_day(value)) for value in source_time) || throw(ArgumentError(
+        "monthly nitrogen deposition requires calendar dates in $(spec.path)",
+    ))
+    positions = Int[]
+    for year in years
+        year_positions = findall(value -> _calendar_year(value) == year, source_time)
+        length(year_positions) == 12 || throw(ArgumentError(
+            "monthly nitrogen deposition must provide 12 values for year $year in $(spec.path)",
+        ))
+        months = first.(_date_month_day.(source_time[year_positions]))
+        months == collect(1:12) || throw(ArgumentError(
+            "monthly nitrogen deposition must be ordered from January through December in $(spec.path)",
+        ))
+        append!(positions, year_positions)
+    end
+    return positions
+end
+
+"""Interpolate monthly N deposition to daily values with LPJmL's month-centred rule."""
+function _daily_nitrogen_deposition(
+    reader::ClimateBlockReader{T}, name::Symbol, block_time,
+) where {T}
+    haskey(reader.catalog.datasets, name) || return nothing
+    all(!isnothing(_date_month_day(value)) for value in block_time) || throw(ArgumentError(
+        "daily climate dates are required when nitrogen deposition is configured",
+    ))
+    years = unique(Int.(_calendar_year.(block_time)))
+    spec = dataset(reader.catalog, name)
+    positions = _monthly_deposition_positions(spec, years)
+    monthly = read_compact_variable(
+        spec, reader.grid;
+        selection = reader.selection,
+        selectors = (time = positions,),
+        order = (:time, :cell),
+        T,
+    )
+    monthly_values, _ = _normalize_climate_units(
+        name, Matrix{T}(monthly.values), monthly.provenance.units,
+    )
+    year_offsets = Dict(year => 12 * (index - 1) for (index, year) in pairs(years))
+    daily = Matrix{T}(undef, length(block_time), size(monthly_values, 2))
+    for day_index in eachindex(block_time)
+        year = _calendar_year(block_time[day_index])
+        month, day_of_month = _date_month_day(block_time[day_index])
+        month_length = _NOLEAP_MONTH_LENGTHS[month]
+        previous_month = month == 1 ? 12 : month - 1
+        next_month = month == 12 ? 1 : month + 1
+        source_month, target_month, offset, denominator = if day_of_month >= month_length ÷ 2
+            month, next_month, day_of_month - month_length ÷ 2,
+            _LPJML_MONTH_CENTRE_INTERVALS[month]
+        else
+            previous_month, month,
+            day_of_month + (_NOLEAP_MONTH_LENGTHS[previous_month] + 1) ÷ 2,
+            _LPJML_MONTH_CENTRE_INTERVALS[previous_month]
+        end
+        year_offset = year_offsets[year]
+        fraction = T(offset) / T(denominator)
+        @views daily[day_index, :] .= monthly_values[year_offset + source_month, :] .+
+            fraction .* (monthly_values[year_offset + target_month, :] .-
+                         monthly_values[year_offset + source_month, :])
+    end
+    return daily
 end
 
 function _daily_co2(series::CO2Series{T}, time) where {T}
@@ -210,18 +285,24 @@ function read_climate_block(reader::ClimateBlockReader{T}, block_index::Integer)
     _validate_climate(:lwnet, lwnet_values)
     _validate_climate(:swdown, swdown_values)
     block_time = collect(reader.time[indices])
+    no3_deposition = _daily_nitrogen_deposition(reader, :no3_deposition, block_time)
+    nh4_deposition = _daily_nitrogen_deposition(reader, :nh4_deposition, block_time)
     provenance = (
         temp = temp.provenance,
         prec = prec.provenance,
         lwnet = lwnet.provenance,
         swdown = swdown.provenance,
         co2 = reader.co2.provenance,
+        no3_deposition = isnothing(no3_deposition) ? nothing : dataset(reader.catalog, :no3_deposition).path,
+        nh4_deposition = isnothing(nh4_deposition) ? nothing : dataset(reader.catalog, :nh4_deposition).path,
         model_units = (
             temp = temp_units,
             prec = prec_units,
             lwnet = lwnet_units,
             swdown = swdown_units,
             co2 = "ppm",
+            no3_deposition = isnothing(no3_deposition) ? nothing : "g/m2/day",
+            nh4_deposition = isnothing(nh4_deposition) ? nothing : "g/m2/day",
         ),
         calendar = reader.calendar,
     )
@@ -231,6 +312,8 @@ function read_climate_block(reader::ClimateBlockReader{T}, block_index::Integer)
         prec_values,
         swdown_values,
         lwnet_values,
+        no3_deposition,
+        nh4_deposition,
         _daily_co2(reader.co2, block_time),
         reader.selection,
         provenance,
@@ -243,15 +326,24 @@ function Base.iterate(reader::ClimateBlockReader, block_index::Int = 1)
 end
 
 """Return the model-facing forcing tuple without provenance metadata."""
-climate_forcing(block::ClimateBlock) = (
-    temp = block.temperature,
-    prec = block.precipitation,
-    sw = block.shortwave,
-    lw = block.longwave,
-    co2 = block.co2,
-    co2_daily = true,
-    backend_neutral = true,
-)
+function climate_forcing(block::ClimateBlock)
+    forcing = (
+        temp = block.temperature,
+        prec = block.precipitation,
+        sw = block.shortwave,
+        lw = block.longwave,
+        co2 = block.co2,
+        co2_daily = true,
+        backend_neutral = true,
+    )
+    !isnothing(block.no3_deposition) && (forcing = merge(forcing, (
+        no3_deposition = block.no3_deposition,
+    )))
+    !isnothing(block.nh4_deposition) && (forcing = merge(forcing, (
+        nh4_deposition = block.nh4_deposition,
+    )))
+    return forcing
+end
 
 """Expose climate blocks through Agrocosm's existing block-runner API."""
 climate_forcings(source::ClimateBlockReader) = ClimateForcingReader(source)

@@ -152,6 +152,13 @@ function _daily_crop!(
             lpjmlparams = global_params,
             soil_decomp_params = decomp_params,
         )
+        # Match LPJmL: add atmospheric mineral N after litter/SOM turnover and
+        # before the crop's daily nitrogen uptake and nitrogen losses.
+        if hasproperty(climate, :no3_deposition) || hasproperty(climate, :nh4_deposition)
+            nitrogen_deposition!(
+                state, dailyWeather.no3_deposition, dailyWeather.nh4_deposition,
+            )
+        end
         c_shift_response_sum === nothing ||
             accumulate_c_shift_response!(c_shift_response_sum, state)
 
@@ -284,7 +291,11 @@ function _daily_crop!(
             record_water_balance_end!(water_balance, diagnostic_day, state, state)
         end
         if nitrogen_balance !== nothing
-            record_nitrogen_balance_end!(nitrogen_balance, diagnostic_day, state, state)
+            record_nitrogen_balance_end!(
+                nitrogen_balance, diagnostic_day, state, state;
+                nitrate_deposition = dailyWeather.no3_deposition,
+                ammonium_deposition = dailyWeather.nh4_deposition,
+            )
         end
         if carbon_balance !== nothing
             record_carbon_balance_end!(carbon_balance, diagnostic_day, state, state)

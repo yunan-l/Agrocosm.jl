@@ -7,6 +7,7 @@ using .FixtureData
 
 include("test_hwsd.jl")
 include("test_prepare_global_wheat_subset.jl")
+include("test_climate_deposition.jl")
 
 @testset "AgrocosmData" begin
     mktempdir() do directory
@@ -50,7 +51,10 @@ include("test_prepare_global_wheat_subset.jl")
         @test climate[1].provenance.model_units == (
             temp = "degC", prec = "mm/day", lwnet = "W/m2",
             swdown = "W/m2", co2 = "ppm",
+            no3_deposition = nothing, nh4_deposition = nothing,
         )
+        @test isnothing(climate[1].no3_deposition)
+        @test isnothing(climate[1].nh4_deposition)
         @test climate_forcing(climate[1]).co2_daily
         @test climate_forcing(climate[1]).backend_neutral
         @test !hasproperty(climate_forcing(climate[1]), :provenance)

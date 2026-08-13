@@ -36,6 +36,20 @@ function Enzyme.EnzymeRules.inactive(
     return nothing
 end
 
+# Climate forcing is a fixed input to every current Enzyme objective. Execute
+# the production reader for its primal weather-buffer updates, while keeping
+# its backend launch outside Enzyme's differentiated graph.
+function Enzyme.EnzymeRules.inactive(::typeof(Agrocosm.readclimate!), args...)
+    return nothing
+end
+
+# Deposition is a fixed additive input to the mineral-N state for the current
+# objectives. The primal kernel runs normally; its parameter tangent is the
+# unchanged incoming mineral-N tangent.
+function Enzyme.EnzymeRules.inactive(::typeof(Agrocosm.nitrogen_deposition!), args...)
+    return nothing
+end
+
 function _zero_tangent_arrays!(value)
     value isa AbstractArray && return fill!(value, zero(eltype(value)))
     value === nothing && return nothing
@@ -579,6 +593,13 @@ function _enzyme_continuous_transition!(
         lpjmlparams = global_params,
         soil_decomp_params = decomp_params,
     )
+    if hasproperty(climate, :no3_deposition) || hasproperty(climate, :nh4_deposition)
+        Agrocosm.nitrogen_deposition!(
+            state,
+            daily_weather.no3_deposition,
+            daily_weather.nh4_deposition,
+        )
+    end
     Agrocosm.phenology_crop!(
         state,
         climbuf.V_req,

@@ -22,6 +22,7 @@ water, nitrogen, and management process coefficients.
     alphac4::T = 0.053 # C4 intrinsic quantum efficiency (mol C mol⁻¹ photons).
     k::T = 0.0548 # Extinction/scaling coefficient used by crop respiration and radiation.
     r_growth::T = 0.25 # Fraction of assimilated carbon consumed by growth respiration.
+    crop_resp_fix::Bool = false # Use fixed CFT organ N:C for crop maintenance respiration.
     e0::T = 308.56 # Lloyd–Taylor activation parameter for decomposition (K).
     temp_response::T = 56.02 # Lloyd–Taylor reference-temperature offset (K).
     residue_frac::T = 0.95 # fraction of residues to be submerged by tillage
@@ -247,6 +248,7 @@ end
 
 _convert_parameter_value(::Type{T}, value::AbstractFloat) where {T <: AbstractFloat} = T(value)
 _convert_parameter_value(::Type{T}, value::Integer) where {T <: AbstractFloat} = value
+_convert_parameter_value(::Type{T}, value::Bool) where {T <: AbstractFloat} = value
 _convert_parameter_value(::Type{T}, value::K_Soil10) where {T <: AbstractFloat} =
     K_Soil10{T}(T(value.fast), T(value.slow))
 

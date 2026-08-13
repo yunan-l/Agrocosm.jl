@@ -92,6 +92,8 @@ end
             copy(climate.prec[rows, :]),
             copy(climate.swdown[rows, :]),
             copy(climate.lwnet[rows, :]),
+            nothing,
+            nothing,
             fill(Float32(climate.co2[1]), length(rows)),
             selection,
             (fixture = "examples/climate_2000_2009.jld2",),

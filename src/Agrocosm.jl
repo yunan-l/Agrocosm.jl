@@ -75,7 +75,7 @@ export solve_lambda_c3!, solve_lambda_c4!
 export apply_percolation_enthalpy!, soil_temperature!
 export pedotransfer!, soil_carbon!
 export evaporation!, soil_infiltration!, soil_evapotranspiration!
-export soil_nitrogen!, nitrogen_transform!, soil_cn_decomposition!, post_crop_nitrogen_losses!
+export soil_nitrogen!, nitrogen_transform!, soil_cn_decomposition!, nitrogen_deposition!, post_crop_nitrogen_losses!
 export soil_decomp_response!
 export accumulate_c_shift_response!, equilibrated_c_shift!
 export update_surface_litter_properties!, surface_litter_interception!
@@ -193,6 +193,7 @@ include("processes/soil/infil_perc.jl")
 include("processes/soil/soil_water.jl")
 include("processes/soil/soil_carbon.jl")
 include("processes/soil/soil_nitrogen.jl")
+include("processes/soil/nitrogen_deposition.jl")
 include("processes/soil/soil_response.jl")
 
 # Input and output

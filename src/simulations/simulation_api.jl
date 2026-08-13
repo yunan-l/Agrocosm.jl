@@ -198,6 +198,14 @@ function _prepare_climate(simulation::CropSimulation, climate::NamedTuple)
         if hasproperty(climate, :wind)
             prepared = merge(prepared, (wind = T.(climate.wind),))
         end
+        for name in (:no3_deposition, :nh4_deposition)
+            hasproperty(climate, name) || continue
+            values = T.(getproperty(climate, name))
+            prepared = merge(
+                prepared,
+                (; name => _daily_deposition_forcing(values, size(prepared.temp, 1))),
+            )
+        end
         if hasproperty(climate, :temp_spinup)
             prepared = merge(prepared, (temp_spinup = T.(climate.temp_spinup),))
         end

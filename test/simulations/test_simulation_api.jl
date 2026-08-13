@@ -93,10 +93,10 @@ end
     @test estimate_memory(
         1, 1; T = Float64, diagnostics = false, block_days = 1,
         backend = :cpu, safety_factor = 1,
-    ).persistent_state_bytes == 13326
-    @test estimate.forcing_block_bytes == 40
-    @test prefetched.host_forcing_bytes == estimate.host_forcing_bytes + 40
-    @test prefetched.host_peak_bytes == estimate.host_peak_bytes + 40
+    ).persistent_state_bytes == 13342
+    @test estimate.forcing_block_bytes == 56
+    @test prefetched.host_forcing_bytes == estimate.host_forcing_bytes + 56
+    @test prefetched.host_peak_bytes == estimate.host_peak_bytes + 56
     warmup_estimate = estimate_memory(
         simulation; block_days = 2, warmup_years = 10, safety_factor = 1,
     )

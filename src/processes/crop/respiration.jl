@@ -19,6 +19,9 @@ function respiration!(crop,
         crop_prognostic(crop).carbon.root,
         crop_prognostic(crop).carbon.storage,
         crop_prognostic(crop).carbon.pool,
+        crop_prognostic(crop).nitrogen.root,
+        crop_prognostic(crop).nitrogen.storage,
+        crop_prognostic(crop).nitrogen.pool,
         crop_prognostic(crop).phenology.is_growing,
         air_temperature,
         soil_temperature,
@@ -75,6 +78,18 @@ the separate root/air temperature choices explicit.
     return carbon * coefficient * rate * nitrogen_ratio * temperature_response
 end
 
+"""Return LPJmL-style organ N:C for crop maintenance respiration."""
+@inline function compute_respiration_nitrogen_ratio(
+    carbon::T,
+    nitrogen::T,
+    fixed_ratio::T,
+    maximum_ratio::T,
+    crop_resp_fix::Bool,
+) where {T <: AbstractFloat}
+    ratio = !crop_resp_fix && carbon > eps(T) ? nitrogen / carbon : fixed_ratio
+    return min(max(zero(T), ratio), maximum_ratio)
+end
+
 """
     compute_growth_respiration(assimilation, root, storage, pool, growth_fraction)
 
@@ -94,6 +109,9 @@ end
     root_carbon::AbstractVector{T},
     storage_carbon::AbstractVector{T},
     pool_carbon::AbstractVector{T},
+    root_nitrogen::AbstractVector{T},
+    storage_nitrogen::AbstractVector{T},
+    pool_nitrogen::AbstractVector{T},
     is_growing::AbstractVector{I},
     air_temperature::AbstractVector{T},
     soil_temperature::AbstractMatrix{T},
@@ -103,8 +121,8 @@ end
     lpjmlparams::LPJmLParams,
 ) where {T <: AbstractFloat, I <: Integer}
     cell = @index(Global)
-    @unpack respcoeff, nc_ratio = CFT
-    @unpack k, r_growth, e0, temp_response = lpjmlparams
+    @unpack respcoeff, nc_ratio, ncleaf, ratio = CFT
+    @unpack k, r_growth, e0, temp_response, crop_resp_fix = lpjmlparams
 
     gtemp_air = compute_respiration_temperature_response(
         air_temperature[cell], T(e0), T(temp_response),
@@ -112,14 +130,26 @@ end
     gtemp_soil = compute_respiration_temperature_response(
         soil_temperature[1, cell], T(e0), T(temp_response),
     )
+    root_nc = compute_respiration_nitrogen_ratio(
+        root_carbon[cell], root_nitrogen[cell], T(nc_ratio.root),
+        T(ncleaf.high) / T(ratio.root), crop_resp_fix,
+    )
+    storage_nc = compute_respiration_nitrogen_ratio(
+        storage_carbon[cell], storage_nitrogen[cell], T(nc_ratio.sto),
+        T(ncleaf.high) / T(ratio.sto), crop_resp_fix,
+    )
+    pool_nc = compute_respiration_nitrogen_ratio(
+        pool_carbon[cell], pool_nitrogen[cell], T(nc_ratio.pool),
+        T(ncleaf.high) / T(ratio.pool), crop_resp_fix,
+    )
     root_respiration = compute_maintenance_respiration(
-        root_carbon[cell], T(respcoeff), T(k), T(nc_ratio.root), gtemp_soil,
+        root_carbon[cell], T(respcoeff), T(k), root_nc, gtemp_soil,
     )
     storage_respiration = compute_maintenance_respiration(
-        storage_carbon[cell], T(respcoeff), T(k), T(nc_ratio.sto), gtemp_air,
+        storage_carbon[cell], T(respcoeff), T(k), storage_nc, gtemp_air,
     )
     pool_respiration = compute_maintenance_respiration(
-        pool_carbon[cell], T(respcoeff), T(k), T(nc_ratio.pool), gtemp_air,
+        pool_carbon[cell], T(respcoeff), T(k), pool_nc, gtemp_air,
     )
     assimilation = gross_assimilation[cell] - leaf_respiration[cell]
     growth_respiration = compute_growth_respiration(
