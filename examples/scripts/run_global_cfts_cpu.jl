@@ -121,6 +121,7 @@ function write_batch_config(path, config; output_directory, pool_allocation = no
         paths["pool_allocation"] = pool_allocation
     end
     run["production"] = production
+    run["calibration_only"] = !production
     run["warmup_target_constrained"] = target_constrained
     if !production
         merge!(run, _CALIBRATION_RUN_OPTIONS)
@@ -160,9 +161,7 @@ function run_global_cfts(
     free_warmup_options = get(config, "free_warmup",
         get(config, "allocation_validation", nothing))
     calibration_only = Bool(get(config["run"], "calibration_only", false))
-    simulation_years = Int(config["run"]["simulation_start_year"]):Int(
-        config["run"]["simulation_end_year"],
-    )
+    simulation_years = configured_simulation_years(config)
     resume_completed_batches = Bool(get(config["run"], "resume_completed_batches", true))
     batch_manifest = Dict{String, Any}[]
     for (cft_id, irrigated) in systems

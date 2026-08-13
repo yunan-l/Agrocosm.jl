@@ -156,6 +156,37 @@ function management_source_years(config, simulation_years)
     return collect(Int, simulation_years)
 end
 
+"""Resolve production years, or the fixed-management anchor for calibration only."""
+function configured_simulation_years(config)
+    run = config["run"]
+    has_start = haskey(run, "simulation_start_year")
+    has_end = haskey(run, "simulation_end_year")
+    has_start == has_end || error(
+        "provide both simulation_start_year and simulation_end_year",
+    )
+    if has_start
+        start_year = Int(run["simulation_start_year"])
+        end_year = Int(run["simulation_end_year"])
+        start_year <= end_year || error(
+            "simulation_start_year must not exceed simulation_end_year",
+        )
+        return start_year:end_year
+    end
+
+    calibration_only = Bool(get(run, "calibration_only", false)) ||
+        !Bool(get(run, "production", true))
+    calibration_only || error(
+        "production runs require simulation_start_year and simulation_end_year",
+    )
+    management = config["management"]
+    mode = Symbol(lowercase(String(get(management, "mode", "fixed"))))
+    mode === :fixed || error(
+        "calibration without simulation years requires management.mode = \"fixed\"",
+    )
+    fixed_year = Int(get(management, "fixed_year", 2015))
+    return fixed_year:fixed_year
+end
+
 function read_management_schedule(
     catalog, grid, selection, active, source_years, simulation_years, config, cft_id;
     irrigated::Bool,
@@ -419,6 +450,8 @@ function run_global_wheat(
     config = TOML.parsefile(config_path)
     paths = config["paths"]
     run = config["run"]
+    production_enabled = Bool(get(run, "production", true)) &&
+        !Bool(get(run, "calibration_only", false))
     backend = execution_backend(config; override = backend_override)
     println(
         "execution backend: $(backend.name)" *
@@ -429,10 +462,9 @@ function run_global_wheat(
     mkpath(output_directory)
     catalog = catalog_from_config(config)
     grid = read_grid(dataset(catalog, :grid); T = Float32)
-    start_year = Int(get(run, "simulation_start_year", 2015))
-    end_year = Int(get(run, "simulation_end_year", 2016))
-    start_year <= end_year || error("simulation_start_year must not exceed simulation_end_year")
-    simulation_years = collect(start_year:end_year)
+    simulation_years = collect(configured_simulation_years(config))
+    start_year = first(simulation_years)
+    end_year = last(simulation_years)
     source_years = management_source_years(config, simulation_years)
     landuse = read_management(
         catalog, :landuse, grid, cft_id;
@@ -529,24 +561,28 @@ function run_global_wheat(
         warmup_forcings = collect(warmup_forcings)
     end
 
-    reader = climate_blocks(
-        catalog, grid;
-        selection, start_year, end_year, block_days = 365, T = Float32,
-    )
-    expected_days = 365 * length(simulation_years)
-    climate_days(reader) == expected_days || error("expected exactly $expected_days forcing days")
-    first_block = read_climate_block(reader, 1)
-    last_block = read_climate_block(reader, length(reader))
-    start_date = first(first_block.time)
-    end_date = last(last_block.time)
-    (year(start_date), month(start_date), day(start_date)) == (start_year, 1, 1) ||
-        error("forcing must start on $start_year-01-01, got $start_date")
-    (year(end_date), month(end_date), day(end_date)) == (end_year, 12, 31) ||
-        error("forcing must end on $end_year-12-31, got $end_date")
-    forcings = climate_forcings(reader)
-    length(forcings) == length(simulation_years) || error(
-        "365-day blocks must produce one forcing block per simulation year",
-    )
+    expected_days = production_enabled ? 365 * length(simulation_years) : 365
+    reader = nothing
+    forcings = nothing
+    if production_enabled
+        reader = climate_blocks(
+            catalog, grid;
+            selection, start_year, end_year, block_days = 365, T = Float32,
+        )
+        climate_days(reader) == expected_days || error("expected exactly $expected_days forcing days")
+        first_block = read_climate_block(reader, 1)
+        last_block = read_climate_block(reader, length(reader))
+        start_date = first(first_block.time)
+        end_date = last(last_block.time)
+        (year(start_date), month(start_date), day(start_date)) == (start_year, 1, 1) ||
+            error("forcing must start on $start_year-01-01, got $start_date")
+        (year(end_date), month(end_date), day(end_date)) == (end_year, 12, 31) ||
+            error("forcing must end on $end_year-12-31, got $end_date")
+        forcings = climate_forcings(reader)
+        length(forcings) == length(simulation_years) || error(
+            "365-day blocks must produce one forcing block per simulation year",
+        )
+    end
 
     preflight_stream = OutputStream(
         production_output_variables();
@@ -642,7 +678,7 @@ function run_global_wheat(
         required_converged_fraction = warmup.required_converged_fraction,
         converged = warmup.converged,
     )
-    if !Bool(get(run, "production", true))
+    if !production_enabled
         return (
             cells = length(selection.cell_ids),
             backend = backend.name,
