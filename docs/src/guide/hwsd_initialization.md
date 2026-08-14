@@ -176,8 +176,10 @@ number of consecutive years:
   relative tolerance;
 - annual change in fast-C and fast-N fractions is below the pool-fraction
   tolerance;
-- the absolute annual target correction, relative to the initial cell total,
-  is below the relative tolerance.
+- the change in the target correction relative to the previous occurrence of
+  the same forcing phase, normalized by the initial cell total, is below the
+  relative tolerance. The correction may remain non-zero under persistent
+  external inputs such as atmospheric nitrogen deposition.
 
 The global CPU workflow cycles 1901--1930 climate five times and runs every
 selected cell for 150 years. It still reports whether each cell passes for

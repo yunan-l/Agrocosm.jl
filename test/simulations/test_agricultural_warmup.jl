@@ -99,6 +99,22 @@ end
         constrained_nitrogen.nitrate + constrained_nitrogen.ammonium,
     ) ≈ target_nitrogen
 
+    stable_snapshot = (
+        total_carbon = Float32[100], total_nitrogen = Float32[10],
+        fast_carbon = Float32[40], slow_carbon = Float32[60],
+        fast_nitrogen = Float32[4], slow_nitrogen = Float32[6],
+    )
+    stable_correction = (carbon = Float32[-5], nitrogen = Float32[-2])
+    consecutive = [0]
+    @test Agrocosm._warmup_convergence!(
+        consecutive, stable_snapshot, stable_snapshot, stable_snapshot,
+        stable_correction, stable_correction;
+        relative_tolerance = 0.01,
+        pool_fraction_tolerance = 0.01,
+        consecutive_years = 1,
+    ) == 1
+    @test consecutive == [1]
+
     capped = initialize_simulation(
         cft1, initial;
         indices = [1], T = Float32, days = 3,
@@ -144,13 +160,13 @@ end
     complete_report = agricultural_warmup!(
         complete_cycle, two_year_climate;
         years = 1,
-        maximum_years = 2,
+        maximum_years = 3,
         target_constrained = true,
         consecutive_years = 1,
         relative_tolerance = 1.0e6,
         pool_fraction_tolerance = 1.0e6,
     )
-    @test complete_report.years == 2
+    @test complete_report.years == 3
     @test complete_report.converged
 
     run_simulation!(simulation, climate; end_day = 3, spinup = false)

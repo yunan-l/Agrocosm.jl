@@ -185,6 +185,7 @@ function _warmup_convergence!(
     initial,
     previous,
     current,
+    previous_correction,
     correction;
     relative_tolerance::Real,
     pool_fraction_tolerance::Real,
@@ -204,9 +205,9 @@ function _warmup_convergence!(
         pool_fraction(current.fast_nitrogen, current.slow_nitrogen) .-
         pool_fraction(previous.fast_nitrogen, previous.slow_nitrogen)
     ) .<= pool_fraction_tolerance
-    stable .&= abs.(correction.carbon) ./
+    stable .&= abs.(correction.carbon .- previous_correction.carbon) ./
         max.(abs.(initial.total_carbon), one(eltype(correction.carbon))) .<= relative_tolerance
-    stable .&= abs.(correction.nitrogen) ./
+    stable .&= abs.(correction.nitrogen .- previous_correction.nitrogen) ./
         max.(abs.(initial.total_nitrogen), one(eltype(correction.nitrogen))) .<= relative_tolerance
     consecutive .= ifelse.(stable, consecutive .+ 1, 0)
     return count(>=(consecutive_years), consecutive) / length(consecutive)
@@ -460,11 +461,20 @@ function agricultural_warmup!(
         nitrogen_correction[year, :] .= correction.nitrogen
         current_soil = _warmup_soil_snapshot(simulation.state)
         _store_warmup_snapshot!(history, year, current_soil)
-        if year >= forcing_years
+        # A persistent external input such as atmospheric N deposition can
+        # require a stable, non-zero annual target correction. Constrained
+        # convergence therefore compares corrections at the same forcing
+        # phase instead of requiring the correction itself to vanish.
+        if year >= forcing_years && (!target_constrained || year > forcing_years)
             previous_soil = year == forcing_years ? initial_soil :
                 _warmup_history_row(history, year - forcing_years)
+            previous_correction = target_constrained ? (
+                carbon = view(carbon_correction, year - forcing_years, :),
+                nitrogen = view(nitrogen_correction, year - forcing_years, :),
+            ) : correction
             converged_fraction[year] = _warmup_convergence!(
-                consecutive, initial_soil, previous_soil, current_soil, correction;
+                consecutive, initial_soil, previous_soil, current_soil,
+                previous_correction, correction;
                 relative_tolerance, pool_fraction_tolerance, consecutive_years,
             )
         end
@@ -635,11 +645,16 @@ function agricultural_warmup!(
         nitrogen_correction[year, :] .= correction.nitrogen
         current_soil = _warmup_soil_snapshot(simulation.state)
         _store_warmup_snapshot!(history, year, current_soil)
-        if year >= forcing_years
+        if year >= forcing_years && (!target_constrained || year > forcing_years)
             previous_soil = year == forcing_years ? initial_soil :
                 _warmup_history_row(history, year - forcing_years)
+            previous_correction = target_constrained ? (
+                carbon = view(carbon_correction, year - forcing_years, :),
+                nitrogen = view(nitrogen_correction, year - forcing_years, :),
+            ) : correction
             converged_fraction[year] = _warmup_convergence!(
-                consecutive, initial_soil, previous_soil, current_soil, correction;
+                consecutive, initial_soil, previous_soil, current_soil,
+                previous_correction, correction;
                 relative_tolerance, pool_fraction_tolerance, consecutive_years,
             )
         end
