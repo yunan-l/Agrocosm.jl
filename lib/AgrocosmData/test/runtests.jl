@@ -6,7 +6,7 @@ include("fixtures/fixture_data.jl")
 using .FixtureData
 
 include("test_hwsd.jl")
-include("test_prepare_global_wheat_subset.jl")
+include("test_prepare_global_cft_subset.jl")
 include("test_climate_deposition.jl")
 
 @testset "AgrocosmData" begin

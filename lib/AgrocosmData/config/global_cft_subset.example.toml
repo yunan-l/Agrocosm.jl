@@ -1,5 +1,5 @@
 [subset]
-output_directory = "/path/to/agrocosm_global_wheat_fixture"
+output_directory = "/path/to/agrocosm_global_cft_inputs"
 # Preserve every available management year. At runtime, use
 # management.mode = "transient" for histsoc or mode = "fixed" with
 # fixed_year = 2015 for 2015soc.

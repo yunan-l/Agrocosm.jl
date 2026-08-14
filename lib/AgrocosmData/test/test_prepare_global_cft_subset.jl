@@ -2,9 +2,9 @@ using Dates
 using NCDatasets
 using Test
 
-include(joinpath(@__DIR__, "..", "scripts", "prepare_global_wheat_subset.jl"))
+include(joinpath(@__DIR__, "..", "scripts", "prepare_global_cft_subset.jl"))
 
-@testset "Global wheat subset preparation" begin
+@testset "Global CFT subset preparation" begin
     mktempdir() do directory
         management_path = joinpath(directory, "management.nc")
         NCDataset(management_path, "c") do dataset
@@ -22,7 +22,7 @@ include(joinpath(@__DIR__, "..", "scripts", "prepare_global_wheat_subset.jl"))
                 ("longitude", "band", "latitude", "time"),
             )
         end
-        management_output = joinpath(directory, "management_wheat.nc")
+        management_output = joinpath(directory, "management_cft.nc")
         subset_netcdf(
             management_path, management_output, "landfrac";
             cft_index = 1,

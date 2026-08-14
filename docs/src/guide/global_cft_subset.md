@@ -1,40 +1,37 @@
-# Preparing the global wheat test subset
+# Preparing global CFT input subsets
 
-The production source files are intentionally kept on the server. A small
-preprocessing script creates a portable global rainfed-wheat dataset without
-changing the spatial grid:
+The production source files are intentionally kept on the server. The bounded
+preprocessing script extracts the 12 canonical crops in both rainfed and
+irrigated form without changing the spatial grid. A management-only
+configuration can preserve every available source year for both historical
+(`histsoc`) and fixed-year (`2015soc`) experiments. Climate and CO₂ extraction
+remain optional for compact test fixtures.
 
-- management files retain every longitude, latitude, and time record but only
-  the first rainfed crop band;
-- climate files retain every grid cell but only the first two complete calendar
-  years shared by temperature, precipitation, longwave, and shortwave;
-- the annual CO₂ text file is reduced to the same two years.
-
-The first LPJmL crop position is **temperate cereals**. Agrocosm uses its wheat
-parameter set for the initial production test. In all current 64/32/24/16-band
-management products, its rainfed position is band 1. The script ignores the
-irrigated bands.
+Land use, fertilizer, and manure use 24 selected source bands. Sowing date and
+PHU use their 24 rainfed/irrigated bands directly. Residue management provides
+12 crop bands shared by rainfed and irrigated patches. The exact source band
+positions are declared explicitly through `cft_indices` in the configuration.
 
 ## 1. Configure server paths
 
 Copy the example configuration:
 
 ```bash
-cp lib/AgrocosmData/config/global_wheat_subset.example.toml \
-   global_wheat_subset.toml
+cp lib/AgrocosmData/config/global_cft_subset.example.toml \
+   global_cft_subset.toml
 ```
 
 Edit the input paths and `output_directory`. Each entry explicitly declares
 the NetCDF variable because filenames and variable names are independent.
 
-| Dataset | Source bands | Rainfed wheat band | Default variable |
-|---|---:|---:|---|
-| land use | 64 | 1 | `landfrac` |
-| fertilizer | 32 | 1 | `fertilizer` |
-| manure | 32 | 1 | `manure` |
-| residue on field | 16 | 1 | `residuefrac` |
-| sowing date | 24 | 1 | `sdate` |
-| PHU | 24 | 1 | `phusum` |
+| Dataset | Selected output bands | Default variable |
+|---|---:|---|
+| land use | 24 | `landfrac` |
+| fertilizer | 24 | `fertilizer` |
+| manure | 24 | `manure` |
+| residue on field | 12 | `residuefrac` |
+| sowing date | 24 | `sdate` |
+| PHU | 24 | `phusum` |
 
 The CFT dimension may be named `cft`, `cft`, `crop`, or `band`, and it may
 occur in any dimension position. The script requires exactly one such
@@ -49,72 +46,68 @@ julia --project=lib/AgrocosmData \
   -e 'import Pkg; Pkg.instantiate()'
 
 julia --project=lib/AgrocosmData \
-  lib/AgrocosmData/scripts/prepare_global_wheat_subset.jl \
-  /absolute/path/global_wheat_subset.toml
+  lib/AgrocosmData/scripts/prepare_global_cft_subset.jl \
+  /absolute/path/global_cft_subset.toml
 ```
 
-The script performs bounded time-chunk reads. `chunk_length = 31` means that a
-large daily field is copied at most 31 source days at a time; it never loads
-the complete climate file. Existing output files are not overwritten.
+The script performs bounded time-chunk reads. `chunk_length = 31` means that at
+most 31 records along the time dimension are copied in one I/O batch. It does
+not change values or the selected time range. Existing output files are not
+overwritten.
 
-For climate, the script decodes the CF time coordinate, finds the first two
-complete January–December years in the reference file, and requires those same
-years in every other climate file. Every selected year must contain exactly
+Set `management_years = "all"` to preserve every available management year.
+At runtime, `management.mode = "transient"` selects the corresponding year,
+while `management.mode = "fixed"` with `fixed_year = 2015` repeats 2015.
+Static inputs such as the current sowing-date file remain static.
+
+When a `[climate]` section is present, every selected year must contain exactly
 365 rows. A file containing 29 February or any other annual row count is
-rejected because the current production forcing already uses a no-leap
-365-day calendar.
+rejected because Agrocosm uses a no-leap 365-day calendar.
 
 ## 3. Resulting files
 
-The output directory contains six management NetCDF files, four climate
-NetCDF files, and a two-row CO₂ text file. NetCDF dimension order, coordinate
-variables, data type, fill value, units, calendar, and source attributes are
-preserved. Additional global attributes record:
+With the supplied management-only template, the output directory contains six
+management NetCDF files. NetCDF dimension order, coordinate variables, data
+type, fill value, units, calendar, and source attributes are preserved.
+Additional global attributes record:
 
 - the absolute source path;
 - the selected variable;
-- rainfed CFT index 1 for management data;
-- selected climate years for climate data.
+- the selected source CFT indices;
+- selected management years when a time subset is requested.
 
-The CFT dimension remains present with length one. Keeping it avoids ambiguous
-dimension semantics and allows the normal AgrocosmData reader to use an
-explicit single-entry band mapping.
+The CFT dimension remains present with 24 entries for rainfed/irrigated
+management and 12 entries for shared residue management. Output coordinates
+are renumbered consecutively; the source positions remain recorded in global
+attributes.
 
 ## 4. Validate before transfer
 
 Check headers and sizes on the server:
 
 ```bash
-ncdump -h /output/path/landuse_wheat_rainfed.nc
-ncdump -h /output/path/temp_first_two_years.nc
+ncdump -h /output/path/landuse_24cfts_1500-2017.nc
+ncdump -h /output/path/phu_24cfts_1901-2019.nc
 ```
 
 Expected properties:
 
-- management CFT/band dimension: `1`;
+- management CFT/band dimension: `24`, or `12` for residue management;
 - longitude and latitude dimensions: unchanged;
-- management time dimension: unchanged;
-- climate time dimension: exactly 730 rows;
-- all four climate files: identical time coordinate;
-- CO₂ years: identical to the selected climate years.
+- management time dimension: unchanged when `management_years = "all"`;
+- source CFT indices recorded in `agrocosm_source_cft_indices`;
+- all requested source years retained.
 
-Then point a local AgrocosmData catalog at the extracted files. For each
-single-band management dataset use:
-
-```toml
-rainfed_bands = [1]
-irrigated_bands = [1]
-```
-
-The second mapping is only a schema placeholder for these rainfed-only test
-files; the production test must call readers with `irrigated = false`.
+Then point the AgrocosmData catalog at the extracted files. The catalog maps
+the 12 rainfed and 12 irrigated output positions through the canonical CFT
+registry; residue positions are shared between both water-management modes.
 
 ## 5. Scope
 
-This extraction reduces time and CFT volume, not space. It is deliberately a
-global fixture for testing the real `720 × 280` alignment, land-use mask,
-compact cell ordering, streamed forcing, CPU/GPU execution, and output
-reconstruction. It is not a scientifically complete historical experiment.
+This extraction reduces source-band volume, not space. The historical
+management outputs support both fixed-2015 and transient-management
+experiments on the real `720 × 280` grid. Any optional short climate subset is
+only a portable test fixture, not a scientifically complete experiment.
 
 ## 6. CPU production workflow
 

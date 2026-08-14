@@ -33,7 +33,7 @@ makedocs(
             "Inputs and outputs" => "guide/inputs_outputs.md",
             "Multi-CFT simulations" => "guide/multi_cft.md",
             "HWSD soil initialization" => "guide/hwsd_initialization.md",
-            "Global wheat test data" => "guide/global_wheat_subset.md",
+            "Global CFT input data" => "guide/global_cft_subset.md",
             "CPU, GPU, and precision" => "guide/backends.md",
             "Checkpoints" => "guide/checkpoints.md",
         ],

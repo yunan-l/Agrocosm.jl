@@ -1,9 +1,9 @@
 # AgrocosmData.jl
 
-For a bounded server-side extraction of the first rainfed CFT and two climate
-years, see `scripts/prepare_global_wheat_subset.jl` and
-`config/global_wheat_subset.example.toml`. The complete workflow is documented
-in the Agrocosm manual under **Global wheat test data**.
+For bounded server-side extraction of all 12 crops in rainfed and irrigated
+form, see `scripts/prepare_global_cft_subset.jl` and
+`config/global_cft_subset.example.toml`. The complete workflow is documented
+in the Agrocosm manual under **Global CFT input data**.
 
 `AgrocosmData.jl` is the backend-neutral input-data layer for Agrocosm. It
 aligns external NetCDF data to the canonical Agrocosm `cellid` grid, constructs
