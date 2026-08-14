@@ -303,44 +303,52 @@ function prepare_subset(config_path::AbstractString)
         )
     end
 
-    climate_names = sort!(collect(keys(config["climate"])))
-    reference = config["climate"][first(climate_names)]
-    reference_path = resolve_path(config_path, reference["input"])
-    selected_years = climate_years
-    reference_time = selected_time_values(
-        reference_path, reference["variable"], selected_years;
-        daily_source_start_year = climate_source_start_year,
-    )
-    for name in climate_names
-        spec = config["climate"][name]
-        input_path = resolve_path(config_path, spec["input"])
-        selected_time_values(
-            input_path, spec["variable"], selected_years;
+    if haskey(config, "climate")
+        climate_names = sort!(collect(keys(config["climate"])))
+        isempty(climate_names) && throw(ArgumentError("climate configuration cannot be empty"))
+        reference = config["climate"][first(climate_names)]
+        reference_path = resolve_path(config_path, reference["input"])
+        selected_years = climate_years
+        reference_time = selected_time_values(
+            reference_path, reference["variable"], selected_years;
             daily_source_start_year = climate_source_start_year,
-        ) == reference_time ||
-            throw(ArgumentError("climate time coordinate for $name does not match the reference"))
-        subset_netcdf(
-            input_path,
-            joinpath(output_directory, spec["output"]),
-            spec["variable"];
-            years = selected_years,
-            daily_source_start_year = climate_source_start_year,
-            chunk_length,
         )
-    end
-    if haskey(config, "co2")
-        subset_co2(
-            resolve_path(config_path, config["co2"]["input"]),
-            joinpath(output_directory, config["co2"]["output"]),
-            selected_years,
-        )
+        for name in climate_names
+            spec = config["climate"][name]
+            input_path = resolve_path(config_path, spec["input"])
+            selected_time_values(
+                input_path, spec["variable"], selected_years;
+                daily_source_start_year = climate_source_start_year,
+            ) == reference_time || throw(ArgumentError(
+                "climate time coordinate for $name does not match the reference",
+            ))
+            subset_netcdf(
+                input_path,
+                joinpath(output_directory, spec["output"]),
+                spec["variable"];
+                years = selected_years,
+                daily_source_start_year = climate_source_start_year,
+                chunk_length,
+            )
+        end
+        if haskey(config, "co2")
+            subset_co2(
+                resolve_path(config_path, config["co2"]["input"]),
+                joinpath(output_directory, config["co2"]["output"]),
+                selected_years,
+            )
+        end
+    elseif haskey(config, "co2")
+        throw(ArgumentError("co2 extraction requires a climate year selection"))
     end
     println(
         "Prepared 12 CFTs × rainfed/irrigated management for " *
         (isnothing(management_year_selection) ? "all available years " :
          "years $(join(management_year_selection, ", ")) ") *
-        "(12 shared residue bands), " *
-        "and climate years $(join(selected_years, ", ")) in $output_directory",
+        "(12 shared residue bands)" *
+        (haskey(config, "climate") ?
+         ", and climate years $(join(climate_years, ", "))" : "") *
+        " in $output_directory",
     )
     return nothing
 end

@@ -87,6 +87,27 @@ include(joinpath(@__DIR__, "..", "scripts", "prepare_global_wheat_subset.jl"))
             @test size(dataset["sdate"]) == (2, 24, 2, 1)
         end
 
+        management_only_config = joinpath(directory, "management_only.toml")
+        open(management_only_config, "w") do output
+            TOML.print(output, Dict(
+                "subset" => Dict(
+                    "output_directory" => joinpath(directory, "management_only"),
+                    "management_years" => "all",
+                    "chunk_length" => 1,
+                ),
+                "management" => Dict(
+                    "phu" => Dict(
+                        "input" => sdate_path,
+                        "output" => "phu_24cfts.nc",
+                        "variable" => "sdate",
+                        "cft_indices" => collect(1:24),
+                    ),
+                ),
+            ))
+        end
+        prepare_subset(management_only_config)
+        @test isfile(joinpath(directory, "management_only", "phu_24cfts.nc"))
+
         climate_path = joinpath(directory, "climate.nc")
         time_values = Int32.(0:729)
         NCDataset(climate_path, "c") do dataset
