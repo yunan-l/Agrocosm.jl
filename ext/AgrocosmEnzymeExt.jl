@@ -746,7 +746,23 @@ end
 ) where {T, S, parameter_names}
     fields = fieldnames(Agrocosm.CFTParameters)
     values = map(fields) do field
-        if field === :basetemp
+        if field === :temp_co2
+            index = findfirst(==(:temp_co2_high), parameter_names)
+            return index === nothing ?
+                :(getfield(base_cft, :temp_co2)) :
+                :(Agrocosm.TempCO2{$T}(
+                    getfield(getfield(base_cft, :temp_co2), :low),
+                    theta[$index],
+                ))
+        elseif field === :temp_photos
+            index = findfirst(==(:temp_photos_high), parameter_names)
+            return index === nothing ?
+                :(getfield(base_cft, :temp_photos)) :
+                :(Agrocosm.TempPhotos{$T}(
+                    getfield(getfield(base_cft, :temp_photos), :low),
+                    theta[$index],
+                ))
+        elseif field === :basetemp
             index = findfirst(==(:basetemp_low), parameter_names)
             return index === nothing ?
                 :(getfield(base_cft, :basetemp)) :
@@ -768,7 +784,23 @@ end
 ) where {T, S, parameter_names}
     fields = fieldnames(Agrocosm.CFTParameters)
     values = map(fields) do field
-        if field === :basetemp
+        if field === :temp_co2
+            index = findfirst(==(:temp_co2_high), parameter_names)
+            return index === nothing ?
+                :(getfield(zero_cft, :temp_co2)) :
+                :(Agrocosm.TempCO2{$T}(
+                    getfield(getfield(zero_cft, :temp_co2), :low),
+                    dtheta[$index],
+                ))
+        elseif field === :temp_photos
+            index = findfirst(==(:temp_photos_high), parameter_names)
+            return index === nothing ?
+                :(getfield(zero_cft, :temp_photos)) :
+                :(Agrocosm.TempPhotos{$T}(
+                    getfield(getfield(zero_cft, :temp_photos), :low),
+                    dtheta[$index],
+                ))
+        elseif field === :basetemp
             index = findfirst(==(:basetemp_low), parameter_names)
             return index === nothing ?
                 :(getfield(zero_cft, :basetemp)) :
@@ -1470,5 +1502,7 @@ function Agrocosm.enzyme_daily_transition_objective(
     )
     return _daily_transition_observable(state, observable)
 end
+
+include("management_adaptation.jl")
 
 end

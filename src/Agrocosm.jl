@@ -100,13 +100,15 @@ export save_checkpoint, restore_checkpoint!
 export estimate_memory
 
 # OPTIONAL AUTOMATIC DIFFERENTIATION
-export ADSeasonContext
+export ADSeasonContext, ManagementAdaptationContext
 export enzyme_forward_directional, enzyme_forward_gradient, enzyme_zero_tangent
 export enzyme_prepare_daily_state!, enzyme_daily_transition_objective
 export enzyme_seasonal_loss
 export enzyme_seasonal_gradient_blockwise
 export enzyme_seasonal_soil_loss
 export enzyme_seasonal_soil_gradient_blockwise
+export enzyme_management_yield_loss, enzyme_management_yield_split_loss
+export enzyme_joint_adaptation_yield_loss
 
 
 # process-based crop model

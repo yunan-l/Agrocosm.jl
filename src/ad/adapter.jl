@@ -19,6 +19,47 @@ struct ADSeasonContext{M, V, O, S, C}
     calendar_days::Int
 end
 
+"""
+    ManagementAdaptationContext(fertilizer_days, fertilizer_fractions; nitrogen_cost=0)
+
+Fixed discrete management schedule for the optional Enzyme management-adaptation
+path. `fertilizer_days` are preselected calendar days and
+`fertilizer_fractions` must be non-negative fractions summing to one. The
+continuous optimization variable is the total mineral nitrogen input; event
+days themselves remain fixed outer-loop choices.
+"""
+struct ManagementAdaptationContext{D, F, T}
+    fertilizer_days::D
+    fertilizer_fractions::F
+    nitrogen_cost::T
+end
+
+function ManagementAdaptationContext(
+    fertilizer_days::Tuple,
+    fertilizer_fractions::Tuple;
+    nitrogen_cost::Real = 0,
+)
+    length(fertilizer_days) == length(fertilizer_fractions) || throw(DimensionMismatch(
+        "fertilizer_days and fertilizer_fractions must have identical lengths",
+    ))
+    isempty(fertilizer_days) && throw(ArgumentError("at least one fertilizer event is required"))
+    all(day -> day isa Integer && day > 0, fertilizer_days) || throw(ArgumentError(
+        "fertilizer_days must contain positive integers",
+    ))
+    issorted(fertilizer_days) && allunique(fertilizer_days) || throw(ArgumentError(
+        "fertilizer_days must be strictly increasing",
+    ))
+    all(fraction -> fraction isa Real && isfinite(fraction) && fraction >= 0, fertilizer_fractions) ||
+        throw(ArgumentError("fertilizer_fractions must be finite and non-negative"))
+    sum(fertilizer_fractions) ≈ one(sum(fertilizer_fractions)) || throw(ArgumentError(
+        "fertilizer_fractions must sum to one",
+    ))
+    nitrogen_cost isa Real && isfinite(nitrogen_cost) && nitrogen_cost >= 0 || throw(ArgumentError(
+        "nitrogen_cost must be finite and non-negative",
+    ))
+    return ManagementAdaptationContext(fertilizer_days, fertilizer_fractions, nitrogen_cost)
+end
+
 function ADSeasonContext(
     growth_mask::AbstractVector{Bool},
     valid_masks::NamedTuple,
@@ -176,5 +217,29 @@ function enzyme_seasonal_soil_gradient_blockwise(args...; kwargs...)
     throw(ArgumentError(
         "Enzyme is not loaded; add Enzyme to the active environment before " *
         "calling enzyme_seasonal_soil_gradient_blockwise",
+    ))
+end
+
+"""Fallback raised when Enzyme has not been loaded as an optional extension."""
+function enzyme_management_yield_loss(args...; kwargs...)
+    throw(ArgumentError(
+        "Enzyme is not loaded; add Enzyme to the active environment before " *
+        "calling enzyme_management_yield_loss",
+    ))
+end
+
+"""Fallback raised when Enzyme has not been loaded as an optional extension."""
+function enzyme_management_yield_split_loss(args...; kwargs...)
+    throw(ArgumentError(
+        "Enzyme is not loaded; add Enzyme to the active environment before " *
+        "calling enzyme_management_yield_split_loss",
+    ))
+end
+
+"""Fallback raised when Enzyme has not been loaded as an optional extension."""
+function enzyme_joint_adaptation_yield_loss(args...; kwargs...)
+    throw(ArgumentError(
+        "Enzyme is not loaded; add Enzyme to the active environment before " *
+        "calling enzyme_joint_adaptation_yield_loss",
     ))
 end
