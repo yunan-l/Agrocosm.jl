@@ -29,6 +29,30 @@ include(joinpath(@__DIR__, "..", "..", "examples", "scripts", "run_global_cfts_c
     @test endswith(dataset(single_catalog, :landuse).path, "landuse_24cfts_2015.nc")
     @test cft_index(single_catalog.cfts, 1) == 1
 
+    historical_catalog = catalog_from_config(Dict(
+        "paths" => Dict("input_directory" => "/tmp/input"),
+        "management" => Dict(
+            "landuse_file" => "landuse_24cfts_1500-2017.nc",
+            "fertilizer_file" => "fertilizer_24cfts_1860-2017.nc",
+            "manure_file" => "manure_24cfts_1860-2017.nc",
+            "residue_fraction_file" => "residue_12cfts_1850-2015.nc",
+            "sowing_date_file" => "sdate_24cfts_static.nc",
+            "phu_file" => "phu_24cfts_1901-2019.nc",
+        ),
+    ))
+    @test basename(dataset(historical_catalog, :landuse).path) ==
+        "landuse_24cfts_1500-2017.nc"
+    @test basename(dataset(historical_catalog, :fertilizer).path) ==
+        "fertilizer_24cfts_1860-2017.nc"
+    @test basename(dataset(historical_catalog, :manure).path) ==
+        "manure_24cfts_1860-2017.nc"
+    @test basename(dataset(historical_catalog, :residue_fraction).path) ==
+        "residue_12cfts_1850-2015.nc"
+    @test basename(dataset(historical_catalog, :sowing_date).path) ==
+        "sdate_24cfts_static.nc"
+    @test basename(dataset(historical_catalog, :phu).path) ==
+        "phu_24cfts_1901-2019.nc"
+
     days = 30
     rainfed = initialize_simulation(
         cft1, lifecycle_initial_data(Float32);

@@ -37,20 +37,38 @@ function catalog_from_config(config)
         path = String(get(climate, name, default))
         isabspath(path) ? path : joinpath(climate_directory, path)
     end
+    management_config = get(config, "management", Dict{String, Any}())
+    management_path(name, default) = begin
+        path = String(get(management_config, name, default))
+        isabspath(path) ? path : joinpath(management_directory, path)
+    end
     registry = CFTRegistry(collect(1:12), collect(CFT_NAMES))
     bands = (rainfed = Int32.(1:12), irrigated = Int32.(13:24))
-    multi_cft(filename, variable; residue = false) = DatasetSpec(
-        joinpath(management_directory, filename), variable;
+    multi_cft(path, variable; residue = false) = DatasetSpec(
+        path, variable;
         rainfed_bands = bands.rainfed,
         irrigated_bands = residue ? bands.rainfed : bands.irrigated,
     )
     management = Dict{Symbol, DatasetSpec}(
-        :landuse => multi_cft("landuse_24cfts_2015.nc", "landfrac"),
-        :sowing_date => multi_cft("sdate_24cfts_2015.nc", "sdate"),
-        :phu => multi_cft("phu_24cfts_2015.nc", "phusum"),
-        :fertilizer => multi_cft("fertilizer_24cfts_2015.nc", "fertilizer"),
-        :manure => multi_cft("manure_24cfts_2015.nc", "manure"),
-        :residue_fraction => multi_cft("residue_12cfts_2015.nc", "residuefrac"; residue = true),
+        :landuse => multi_cft(
+            management_path("landuse_file", "landuse_24cfts_2015.nc"), "landfrac",
+        ),
+        :sowing_date => multi_cft(
+            management_path("sowing_date_file", "sdate_24cfts_2015.nc"), "sdate",
+        ),
+        :phu => multi_cft(
+            management_path("phu_file", "phu_24cfts_2015.nc"), "phusum",
+        ),
+        :fertilizer => multi_cft(
+            management_path("fertilizer_file", "fertilizer_24cfts_2015.nc"), "fertilizer",
+        ),
+        :manure => multi_cft(
+            management_path("manure_file", "manure_24cfts_2015.nc"), "manure",
+        ),
+        :residue_fraction => multi_cft(
+            management_path("residue_fraction_file", "residue_12cfts_2015.nc"),
+            "residuefrac"; residue = true,
+        ),
     )
     has_no3_deposition = haskey(climate, "no3_deposition_file")
     has_nh4_deposition = haskey(climate, "nh4_deposition_file")
