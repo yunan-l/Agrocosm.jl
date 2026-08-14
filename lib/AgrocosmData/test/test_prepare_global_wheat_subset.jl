@@ -53,6 +53,19 @@ include(joinpath(@__DIR__, "..", "scripts", "prepare_global_wheat_subset.jl"))
             @test dataset["landfrac"][:, 2, :, :] == dataset["landfrac"][:, 4, :, :]
         end
 
+        @test isnothing(management_years(management_path, "landfrac", nothing))
+        management_all_output = joinpath(directory, "management_all.nc")
+        subset_netcdf(
+            management_path, management_all_output, "landfrac";
+            cft_indices = [1, 2, 1, 2],
+            years = management_years(management_path, "landfrac", nothing),
+            require_365_days = false, chunk_length = 1,
+        )
+        NCDataset(management_all_output, "r") do dataset
+            @test size(dataset["landfrac"]) == (2, 4, 2, 2)
+            @test dataset["time"][:] == Int32[2000, 2001]
+        end
+
         sdate_path = joinpath(directory, "sdate.nc")
         NCDataset(sdate_path, "c") do dataset
             defDim(dataset, "longitude", 2); defDim(dataset, "band", 24)

@@ -226,9 +226,20 @@ function has_time_dimension(path, variable_name)
     end
 end
 
-management_years(path, variable_name, management_year) =
-    lowercase(String(variable_name)) == "sdate" ? nothing :
-    (has_time_dimension(path, variable_name) ? [management_year] : nothing)
+function management_years(path, variable_name, requested_years)
+    lowercase(String(variable_name)) == "sdate" && return nothing
+    has_time_dimension(path, variable_name) || return nothing
+    isnothing(requested_years) && return nothing
+    return requested_years isa Integer ? [Int(requested_years)] : Int.(requested_years)
+end
+
+function requested_management_years(settings)
+    value = get(settings, "management_years", get(settings, "management_year", 2015))
+    value isa AbstractString && lowercase(strip(value)) == "all" && return nothing
+    value isa Integer && return [Int(value)]
+    value isa AbstractVector && return Int.(value)
+    throw(ArgumentError("subset.management_years must be an integer, an array, or 'all'"))
+end
 
 function subset_co2(input_path, output_path, years)
     isfile(output_path) && throw(ArgumentError("output already exists: $output_path"))
@@ -262,10 +273,11 @@ function prepare_subset(config_path::AbstractString)
     config = TOML.parsefile(config_path)
     settings = config["subset"]
     output_directory = resolve_path(config_path, settings["output_directory"])
-    management_year = Int(get(settings, "management_year", 2015))
+    management_year_selection = requested_management_years(settings)
+    climate_start_year = Int(get(settings, "climate_start_year", 2015))
     climate_year_setting = get(settings, "climate_years", [2015, 2016])
     climate_years = climate_year_setting isa Integer ?
-        collect(management_year:(management_year + Int(climate_year_setting) - 1)) :
+        collect(climate_start_year:(climate_start_year + Int(climate_year_setting) - 1)) :
         Int.(climate_year_setting)
     climate_source_start_year = Int(get(settings, "climate_source_start_year", 1901))
     chunk_length = Int(get(settings, "chunk_length", 31))
@@ -283,7 +295,9 @@ function prepare_subset(config_path::AbstractString)
             joinpath(output_directory, spec["output"]),
             spec["variable"];
             cft_indices = source_cft_indices,
-            years = management_years(input_path, spec["variable"], management_year),
+            years = management_years(
+                input_path, spec["variable"], management_year_selection,
+            ),
             require_365_days = false,
             chunk_length,
         )
@@ -322,7 +336,9 @@ function prepare_subset(config_path::AbstractString)
         )
     end
     println(
-        "Prepared 12 CFTs × rainfed/irrigated management for $management_year " *
+        "Prepared 12 CFTs × rainfed/irrigated management for " *
+        (isnothing(management_year_selection) ? "all available years " :
+         "years $(join(management_year_selection, ", ")) ") *
         "(12 shared residue bands), " *
         "and climate years $(join(selected_years, ", ")) in $output_directory",
     )
