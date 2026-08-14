@@ -5,6 +5,9 @@ using Test
 include(joinpath(@__DIR__, "..", "scripts", "prepare_global_cft_subset.jl"))
 
 @testset "Global CFT subset preparation" begin
+    @test dimension_kind("pft") === :cft
+    @test dimension_kind("cft") === :cft
+
     mktempdir() do directory
         management_path = joinpath(directory, "management.nc")
         NCDataset(management_path, "c") do dataset
@@ -51,6 +54,32 @@ include(joinpath(@__DIR__, "..", "scripts", "prepare_global_cft_subset.jl"))
             @test dataset.attrib["agrocosm_source_cft_indices"] == "1,2,1,2"
             @test dataset["landfrac"][:, 1, :, :] == dataset["landfrac"][:, 3, :, :]
             @test dataset["landfrac"][:, 2, :, :] == dataset["landfrac"][:, 4, :, :]
+        end
+
+        pft_path = joinpath(directory, "fertilizer_pft.nc")
+        NCDataset(pft_path, "c") do dataset
+            defDim(dataset, "pft", 4)
+            defDim(dataset, "time", 2)
+            defVar(dataset, "pft", Int32.(1:4), ("pft",))
+            defVar(dataset, "time", Int32[2000, 2001], ("time",))
+            defVar(
+                dataset, "fertilizer", reshape(Float32.(1:8), 4, 2),
+                ("pft", "time"),
+            )
+        end
+        pft_output = joinpath(directory, "fertilizer_2cfts.nc")
+        subset_netcdf(
+            pft_path, pft_output, "fertilizer";
+            cft_indices = [2, 4], years = [2000, 2001],
+            require_365_days = false, chunk_length = 1,
+        )
+        NCDataset(pft_output, "r") do dataset
+            @test size(dataset["fertilizer"]) == (2, 2)
+            @test dataset["pft"][:] == Int32[1, 2]
+            @test dataset.attrib["agrocosm_source_cft_indices"] == "2,4"
+            @test dataset["fertilizer"][:, :] == NCDataset(pft_path, "r") do source
+                source["fertilizer"][[2, 4], :]
+            end
         end
 
         @test isnothing(management_years(management_path, "landfrac", nothing))

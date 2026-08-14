@@ -2,7 +2,7 @@ using Dates
 using NCDatasets
 using TOML
 
-const CFT_DIMENSIONS = Set(("cft", "cft", "crop", "band"))
+const CFT_DIMENSIONS = Set(("pft", "cft", "crop", "band"))
 const TIME_DIMENSIONS = Set(("time", "year"))
 dimension_kind(name) = lowercase(String(name)) in CFT_DIMENSIONS ? :cft :
     lowercase(String(name)) in TIME_DIMENSIONS ? :time : :other
@@ -173,7 +173,7 @@ function subset_netcdf(
         if !isnothing(selected_cft_indices)
             cft_dimensions = filter(dimension -> dimension_kind(dimension) === :cft, dimensions)
             length(cft_dimensions) == 1 || throw(ArgumentError(
-                "$variable_name must contain exactly one cft/cft/crop/band dimension",
+                "$variable_name must contain exactly one pft/cft/crop/band dimension",
             ))
             cft_dimension = only(cft_dimensions)
             isempty(selected_cft_indices) && throw(ArgumentError("cft_indices must not be empty"))
