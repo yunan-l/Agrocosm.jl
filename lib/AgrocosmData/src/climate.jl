@@ -13,6 +13,7 @@ struct ClimateBlockReader{T <: AbstractFloat, TT, G, S, C}
     block_days::Int
     co2::CO2Series{T}
     calendar::String
+    nitrogen_deposition_year::Union{Nothing, Int}
 end
 
 """Read a two-column `year ppm` global annual CO₂ text file."""
@@ -114,6 +115,7 @@ function climate_blocks(
     end_year = nothing,
     block_days::Integer = 31,
     T::Type{<:AbstractFloat} = Float32,
+    nitrogen_deposition_year::Union{Nothing, Integer} = nothing,
 )
     block_days > 0 || throw(ArgumentError("block_days must be positive"))
     time, time_metadata = _climate_time(catalog)
@@ -128,6 +130,7 @@ function climate_blocks(
         throw(ArgumentError("CO₂ data do not cover all requested climate years"))
     return ClimateBlockReader{T, eltype(time), typeof(grid), typeof(selection), typeof(catalog)}(
         catalog, grid, selection, time, indices, Int(block_days), co2, calendar,
+        isnothing(nitrogen_deposition_year) ? nothing : Int(nitrogen_deposition_year),
     )
 end
 
@@ -212,7 +215,8 @@ function _daily_nitrogen_deposition(
     all(!isnothing(_date_month_day(value)) for value in block_time) || throw(ArgumentError(
         "daily climate dates are required when nitrogen deposition is configured",
     ))
-    years = unique(Int.(_calendar_year.(block_time)))
+    years = isnothing(reader.nitrogen_deposition_year) ?
+        unique(Int.(_calendar_year.(block_time))) : [reader.nitrogen_deposition_year]
     spec = dataset(reader.catalog, name)
     positions = _monthly_deposition_positions(spec, years)
     monthly = read_compact_variable(
@@ -228,7 +232,8 @@ function _daily_nitrogen_deposition(
     year_offsets = Dict(year => 12 * (index - 1) for (index, year) in pairs(years))
     daily = Matrix{T}(undef, length(block_time), size(monthly_values, 2))
     for day_index in eachindex(block_time)
-        year = _calendar_year(block_time[day_index])
+        year = isnothing(reader.nitrogen_deposition_year) ?
+            _calendar_year(block_time[day_index]) : reader.nitrogen_deposition_year
         month, day_of_month = _date_month_day(block_time[day_index])
         month_length = _NOLEAP_MONTH_LENGTHS[month]
         previous_month = month == 1 ? 12 : month - 1

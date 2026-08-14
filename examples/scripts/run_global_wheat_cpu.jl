@@ -467,6 +467,10 @@ function run_global_wheat(
     start_year = first(simulation_years)
     end_year = last(simulation_years)
     source_years = management_source_years(config, simulation_years)
+    management_config = config["management"]
+    management_mode = Symbol(lowercase(String(get(management_config, "mode", "fixed"))))
+    nitrogen_deposition_year = management_mode === :fixed ?
+        Int(get(management_config, "fixed_year", 2015)) : nothing
     landuse = read_management(
         catalog, :landuse, grid, cft_id;
         simulation_years = source_years, T = Float32, irrigated,
@@ -550,7 +554,7 @@ function run_global_wheat(
     warmup_reader = climate_blocks(
         catalog, grid;
         selection, start_year = warmup_start_year, end_year = warmup_end_year,
-        block_days = 365, T = Float32,
+        block_days = 365, T = Float32, nitrogen_deposition_year,
     )
     climate_days(warmup_reader) == 365 * length(warmup_years) || error(
         "warm-up climate must contain complete 365-day years",
@@ -569,6 +573,7 @@ function run_global_wheat(
         reader = climate_blocks(
             catalog, grid;
             selection, start_year, end_year, block_days = 365, T = Float32,
+            nitrogen_deposition_year,
         )
         climate_days(reader) == expected_days || error("expected exactly $expected_days forcing days")
         first_block = read_climate_block(reader, 1)
@@ -793,7 +798,7 @@ function run_global_wheat(
     diagnostic_reader = climate_blocks(
         catalog, grid;
         selection = diagnostic_selection, start_year, end_year,
-        block_days = 365, T = Float32,
+        block_days = 365, T = Float32, nitrogen_deposition_year,
     )
     diagnostic = create_simulation(
         diagnostic_initial, diagnostic_selection, config, expected_days, backend.device, cft_id;
@@ -803,7 +808,7 @@ function run_global_wheat(
         catalog, grid;
         selection = diagnostic_selection,
         start_year = warmup_start_year, end_year = warmup_end_year,
-        block_days = 365, T = Float32,
+        block_days = 365, T = Float32, nitrogen_deposition_year,
     )
     diagnostic_warmup_landuse = read_management(
         catalog, :landuse, grid, cft_id;
