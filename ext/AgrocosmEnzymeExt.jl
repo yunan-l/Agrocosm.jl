@@ -1258,6 +1258,88 @@ function Agrocosm.enzyme_seasonal_soil_loss(
     return _enzyme_seasonal_loss_value(losses, context)
 end
 
+"""
+    Agrocosm.enzyme_seasonal_joint_loss(
+        theta_cft, theta_soil, state, base_cft, base_parameters,
+        cft_parameter_names, soil_parameter_names, climate, days,
+        layer_depth, context,
+    )
+
+Accumulate one fixed-event seasonal loss while differentiating selected CFT
+and soil fields together. Existing CFT-only and soil-only entry points remain
+unchanged.
+"""
+function Agrocosm.enzyme_seasonal_joint_loss(
+    theta_cft::AbstractVector{T},
+    theta_soil::AbstractVector{T},
+    state::Agrocosm.ModelState,
+    base_cft::Agrocosm.CFTParameters,
+    base_parameters::Agrocosm.ModelParameters,
+    cft_parameter_names::Tuple,
+    soil_parameter_names::Tuple,
+    climate,
+    days::Tuple,
+    layer_depth,
+    context::Agrocosm.ADSeasonContext;
+    irrigation::Bool = false,
+) where {T <: AbstractFloat}
+    cft = _replace_cft_parameters(base_cft, theta_cft, cft_parameter_names)
+    model_parameters = _replace_model_parameters(
+        base_parameters, theta_soil, soil_parameter_names,
+    )
+    losses = _ADSeasonalLossAccumulator(zero(T), zero(T), zero(T))
+    for index in eachindex(days)
+        _enzyme_continuous_transition!(
+            state,
+            cft,
+            model_parameters,
+            climate,
+            days[index],
+            :et,
+            layer_depth,
+            irrigation,
+        )
+        _enzyme_add_seasonal_loss!(losses, state, index, context)
+    end
+    return _enzyme_seasonal_loss_value(losses, context)
+end
+
+function _enzyme_seasonal_joint_loss_block(
+    theta_cft::AbstractVector{T},
+    theta_soil::AbstractVector{T},
+    state::Agrocosm.ModelState,
+    base_cft::Agrocosm.CFTParameters,
+    base_parameters::Agrocosm.ModelParameters,
+    cft_parameter_names::Tuple,
+    soil_parameter_names::Tuple,
+    climate,
+    days::Tuple,
+    layer_depth,
+    context::Agrocosm.ADSeasonContext,
+    day_range::UnitRange{Int},
+    irrigation::Bool,
+) where {T <: AbstractFloat}
+    cft = _replace_cft_parameters(base_cft, theta_cft, cft_parameter_names)
+    model_parameters = _replace_model_parameters(
+        base_parameters, theta_soil, soil_parameter_names,
+    )
+    losses = _ADSeasonalLossAccumulator(zero(T), zero(T), zero(T))
+    for index in day_range
+        _enzyme_continuous_transition!(
+            state,
+            cft,
+            model_parameters,
+            climate,
+            days[index],
+            :et,
+            layer_depth,
+            irrigation,
+        )
+        _enzyme_add_seasonal_loss!(losses, state, index, context)
+    end
+    return _enzyme_seasonal_loss_value(losses, context)
+end
+
 function _enzyme_seasonal_soil_loss_block(
     theta_soil::AbstractVector{T},
     state::Agrocosm.ModelState,
@@ -1365,6 +1447,101 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
         primal = reverse_primal,
         forward_primal = forward_primal,
         gradient,
+        block_days = Int(block_days),
+        block_ranges = ranges,
+    )
+end
+
+"""Compute one checkpointed reverse gradient for CFT and soil parameters."""
+function Agrocosm.enzyme_seasonal_joint_gradient_blockwise(
+    theta_cft::AbstractVector{T},
+    theta_soil::AbstractVector{T},
+    state_factory::F,
+    base_cft::Agrocosm.CFTParameters,
+    base_parameters::Agrocosm.ModelParameters,
+    cft_parameter_names::Tuple,
+    soil_parameter_names::Tuple,
+    climate,
+    days::Tuple,
+    layer_depth,
+    context::Agrocosm.ADSeasonContext;
+    block_days::Integer = 30,
+    irrigation::Bool = false,
+) where {T <: AbstractFloat, F}
+    length(theta_cft) == length(cft_parameter_names) || throw(DimensionMismatch(
+        "CFT parameter values and names must have identical lengths",
+    ))
+    length(theta_soil) == length(soil_parameter_names) || throw(DimensionMismatch(
+        "soil parameter values and names must have identical lengths",
+    ))
+    length(days) == length(context.growth_mask) || throw(DimensionMismatch(
+        "days and context must have identical lengths",
+    ))
+    ranges = _seasonal_block_ranges(days, Int(block_days))
+    isempty(ranges) && throw(ArgumentError("days must not be empty"))
+
+    state, _ = _state_and_shadow(state_factory)
+    Agrocosm.enzyme_prepare_daily_state!(state)
+    snapshots = Vector{typeof(state)}(undef, length(ranges))
+    forward_primal = zero(T)
+    for (block_index, day_range) in enumerate(ranges)
+        snapshots[block_index] = deepcopy(state)
+        forward_primal += _enzyme_seasonal_joint_loss_block(
+            theta_cft,
+            theta_soil,
+            state,
+            base_cft,
+            base_parameters,
+            cft_parameter_names,
+            soil_parameter_names,
+            climate,
+            days,
+            layer_depth,
+            context,
+            day_range,
+            irrigation,
+        )
+    end
+
+    cft_gradient = zeros(T, length(theta_cft))
+    soil_gradient = zeros(T, length(theta_soil))
+    state_cotangent = nothing
+    reverse_primal = zero(T)
+    for block_index in length(ranges):-1:1
+        block_state = deepcopy(snapshots[block_index])
+        block_shadow = state_cotangent === nothing ?
+            Agrocosm.enzyme_zero_tangent(block_state) : deepcopy(state_cotangent)
+        block_cft_gradient = zeros(T, length(theta_cft))
+        block_soil_gradient = zeros(T, length(theta_soil))
+        day_range = ranges[block_index]
+        result = Enzyme.autodiff(
+            Enzyme.set_runtime_activity(Enzyme.ReverseWithPrimal),
+            _enzyme_seasonal_joint_loss_block,
+            Enzyme.Duplicated(theta_cft, block_cft_gradient),
+            Enzyme.Duplicated(theta_soil, block_soil_gradient),
+            Enzyme.Duplicated(block_state, block_shadow),
+            Enzyme.Const(base_cft),
+            Enzyme.Const(base_parameters),
+            Enzyme.Const(cft_parameter_names),
+            Enzyme.Const(soil_parameter_names),
+            Enzyme.Const(climate),
+            Enzyme.Const(days),
+            Enzyme.Const(layer_depth),
+            Enzyme.Const(context),
+            Enzyme.Const(day_range),
+            Enzyme.Const(irrigation),
+        )
+        reverse_primal += result[2]
+        cft_gradient .+= block_cft_gradient
+        soil_gradient .+= block_soil_gradient
+        state_cotangent = block_shadow
+    end
+
+    return (;
+        primal = reverse_primal,
+        forward_primal,
+        cft_gradient,
+        soil_gradient,
         block_days = Int(block_days),
         block_ranges = ranges,
     )

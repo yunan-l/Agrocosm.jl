@@ -107,6 +107,8 @@ export enzyme_seasonal_loss
 export enzyme_seasonal_gradient_blockwise
 export enzyme_seasonal_soil_loss
 export enzyme_seasonal_soil_gradient_blockwise
+export enzyme_seasonal_joint_loss
+export enzyme_seasonal_joint_gradient_blockwise
 export enzyme_management_yield_loss, enzyme_management_yield_split_loss
 export enzyme_joint_adaptation_yield_loss
 

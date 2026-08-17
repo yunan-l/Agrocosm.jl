@@ -221,6 +221,22 @@ function enzyme_seasonal_soil_gradient_blockwise(args...; kwargs...)
 end
 
 """Fallback raised when Enzyme has not been loaded as an optional extension."""
+function enzyme_seasonal_joint_loss(args...; kwargs...)
+    throw(ArgumentError(
+        "Enzyme is not loaded; add Enzyme to the active environment before " *
+        "calling enzyme_seasonal_joint_loss",
+    ))
+end
+
+"""Fallback raised when Enzyme has not been loaded as an optional extension."""
+function enzyme_seasonal_joint_gradient_blockwise(args...; kwargs...)
+    throw(ArgumentError(
+        "Enzyme is not loaded; add Enzyme to the active environment before " *
+        "calling enzyme_seasonal_joint_gradient_blockwise",
+    ))
+end
+
+"""Fallback raised when Enzyme has not been loaded as an optional extension."""
 function enzyme_management_yield_loss(args...; kwargs...)
     throw(ArgumentError(
         "Enzyme is not loaded; add Enzyme to the active environment before " *
