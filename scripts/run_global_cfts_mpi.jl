@@ -127,7 +127,11 @@ function merge_partition_outputs(output_paths, allocation_paths, output_path)
     return output_path
 end
 
-function merge_mpi_rank_products(rank_manifests, output_root)
+function merge_mpi_rank_products(
+    rank_manifests,
+    output_root;
+    manifest_path = joinpath(output_root, "cft_batch_manifest.toml"),
+)
     manifests = TOML.parsefile.(rank_manifests)
     batch_maps = [Dict(String(batch["name"]) => batch for batch in manifest["batches"])
                   for manifest in manifests]
@@ -146,7 +150,9 @@ function merge_mpi_rank_products(rank_manifests, output_root)
         )
         allocation_paths = String.(getindex.(batches, "pool_allocation"))
         all(isfile, allocation_paths) || error("MPI allocation partition missing for $name")
-        merged_directory = joinpath(output_root, "merged", "batches", name)
+        # Publish merged MPI products through the same batches/<patch> contract
+        # as the single-device runner. Rank-local products remain temporary.
+        merged_directory = joinpath(output_root, "batches", name)
         merged_allocation = merge_partition_allocations(
             allocation_paths,
             joinpath(
@@ -177,15 +183,14 @@ function merge_mpi_rank_products(rank_manifests, output_root)
             "production_output" => isempty(merged_output) ? "" : abspath(merged_output),
         ))
     end
-    merged_manifest = joinpath(output_root, "merged", "cft_batch_manifest.toml")
-    write_report(merged_manifest, Dict(
+    write_report(manifest_path, Dict(
         "schema_version" => "1",
         "repository_commit" => _repository_commit(),
         "partition_count" => length(rank_manifests),
         "batches" => products,
         "created_at" => string(now()),
     ))
-    return merged_manifest
+    return manifest_path
 end
 
 function run_global_cfts_mpi(
@@ -205,7 +210,9 @@ function run_global_cfts_mpi(
         joinpath(output_base, "batches", batch_name(cft_id, irrigated))
     output_root = joinpath(scoped_output, "mpi_$(lpad(count, 4, '0'))_ranks")
     mpi_manifest_path = joinpath(output_root, "mpi_manifest.toml")
-    merged_manifest = joinpath(output_root, "merged", "cft_batch_manifest.toml")
+    # Independent CFT jobs may run concurrently. Keep the resume manifest
+    # patch-local so jobs never overwrite one another.
+    merged_manifest = joinpath(scoped_output, "cft_batch_manifest.toml")
     if cleanup_rank_outputs
         locally_complete = false
         if isfile(mpi_manifest_path)
@@ -246,7 +253,11 @@ function run_global_cfts_mpi(
         rank_manifests = [joinpath(path, "cft_batch_manifest.toml")
                           for path in rank_directories]
         all(isfile, rank_manifests) || error("one or more MPI rank manifests are missing")
-        merge_mpi_rank_products(rank_manifests, output_root) == merged_manifest || error(
+        merge_mpi_rank_products(
+            rank_manifests,
+            output_base;
+            manifest_path = merged_manifest,
+        ) == merged_manifest || error(
             "unexpected merged MPI manifest path",
         )
         write_report(mpi_manifest_path, Dict(
