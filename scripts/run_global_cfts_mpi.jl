@@ -200,9 +200,27 @@ function run_global_cfts_mpi(
     configured_output = abspath(config["paths"]["output_directory"])
     mpi_config = get(config, "mpi", Dict{String, Any}())
     output_base = abspath(get(mpi_config, "output_directory", configured_output))
+    cleanup_rank_outputs = Bool(get(mpi_config, "cleanup_rank_outputs", false))
     scoped_output = isnothing(cft_id) ? output_base :
-        joinpath(output_base, batch_name(cft_id, irrigated))
+        joinpath(output_base, "batches", batch_name(cft_id, irrigated))
     output_root = joinpath(scoped_output, "mpi_$(lpad(count, 4, '0'))_ranks")
+    mpi_manifest_path = joinpath(output_root, "mpi_manifest.toml")
+    merged_manifest = joinpath(output_root, "merged", "cft_batch_manifest.toml")
+    if cleanup_rank_outputs
+        locally_complete = false
+        if isfile(mpi_manifest_path)
+            manifest = TOML.parsefile(mpi_manifest_path)
+            merged_manifest = String(get(manifest, "merged_manifest", ""))
+            locally_complete = get(manifest, "config_fingerprint", "") ==
+                               _file_fingerprint(config_path) &&
+                               get(manifest, "rank_count", 0) == count &&
+                               isfile(merged_manifest)
+        end
+        if mpi_resume_consensus(comm, locally_complete)
+            rank == 0 && println("MPI batch already merged: $merged_manifest")
+            return merged_manifest
+        end
+    end
     rank_directory = joinpath(output_root, "rank_$(lpad(rank, 4, '0'))")
     convergence_reducer = (converged_cells, total_cells) ->
         mpi_warmup_convergence_reducer(comm, converged_cells, total_cells)
@@ -228,21 +246,29 @@ function run_global_cfts_mpi(
         rank_manifests = [joinpath(path, "cft_batch_manifest.toml")
                           for path in rank_directories]
         all(isfile, rank_manifests) || error("one or more MPI rank manifests are missing")
-        merged_manifest = merge_mpi_rank_products(rank_manifests, output_root)
-        write_report(joinpath(output_root, "mpi_manifest.toml"), Dict(
+        merge_mpi_rank_products(rank_manifests, output_root) == merged_manifest || error(
+            "unexpected merged MPI manifest path",
+        )
+        write_report(mpi_manifest_path, Dict(
             "schema_version" => "1",
             "repository_commit" => _repository_commit(),
             "config_path" => abspath(config_path),
             "config_fingerprint" => _file_fingerprint(config_path),
             "rank_count" => count,
+            "rank_outputs_retained" => !cleanup_rank_outputs,
             "rank_directories" => rank_directories,
             "rank_manifests" => rank_manifests,
             "merged_manifest" => merged_manifest,
             "created_at" => string(now()),
         ))
+        if cleanup_rank_outputs
+            foreach(rank_directories) do directory
+                rm(directory; recursive = true, force = true)
+            end
+        end
     end
     MPI.Barrier(comm)
-    return rank_manifest
+    return merged_manifest
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
@@ -257,7 +283,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
 
     MPI.Init()
     try
-        println(run_global_cfts_mpi(abspath(ARGS[1]); cft_id, irrigated))
+        result = run_global_cfts_mpi(abspath(ARGS[1]); cft_id, irrigated)
+        MPI.Comm_rank(MPI.COMM_WORLD) == 0 && println(result)
     catch exception
         rank = MPI.Comm_rank(MPI.COMM_WORLD)
         println(stderr, "MPI rank $rank failed: ", sprint(showerror, exception, catch_backtrace()))
