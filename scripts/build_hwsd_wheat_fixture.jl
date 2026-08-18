@@ -2,7 +2,7 @@ using Agrocosm
 using JLD2
 
 if !isdefined(@__MODULE__, :AgrocosmData)
-    include(joinpath(@__DIR__, "..", "..", "lib", "AgrocosmData", "src", "AgrocosmData.jl"))
+    include(joinpath(@__DIR__, "..", "lib", "AgrocosmData", "src", "AgrocosmData.jl"))
 end
 import .AgrocosmData: CFTRegistry, DATA_SCHEMA_VERSION, DatasetCatalog, DatasetSpec,
     HWSD_CN_PREPROCESSING_VERSION, SoilCNTargets, SoilPoolAllocation, crop_inputs,
@@ -18,7 +18,7 @@ const WHEAT_FIXTURE_GRID_INDICES = (
 )
 
 length(ARGS) in (4, 5) || error(
-    "usage: julia --project=. examples/scripts/build_hwsd_wheat_fixture.jl " *
+    "usage: julia --project=. scripts/build_hwsd_wheat_fixture.jl " *
     "INPUT_DATA_DIR HWSD_PROFILE_DIR ALLOCATION_PATH EXAMPLES_OUTPUT [NOTEBOOK_OUTPUT]",
 )
 

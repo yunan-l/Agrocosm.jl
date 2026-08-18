@@ -4,7 +4,7 @@ using NCDatasets
 using TOML
 
 if !isdefined(@__MODULE__, :AgrocosmData)
-    include(joinpath(@__DIR__, "..", "..", "lib", "AgrocosmData", "src", "AgrocosmData.jl"))
+    include(joinpath(@__DIR__, "..", "lib", "AgrocosmData", "src", "AgrocosmData.jl"))
 end
 import .AgrocosmData: CFTRegistry, DATA_SCHEMA_VERSION, DatasetCatalog, DatasetSpec,
     HWSD_CN_PREPROCESSING_VERSION, PatchDomain, SoilCNTargets, SoilPoolAllocation,
@@ -459,12 +459,36 @@ function balance_report(simulation, validation)
     )
 end
 
+"""Return one balanced, contiguous, zero-based partition of a cell selection."""
+function partition_cell_selection(
+    selection::AgrocosmData.CellSelection,
+    rank::Integer,
+    count::Integer,
+)
+    count > 0 || throw(ArgumentError("partition count must be positive"))
+    0 <= rank < count || throw(ArgumentError("partition rank must be in 0:$(count - 1)"))
+    cells = length(selection.cell_ids)
+    cells >= count || throw(ArgumentError(
+        "cannot divide $cells selected cells among $count non-empty partitions",
+    ))
+    base, remainder = divrem(cells, count)
+    length_for_rank = base + (rank < remainder)
+    first_index = rank * base + min(rank, remainder) + 1
+    indices = first_index:(first_index + length_for_rank - 1)
+    return AgrocosmData.CellSelection(
+        selection.compact_indices[indices],
+        selection.cell_ids[indices],
+    )
+end
+
 function run_global_wheat(
     config_path;
     backend_override = nothing,
     cft_id::Integer = 1,
     irrigated::Bool = false,
     output_subdirectory::Union{Nothing, AbstractString} = nothing,
+    partition_rank::Integer = 0,
+    partition_count::Integer = 1,
 )
     config = TOML.parsefile(config_path)
     paths = config["paths"]
@@ -519,6 +543,10 @@ function run_global_wheat(
             grid, selection.compact_indices[1:min(cell_limit, length(selection.cell_ids))],
         )
     end
+    eligible_cell_count = length(selection.cell_ids)
+    if partition_count != 1 || partition_rank != 0
+        selection = partition_cell_selection(selection, partition_rank, partition_count)
+    end
     excluded_landfrac = sum(landfrac[excluded])
     write_report(joinpath(output_directory, "selection_qc.toml"), Dict(
         "landfrac_positive_cells" => length(crop_mask.selection.cell_ids),
@@ -526,7 +554,10 @@ function run_global_wheat(
         "excluded_phu_cells" => count(excluded),
         "excluded_landfrac_sum" => excluded_landfrac,
         "excluded_landfrac_fraction" => excluded_landfrac / sum(landfrac),
+        "eligible_cells" => eligible_cell_count,
         "run_cells" => length(selection.cell_ids),
+        "partition_rank" => Int(partition_rank),
+        "partition_count" => Int(partition_count),
     ))
     hwsd = load_hwsd_targets(paths, selection)
     pool_allocation = haskey(paths, "pool_allocation") ?

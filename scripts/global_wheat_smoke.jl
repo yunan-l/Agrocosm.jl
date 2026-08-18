@@ -1,7 +1,7 @@
 using Agrocosm
 
 if !isdefined(@__MODULE__, :AgrocosmData)
-    include(joinpath(@__DIR__, "..", "..", "lib", "AgrocosmData", "src", "AgrocosmData.jl"))
+    include(joinpath(@__DIR__, "..", "lib", "AgrocosmData", "src", "AgrocosmData.jl"))
 end
 import .AgrocosmData: CFTRegistry, DATA_SCHEMA_VERSION, DatasetCatalog, DatasetSpec,
     HWSD_CN_PREPROCESSING_VERSION, SoilCNTargets, build_crop_mask, climate_forcings,
@@ -9,7 +9,7 @@ import .AgrocosmData: CFTRegistry, DATA_SCHEMA_VERSION, DatasetCatalog, DatasetS
     read_soil_data, select_cells
 
 length(ARGS) == 2 || error(
-    "usage: julia --project=. examples/scripts/global_wheat_smoke.jl " *
+    "usage: julia --project=. scripts/global_wheat_smoke.jl " *
     "INPUT_DATA_DIR HWSD_PROFILE_DIR",
 )
 

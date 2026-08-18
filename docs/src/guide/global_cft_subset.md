@@ -114,9 +114,9 @@ only a portable test fixture, not a scientifically complete experiment.
 Copy and edit the production configuration:
 
 ```bash
-cp examples/scripts/global_wheat_cpu.example.toml global_wheat_cpu.toml
+cp scripts/global_wheat_cpu.example.toml global_wheat_cpu.toml
 
-julia --project=. examples/scripts/run_global_wheat_cpu.jl \
+julia --project=. scripts/run_global_wheat_cpu.jl \
   /absolute/path/global_wheat_cpu.toml
 ```
 
@@ -167,7 +167,7 @@ Use a separate output directory from the CPU baseline, then run:
 
 ```bash
 JULIA_NUM_THREADS=4 julia --project=. \
-  examples/scripts/run_global_wheat_gpu.jl \
+  scripts/run_global_wheat_gpu.jl \
   /absolute/path/global_wheat_gpu.toml
 ```
 

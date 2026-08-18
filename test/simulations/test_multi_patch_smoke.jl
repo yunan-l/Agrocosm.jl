@@ -1,4 +1,4 @@
-include(joinpath(@__DIR__, "..", "..", "examples", "scripts", "run_global_cfts_cpu.jl"))
+include(joinpath(@__DIR__, "..", "..", "scripts", "run_global_cfts_cpu.jl"))
 
 @testset "multi-CFT patch selection, state isolation, and batch configuration" begin
     high_throughput_closure = percolation_energy_closure(
@@ -16,6 +16,14 @@ include(joinpath(@__DIR__, "..", "..", "examples", "scripts", "run_global_cfts_c
     @test requested_crop_systems(Dict("cfts" => Dict(
         "cft_ids" => "all", "water_systems" => ["rainfed", "irrigated"],
     ))) == [(cft_id, irrigated) for cft_id in 1:length(CFTS) for irrigated in (false, true)]
+    selection = AgrocosmData.CellSelection(11:20, 101:110)
+    partitions = [partition_cell_selection(selection, rank, 3) for rank in 0:2]
+    @test length.(getproperty.(partitions, :cell_ids)) == [4, 3, 3]
+    @test reduce(vcat, getproperty.(partitions, :cell_ids)) == selection.cell_ids
+    @test all(isempty(intersect(partitions[i].cell_ids, partitions[j].cell_ids))
+        for i in eachindex(partitions) for j in (i + 1):length(partitions))
+    @test_throws ArgumentError partition_cell_selection(selection, 3, 3)
+    @test_throws ArgumentError partition_cell_selection(selection, 0, 11)
     patch_domain = combine_patch_domains([
         PatchDomain([1], [3], [42], [1], [false], Float32[0.2]),
         PatchDomain([1], [3], [42], [2], [true], Float32[0.3]),

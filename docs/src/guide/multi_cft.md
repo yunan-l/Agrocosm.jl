@@ -43,7 +43,7 @@ diagnostics but does not require free equilibrium; therefore its outputs are a
 production baseline, not a claimed long-term soil equilibrium.
 
 ```bash
-julia --project=. examples/scripts/run_global_cfts_cpu.jl \
+julia --project=. scripts/run_global_cfts_cpu.jl \
   /absolute/path/global_crops.toml
 ```
 
@@ -56,7 +56,7 @@ To run exactly one patch in a scheduler array or rerun one failed patch, pass
 its CFT identifier and water system on the command line:
 
 ```bash
-julia --project=. examples/scripts/run_global_cfts_gpu.jl \
+julia --project=. scripts/run_global_cfts_gpu.jl \
   /absolute/path/global_crops.toml 1 rainfed
 ```
 

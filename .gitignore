@@ -1,5 +1,7 @@
 /Manifest*.toml
 /test/Manifest.toml
+/environments/mpi/Manifest.toml
+/environments/mpi/LocalPreferences.toml
 /notebooks
 /docs/Manifest.toml
 /lib/AgrocosmData/Manifest.toml

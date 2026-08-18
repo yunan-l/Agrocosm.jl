@@ -142,6 +142,9 @@ function run_global_cfts(
     backend_override = :cpu,
     cft_id::Union{Nothing, Integer} = nothing,
     irrigated::Union{Nothing, Bool} = nothing,
+    output_directory_override::Union{Nothing, AbstractString} = nothing,
+    partition_rank::Integer = 0,
+    partition_count::Integer = 1,
 )
     config = TOML.parsefile(config_path)
     haskey(config["paths"], "pool_allocation") && error(
@@ -154,7 +157,8 @@ function run_global_cfts(
         isnothing(irrigated) && error("a single CFT run must specify rainfed or irrigated")
         systems = [(Int(cft_id), irrigated)]
     end
-    output_directory = abspath(config["paths"]["output_directory"])
+    output_directory = isnothing(output_directory_override) ?
+        abspath(config["paths"]["output_directory"]) : abspath(output_directory_override)
     haskey(config, "free_warmup") && haskey(config, "allocation_validation") && error(
         "use [free_warmup], not both [free_warmup] and legacy [allocation_validation]",
     )
@@ -208,6 +212,8 @@ function run_global_cfts(
             calibration_output_directory = calibration_directory,
             production_output_directory = production_directory,
             allocation_path, production_config_fingerprint,
+            partition_rank = Int(partition_rank),
+            partition_count = Int(partition_count),
         )
         try
             calibration_output_directory = calibration_directory
@@ -218,6 +224,8 @@ function run_global_cfts(
                     backend_override,
                     cft_id,
                     irrigated,
+                    partition_rank,
+                    partition_count,
                 )
                 isfile(allocation_path) || error("$name did not write a soil-pool allocation")
                 allocation_fingerprint = _file_fingerprint(allocation_path)
@@ -231,6 +239,8 @@ function run_global_cfts(
                     allocation_path, production_config_fingerprint,
                     allocation_fingerprint,
                     calibration_completed = true,
+                    partition_rank = Int(partition_rank),
+                    partition_count = Int(partition_count),
                 )
                 calibration_completed = true
             else
@@ -246,7 +256,14 @@ function run_global_cfts(
                 ))
                 continue
             end
-            result = run_global_wheat(production_config; backend_override, cft_id, irrigated)
+            result = run_global_wheat(
+                production_config;
+                backend_override,
+                cft_id,
+                irrigated,
+                partition_rank,
+                partition_count,
+            )
             isfile(production_output) || error("$name did not write production output")
             status = Dict{String, Any}(
                 "schema_version" => _CFT_BATCH_MANIFEST_SCHEMA_VERSION,
@@ -265,6 +282,8 @@ function run_global_cfts(
                 "production_output_bytes" => filesize(production_output),
                 "production_warmup_years" => result.warmup_years,
                 "production_warmup_converged" => result.warmup_converged,
+                "partition_rank" => Int(partition_rank),
+                "partition_count" => Int(partition_count),
                 "updated_at" => string(now()),
             )
             write_report(status_path, status)
@@ -278,6 +297,8 @@ function run_global_cfts(
                 production_output_directory = production_directory,
                 allocation_path, production_config_fingerprint,
                 calibration_completed,
+                partition_rank = Int(partition_rank),
+                partition_count = Int(partition_count),
                 error = sprint(showerror, exception),
             )
             rethrow()
@@ -291,6 +312,8 @@ function run_global_cfts(
         "config_fingerprint" => _file_fingerprint(config_path),
         "simulation_start_year" => first(simulation_years),
         "simulation_end_year" => last(simulation_years),
+        "partition_rank" => Int(partition_rank),
+        "partition_count" => Int(partition_count),
         "created_at" => string(now()),
         "batches" => batch_manifest,
     ))
