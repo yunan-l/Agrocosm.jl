@@ -65,6 +65,7 @@ function soil_evapotranspiration!(soil,
             reset_irrigated_storage_kernel!,
             soil_water_prognostic(soil).storage,
             size(soil_water_prognostic(soil).storage, 2),
+            soil_water_prognostic(soil).ice_storage,
             soil_water_auxiliary(soil).field_capacity,
             soil_properties(soil).layer_depth,
             size(soil_water_prognostic(soil).storage, 1),
@@ -109,12 +110,17 @@ end
 
 @kernel inbounds = true function reset_irrigated_storage_kernel!(
     storage::AbstractMatrix{T},
+    ice_storage::AbstractMatrix{T},
     field_capacity::AbstractMatrix{T},
     layer_depth::AbstractVector{T},
     layers::Integer,
 ) where {T <: AbstractFloat}
     cell = @index(Global)
     for layer in 1:layers
-        storage[layer, cell] = field_capacity[layer, cell] * layer_depth[layer]
+        target_storage = field_capacity[layer, cell] * layer_depth[layer]
+        storage[layer, cell] = max(
+            target_storage - ice_storage[layer, cell],
+            zero(T),
+        )
     end
 end

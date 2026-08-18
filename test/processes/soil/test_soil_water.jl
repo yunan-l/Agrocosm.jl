@@ -35,6 +35,31 @@ using Test
     @test sum(soil.water.storage) ≈ storage_after_infiltration - 3.0f0 atol = 1.0f-5
 end
 
+@testset "Full irrigation restores total water to field capacity" begin
+    soil = init_soil(1, soilparams.soildepth, identity)
+    crop = init_crop(1, identity)
+    state = test_model_state(crop, soil)
+
+    soil.properties.sand_fraction .= 0.4f0
+    soil.properties.clay_fraction .= 0.2f0
+    pedotransfer!(state)
+
+    target_storage = soil.water.field_capacity .* reshape(soil.properties.layer_depth, :, 1)
+
+    soil.water.storage .= 0.0f0
+    soil.water.ice_storage .= 0.0f0
+    soil_evapotranspiration!(state, state; irrigation = true)
+    @test soil.water.storage == target_storage
+
+    ice_storage = min.(target_storage .* 0.25f0, 10.0f0)
+    soil.water.storage .= 0.0f0
+    soil.water.ice_storage .= ice_storage
+    soil_evapotranspiration!(state, state; irrigation = true)
+
+    @test soil.water.storage .+ soil.water.ice_storage ≈ target_storage
+    @test soil.water.storage ≈ target_storage .- ice_storage
+end
+
 @testset "LPJmL infiltration iteration cap preserves water" begin
     soil = init_soil(1, soilparams.soildepth, identity)
     crop = init_crop(1, identity)
