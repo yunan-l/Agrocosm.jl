@@ -489,6 +489,7 @@ function run_global_wheat(
     output_subdirectory::Union{Nothing, AbstractString} = nothing,
     partition_rank::Integer = 0,
     partition_count::Integer = 1,
+    warmup_convergence_reducer = nothing,
 )
     config = TOML.parsefile(config_path)
     paths = config["paths"]
@@ -688,6 +689,7 @@ function run_global_wheat(
     warmup = agricultural_warmup!(
         warmup_simulation, warmup_forcings;
         warmup_options..., management_blocks = warmup_management_blocks,
+        convergence_reducer = warmup_convergence_reducer,
     )
     warmup_drift = agricultural_warmup_drift(warmup)
     write_report(

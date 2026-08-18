@@ -145,6 +145,8 @@ function run_global_cfts(
     output_directory_override::Union{Nothing, AbstractString} = nothing,
     partition_rank::Integer = 0,
     partition_count::Integer = 1,
+    warmup_convergence_reducer = nothing,
+    resume_consensus = nothing,
 )
     config = TOML.parsefile(config_path)
     haskey(config["paths"], "pool_allocation") && error(
@@ -197,6 +199,11 @@ function run_global_cfts(
         status_path = joinpath(batch_directory, "batch_status.toml")
         resumed = resume_completed_batches ?
             _resumable_batch(status_path, production_config_fingerprint) : nothing
+        if resume_completed_batches && resume_consensus !== nothing
+            globally_completed = resume_consensus(resumed !== nothing)
+            globally_completed isa Bool || error("resume consensus must return Bool")
+            resumed = globally_completed ? resumed : nothing
+        end
         if resumed !== nothing
             println("resuming completed $name")
             push!(batch_manifest, Dict{String, Any}(String(k) => v for (k, v) in pairs(resumed)))
@@ -205,6 +212,11 @@ function run_global_cfts(
 
         calibration_resume = resume_completed_batches ?
             _resumable_calibration(status_path, production_config_fingerprint) : nothing
+        if resume_completed_batches && resume_consensus !== nothing
+            globally_calibrated = resume_consensus(calibration_resume !== nothing)
+            globally_calibrated isa Bool || error("resume consensus must return Bool")
+            calibration_resume = globally_calibrated ? calibration_resume : nothing
+        end
         calibration_resume === nothing && _write_batch_status(
             status_path;
             status = "running", name, cft_id, irrigated,
@@ -226,6 +238,7 @@ function run_global_cfts(
                     irrigated,
                     partition_rank,
                     partition_count,
+                    warmup_convergence_reducer,
                 )
                 isfile(allocation_path) || error("$name did not write a soil-pool allocation")
                 allocation_fingerprint = _file_fingerprint(allocation_path)
@@ -263,6 +276,7 @@ function run_global_cfts(
                 irrigated,
                 partition_rank,
                 partition_count,
+                warmup_convergence_reducer,
             )
             isfile(production_output) || error("$name did not write production output")
             status = Dict{String, Any}(

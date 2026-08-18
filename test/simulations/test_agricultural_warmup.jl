@@ -115,6 +115,37 @@ end
     ) == 1
     @test consecutive == [1]
 
+    reduced_consecutive = [0]
+    @test Agrocosm._warmup_convergence!(
+        reduced_consecutive, stable_snapshot, stable_snapshot, stable_snapshot,
+        stable_correction, stable_correction;
+        relative_tolerance = 0.01,
+        pool_fraction_tolerance = 0.01,
+        consecutive_years = 1,
+        convergence_reducer = (converged, total) -> (converged + 2, total + 3),
+    ) == 0.75
+    @test reduced_consecutive == [1]
+
+    reduced = initialize_simulation(
+        cft1, initial;
+        indices = [1], T = Float32, days = 3,
+        diagnostics = false, fertilizer = :no,
+    )
+    reduced_report = agricultural_warmup!(
+        reduced, [climate];
+        years = 2,
+        maximum_years = 2,
+        target_constrained = true,
+        consecutive_years = 1,
+        relative_tolerance = 1.0e6,
+        pool_fraction_tolerance = 1.0e6,
+        required_converged_fraction = 0.75,
+        convergence_reducer = (converged, total) -> (converged + 2, total + 3),
+    )
+    @test reduced_report.converged
+    @test reduced_report.converged_cell_fraction == 0.75
+    @test reduced_report.unconverged_cells == 1
+
     capped = initialize_simulation(
         cft1, initial;
         indices = [1], T = Float32, days = 3,

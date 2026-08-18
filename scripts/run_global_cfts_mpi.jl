@@ -2,6 +2,192 @@ using MPI
 
 include(joinpath(@__DIR__, "run_global_cfts_cpu.jl"))
 
+function mpi_warmup_convergence_reducer(comm, converged_cells, total_cells)
+    global_converged = MPI.Allreduce(Int64(converged_cells), +, comm)
+    global_total = MPI.Allreduce(Int64(total_cells), +, comm)
+    return global_converged, global_total
+end
+
+function mpi_resume_consensus(comm, locally_ready)
+    ready_ranks = MPI.Allreduce(locally_ready ? Int32(1) : Int32(0), +, comm)
+    return ready_ranks == MPI.Comm_size(comm)
+end
+
+function merge_partition_allocations(paths, output_path)
+    allocations = read_soil_pool_allocation.(paths)
+    cft_id = only(unique(getproperty.(allocations, :cft_id)))
+    irrigated = only(unique(getproperty.(allocations, :irrigated)))
+    cell_ids = reduce(vcat, getproperty.(getproperty.(allocations, :selection), :cell_ids))
+    allunique(cell_ids) || error("MPI allocation partitions contain overlapping cells")
+    order = sortperm(cell_ids)
+    values(name) = reduce(hcat, getproperty.(allocations, name))[:, order]
+    selection = AgrocosmData.CellSelection(collect(eachindex(cell_ids)), cell_ids[order])
+    allocation = SoilPoolAllocation(
+        selection,
+        values(:fast_carbon_fraction),
+        values(:fast_nitrogen_fraction),
+        values(:c_shift_fast),
+        values(:c_shift_slow);
+        cft_id,
+        irrigated,
+        provenance = (
+            source = "mpi_partition_merge",
+            partition_count = length(paths),
+        ),
+    )
+    mkpath(dirname(output_path))
+    return write_soil_pool_allocation(output_path, allocation)
+end
+
+function merge_partition_outputs(output_paths, allocation_paths, output_path)
+    length(output_paths) == length(allocation_paths) || throw(DimensionMismatch(
+        "MPI output and allocation partition counts differ",
+    ))
+    allocations = read_soil_pool_allocation.(allocation_paths)
+    reference = NCDataset(first(output_paths), "r")
+    try
+        longitude = Float32.(reference["longitude"][:])
+        latitude = Float32.(reference["latitude"][:])
+        time = Int32.(reference["time"][:])
+        cellid = Int32.(reference["cellid"][:, :])
+        coordinate_names = Set(("longitude", "latitude", "time", "cellid"))
+        variable_names = sort!(filter(
+            name -> !(name in coordinate_names),
+            String.(collect(keys(reference))),
+        ))
+        expected_names = union(coordinate_names, Set(variable_names))
+        merged = Dict(name => fill(
+            Float32(NaN), length(longitude), length(latitude), length(time),
+        ) for name in variable_names)
+        positions = Dict{Int32, CartesianIndex{2}}()
+        for index in CartesianIndices(cellid)
+            positions[cellid[index]] = index
+        end
+        assigned = Set{Int32}()
+
+        for (path, allocation) in zip(output_paths, allocations)
+            NCDataset(path, "r") do dataset
+                Set(String.(collect(keys(dataset)))) == expected_names || error(
+                    "output variables differ across MPI partitions",
+                )
+                dataset["longitude"][:] == longitude || error(
+                    "longitude coordinates differ across MPI outputs",
+                )
+                dataset["latitude"][:] == latitude || error(
+                    "latitude coordinates differ across MPI outputs",
+                )
+                Int32.(dataset["time"][:]) == time || error(
+                    "time coordinates differ across MPI outputs",
+                )
+                Int32.(dataset["cellid"][:, :]) == cellid || error(
+                    "cell IDs differ across MPI outputs",
+                )
+                indices = map(allocation.selection.cell_ids) do cell_id
+                    cell_id in assigned && error("MPI output partitions overlap at cell $cell_id")
+                    haskey(positions, cell_id) || error(
+                        "MPI output cell $cell_id is absent from the canonical grid",
+                    )
+                    push!(assigned, cell_id)
+                    return positions[cell_id]
+                end
+                for name in variable_names
+                    size(dataset[name]) == size(merged[name]) || error(
+                        "variable $name dimensions differ across MPI outputs",
+                    )
+                    partition_values = dataset[name][:, :, :]
+                    for index in indices
+                        merged[name][index[1], index[2], :] .=
+                            partition_values[index[1], index[2], :]
+                    end
+                end
+            end
+        end
+
+        mkpath(dirname(output_path))
+        isfile(output_path) && rm(output_path; force = true)
+        NCDataset(output_path, "c") do dataset
+            defDim(dataset, "longitude", length(longitude))
+            defDim(dataset, "latitude", length(latitude))
+            defDim(dataset, "time", length(time))
+            defVar(dataset, "longitude", Float32, ("longitude",))[:] = longitude
+            defVar(dataset, "latitude", Float32, ("latitude",))[:] = latitude
+            defVar(dataset, "time", Int32, ("time",))[:] = time
+            defVar(dataset, "cellid", Int32, ("longitude", "latitude"))[:, :] = cellid
+            for name in variable_names
+                defVar(
+                    dataset, name, Float32, ("longitude", "latitude", "time"),
+                )[:, :, :] = merged[name]
+            end
+            dataset.attrib["source"] = "mpi_partition_merge"
+            dataset.attrib["partition_count"] = length(output_paths)
+        end
+    finally
+        close(reference)
+    end
+    return output_path
+end
+
+function merge_mpi_rank_products(rank_manifests, output_root)
+    manifests = TOML.parsefile.(rank_manifests)
+    batch_maps = [Dict(String(batch["name"]) => batch for batch in manifest["batches"])
+                  for manifest in manifests]
+    names = sort!(collect(keys(first(batch_maps))))
+    all(Set(keys(batch_map)) == Set(names) for batch_map in batch_maps) || error(
+        "MPI ranks completed different CFT batches",
+    )
+    products = Dict{String, Any}[]
+    for name in names
+        batches = [batch_map[name] for batch_map in batch_maps]
+        all(batch["cft_id"] == first(batches)["cft_id"] for batch in batches) || error(
+            "CFT IDs differ across MPI rank manifests for $name",
+        )
+        all(batch["irrigated"] == first(batches)["irrigated"] for batch in batches) || error(
+            "water systems differ across MPI rank manifests for $name",
+        )
+        allocation_paths = String.(getindex.(batches, "pool_allocation"))
+        all(isfile, allocation_paths) || error("MPI allocation partition missing for $name")
+        merged_directory = joinpath(output_root, "merged", "batches", name)
+        merged_allocation = merge_partition_allocations(
+            allocation_paths,
+            joinpath(
+                merged_directory, "calibration", "warmup_soil_pool_allocation.nc",
+            ),
+        )
+        output_paths = String.(getindex.(batches, "production_output"))
+        output_exists = isfile.(output_paths)
+        any(output_exists) && !all(output_exists) && error(
+            "only some MPI production partitions exist for $name",
+        )
+        merged_output = if all(output_exists)
+            merge_partition_outputs(
+                output_paths,
+                allocation_paths,
+                joinpath(
+                    merged_directory, "production", basename(first(output_paths)),
+                ),
+            )
+        else
+            ""
+        end
+        push!(products, Dict(
+            "name" => name,
+            "cft_id" => first(batches)["cft_id"],
+            "irrigated" => first(batches)["irrigated"],
+            "pool_allocation" => abspath(merged_allocation),
+            "production_output" => isempty(merged_output) ? "" : abspath(merged_output),
+        ))
+    end
+    merged_manifest = joinpath(output_root, "merged", "cft_batch_manifest.toml")
+    write_report(merged_manifest, Dict(
+        "schema_version" => "1",
+        "repository_commit" => _repository_commit(),
+        "partition_count" => length(rank_manifests),
+        "batches" => products,
+        "created_at" => string(now()),
+    ))
+    return merged_manifest
+end
+
 function run_global_cfts_mpi(
     config_path;
     cft_id::Union{Nothing, Integer} = nothing,
@@ -14,8 +200,13 @@ function run_global_cfts_mpi(
     configured_output = abspath(config["paths"]["output_directory"])
     mpi_config = get(config, "mpi", Dict{String, Any}())
     output_base = abspath(get(mpi_config, "output_directory", configured_output))
-    output_root = joinpath(output_base, "mpi_$(lpad(count, 4, '0'))_ranks")
+    scoped_output = isnothing(cft_id) ? output_base :
+        joinpath(output_base, batch_name(cft_id, irrigated))
+    output_root = joinpath(scoped_output, "mpi_$(lpad(count, 4, '0'))_ranks")
     rank_directory = joinpath(output_root, "rank_$(lpad(rank, 4, '0'))")
+    convergence_reducer = (converged_cells, total_cells) ->
+        mpi_warmup_convergence_reducer(comm, converged_cells, total_cells)
+    resume_consensus = locally_ready -> mpi_resume_consensus(comm, locally_ready)
 
     println("MPI rank $rank/$count: output=$rank_directory")
     rank_manifest = run_global_cfts(
@@ -26,6 +217,8 @@ function run_global_cfts_mpi(
         output_directory_override = rank_directory,
         partition_rank = rank,
         partition_count = count,
+        warmup_convergence_reducer = convergence_reducer,
+        resume_consensus,
     )
     MPI.Barrier(comm)
 
@@ -35,6 +228,7 @@ function run_global_cfts_mpi(
         rank_manifests = [joinpath(path, "cft_batch_manifest.toml")
                           for path in rank_directories]
         all(isfile, rank_manifests) || error("one or more MPI rank manifests are missing")
+        merged_manifest = merge_mpi_rank_products(rank_manifests, output_root)
         write_report(joinpath(output_root, "mpi_manifest.toml"), Dict(
             "schema_version" => "1",
             "repository_commit" => _repository_commit(),
@@ -43,6 +237,7 @@ function run_global_cfts_mpi(
             "rank_count" => count,
             "rank_directories" => rank_directories,
             "rank_manifests" => rank_manifests,
+            "merged_manifest" => merged_manifest,
             "created_at" => string(now()),
         ))
     end

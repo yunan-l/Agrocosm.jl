@@ -180,6 +180,25 @@ function _apply_warmup_targets!(state::ModelState, targets)
     )
 end
 
+function _warmup_convergence_counts(
+    consecutive,
+    consecutive_years::Integer,
+    convergence_reducer,
+)
+    converged_cells = count(>=(consecutive_years), consecutive)
+    total_cells = length(consecutive)
+    if convergence_reducer !== nothing
+        converged_cells, total_cells = convergence_reducer(converged_cells, total_cells)
+    end
+    0 <= converged_cells <= total_cells || throw(ArgumentError(
+        "warm-up convergence reduction returned invalid cell counts",
+    ))
+    total_cells > 0 || throw(ArgumentError(
+        "warm-up convergence reduction returned no cells",
+    ))
+    return converged_cells, total_cells
+end
+
 function _warmup_convergence!(
     consecutive::AbstractVector{<:Integer},
     initial,
@@ -190,6 +209,7 @@ function _warmup_convergence!(
     relative_tolerance::Real,
     pool_fraction_tolerance::Real,
     consecutive_years::Integer,
+    convergence_reducer = nothing,
 )
     relative_change(now, before) = (now .- before) ./ max.(abs.(before), one(eltype(now)))
     pool_fraction(fast, slow) = fast ./ max.(fast .+ slow, eps(eltype(fast)))
@@ -210,7 +230,10 @@ function _warmup_convergence!(
     stable .&= abs.(correction.nitrogen .- previous_correction.nitrogen) ./
         max.(abs.(initial.total_nitrogen), one(eltype(correction.nitrogen))) .<= relative_tolerance
     consecutive .= ifelse.(stable, consecutive .+ 1, 0)
-    return count(>=(consecutive_years), consecutive) / length(consecutive)
+    converged_cells, total_cells = _warmup_convergence_counts(
+        consecutive, consecutive_years, convergence_reducer,
+    )
+    return converged_cells / total_cells
 end
 
 function _warmup_options(
@@ -390,6 +413,7 @@ function agricultural_warmup!(
     relative_tolerance::Real = 0.01,
     pool_fraction_tolerance::Real = 0.01,
     required_converged_fraction::Real = 1.0,
+    convergence_reducer = nothing,
 )
     _warmup_options(
         years, maximum_years, consecutive_years, relative_tolerance,
@@ -476,6 +500,7 @@ function agricultural_warmup!(
                 consecutive, initial_soil, previous_soil, current_soil,
                 previous_correction, correction;
                 relative_tolerance, pool_fraction_tolerance, consecutive_years,
+                convergence_reducer,
             )
         end
         actual_years = year
@@ -494,6 +519,9 @@ function agricultural_warmup!(
     )
     clear_output_timeseries!(simulation.output)
     calibrated_c_shift = _warmup_c_shift_report(c_shift_workspace)
+    converged_cells, total_cells = _warmup_convergence_counts(
+        consecutive, consecutive_years, convergence_reducer,
+    )
     return (
         years = actual_years,
         days = 365 * actual_years,
@@ -507,7 +535,7 @@ function agricultural_warmup!(
         required_converged_fraction = Float64(required_converged_fraction),
         converged,
         converged_cell_fraction = converged_fraction[actual_years],
-        unconverged_cells = count(<(consecutive_years), consecutive),
+        unconverged_cells = total_cells - converged_cells,
         consecutive_stable_years = consecutive,
         initial_soil = initial_soil,
         soil = _warmup_history_view(history, actual_years),
@@ -542,6 +570,7 @@ function agricultural_warmup!(
     pool_fraction_tolerance::Real = 0.01,
     required_converged_fraction::Real = 1.0,
     management_blocks::Union{Nothing, AbstractVector} = nothing,
+    convergence_reducer = nothing,
 )
     _warmup_options(
         years, maximum_years, consecutive_years, relative_tolerance,
@@ -656,6 +685,7 @@ function agricultural_warmup!(
                 consecutive, initial_soil, previous_soil, current_soil,
                 previous_correction, correction;
                 relative_tolerance, pool_fraction_tolerance, consecutive_years,
+                convergence_reducer,
             )
         end
         actual_years = year
@@ -671,6 +701,9 @@ function agricultural_warmup!(
     )
     clear_output_timeseries!(simulation.output)
     calibrated_c_shift = _warmup_c_shift_report(c_shift_workspace)
+    converged_cells, total_cells = _warmup_convergence_counts(
+        consecutive, consecutive_years, convergence_reducer,
+    )
     return (
         years = actual_years,
         days = 365 * actual_years,
@@ -684,7 +717,7 @@ function agricultural_warmup!(
         required_converged_fraction = Float64(required_converged_fraction),
         converged,
         converged_cell_fraction = converged_fraction[actual_years],
-        unconverged_cells = count(<(consecutive_years), consecutive),
+        unconverged_cells = total_cells - converged_cells,
         consecutive_stable_years = consecutive,
         initial_soil = initial_soil,
         soil = _warmup_history_view(history, actual_years),
