@@ -174,6 +174,25 @@ function management_source_years(config, simulation_years)
     return collect(Int, simulation_years)
 end
 
+"""Resolve an optional fixed year for atmospheric nitrogen deposition."""
+function nitrogen_deposition_source_year(config)
+    climate = get(config, "climate", Dict{String, Any}())
+    management = config["management"]
+    default_mode = get(management, "mode", "fixed")
+    mode = Symbol(lowercase(String(get(
+        climate, "nitrogen_deposition_mode", default_mode,
+    ))))
+    mode in (:fixed, :transient) || error(
+        "climate.nitrogen_deposition_mode must be fixed or transient",
+    )
+    mode === :transient && return nothing
+    return Int(get(
+        climate,
+        "nitrogen_deposition_fixed_year",
+        get(management, "fixed_year", 2015),
+    ))
+end
+
 """Resolve production years, or the fixed-management anchor for calibration only."""
 function configured_simulation_years(config)
     run = config["run"]
@@ -510,10 +529,7 @@ function run_global_wheat(
     start_year = first(simulation_years)
     end_year = last(simulation_years)
     source_years = management_source_years(config, simulation_years)
-    management_config = config["management"]
-    management_mode = Symbol(lowercase(String(get(management_config, "mode", "fixed"))))
-    nitrogen_deposition_year = management_mode === :fixed ?
-        Int(get(management_config, "fixed_year", 2015)) : nothing
+    nitrogen_deposition_year = nitrogen_deposition_source_year(config)
     landuse = read_management(
         catalog, :landuse, grid, cft_id;
         simulation_years = source_years, T = Float32, irrigated,
