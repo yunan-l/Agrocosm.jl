@@ -472,8 +472,13 @@ function _enzyme_soil_evapotranspiration!(
     if irrigation
         field_capacity = Agrocosm.soil_water_auxiliary(state).field_capacity
         layer_depth = Agrocosm.soil_properties(state).layer_depth
+        ice_storage = water.ice_storage
         for cell in axes(storage, 2), layer in axes(storage, 1)
-            storage[layer, cell] = field_capacity[layer, cell] * layer_depth[layer]
+            target_storage = field_capacity[layer, cell] * layer_depth[layer]
+            storage[layer, cell] = max(
+                target_storage - ice_storage[layer, cell],
+                zero(eltype(storage)),
+            )
         end
     else
         for cell in eachindex(Agrocosm.crop_fluxes(state).carbon.gross_assimilation)

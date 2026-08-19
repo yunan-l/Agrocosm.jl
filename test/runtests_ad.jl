@@ -6,6 +6,7 @@ using Test
     include("ad/test_adapter_contract.jl")
     include("ad/test_enzyme_adapter.jl")
     include("ad/test_enzyme_daily_transition.jl")
+    include("ad/test_enzyme_irrigation.jl")
     include("ad/test_enzyme_management_adaptation.jl")
     include("ad/test_enzyme_seasonal_loss.jl")
     include("ad/test_enzyme_reverse.jl")
