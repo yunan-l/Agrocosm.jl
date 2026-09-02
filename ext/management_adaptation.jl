@@ -88,6 +88,7 @@ function Agrocosm.enzyme_management_yield_loss(
     layer_depth,
     context::Agrocosm.ManagementAdaptationContext;
     irrigation::Bool = false,
+    nitrogen_limit_vcmax::Bool = false,
 ) where {T <: AbstractFloat}
     length(theta) == 1 || throw(DimensionMismatch(
         "management adaptation expects theta = [total_fertilizer]",
@@ -103,7 +104,8 @@ function Agrocosm.enzyme_management_yield_loss(
     while day <= final_day
         _apply_management_fertilizer!(state, theta[1], context, day, model_parameters.lpjml)
         _enzyme_continuous_transition!(
-            state, cft, model_parameters, climate, day, :gpp, layer_depth, irrigation,
+            state, cft, model_parameters, climate, day, :gpp, layer_depth,
+            irrigation, nitrogen_limit_vcmax,
         )
         day += 1
     end
@@ -134,6 +136,7 @@ function Agrocosm.enzyme_management_yield_split_loss(
     layer_depth,
     context::Agrocosm.ManagementAdaptationContext;
     irrigation::Bool = false,
+    nitrogen_limit_vcmax::Bool = false,
 ) where {T <: AbstractFloat}
     length(theta) == 2 || throw(DimensionMismatch(
         "split management adaptation expects theta = [total_fertilizer, first_event_fraction]",
@@ -154,7 +157,8 @@ function Agrocosm.enzyme_management_yield_split_loss(
             state, theta[1], theta[2], context, day, model_parameters.lpjml,
         )
         _enzyme_continuous_transition!(
-            state, cft, model_parameters, climate, day, :gpp, layer_depth, irrigation,
+            state, cft, model_parameters, climate, day, :gpp, layer_depth,
+            irrigation, nitrogen_limit_vcmax,
         )
         day += 1
     end
@@ -190,6 +194,7 @@ function Agrocosm.enzyme_joint_adaptation_yield_loss(
     layer_depth,
     context::Agrocosm.ManagementAdaptationContext;
     irrigation::Bool = false,
+    nitrogen_limit_vcmax::Bool = false,
 ) where {T <: AbstractFloat}
     length(theta) == 6 || throw(DimensionMismatch(
         "joint adaptation expects [fertilizer, split, PHU scale, heat shift, " *
@@ -234,6 +239,7 @@ function Agrocosm.enzyme_joint_adaptation_yield_loss(
             :gpp,
             layer_depth,
             irrigation,
+            nitrogen_limit_vcmax,
         )
         day += 1
     end
