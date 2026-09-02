@@ -32,6 +32,12 @@ using Test
           position("transpiration!") < position("solve_lambda!")
     @test position("solve_lambda!") < position("crop_carbon!") <
           position("terminate_failed_crop!") < position("evaporation!")
+    @test position("solve_lambda!") < position("acquire_crop_nitrogen!") <
+          position("limit_vcmax_by_nitrogen!") <
+          position("recouple_nitrogen_water!") <
+          position("finalize_nitrogen_limited_transpiration!") <
+          position("crop_carbon!") <
+          position("allocate_crop_nitrogen!")
     @test position("evaporation!") <
           position("soil_evapotranspiration!") < position("post_crop_nitrogen_losses!")
 end

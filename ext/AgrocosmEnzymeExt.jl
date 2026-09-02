@@ -173,6 +173,7 @@ function _enzyme_crop_carbon!(
     air_temperature,
     soil_temperature,
     lpjmlparams,
+    include_biological_fixation_cost::Bool,
 )
     fluxes = Agrocosm.crop_fluxes(state)
     Agrocosm.respiration!(
@@ -184,7 +185,9 @@ function _enzyme_crop_carbon!(
         fluxes.carbon.leaf_respiration;
         lpjmlparams,
     )
-    Agrocosm.carbon_allocation!(cft, state)
+    Agrocosm.carbon_allocation!(
+        cft, state; include_biological_fixation_cost,
+    )
     return nothing
 end
 
@@ -245,6 +248,9 @@ end
     daylength,
     lpjmlparams,
     photoparams,
+    upper_bound = typeof(fac)(0.85),
+    max_iterations::Int = 30,
+    constrain_to_upper_bound::Bool = false,
 )
     T = typeof(fac)
     lambda = Agrocosm.compute_lambda_c3_solution(
@@ -258,6 +264,8 @@ end
         daylength,
         lpjmlparams,
         photoparams,
+        upper_bound,
+        max_iterations,
     )
     for _ in 1:8
         residual = fac * (one(T) - lambda) - Agrocosm.c3_adtmm_scalar_impl(
@@ -285,7 +293,9 @@ end
             lpjmlparams,
             photoparams,
         )
-        lambda -= residual / slope
+        updated_lambda = lambda - residual / slope
+        lambda = constrain_to_upper_bound ?
+            clamp(updated_lambda, zero(T), upper_bound) : updated_lambda
     end
     return lambda
 end
@@ -331,6 +341,148 @@ function _enzyme_solve_lambda_c3!(
             )
         else
             zero(T)
+        end
+    end
+    return nothing
+end
+
+function _enzyme_recouple_nitrogen_water_c3!(
+    state::Agrocosm.ModelState,
+    cft::Agrocosm.CFTParameters,
+    pet,
+    temperature,
+    co2,
+    lpjmlparams,
+    photoparams,
+)
+    T = eltype(Agrocosm.crop_photosynthesis_auxiliary(state).lambda)
+    photosynthesis = Agrocosm.crop_photosynthesis_auxiliary(state)
+    canopy = Agrocosm.crop_canopy_auxiliary(state)
+    crop = Agrocosm.crop_prognostic(state)
+    assimilation = Agrocosm.crop_fluxes(state).carbon.water_limited_assimilation
+    root_distribution = Agrocosm.crop_root_input(state).distribution
+    soil_water = Agrocosm.soil_water_auxiliary(state).relative_content
+    for cell in eachindex(photosynthesis.lambda)
+        if crop.phenology.is_growing[cell] == one(eltype(crop.phenology.is_growing)) &&
+           photosynthesis.lambda[cell] > zero(T) &&
+           photosynthesis.temperature_stress[cell] >= T(1e-2)
+            co2_cell = co2[length(co2) == 1 ? 1 : cell]
+            previous_lambda = photosynthesis.lambda[cell]
+            potential_conductance = canopy.canopy_conductance[cell]
+            limited_conductance = Agrocosm.compute_canopy_conductance(
+                assimilation[cell], co2_cell, pet.daylength[cell], canopy.fpar[cell],
+                T(cft.gmin), previous_lambda,
+            )
+            demand = Agrocosm.compute_transpiration_demand(
+                canopy.canopy_wet[cell], pet.eeq[cell], T(lpjmlparams.ALPHAM),
+                T(lpjmlparams.GM), limited_conductance,
+            )
+            root_water = zero(T)
+            for layer in axes(soil_water, 1)
+                root_water += soil_water[layer, cell] * root_distribution[layer]
+            end
+            supply = Agrocosm.compute_transpiration_supply(
+                T(cft.emax), root_water, crop.carbon.root[cell],
+            ) * T(cft.fpc)
+            canopy.canopy_conductance[cell] = limited_conductance
+
+            if Agrocosm.nitrogen_water_recoupling_required(
+                potential_conductance, limited_conductance, demand, supply,
+            )
+                constrained_conductance = Agrocosm.compute_actual_canopy_conductance(
+                    limited_conductance, supply, demand, canopy.canopy_wet[cell],
+                    pet.eeq[cell], T(lpjmlparams.ALPHAM), T(lpjmlparams.GM),
+                )
+                gpd, fac = Agrocosm.compute_canopy_water_supply(
+                    pet.daylength[cell], constrained_conductance, T(cft.gmin),
+                    canopy.fpar[cell], co2_cell,
+                )
+                if gpd > T(1e-5) && pet.daylength[cell] > zero(T) && co2_cell > zero(T)
+                    photosynthesis.lambda[cell] = _enzyme_smooth_lambda_c3(
+                        fac,
+                        photosynthesis.vcmax[cell],
+                        photosynthesis.temperature_stress[cell],
+                        T(cft.b),
+                        co2_cell,
+                        temperature[cell],
+                        canopy.apar[cell],
+                        pet.daylength[cell],
+                        lpjmlparams,
+                        photoparams,
+                        previous_lambda,
+                        20,
+                        true,
+                    )
+                end
+            end
+        end
+    end
+    return nothing
+end
+
+function _enzyme_refresh_potential_canopy_conductance!(state, cft, pet, co2)
+    T = eltype(Agrocosm.crop_photosynthesis_auxiliary(state).lambda)
+    photosynthesis = Agrocosm.crop_photosynthesis_auxiliary(state)
+    canopy = Agrocosm.crop_canopy_auxiliary(state)
+    crop = Agrocosm.crop_prognostic(state)
+    assimilation = Agrocosm.crop_fluxes(state).carbon.water_limited_assimilation
+    for cell in eachindex(photosynthesis.lambda)
+        if crop.phenology.is_growing[cell] == one(eltype(crop.phenology.is_growing)) &&
+           photosynthesis.lambda[cell] > zero(T) &&
+           photosynthesis.temperature_stress[cell] >= T(1e-2)
+            co2_cell = co2[length(co2) == 1 ? 1 : cell]
+            canopy.canopy_conductance[cell] = Agrocosm.compute_canopy_conductance(
+                assimilation[cell], co2_cell, pet.daylength[cell], canopy.fpar[cell],
+                T(cft.gmin), photosynthesis.lambda[cell],
+            )
+        end
+    end
+    return nothing
+end
+
+function _enzyme_finalize_nitrogen_limited_transpiration!(
+    state::Agrocosm.ModelState,
+    cft::Agrocosm.CFTParameters,
+    pet,
+    co2,
+    lpjmlparams,
+)
+    T = eltype(Agrocosm.crop_photosynthesis_auxiliary(state).lambda)
+    photosynthesis = Agrocosm.crop_photosynthesis_auxiliary(state)
+    canopy = Agrocosm.crop_canopy_auxiliary(state)
+    crop = Agrocosm.crop_prognostic(state)
+    assimilation = Agrocosm.crop_fluxes(state).carbon.water_limited_assimilation
+    transpiration = Agrocosm.crop_fluxes(state).water.transpiration_layer
+    root_distribution = Agrocosm.crop_root_input(state).distribution
+    soil_water = Agrocosm.soil_water_auxiliary(state)
+    for cell in eachindex(photosynthesis.lambda)
+        if crop.phenology.is_growing[cell] == one(eltype(crop.phenology.is_growing)) &&
+           photosynthesis.lambda[cell] > zero(T) &&
+           photosynthesis.temperature_stress[cell] >= T(1e-2)
+            co2_cell = co2[length(co2) == 1 ? 1 : cell]
+            final_conductance = Agrocosm.compute_canopy_conductance(
+                assimilation[cell], co2_cell, pet.daylength[cell], canopy.fpar[cell],
+                T(cft.gmin), photosynthesis.lambda[cell],
+            )
+            demand = Agrocosm.compute_transpiration_demand(
+                canopy.canopy_wet[cell], pet.eeq[cell], T(lpjmlparams.ALPHAM),
+                T(lpjmlparams.GM), final_conductance,
+            )
+            root_water = zero(T)
+            for layer in axes(soil_water.relative_content, 1)
+                root_water += soil_water.relative_content[layer, cell] *
+                    root_distribution[layer]
+            end
+            transpiration_scale = root_water > zero(T) ?
+                demand * canopy.fpar[cell] / root_water : zero(T)
+            for layer in axes(soil_water.relative_content, 1)
+                transpiration[layer, cell], _ = Agrocosm.compute_layer_transpiration(
+                    transpiration_scale, root_distribution[layer],
+                    soil_water.relative_content[layer, cell],
+                    soil_water.holding_capacity_storage[layer, cell],
+                )
+            end
+            canopy.canopy_conductance[cell] = final_conductance
         end
     end
     return nothing
@@ -679,26 +831,6 @@ function _enzyme_continuous_transition!(
         global_params,
         photo_params,
     )
-    if nitrogen_limit_vcmax
-        # Match the nitrogen-limited production path: derive demand and acquire
-        # nitrogen from the potential capacity before applying the leaf-N Vcmax
-        # constraint to the final photosynthesis evaluation.
-        Agrocosm.crop_nitrogen!(
-            state,
-            cft,
-            state,
-            Agrocosm.crop_photosynthesis_auxiliary(state).potential_vcmax,
-            daily_weather.temp;
-            auto_fertilizer = false,
-            lpjmlparams = global_params,
-        )
-        Agrocosm.limit_vcmax_by_nitrogen!(
-            state,
-            cft,
-            daily_weather.temp;
-            lpjmlparams = global_params,
-        )
-    end
     Agrocosm.photosynthesis!(
         Val(:C3),
         cft,
@@ -711,12 +843,72 @@ function _enzyme_continuous_transition!(
         lpjmlparams = global_params,
         photoparams = photo_params,
     )
+    if nitrogen_limit_vcmax
+        _enzyme_refresh_potential_canopy_conductance!(state, cft, pet, current_co2)
+        # Match the nitrogen-limited production path: derive demand and acquire
+        # nitrogen from the potential capacity before applying the leaf-N Vcmax
+        # constraint to the final photosynthesis evaluation.
+        Agrocosm.acquire_crop_nitrogen!(
+            state,
+            cft,
+            state,
+            Agrocosm.crop_photosynthesis_auxiliary(state).potential_vcmax,
+            daily_weather.temp;
+            auto_fertilizer = false,
+            include_storage_reserve = true,
+            biological_fixation = true,
+            lpjmlparams = global_params,
+        )
+        Agrocosm.limit_vcmax_by_nitrogen!(
+            state,
+            cft,
+            daily_weather.temp;
+            lpjmlparams = global_params,
+        )
+        Agrocosm.photosynthesis!(
+            Val(:C3),
+            cft,
+            state,
+            Agrocosm.crop_canopy_auxiliary(state).apar,
+            pet.daylength,
+            daily_weather.temp,
+            current_co2;
+            comp_vcmax = false,
+            lpjmlparams = global_params,
+            photoparams = photo_params,
+        )
+        _enzyme_recouple_nitrogen_water_c3!(
+            state,
+            cft,
+            pet,
+            daily_weather.temp,
+            current_co2,
+            global_params,
+            photo_params,
+        )
+        Agrocosm.photosynthesis!(
+            Val(:C3),
+            cft,
+            state,
+            Agrocosm.crop_canopy_auxiliary(state).apar,
+            pet.daylength,
+            daily_weather.temp,
+            current_co2;
+            comp_vcmax = false,
+            lpjmlparams = global_params,
+            photoparams = photo_params,
+        )
+        _enzyme_finalize_nitrogen_limited_transpiration!(
+            state, cft, pet, current_co2, global_params,
+        )
+    end
     _enzyme_crop_carbon!(
         state,
         cft,
         daily_weather.temp,
         Agrocosm.soil_thermal_prognostic(state).temperature,
         global_params,
+        nitrogen_limit_vcmax,
     )
     if nitrogen_limit_vcmax
         # Carbon allocation changes organ weights; redistribute the acquired
@@ -1072,6 +1264,7 @@ function Agrocosm.enzyme_seasonal_loss(
     layer_depth,
     context::Agrocosm.ADSeasonContext;
     irrigation::Bool = false,
+    nitrogen_limit_vcmax::Bool = false,
 ) where {T <: AbstractFloat}
     cft = _replace_cft_parameters(base_cft, theta, parameter_names)
     gpp_loss = zero(T)
@@ -1088,6 +1281,7 @@ function Agrocosm.enzyme_seasonal_loss(
             :et,
             layer_depth,
             irrigation,
+            nitrogen_limit_vcmax,
         )
         if context.growth_mask[day_index]
             crop_flux = Agrocosm.crop_fluxes(state)
@@ -1202,6 +1396,7 @@ function _enzyme_seasonal_loss_block(
     context::Agrocosm.ADSeasonContext,
     day_range::UnitRange{Int},
     irrigation::Bool,
+    nitrogen_limit_vcmax::Bool,
 ) where {T <: AbstractFloat}
     cft = _replace_cft_parameters(base_cft, theta, parameter_names)
     losses = _ADSeasonalLossAccumulator(zero(T), zero(T), zero(T))
@@ -1215,6 +1410,7 @@ function _enzyme_seasonal_loss_block(
             :et,
             layer_depth,
             irrigation,
+            nitrogen_limit_vcmax,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end
@@ -1588,6 +1784,7 @@ function Agrocosm.enzyme_seasonal_gradient_blockwise(
     context::Agrocosm.ADSeasonContext;
     block_days::Integer = 30,
     irrigation::Bool = false,
+    nitrogen_limit_vcmax::Bool = false,
 ) where {T <: AbstractFloat, F}
     length(days) == length(context.growth_mask) || throw(DimensionMismatch(
         "days and context must have identical lengths",
@@ -1613,6 +1810,7 @@ function Agrocosm.enzyme_seasonal_gradient_blockwise(
             context,
             day_range,
             irrigation,
+            nitrogen_limit_vcmax,
         )
     end
 
@@ -1639,6 +1837,7 @@ function Agrocosm.enzyme_seasonal_gradient_blockwise(
             Enzyme.Const(context),
             Enzyme.Const(day_range),
             Enzyme.Const(irrigation),
+            Enzyme.Const(nitrogen_limit_vcmax),
         )
         reverse_primal += result[2]
         gradient .+= block_gradient
@@ -1676,11 +1875,12 @@ function Agrocosm.enzyme_daily_transition_objective(
     observable::Symbol,
     layer_depth;
     irrigation::Bool = false,
+    nitrogen_limit_vcmax::Bool = false,
 ) where {T <: AbstractFloat}
     cft = _replace_cft_parameters(base_cft, theta, parameter_names)
     _enzyme_continuous_transition!(
         state, cft, global_parameters, climate, day, observable, layer_depth,
-        irrigation,
+        irrigation, nitrogen_limit_vcmax,
     )
     return _daily_transition_observable(state, observable)
 end

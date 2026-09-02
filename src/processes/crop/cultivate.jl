@@ -11,6 +11,7 @@ function cultivate!(crop,
                     lpjmlparams::LPJmLParams = lpjmlparams,
                     manure = false,
                     apply_prescribed_fertilizer::Bool = true,
+                    defer_second_fertilizer::Bool = false,
                     prescribed_phu = nothing,
                     prescribed_winter_type = nothing,
                     cftparameters::CFTParameters = cft1,
@@ -73,6 +74,7 @@ function cultivate!(crop,
         crop, ml, soil, day;
         fertilizer = apply_prescribed_fertilizer,
         manure = manure,
+        apply_second_dose = !defer_second_fertilizer,
         lpjmlparams = lpjmlparams,
     )
     return nothing

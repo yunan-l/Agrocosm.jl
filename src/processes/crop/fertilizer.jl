@@ -9,10 +9,16 @@ function fertilizer!(crop,
                      day;
                      fertilizer::Bool = true,
                      manure::Bool = false,
+                     apply_sowing_dose::Bool = true,
+                     apply_second_dose::Bool = true,
+                     reset_inputs::Bool = true,
                      lpjmlparams::LPJmLParams = lpjmlparams
 )
 
-    kernel_params = (; lpjmlparams, fertilizer, manure)
+    kernel_params = (;
+        lpjmlparams, fertilizer, manure, apply_sowing_dose,
+        apply_second_dose, reset_inputs,
+    )
 
     launch_1D!(
         fertilizer_kernel!,
@@ -56,16 +62,19 @@ end
 
     cell = @index(Global)
 
-    @unpack lpjmlparams, fertilizer, manure = kernel_params
+    @unpack lpjmlparams, fertilizer, manure, apply_sowing_dose,
+        apply_second_dose, reset_inputs = kernel_params
     @unpack manure_cn, nmanure_nh4_frac, nfert_split_frac, nfert_no3_frac = lpjmlparams
 
-    crop_manure_input[cell] = zero(T)
-    crop_fertilizer_input[cell] = zero(T)
+    if reset_inputs
+        crop_manure_input[cell] = zero(T)
+        crop_fertilizer_input[cell] = zero(T)
+    end
 
     if fertilizer || manure
         fphu = crop_phu[cell] > zero(T) ?
             min(one(T), crop_husum[cell] / crop_phu[cell]) : zero(T)
-        if crop_cal_sdate[cell] == day
+        if apply_sowing_dose && crop_cal_sdate[cell] == day
             if manure
                 manure_input = ml_manure[cell] * nfert_split_frac
                 soil_NH4[1, cell] += manure_input * nmanure_nh4_frac
@@ -83,14 +92,16 @@ end
             end
         end
 
-        if fertilizer && fphu > T(0.25) && crop_nfertilizer[cell] > zero(T)
+        if apply_second_dose && fertilizer && fphu > T(0.25) &&
+           crop_nfertilizer[cell] > zero(T)
             crop_fertilizer_input[cell] += crop_nfertilizer[cell]
             soil_NO3[1, cell] += crop_nfertilizer[cell] * nfert_no3_frac
             soil_NH4[1, cell] += crop_nfertilizer[cell] * (1 - nfert_no3_frac)
             crop_nfertilizer[cell] = zero(T)
         end
 
-        if manure && fphu > T(0.25) && crop_nmanure[cell] > zero(T)
+        if apply_second_dose && manure && fphu > T(0.25) &&
+           crop_nmanure[cell] > zero(T)
             manure_input = crop_nmanure[cell]
             crop_manure_input[cell] += manure_input
             soil_NH4[1, cell] += manure_input * nmanure_nh4_frac

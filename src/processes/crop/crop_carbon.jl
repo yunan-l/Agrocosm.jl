@@ -10,6 +10,7 @@ function crop_carbon!(crop,
                       soil_temperature::AbstractMatrix{T};
                       output_row::Union{Nothing, Integer} = nothing,
                       crop_resp_fix::Bool = false,
+                      include_biological_fixation_cost::Bool = false,
                       lpjmlparams::LPJmLParams = lpjmlparams,
 ) where {T <: AbstractFloat} # directly translated from LPJmL
 
@@ -23,7 +24,7 @@ function crop_carbon!(crop,
     )
 
     # compute crop carbon allocation
-    carbon_allocation!(CFT, crop)
+    carbon_allocation!(CFT, crop; include_biological_fixation_cost)
 
     sources = (
         gpp = crop_fluxes(crop).carbon.gross_assimilation,

@@ -7,10 +7,14 @@ function ndemand_crop!(crop,
                        CFT::CFTParameters,
                        photos_vcmax::AbstractArray{T},
                        temp::AbstractArray{T};
+                       include_storage_reserve::Bool = false,
                        lpjmlparams::LPJmLParams = lpjmlparams
 ) where {T <: AbstractFloat}
 
-    kernel_params = (lpjmlparams = lpjmlparams,)
+    kernel_params = (
+        lpjmlparams = lpjmlparams,
+        include_storage_reserve = include_storage_reserve,
+    )
 
     launch_1D!(
         ndemand_crop_kernel!,
@@ -45,10 +49,10 @@ end
 
     cell = @index(Global)
 
-    @unpack lpjmlparams = kernel_params
+    @unpack lpjmlparams, include_storage_reserve = kernel_params
 
     @unpack p, k_temp = lpjmlparams
-    @unpack ratio, ncleaf = CFT
+    @unpack ratio, ncleaf, knstore = CFT
 
     if crop_isgrowing[cell] == 1
         # LPJmL ndemand_crop: Rubisco requirement plus structural minimum leaf N.
@@ -68,7 +72,17 @@ end
             nc_ratio = ncleaf.low
         end
 
-        crop_ndemand_tot[cell] = crop_ndemand_leaf[cell] + nc_ratio * (crop_rootc[cell] / ratio.root + crop_poolc[cell] / ratio.pool + crop_stoc[cell] / ratio.sto)
+        # `ndemand_crop.c` returns structural whole-plant demand. LPJmL's
+        # `nitrogen_stress.c` then adds the CFT-specific storage reserve before
+        # uptake. Leaf demand stays unchanged because the inverse Vcmax
+        # calculation consumes it directly.
+        structural_demand = crop_ndemand_leaf[cell] + nc_ratio * (
+            crop_rootc[cell] / ratio.root +
+            crop_poolc[cell] / ratio.pool +
+            crop_stoc[cell] / ratio.sto
+        )
+        crop_ndemand_tot[cell] = include_storage_reserve ?
+            structural_demand * (one(T) + T(knstore)) : structural_demand
     else
         crop_ndemand_tot[cell] = zero(T)
         crop_ndemand_leaf[cell] = zero(T)

@@ -13,6 +13,10 @@
     @test cft4.fphusen == 0.85f0
     @test cft9.path == 1
     @test cft9.basetemp.low == 7.0f0
+    @test cft9.biological_fixation.enabled == 1
+    @test cft9.biological_fixation.temperature_limit.low == 5.0f0
+    @test cft9.biological_fixation.temperature_limit.high == 44.0f0
+    @test cft1.biological_fixation.enabled == 0
     @test cft12.path == 2
     @test cft12.hiopt == 0.8f0
 

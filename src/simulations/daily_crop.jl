@@ -109,6 +109,7 @@ function _daily_crop!(
             state, managed_land, state, day_of_year;
             manure,
             apply_prescribed_fertilizer = fertilizer === :yes,
+            defer_second_fertilizer = nitrogen_limit_vcmax,
             prescribed_phu,
             prescribed_winter_type,
             cftparameters = cftparameters,
@@ -158,6 +159,18 @@ function _daily_crop!(
         if hasproperty(climate, :no3_deposition) || hasproperty(climate, :nh4_deposition)
             nitrogen_deposition!(
                 state, dailyWeather.no3_deposition, dailyWeather.nh4_deposition,
+            )
+        end
+        if nitrogen_limit_vcmax
+            # LPJmL applies the second fertilizer/manure dose after today's
+            # litter/SOM turnover and atmospheric deposition, before uptake.
+            fertilizer!(
+                state, managed_land, state, day_of_year;
+                fertilizer = fertilizer === :yes,
+                manure,
+                apply_sowing_dose = false,
+                reset_inputs = false,
+                lpjmlparams = global_params,
             )
         end
         c_shift_response_sum === nothing ||
@@ -224,20 +237,6 @@ function _daily_crop!(
             lpjmlparams = global_params,
             photoparams = photo_params,
         )
-
-        if nitrogen_limit_vcmax
-            crop_nitrogen!(
-                state, cftparameters, state,
-                crop_photosynthesis_auxiliary(state).potential_vcmax,
-                dailyWeather.temp;
-                auto_fertilizer = automatic_fertilizer,
-                lpjmlparams = global_params,
-            )
-            limit_vcmax_by_nitrogen!(
-                state, cftparameters, dailyWeather.temp;
-                lpjmlparams = global_params,
-            )
-        end
         photosynthesis!(
             pathway, cftparameters, state, crop_canopy_auxiliary(state).apar,
             pet.daylength, dailyWeather.temp, current_co2;
@@ -246,10 +245,55 @@ function _daily_crop!(
             photoparams = photo_params,
         )
 
+        if nitrogen_limit_vcmax
+            refresh_potential_canopy_conductance!(
+                cftparameters, state, pet.daylength, current_co2,
+            )
+            acquire_crop_nitrogen!(
+                state, cftparameters, state,
+                crop_photosynthesis_auxiliary(state).potential_vcmax,
+                dailyWeather.temp;
+                auto_fertilizer = automatic_fertilizer,
+                include_storage_reserve = true,
+                biological_fixation = true,
+                lpjmlparams = global_params,
+            )
+            limit_vcmax_by_nitrogen!(
+                state, cftparameters, dailyWeather.temp;
+                lpjmlparams = global_params,
+            )
+            photosynthesis!(
+                pathway, cftparameters, state, crop_canopy_auxiliary(state).apar,
+                pet.daylength, dailyWeather.temp, current_co2;
+                comp_vcmax = false,
+                lpjmlparams = global_params,
+                photoparams = photo_params,
+            )
+            recouple_nitrogen_water!(
+                pathway, cftparameters, state, pet, state,
+                dailyWeather.temp, current_co2;
+                lpjmlparams = global_params,
+                photoparams = photo_params,
+            )
+            photosynthesis!(
+                pathway, cftparameters, state, crop_canopy_auxiliary(state).apar,
+                pet.daylength, dailyWeather.temp, current_co2;
+                comp_vcmax = false,
+                lpjmlparams = global_params,
+                photoparams = photo_params,
+            )
+            finalize_nitrogen_limited_transpiration!(
+                cftparameters, state, pet, state, current_co2;
+                lpjmlparams = global_params,
+            )
+        end
+
         crop_carbon!(
             state, output, cftparameters, dailyWeather.temp,
             soil_thermal_prognostic(state).temperature;
-            output_row, crop_resp_fix, lpjmlparams = global_params,
+            output_row, crop_resp_fix,
+            include_biological_fixation_cost = nitrogen_limit_vcmax,
+            lpjmlparams = global_params,
         )
         # --- Discrete failed-crop termination event -----------------------
         # This remains separate from calendar harvest: it is only triggered

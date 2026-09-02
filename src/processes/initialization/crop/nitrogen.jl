@@ -19,6 +19,7 @@ mutable struct CropNitrogenFluxes{A}
     prescribed_manure_input::A     # Prescribed manure N applied today (gN m⁻² day⁻¹).
     prescribed_fertilizer_input::A # Prescribed mineral fertilizer N applied today (gN m⁻² day⁻¹).
     harvest_export::A              # Plant nitrogen removed at harvest (gN m⁻² day⁻¹).
+    biological_fixation::A         # Atmospheric N fixed biologically by the crop (gN m⁻² day⁻¹).
 end
 
 function init_crop_nitrogen_state(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
@@ -31,5 +32,5 @@ end
 
 function init_crop_nitrogen_fluxes(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
     float_flux() = device(zeros(T, cell_size))
-    return CropNitrogenFluxes(ntuple(_ -> float_flux(), 6)...)
+    return CropNitrogenFluxes(ntuple(_ -> float_flux(), 7)...)
 end

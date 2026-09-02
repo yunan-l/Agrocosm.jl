@@ -103,6 +103,23 @@ end
     @test balance.residual[1, 1] ≈ 0.0f0 atol = 2.0f-6
 end
 
+@testset "Biological fixation is an external nitrogen input" begin
+    crop = init_crop(1, identity)
+    soil = init_soil(1, soilparams.soildepth, identity)
+    state = test_model_state(crop, soil)
+    balance = init_nitrogen_balance(1, 1, identity)
+
+    Agrocosm.record_nitrogen_balance_start!(balance, 1, state, state)
+    crop.state.nitrogen.total[1] += 0.5f0
+    crop.fluxes.nitrogen.uptake[1] = 0.5f0
+    crop.fluxes.nitrogen.biological_fixation[1] = 0.5f0
+    Agrocosm.record_nitrogen_balance_end!(balance, 1, state, state)
+
+    @test balance.biological_fixation[1, 1] == 0.5f0
+    @test balance.root_uptake[1, 1] == 0.0f0
+    @test balance.residual[1, 1] ≈ 0.0f0 atol = 1.0f-6
+end
+
 @testset "Conservative baseline soil-N mineralization" begin
     crop = init_crop(1, identity)
     soil = init_soil(1, soilparams.soildepth, identity)

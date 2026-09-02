@@ -151,6 +151,61 @@ function _multi_day_transition_value(template, theta, parameter_names, days, obs
     )
 end
 
+function _nitrogen_limited_daily_objective(
+    theta,
+    state,
+    base_cft,
+    global_parameters,
+    climate,
+    parameter_names,
+    day,
+    observable,
+    layer_depth,
+)
+    return enzyme_daily_transition_objective(
+        theta,
+        state,
+        base_cft,
+        global_parameters,
+        climate,
+        parameter_names,
+        day,
+        observable,
+        layer_depth;
+        nitrogen_limit_vcmax = true,
+    )
+end
+
+function _nitrogen_limited_daily_value(template, theta, parameter_names, observable)
+    state = deepcopy(template.state)
+    enzyme_prepare_daily_state!(state)
+    return _nitrogen_limited_daily_objective(
+        theta,
+        state,
+        cft1,
+        template.global_parameters,
+        template.climate,
+        parameter_names,
+        template.day,
+        observable,
+        template.layer_depth,
+    )
+end
+
+function _nitrogen_limited_transition_fixture()
+    template = _daily_transition_fixture()
+    soil_nitrogen = Agrocosm.soil_nitrogen_prognostic(template.state)
+    soil_nitrogen.nitrate .= 1.0f-4
+    soil_nitrogen.ammonium .= 1.0f-4
+    plant_nitrogen = Agrocosm.crop_prognostic(template.state).nitrogen
+    plant_nitrogen.total .= 2.0f0
+    plant_nitrogen.leaf .= 0.8f0
+    plant_nitrogen.root .= 0.6f0
+    plant_nitrogen.pool .= 0.4f0
+    plant_nitrogen.storage .= 0.2f0
+    return template
+end
+
 @testset "Enzyme one-day ModelState transition" begin
     template = _daily_transition_fixture()
     parameter_names = (:gmin, :b)
@@ -302,4 +357,46 @@ end
         ) / (2.0f0 * step)
     end
     @test gradient ≈ finite_difference rtol = 2.0f-2 atol = 1.0f-5
+end
+
+@testset "Enzyme explicit nitrogen-limited transition" begin
+    template = _nitrogen_limited_transition_fixture()
+    parameter_names = (:knstore, :gmin)
+    theta = Float32[cft1.knstore, cft1.gmin]
+    observable = :gpp
+    state_factory() = begin
+        state = deepcopy(template.state)
+        return state, enzyme_zero_tangent(state)
+    end
+
+    gradient = enzyme_forward_gradient(
+        _nitrogen_limited_daily_objective,
+        theta,
+        state_factory,
+        cft1,
+        template.global_parameters,
+        template.climate,
+        parameter_names,
+        template.day,
+        observable,
+        template.layer_depth,
+    )
+    @test all(isfinite, gradient)
+    @test any(!iszero, gradient)
+
+    finite_difference = similar(theta)
+    for index in eachindex(theta)
+        step = 1.0f-3 * max(abs(theta[index]), 1.0f0)
+        delta = zeros(Float32, length(theta))
+        delta[index] = step
+        finite_difference[index] = (
+            _nitrogen_limited_daily_value(
+                template, theta .+ delta, parameter_names, observable,
+            ) -
+            _nitrogen_limited_daily_value(
+                template, theta .- delta, parameter_names, observable,
+            )
+        ) / (2.0f0 * step)
+    end
+    @test gradient ≈ finite_difference rtol = 3.0f-2 atol = 2.0f-5
 end

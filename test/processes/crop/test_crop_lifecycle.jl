@@ -179,13 +179,13 @@ end
          (:biomass, :leaf, :root, :pool, :storage)),
         (simulation.state.fluxes.crop.carbon,
          (:yield, :harvest_export, :npp, :respiration, :gross_assimilation, :net_assimilation,
-          :water_limited_assimilation, :leaf_respiration)),
+          :water_limited_assimilation, :leaf_respiration, :biological_fixation_cost)),
         (simulation.state.prognostic.crop.nitrogen,
          (:total, :leaf, :root, :pool, :storage, :pending_manure,
           :pending_fertilizer, :stress_sum)),
         (simulation.state.fluxes.crop.nitrogen,
          (:uptake, :auto_fertilizer, :seed_input, :prescribed_manure_input,
-          :prescribed_fertilizer_input, :harvest_export)),
+          :prescribed_fertilizer_input, :harvest_export, :biological_fixation)),
         (simulation.state.prognostic.crop.water,
          (:demand_sum, :supply_sum)),
         (simulation.state.fluxes.crop.water,
@@ -267,4 +267,44 @@ end
     @test crop.fluxes.nitrogen.prescribed_fertilizer_input[1] == 0.0f0
     @test sum(soil.nitrogen.nitrate) + sum(soil.nitrogen.ammonium) ≈
         mineral_before + 10.0f0
+end
+
+@testset "Second fertilizer dose can be deferred until after decomposition" begin
+    crop = init_crop(1, identity)
+    soil = init_soil(1, soilparams.soildepth, identity)
+    managed_land = init_managed_land(1, identity)
+    state = test_model_state(crop, soil; managed_land)
+    crop.auxiliary.calendar.sowing_date .= Int32(100)
+    managed_land.fertilizer .= 10.0f0
+
+    cultivate!(
+        state, managed_land, state, 100;
+        apply_prescribed_fertilizer = true,
+        defer_second_fertilizer = true,
+    )
+    @test crop.fluxes.nitrogen.prescribed_fertilizer_input[1] == 2.0f0
+    @test crop.state.nitrogen.pending_fertilizer[1] == 8.0f0
+
+    crop.auxiliary.phenology.phu .= 1.0f0
+    crop.state.phenology.husum .= 0.3f0
+    cultivate!(
+        state, managed_land, state, 101;
+        apply_prescribed_fertilizer = true,
+        defer_second_fertilizer = true,
+    )
+    mineral_before_second_dose =
+        sum(soil.nitrogen.nitrate) + sum(soil.nitrogen.ammonium)
+    @test crop.fluxes.nitrogen.prescribed_fertilizer_input[1] == 0.0f0
+    @test crop.state.nitrogen.pending_fertilizer[1] == 8.0f0
+
+    fertilizer!(
+        state, managed_land, state, 101;
+        fertilizer = true,
+        apply_sowing_dose = false,
+        reset_inputs = false,
+    )
+    @test crop.fluxes.nitrogen.prescribed_fertilizer_input[1] == 8.0f0
+    @test crop.state.nitrogen.pending_fertilizer[1] == 0.0f0
+    @test sum(soil.nitrogen.nitrate) + sum(soil.nitrogen.ammonium) ≈
+        mineral_before_second_dose + 8.0f0
 end

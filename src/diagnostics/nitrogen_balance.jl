@@ -23,6 +23,7 @@ mutable struct NitrogenBalance{M <: AbstractArray{<:AbstractFloat}}
     prescribed_fertilizer_input::M # Scheduled mineral-fertilizer input (gN m⁻² day⁻¹).
     prescribed_manure_input::M     # Scheduled manure-N input (gN m⁻² day⁻¹).
     automatic_fertilizer_input::M  # Demand-driven mineral-N input (gN m⁻² day⁻¹).
+    biological_fixation::M         # Biological atmospheric-N input (gN m⁻² day⁻¹).
     atmospheric_deposition::M      # Nitrate plus ammonium deposition input (gN m⁻² day⁻¹).
     harvest_export::M              # Harvested nitrogen leaving the system (gN m⁻² day⁻¹).
     mineralization::M              # Organic N mineralized today (gN m⁻² day⁻¹).
@@ -50,7 +51,7 @@ function init_nitrogen_balance(number_of_days::Integer,
         allocate(), allocate(), allocate(), allocate(), allocate(),
         allocate(), allocate(), allocate(), allocate(), allocate(),
         allocate(), allocate(), allocate(), allocate(), allocate(),
-        allocate(), allocate(),
+        allocate(), allocate(), allocate(),
     )
 end
 
@@ -94,7 +95,9 @@ function record_nitrogen_balance_end!(balance::NitrogenBalance,
             balance.organic_after[day_index, :]
 
         balance.root_uptake[day_index, :] .=
-            crop_fluxes(crop).nitrogen.uptake .- crop_fluxes(crop).nitrogen.auto_fertilizer
+            crop_fluxes(crop).nitrogen.uptake .-
+            crop_fluxes(crop).nitrogen.auto_fertilizer .-
+            crop_fluxes(crop).nitrogen.biological_fixation
         balance.seed_input[day_index, :] .= crop_fluxes(crop).nitrogen.seed_input
         balance.prescribed_fertilizer_input[day_index, :] .=
             crop_fluxes(crop).nitrogen.prescribed_fertilizer_input
@@ -102,6 +105,8 @@ function record_nitrogen_balance_end!(balance::NitrogenBalance,
             crop_fluxes(crop).nitrogen.prescribed_manure_input
         balance.automatic_fertilizer_input[day_index, :] .=
             crop_fluxes(crop).nitrogen.auto_fertilizer
+        balance.biological_fixation[day_index, :] .=
+            crop_fluxes(crop).nitrogen.biological_fixation
         if isnothing(nitrate_deposition)
             balance.atmospheric_deposition[day_index, :] .= 0
         else
@@ -137,6 +142,7 @@ function record_nitrogen_balance_end!(balance::NitrogenBalance,
             balance.prescribed_fertilizer_input[day_index, :] .+
             balance.prescribed_manure_input[day_index, :] .+
             balance.automatic_fertilizer_input[day_index, :] .+
+            balance.biological_fixation[day_index, :] .+
             balance.atmospheric_deposition[day_index, :] .-
             balance.harvest_export[day_index, :] .-
             balance.gaseous_loss[day_index, :] .-
@@ -149,6 +155,7 @@ function record_nitrogen_balance_end!(balance::NitrogenBalance,
                 balance.prescribed_fertilizer_input[day_index, :] .+
                 balance.prescribed_manure_input[day_index, :] .+
                 balance.automatic_fertilizer_input[day_index, :] .+
+                balance.biological_fixation[day_index, :] .+
                 balance.atmospheric_deposition[day_index, :],
                 eps(eltype(balance.residual)),
             )

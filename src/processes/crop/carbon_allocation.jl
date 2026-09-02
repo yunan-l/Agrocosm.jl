@@ -4,11 +4,16 @@ carbon_allocation!(CFT, crop, photos)
 Partition crop biomass among leaf/root/storage/pool carbon compartments.
 """
 function carbon_allocation!(CFT::CFTParameters,
-                            crop
+                            crop;
+                            include_biological_fixation_cost::Bool = false,
 )
     # 1D cell-wise allocation; crop_prognostic(crop).carbon.storage provides launch length and kernel arg #1.
     T = eltype(crop_prognostic(crop).carbon.storage)
-    kernel_params = (FROOTMAX = T(0.4), FROOTMIN = T(0.3))
+    kernel_params = (
+        FROOTMAX = T(0.4),
+        FROOTMIN = T(0.3),
+        include_biological_fixation_cost = include_biological_fixation_cost,
+    )
 
     launch_1D!(carbon_allocation_kernel!,
                crop_prognostic(crop).carbon.storage,
@@ -23,6 +28,7 @@ function carbon_allocation!(CFT::CFTParameters,
                crop_prognostic(crop).phenology.senescence,
                crop_prognostic(crop).carbon.biomass,
                crop_fluxes(crop).carbon.respiration,
+               crop_fluxes(crop).carbon.biological_fixation_cost,
                crop_fluxes(crop).carbon.gross_assimilation,
                crop_fluxes(crop).carbon.leaf_respiration,
                crop_fluxes(crop).carbon.npp,
@@ -111,6 +117,7 @@ end
                                            crop_senescence::AbstractArray{B},
                                            crop_biomass::AbstractArray{T},
                                            crop_resp::AbstractArray{T},
+                                           crop_bnf_cost::AbstractArray{T},
                                            photos_agd::AbstractArray{T},
                                            photos_rd::AbstractArray{T},
                                            crop_npp::AbstractArray{T},
@@ -127,7 +134,7 @@ end
     cell = @index(Global)
 
     @unpack sla, hiopt, himin = CFT
-    @unpack FROOTMAX, FROOTMIN = kernel_params
+    @unpack FROOTMAX, FROOTMIN, include_biological_fixation_cost = kernel_params
 
     if crop_isgrowing[cell] == 1
         # LPJmL preserves the potential phenological LAI and applies the NPP
@@ -135,7 +142,12 @@ end
         actual_lai = max(zero(T), crop_lai[cell] - crop_lai_nppdeficit[cell])
         # Complete crop carbon cost: leaf respiration plus maintenance/growth
         # respiration, including root respiration.
-        crop_npp[cell] = compute_crop_npp(photos_agd[cell], photos_rd[cell], crop_resp[cell])
+        crop_npp[cell] = compute_crop_npp(
+            photos_agd[cell], photos_rd[cell], crop_resp[cell],
+        )
+        if include_biological_fixation_cost
+            crop_npp[cell] -= crop_bnf_cost[cell]
+        end
         if ((crop_biomass[cell] + crop_npp[cell]) <= T(0.0001)) || ((actual_lai <= zero(T)) && (!crop_senescence[cell]))
             # LPJmL reports `negbm` here. The daily driver then harvests the
             # remaining pools and removes the failed crop stand.

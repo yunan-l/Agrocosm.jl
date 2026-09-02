@@ -63,6 +63,17 @@ struct NuptakeKinetics{T}
     Km::T   # Half-saturation concentration (gN m-3)
 end
 
+"""LPJmL biological nitrogen-fixation traits for one crop functional type."""
+struct BiologicalNitrogenFixation{T, S <: Integer}
+    enabled::S
+    temperature_limit::Temp{T}
+    temperature_optimum::Temp{T}
+    water_limit::Temp{T}
+    potential::T
+    maximum_npp_fraction::T
+    carbon_cost::T
+end
+
 """LPJmL-compatible sowing-date methods and daily trigger thresholds.
 
 The method values follow LPJmL's ``NO_CALC_SDATE``, ``PREC_CALC_SDATE``,
@@ -98,6 +109,16 @@ _convert_precision(::Type{T}, value::ncleaf) where {T <: AbstractFloat} = ncleaf
 _convert_precision(::Type{T}, value::K_Litter10) where {T <: AbstractFloat} = K_Litter10{T}(T(value.leaf), T(value.root))
 _convert_precision(::Type{T}, value::NuptakeKinetics) where {T <: AbstractFloat} =
     NuptakeKinetics{T}(T(value.vmax), T(value.kmin), T(value.Km))
+_convert_precision(::Type{T}, value::BiologicalNitrogenFixation{<:AbstractFloat, S}) where {T <: AbstractFloat, S <: Integer} =
+    BiologicalNitrogenFixation{T, S}(
+        value.enabled,
+        _convert_precision(T, value.temperature_limit),
+        _convert_precision(T, value.temperature_optimum),
+        _convert_precision(T, value.water_limit),
+        T(value.potential),
+        T(value.maximum_npp_fraction),
+        T(value.carbon_cost),
+    )
 _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractFloat} =
     SowingDateParameters{T, typeof(value.method)}(
         value.method, T(value.temp_fall), T(value.temp_spring), T(value.minimum_prec),
@@ -148,6 +169,7 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     knstore::T              # Fraction of N demand allocated to storage reserve.
     no3_uptake::NuptakeKinetics{T} # Root NO₃ uptake kinetic parameters.
     nh4_uptake::NuptakeKinetics{T} # Root NH₄ uptake kinetic parameters.
+    biological_fixation::BiologicalNitrogenFixation{T, S} # Crop biological N-fixation traits.
     hiopt::T                # Optimal harvest index.
     himin::T                # Minimum harvest index under stress.
 end
@@ -183,6 +205,9 @@ function _crop_cft(;
     fphusen, flaimaxharvest, laimax, laimin, hlimit, pvd_max = 0, beta_root,
     longevity, emax, gmin, shapesenescencenorm, storage_ratio, hiopt, himin,
     sowing_method = SDATE_NO_CALC, temp_fall = 1000, temp_spring = 1000,
+    biological_fixation = false, bnf_temperature_limit = (0, 0),
+    bnf_temperature_optimum = (0, 0), bnf_water_limit = (0, 0),
+    bnf_potential = 0, bnf_maximum_npp_fraction = 0, bnf_carbon_cost = 0,
 )
     T = Float32
     return CFTParameters{T, Int32}(
@@ -232,6 +257,15 @@ function _crop_cft(;
         knstore = 0.1,
         no3_uptake = NuptakeKinetics{T}(1.5, 0.05, 0.70),
         nh4_uptake = NuptakeKinetics{T}(4.7, 0.05, 0.45),
+        biological_fixation = BiologicalNitrogenFixation{T, Int32}(
+            Int32(biological_fixation),
+            Temp{T}(bnf_temperature_limit...),
+            Temp{T}(bnf_temperature_optimum...),
+            Temp{T}(bnf_water_limit...),
+            T(bnf_potential),
+            T(bnf_maximum_npp_fraction),
+            T(bnf_carbon_cost),
+        ),
         hiopt = hiopt,
         himin = himin,
     )
@@ -267,6 +301,9 @@ const cft5 = _crop_cft(id=5, path=1, temp_co2=(-4, 45), temp_photos=(10, 30),
     basetemp=1, fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.90,
     flaimaxharvest=0, laimax=4, laimin=4, hlimit=282, beta_root=.94,
     longevity=.50, emax=8, gmin=1, shapesenescencenorm=2, storage_ratio=.45,
+    biological_fixation=true, bnf_temperature_limit=(1, 40),
+    bnf_temperature_optimum=(16, 25), bnf_water_limit=(0, .5),
+    bnf_potential=.5, bnf_maximum_npp_fraction=.25, bnf_carbon_cost=6,
     hiopt=.45, himin=.10)
 const cft6 = _crop_cft(id=6, path=1, temp_co2=(-4, 45), temp_photos=(10, 30),
     basetemp=3, fphuc=.15, flaimaxc=.05, fphuk=.50, fphusen=.75,
@@ -288,6 +325,9 @@ const cft9 = _crop_cft(id=9, path=1, temp_co2=(5, 45), temp_photos=(28, 32),
     fphuk=.50, fphusen=.70,
     flaimaxharvest=0, laimax=5, laimin=5, hlimit=282, pvd_max=70,
     beta_root=.94, longevity=.66, emax=10, gmin=1.2, shapesenescencenorm=.5,
+    biological_fixation=true, bnf_temperature_limit=(5, 44),
+    bnf_temperature_optimum=(20, 35), bnf_water_limit=(.2, .8),
+    bnf_potential=.5, bnf_maximum_npp_fraction=.25, bnf_carbon_cost=6,
     storage_ratio=.42, hiopt=.40, himin=.10)
 const cft10 = _crop_cft(id=10, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
     basetemp=14, fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.75,

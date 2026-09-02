@@ -62,7 +62,7 @@ end
 # Includes the dynamic-sowing climate calendar: monthly PET and its rolling
 # climatology (24 values), annual PET history (365 values), and four Int32
 # calendar fields per cell.
-const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1636
+const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1638
 const _PERSISTENT_NONFLOAT_BYTES_PER_CELL = 46
 const _PERSISTENT_FIXED_FLOAT_VALUES = 26
 

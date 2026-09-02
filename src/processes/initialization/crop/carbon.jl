@@ -17,6 +17,7 @@ mutable struct CropCarbonFluxes{A}
     net_assimilation::A           # Nonnegative daytime assimilation after leaf respiration (gC m⁻² day⁻¹).
     water_limited_assimilation::A # Assimilation expressed as transpiration demand (mm day⁻¹).
     leaf_respiration::A           # Daily leaf/dark respiration (gC m⁻² day⁻¹).
+    biological_fixation_cost::A   # Carbon allocated to biological N fixation (gC m⁻² day⁻¹).
 end
 
 function init_crop_carbon_state(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
@@ -26,5 +27,5 @@ end
 
 function init_crop_carbon_fluxes(::Type{T}, cell_size::Int, device) where {T <: AbstractFloat}
     float_flux() = device(zeros(T, cell_size))
-    return CropCarbonFluxes(ntuple(_ -> float_flux(), 8)...)
+    return CropCarbonFluxes(ntuple(_ -> float_flux(), 9)...)
 end

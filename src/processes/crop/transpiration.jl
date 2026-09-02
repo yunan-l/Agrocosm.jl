@@ -44,6 +44,262 @@ function transpiration!(photos_adtmm::AbstractArray{T},
 
 end
 
+"""Return whether LPJmL repeats the water-limited lambda solve after N stress."""
+@inline nitrogen_water_recoupling_required(
+    potential_conductance::T,
+    nitrogen_limited_conductance::T,
+    demand::T,
+    supply::T,
+) where {T <: AbstractFloat} =
+    potential_conductance - nitrogen_limited_conductance > T(0.01) &&
+    demand - supply > T(0.1)
+
+"""Store LPJmL's pre-N-limitation `gc_new` from potential assimilation."""
+function refresh_potential_canopy_conductance!(
+    CFT::CFTParameters,
+    crop,
+    daylength::AbstractArray{T},
+    co2::AbstractArray{T},
+) where {T <: AbstractFloat}
+    launch_1D!(
+        refresh_potential_canopy_conductance_kernel!,
+        crop_canopy_auxiliary(crop).canopy_conductance,
+        crop_fluxes(crop).carbon.water_limited_assimilation,
+        crop_photosynthesis_auxiliary(crop).lambda,
+        crop_photosynthesis_auxiliary(crop).temperature_stress,
+        crop_canopy_auxiliary(crop).fpar,
+        crop_prognostic(crop).phenology.is_growing,
+        daylength,
+        co2,
+        T(CFT.gmin),
+    )
+    return nothing
+end
+
+@kernel inbounds = true function refresh_potential_canopy_conductance_kernel!(
+    conductance::AbstractArray{T},
+    potential_assimilation::AbstractArray{T},
+    lambda::AbstractArray{T},
+    temperature_stress::AbstractArray{T},
+    fpar::AbstractArray{T},
+    is_growing::AbstractArray{S},
+    daylength::AbstractArray{T},
+    co2::AbstractArray{T},
+    gmin::T,
+) where {T <: AbstractFloat, S <: Integer}
+    cell = @index(Global)
+    if is_growing[cell] == one(S) && lambda[cell] > zero(T) &&
+       temperature_stress[cell] >= T(1e-2)
+        co2_cell = co2[length(co2) == 1 ? 1 : cell]
+        conductance[cell] = compute_canopy_conductance(
+            potential_assimilation[cell], co2_cell, daylength[cell], fpar[cell],
+            gmin, lambda[cell],
+        )
+    end
+end
+
+"""
+    recouple_nitrogen_water!(pathway, CFT, crop, pet, soil, temperature, co2)
+
+Apply LPJmL's conditional second lambda solve after leaf nitrogen has limited
+Vcmax. The first water pass remains responsible for seasonal water-stress
+diagnostics; this correction only updates today's conductance and lambda.
+"""
+function recouple_nitrogen_water!(
+    pathway::Union{Val{:C3}, Val{:C4}},
+    CFT::CFTParameters,
+    crop,
+    pet::PetPar,
+    soil,
+    temperature::AbstractArray{T},
+    co2::AbstractArray{T};
+    lpjmlparams::LPJmLParams = lpjmlparams,
+    photoparams::PhotoParams = photoparams,
+) where {T <: AbstractFloat}
+    kernel_params = (
+        pathway = pathway,
+        b = T(CFT.b),
+        emax = T(CFT.emax),
+        fpc = T(CFT.fpc),
+        gmin = T(CFT.gmin),
+        soil_layers = 5,
+        lpjmlparams = lpjmlparams,
+        photoparams = photoparams,
+    )
+    launch_1D!(
+        nitrogen_water_recoupling_kernel!,
+        crop_photosynthesis_auxiliary(crop).lambda,
+        crop_photosynthesis_auxiliary(crop).vcmax,
+        crop_photosynthesis_auxiliary(crop).temperature_stress,
+        crop_fluxes(crop).carbon.water_limited_assimilation,
+        crop_canopy_auxiliary(crop).canopy_conductance,
+        crop_canopy_auxiliary(crop).fpar,
+        crop_canopy_auxiliary(crop).apar,
+        crop_canopy_auxiliary(crop).canopy_wet,
+        crop_prognostic(crop).phenology.is_growing,
+        crop_prognostic(crop).carbon.root,
+        crop_root_input(crop).distribution,
+        soil_water_auxiliary(soil).relative_content,
+        pet.daylength,
+        pet.eeq,
+        temperature,
+        co2,
+        kernel_params,
+    )
+    return nothing
+end
+
+@kernel inbounds = true function nitrogen_water_recoupling_kernel!(
+    lambda::AbstractArray{T},
+    vcmax::AbstractArray{T},
+    temperature_stress::AbstractArray{T},
+    limited_assimilation::AbstractArray{T},
+    conductance::AbstractArray{T},
+    fpar::AbstractArray{T},
+    apar::AbstractArray{T},
+    canopy_wet::AbstractArray{T},
+    is_growing::AbstractArray{S},
+    root_carbon::AbstractArray{T},
+    root_distribution::AbstractArray{T},
+    soil_water::AbstractArray{M},
+    daylength::AbstractArray{T},
+    equilibrium_evaporation::AbstractArray{T},
+    temperature::AbstractArray{T},
+    co2::AbstractArray{T},
+    kernel_params,
+) where {T <: AbstractFloat, M <: AbstractFloat, S <: Integer}
+    cell = @index(Global)
+    @unpack pathway, b, emax, fpc, gmin, soil_layers, lpjmlparams, photoparams = kernel_params
+    @unpack ALPHAM, GM = lpjmlparams
+
+    if is_growing[cell] == one(S) && lambda[cell] > zero(T) &&
+       temperature_stress[cell] >= T(1e-2)
+        co2_cell = co2[length(co2) == 1 ? 1 : cell]
+        previous_lambda = lambda[cell]
+        potential_conductance = conductance[cell]
+        limited_conductance = compute_canopy_conductance(
+            limited_assimilation[cell], co2_cell, daylength[cell], fpar[cell],
+            gmin, previous_lambda,
+        )
+        demand = compute_transpiration_demand(
+            canopy_wet[cell], equilibrium_evaporation[cell], T(ALPHAM), T(GM),
+            limited_conductance,
+        )
+        root_water = zero(T)
+        for layer in 1:soil_layers
+            root_water += soil_water[layer, cell] * root_distribution[layer]
+        end
+        supply = compute_transpiration_supply(emax, root_water, root_carbon[cell]) * fpc
+        conductance[cell] = limited_conductance
+
+        if nitrogen_water_recoupling_required(
+            potential_conductance, limited_conductance, demand, supply,
+        )
+            constrained_conductance = compute_actual_canopy_conductance(
+                limited_conductance, supply, demand, canopy_wet[cell],
+                equilibrium_evaporation[cell], T(ALPHAM), T(GM),
+            )
+            gpd, fac = compute_canopy_water_supply(
+                daylength[cell], constrained_conductance, gmin, fpar[cell], co2_cell,
+            )
+            if gpd > T(1e-5) && daylength[cell] > zero(T) && co2_cell > zero(T)
+                if pathway isa Val{:C3}
+                    lambda[cell] = compute_lambda_c3_solution(
+                        fac, vcmax[cell], temperature_stress[cell], b, co2_cell,
+                        temperature[cell], apar[cell], daylength[cell], lpjmlparams,
+                        photoparams, previous_lambda, 20,
+                    )
+                else
+                    lambda[cell] = compute_lambda_c4_solution(
+                        fac, vcmax[cell], temperature_stress[cell], b,
+                        temperature[cell], apar[cell], daylength[cell], lpjmlparams,
+                        photoparams, previous_lambda, 20,
+                    )
+                end
+            end
+        end
+    end
+end
+
+"""Overwrite today's transpiration layers using final N-limited photosynthesis."""
+function finalize_nitrogen_limited_transpiration!(
+    CFT::CFTParameters,
+    crop,
+    pet::PetPar,
+    soil,
+    co2::AbstractArray{T};
+    lpjmlparams::LPJmLParams = lpjmlparams,
+) where {T <: AbstractFloat}
+    kernel_params = (gmin = T(CFT.gmin), soil_layers = 5,
+                     lpjmlparams = lpjmlparams)
+    launch_1D!(
+        finalize_nitrogen_limited_transpiration_kernel!,
+        crop_fluxes(crop).water.transpiration_layer,
+        crop_canopy_auxiliary(crop).canopy_conductance,
+        crop_fluxes(crop).carbon.water_limited_assimilation,
+        crop_photosynthesis_auxiliary(crop).lambda,
+        crop_photosynthesis_auxiliary(crop).temperature_stress,
+        crop_canopy_auxiliary(crop).fpar,
+        crop_canopy_auxiliary(crop).canopy_wet,
+        crop_prognostic(crop).phenology.is_growing,
+        crop_root_input(crop).distribution,
+        soil_water_auxiliary(soil).relative_content,
+        soil_water_auxiliary(soil).holding_capacity_storage,
+        pet.daylength,
+        pet.eeq,
+        co2,
+        kernel_params,
+    )
+    return nothing
+end
+
+@kernel inbounds = true function finalize_nitrogen_limited_transpiration_kernel!(
+    transpiration_layer::AbstractArray{T},
+    conductance::AbstractArray{T},
+    limited_assimilation::AbstractArray{T},
+    lambda::AbstractArray{T},
+    temperature_stress::AbstractArray{T},
+    fpar::AbstractArray{T},
+    canopy_wet::AbstractArray{T},
+    is_growing::AbstractArray{S},
+    root_distribution::AbstractArray{T},
+    soil_water::AbstractArray{M},
+    holding_storage::AbstractArray{M},
+    daylength::AbstractArray{T},
+    equilibrium_evaporation::AbstractArray{T},
+    co2::AbstractArray{T},
+    kernel_params,
+) where {T <: AbstractFloat, M <: AbstractFloat, S <: Integer}
+    cell = @index(Global)
+    @unpack gmin, soil_layers, lpjmlparams = kernel_params
+    @unpack ALPHAM, GM = lpjmlparams
+
+    if is_growing[cell] == one(S) && lambda[cell] > zero(T) &&
+       temperature_stress[cell] >= T(1e-2)
+        co2_cell = co2[length(co2) == 1 ? 1 : cell]
+        final_conductance = compute_canopy_conductance(
+            limited_assimilation[cell], co2_cell, daylength[cell], fpar[cell],
+            gmin, lambda[cell],
+        )
+        demand = compute_transpiration_demand(
+            canopy_wet[cell], equilibrium_evaporation[cell], T(ALPHAM), T(GM),
+            final_conductance,
+        )
+        root_water = zero(T)
+        for layer in 1:soil_layers
+            root_water += soil_water[layer, cell] * root_distribution[layer]
+        end
+        transpiration = root_water > zero(T) ? demand * fpar[cell] / root_water : zero(T)
+        for layer in 1:soil_layers
+            transpiration_layer[layer, cell], _ = compute_layer_transpiration(
+                transpiration, root_distribution[layer], soil_water[layer, cell],
+                holding_storage[layer, cell],
+            )
+        end
+        conductance[cell] = final_conductance
+    end
+end
+
 """Compute LPJmL canopy conductance from water-limited assimilation."""
 @inline function compute_canopy_conductance(
     water_limited_assimilation::T,

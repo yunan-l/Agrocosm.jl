@@ -292,15 +292,33 @@ grid cell retains the exact same 30-step numerical algorithm on CPU and GPU.
                                              daylength::T,
                                              lpjmlparams::LPJmLParams,
                                              photoparams::PhotoParams) where {T <: AbstractFloat}
+    return compute_lambda_c3_solution(
+        fac, vcmax, stress, b, co2, temperature, apar, daylength,
+        lpjmlparams, photoparams, T(0.85), 30,
+    )
+end
+
+@inline function compute_lambda_c3_solution(fac::T,
+                                             vcmax::T,
+                                             stress::T,
+                                             b::T,
+                                             co2::T,
+                                             temperature::T,
+                                             apar::T,
+                                             daylength::T,
+                                             lpjmlparams::LPJmLParams,
+                                             photoparams::PhotoParams,
+                                             upper_bound::T,
+                                             max_iterations::Int) where {T <: AbstractFloat}
     lower = T(0.02)
-    upper = T(0.85)
+    upper = max(lower, upper_bound)
     lower_residual = fac * (one(T) - lower) - c3_adtmm_scalar_impl(
         lower, vcmax, stress, b, co2, temperature, apar, daylength,
         lpjmlparams, photoparams,
     )
     best = (lower + upper) * T(0.5)
     best_residual = typemax(T)
-    for _ in 1:30
+    for _ in 1:max_iterations
         midpoint = (lower + upper) * T(0.5)
         residual = fac * (one(T) - midpoint) - c3_adtmm_scalar_impl(
             midpoint, vcmax, stress, b, co2, temperature, apar, daylength,
@@ -337,15 +355,32 @@ relation but the same LPJmL bracket and residual-selection rule.
                                              daylength::T,
                                              lpjmlparams::LPJmLParams,
                                              photoparams::PhotoParams) where {T <: AbstractFloat}
+    return compute_lambda_c4_solution(
+        fac, vcmax, stress, b, temperature, apar, daylength,
+        lpjmlparams, photoparams, T(0.85), 30,
+    )
+end
+
+@inline function compute_lambda_c4_solution(fac::T,
+                                             vcmax::T,
+                                             stress::T,
+                                             b::T,
+                                             temperature::T,
+                                             apar::T,
+                                             daylength::T,
+                                             lpjmlparams::LPJmLParams,
+                                             photoparams::PhotoParams,
+                                             upper_bound::T,
+                                             max_iterations::Int) where {T <: AbstractFloat}
     lower = T(0.02)
-    upper = T(0.85)
+    upper = max(lower, upper_bound)
     lower_residual = fac * (one(T) - lower) - c4_adtmm_scalar_impl(
         lower, vcmax, stress, b, temperature, apar, daylength,
         lpjmlparams, photoparams,
     )
     best = (lower + upper) * T(0.5)
     best_residual = typemax(T)
-    for _ in 1:30
+    for _ in 1:max_iterations
         midpoint = (lower + upper) * T(0.5)
         residual = fac * (one(T) - midpoint) - c4_adtmm_scalar_impl(
             midpoint, vcmax, stress, b, temperature, apar, daylength,

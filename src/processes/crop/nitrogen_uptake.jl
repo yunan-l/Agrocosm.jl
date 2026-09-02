@@ -9,6 +9,7 @@ function nuptake_crop!(crop,
                        CFT::CFTParameters,
                        soil;
                        auto_fertilizer::Bool = false,
+                       biological_fixation::Bool = false,
                        lpjmlparams::LPJmLParams = lpjmlparams
 )
 
@@ -16,6 +17,7 @@ function nuptake_crop!(crop,
         lpjmlparams = lpjmlparams,
         soil_layers = 5,
         auto_fertilizer = auto_fertilizer,
+        biological_fixation = biological_fixation,
     )
 
     launch_1D!(
@@ -23,6 +25,9 @@ function nuptake_crop!(crop,
         crop_prognostic(crop).nitrogen.total,
         crop_fluxes(crop).nitrogen.uptake,
         crop_fluxes(crop).nitrogen.auto_fertilizer,
+        crop_fluxes(crop).nitrogen.biological_fixation,
+        crop_fluxes(crop).carbon.biological_fixation_cost,
+        crop_fluxes(crop).carbon.net_assimilation,
         crop_prognostic(crop).nitrogen.leaf,
         crop_prognostic(crop).carbon.leaf,
         crop_prognostic(crop).nitrogen.root,
@@ -42,6 +47,29 @@ function nuptake_crop!(crop,
         kernel_params
     )
 
+end
+
+"""LPJmL trapezoidal soil-temperature response for biological N fixation."""
+@inline function compute_bnf_temperature_response(
+    temperature::T, limit_low::T, optimum_low::T, optimum_high::T, limit_high::T,
+) where {T <: AbstractFloat}
+    if temperature < limit_low || temperature > limit_high
+        return zero(T)
+    elseif temperature < optimum_low
+        return (temperature - limit_low) / (optimum_low - limit_low)
+    elseif temperature <= optimum_high
+        return one(T)
+    end
+    return (limit_high - temperature) / (limit_high - optimum_high)
+end
+
+"""LPJmL piecewise-linear soil-water response for biological N fixation."""
+@inline function compute_bnf_water_response(
+    relative_water::T, lower::T, upper::T,
+) where {T <: AbstractFloat}
+    relative_water <= lower && return zero(T)
+    relative_water >= upper && return one(T)
+    return (relative_water - lower) / (upper - lower)
 end
 
 """Compute LPJmL's bounded soil-temperature response for root nitrogen uptake."""
@@ -93,6 +121,9 @@ end
                                       crop_nitrogen::AbstractArray{T},
                                       crop_nuptake::AbstractArray{T},
                                       crop_nautofertilizer::AbstractArray{T},
+                                      crop_bnf::AbstractArray{T},
+                                      crop_bnf_cost::AbstractArray{T},
+                                      crop_net_assimilation::AbstractArray{T},
                                       crop_leafn::AbstractArray{T},
                                       crop_leafc::AbstractArray{T},
                                       crop_rootn::AbstractArray{T},
@@ -114,14 +145,17 @@ end
 
     cell = @index(Global)
 
-    @unpack lpjmlparams, soil_layers, auto_fertilizer = kernel_params
+    @unpack lpjmlparams, soil_layers, auto_fertilizer, biological_fixation = kernel_params
 
     @unpack T_0, T_m, T_r = lpjmlparams
     @unpack ncleaf, knstore, no3_uptake, nh4_uptake = CFT
+    bnf = CFT.biological_fixation
 
     if crop_isgrowing[cell] == 1
         crop_nuptake[cell] = zero(T)
         crop_nautofertilizer[cell] = zero(T)
+        crop_bnf[cell] = zero(T)
+        crop_bnf_cost[cell] = zero(T)
 
         mobile_carbon = crop_leafc[cell] + crop_rootc[cell]
         NCplant = mobile_carbon > zero(T) ?
@@ -199,7 +233,37 @@ end
 
         ndemand_leaf_opt = crop_ndemand_leaf[cell]
         nitrogen_deficit = max(zero(T), crop_ndemand_tot[cell] - crop_nitrogen[cell])
-        if auto_fertilizer && nitrogen_deficit > zero(T)
+        fixes_nitrogen = biological_fixation && bnf.enabled == one(bnf.enabled)
+        if fixes_nitrogen && nitrogen_deficit > zero(T) &&
+           crop_net_assimilation[cell] > zero(T)
+            fixed_nitrogen = zero(T)
+            for layer in 1:min(2, soil_layers)
+                temperature_response = compute_bnf_temperature_response(
+                    soil_temp[layer, cell], T(bnf.temperature_limit.low),
+                    T(bnf.temperature_optimum.low), T(bnf.temperature_optimum.high),
+                    T(bnf.temperature_limit.high),
+                )
+                water_response = compute_bnf_water_response(
+                    soil_w[layer, cell], T(bnf.water_limit.low), T(bnf.water_limit.high),
+                )
+                fixed_nitrogen += T(bnf.potential) * crop_rootdist[layer] *
+                    temperature_response * water_response
+            end
+            fixed_nitrogen = min(fixed_nitrogen, nitrogen_deficit)
+            carbon_cost = T(bnf.carbon_cost) * fixed_nitrogen
+            maximum_cost = crop_net_assimilation[cell] * T(bnf.maximum_npp_fraction)
+            if carbon_cost > maximum_cost
+                carbon_cost = maximum_cost
+                fixed_nitrogen = carbon_cost / T(bnf.carbon_cost)
+            end
+            crop_nitrogen[cell] += fixed_nitrogen
+            crop_nuptake[cell] += fixed_nitrogen
+            crop_bnf[cell] = fixed_nitrogen
+            crop_bnf_cost[cell] = carbon_cost
+            nitrogen_deficit = max(zero(T), crop_ndemand_tot[cell] - crop_nitrogen[cell])
+        end
+
+        if !fixes_nitrogen && auto_fertilizer && nitrogen_deficit > zero(T)
             crop_nitrogen[cell] += nitrogen_deficit
             crop_nuptake[cell] += nitrogen_deficit
             crop_nautofertilizer[cell] = nitrogen_deficit
@@ -223,6 +287,8 @@ end
         crop_nitrogen[cell] = zero(T)
         crop_nuptake[cell] = zero(T)
         crop_nautofertilizer[cell] = zero(T)
+        crop_bnf[cell] = zero(T)
+        crop_bnf_cost[cell] = zero(T)
         # A deleted LPJmL stand has no active limitation. Keep the reusable
         # placeholder at the neutral multiplicative value.
         crop_vscal[cell] = one(T)

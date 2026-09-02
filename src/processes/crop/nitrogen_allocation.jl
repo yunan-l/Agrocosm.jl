@@ -12,15 +12,49 @@ function crop_nitrogen!(crop,
                         lpjmlparams::LPJmLParams = lpjmlparams,
 ) where {T <: AbstractFloat}
 
-    ndemand_crop!(crop, CFT, photos_vcmax, temp; lpjmlparams = lpjmlparams)
-    nuptake_crop!(
-        crop, CFT, soil;
+    acquire_crop_nitrogen!(
+        crop, CFT, soil, photos_vcmax, temp;
         auto_fertilizer = auto_fertilizer,
         lpjmlparams = lpjmlparams,
     )
 
     allocate_crop_nitrogen!(crop, CFT)
 
+end
+
+
+"""
+    acquire_crop_nitrogen!(crop, CFT, soil, photos_vcmax, temp;
+                           auto_fertilizer=true)
+
+Compute demand and acquire today's crop nitrogen without repartitioning organ
+nitrogen. The nitrogen-limited daily pathway calls this before limiting Vcmax,
+then allocates organ nitrogen only after today's carbon allocation, matching
+LPJmL's process order. `crop_nitrogen!` remains the combined compatibility
+entry point.
+"""
+function acquire_crop_nitrogen!(crop,
+                                CFT::CFTParameters,
+                                soil,
+                                photos_vcmax::AbstractArray{T},
+                                temp::AbstractArray{T};
+                                auto_fertilizer::Bool = true,
+                                include_storage_reserve::Bool = false,
+                                biological_fixation::Bool = false,
+                                lpjmlparams::LPJmLParams = lpjmlparams,
+) where {T <: AbstractFloat}
+    ndemand_crop!(
+        crop, CFT, photos_vcmax, temp;
+        include_storage_reserve,
+        lpjmlparams = lpjmlparams,
+    )
+    nuptake_crop!(
+        crop, CFT, soil;
+        auto_fertilizer = auto_fertilizer,
+        biological_fixation = biological_fixation,
+        lpjmlparams = lpjmlparams,
+    )
+    return nothing
 end
 
 """
