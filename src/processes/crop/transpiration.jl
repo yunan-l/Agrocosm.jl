@@ -234,8 +234,8 @@ function finalize_nitrogen_limited_transpiration!(
                      lpjmlparams = lpjmlparams)
     launch_1D!(
         finalize_nitrogen_limited_transpiration_kernel!,
-        crop_fluxes(crop).water.transpiration_layer,
         crop_canopy_auxiliary(crop).canopy_conductance,
+        crop_fluxes(crop).water.transpiration_layer,
         crop_fluxes(crop).carbon.water_limited_assimilation,
         crop_photosynthesis_auxiliary(crop).lambda,
         crop_photosynthesis_auxiliary(crop).temperature_stress,
@@ -254,8 +254,8 @@ function finalize_nitrogen_limited_transpiration!(
 end
 
 @kernel inbounds = true function finalize_nitrogen_limited_transpiration_kernel!(
-    transpiration_layer::AbstractArray{T},
     conductance::AbstractArray{T},
+    transpiration_layer::AbstractArray{T},
     limited_assimilation::AbstractArray{T},
     lambda::AbstractArray{T},
     temperature_stress::AbstractArray{T},
