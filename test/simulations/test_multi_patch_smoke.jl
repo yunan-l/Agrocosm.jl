@@ -13,6 +13,8 @@ include(joinpath(@__DIR__, "..", "..", "scripts", "run_global_cfts_cpu.jl"))
     ).closes
 
     @test requested_crop_systems(Dict{String, Any}()) == [(1, false)]
+    @test is_arable_crop_soil(13)
+    @test !is_arable_crop_soil(ROCK_ICE_SOIL_CODE)
     @test requested_crop_systems(Dict("cfts" => Dict(
         "cft_ids" => "all", "water_systems" => ["rainfed", "irrigated"],
     ))) == [(cft_id, irrigated) for cft_id in 1:length(CFTS) for irrigated in (false, true)]

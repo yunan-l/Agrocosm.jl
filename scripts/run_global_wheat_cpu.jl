@@ -8,6 +8,7 @@ if !isdefined(@__MODULE__, :AgrocosmData)
 end
 import .AgrocosmData: CFTRegistry, DATA_SCHEMA_VERSION, DatasetCatalog, DatasetSpec,
     HWSD_CN_PREPROCESSING_VERSION, PatchDomain, SoilCNTargets, SoilPoolAllocation,
+    ROCK_ICE_SOIL_CODE,
     build_crop_mask, cft_index, climate_blocks, climate_days, climate_forcings,
     combine_patch_domains, dataset, expand_to_grid, management_schedule,
     read_climate_block, read_grid, read_management, read_soil_cn_targets,
@@ -25,6 +26,8 @@ function execution_backend(config; override = nothing)
     CUDA.allowscalar(false)
     return (name = :cuda, device = CUDA.CuArray, device_id)
 end
+
+is_arable_crop_soil(soilcode::Integer) = soilcode != ROCK_ICE_SOIL_CODE
 
 function catalog_from_config(config)
     paths = config["paths"]
@@ -539,6 +542,8 @@ function run_global_wheat(
         simulation_years = source_years, T = Float32, irrigated,
     )
     crop_mask = build_crop_mask(grid, landuse.values)
+    soil_probe = read_soil_data(catalog, grid; selection = crop_mask.selection)
+    rock_ice = .!is_arable_crop_soil.(soil_probe.soilcode)
     phu_probe = read_management(
         catalog, :phu, grid, cft_id;
         selection = crop_mask.selection,
@@ -551,11 +556,12 @@ function run_global_wheat(
         values = view(phu_probe.values, :, cell)
         all(!active || (isfinite(value) && value != 0) for (active, value) in zip(active_years, values))
     end
-    any(valid_phu) || error("no landfrac-selected cells have valid PHU")
-    excluded = .!valid_phu
+    eligible = valid_phu .& .!rock_ice
+    any(eligible) || error("no landfrac-selected cells have valid PHU on arable soil")
+    excluded = .!eligible
     landfrac = vec(maximum(crop_mask.fraction; dims = 1))
     selection = select_cells(
-        grid, crop_mask.selection.compact_indices[valid_phu],
+        grid, crop_mask.selection.compact_indices[eligible],
     )
     cell_limit = Int(get(run, "cell_limit", 0))
     cell_limit >= 0 || error("cell_limit must be non-negative")
@@ -572,7 +578,10 @@ function run_global_wheat(
     write_report(joinpath(output_directory, "selection_qc.toml"), Dict(
         "landfrac_positive_cells" => length(crop_mask.selection.cell_ids),
         "valid_phu_cells" => count(valid_phu),
-        "excluded_phu_cells" => count(excluded),
+        "excluded_phu_cells" => count(!, valid_phu),
+        "excluded_rock_ice_cells" => count(rock_ice),
+        "excluded_rock_ice_landfrac_sum" => sum(landfrac[rock_ice]),
+        "excluded_cells" => count(excluded),
         "excluded_landfrac_sum" => excluded_landfrac,
         "excluded_landfrac_fraction" => excluded_landfrac / sum(landfrac),
         "eligible_cells" => eligible_cell_count,

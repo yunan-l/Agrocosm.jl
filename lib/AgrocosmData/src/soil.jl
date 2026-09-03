@@ -16,6 +16,7 @@ const _CANONICAL_SOIL_CLASS_NAMES = (
     "clay (light)",
     "rock and ice",
 )
+const ROCK_ICE_SOIL_CODE = Int32(length(_CANONICAL_SOIL_CLASS_NAMES))
 
 _normalize_soil_class_name(name::AbstractString) =
     lowercase(join(split(strip(replace(name, '\0' => ""))), " "))

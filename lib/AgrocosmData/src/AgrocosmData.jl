@@ -19,7 +19,7 @@ export DataProvenance, DatasetSpec, DatasetCatalog, CFTRegistry, ManagementBands
 export GridIndex, CellSelection, PatchDomain, CompactVariable, TimeCellData, CropMask
 export CO2Series, ClimateBlock, ClimateBlockReader, ClimateForcingReader
 export PrefetchedClimateForcingReader
-export SoilLookup, SoilData, DEFAULT_SOIL_LOOKUP_VERSION
+export SoilLookup, SoilData, DEFAULT_SOIL_LOOKUP_VERSION, ROCK_ICE_SOIL_CODE
 export SoilCNTargets, SoilPoolAllocation, SoilCNAggregator
 export HWSD_LAYER_BOUNDS, AGROCOSM_SOIL_LAYER_BOUNDS, HWSD_CN_PREPROCESSING_VERSION
 export load_catalog, dataset, cft_index, cft_name

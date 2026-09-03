@@ -173,6 +173,7 @@ include("test_climate_deposition.jl")
 
         soil = read_soil_data(catalog, grid)
         @test DEFAULT_SOIL_LOOKUP_VERSION == v"1.1.0"
+        @test ROCK_ICE_SOIL_CODE == 14
         @test soil.soilcode == Int32[1, 6, 9, 14]
         @test soil.ph == Float32[6, 7, 8, 9]
         @test soil.sand == Float32[0.22, 0.58, 0.58, 0.99]
