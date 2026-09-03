@@ -427,6 +427,18 @@ fraction sends leaf and mobile-pool material to surface or incorporated litter;
 root material becomes root litter. Remaining material crosses the boundary as
 harvest export, with nitrogen following organ-specific routing.
 
+The model output `crop_yield` is harvested storage-organ carbon in
+``\mathrm{gC\,m^{-2}}``, not dry matter. For LPJmL/GGCMI-compatible reporting,
+convert every crop with the common LPJmL carbon fraction of 0.45:
+
+```math
+Y_{\mathrm{tDM\,ha^{-1}}}=\frac{Y_{\mathrm{gC\,m^{-2}}}}{0.45}\times0.01.
+```
+
+The factor applies uniformly across CFTs for this reporting convention. It is
+distinct from `CCpDM = 0.4763`, which describes leaf carbon per unit leaf dry
+matter and must not be used to convert harvested storage-organ yield.
+
 The failed-crop condition is
 
 ```math
