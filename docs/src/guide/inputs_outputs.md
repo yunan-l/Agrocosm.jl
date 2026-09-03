@@ -21,7 +21,9 @@ Raw climate uses daily matrices `(day, cell)`:
 - `prec`: precipitation in mm day⁻¹
 - `swdown`: downward shortwave radiation
 - `lwnet`: net longwave radiation
-- `windspeed`: optional wind speed; a default is used when absent
+- `windspeed`: wind speed in m s⁻¹; legacy in-memory archives may omit it and
+  use the 1.5 m s⁻¹ compatibility default, but global production configurations
+  require the daily NetCDF forcing
 - `co2`: annual vector or daily matrix
 - `temp_spinup`: temperature history used only to initialize climate memory
 - `prec_spinup`: optional precipitation history aligned with `temp_spinup`;

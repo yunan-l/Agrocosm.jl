@@ -50,11 +50,13 @@ include("test_climate_deposition.jl")
         @test climate[1].provenance.calendar == "unspecified"
         @test climate[1].provenance.model_units == (
             temp = "degC", prec = "mm/day", lwnet = "W/m2",
-            swdown = "W/m2", co2 = "ppm",
+            swdown = "W/m2", wind = "m/s", co2 = "ppm",
             no3_deposition = nothing, nh4_deposition = nothing,
         )
+        @test climate[1].wind == Float32[12 4 2 13; 13 5 3 14]
         @test isnothing(climate[1].no3_deposition)
         @test isnothing(climate[1].nh4_deposition)
+        @test climate_forcing(climate[1]).wind === climate[1].wind
         @test climate_forcing(climate[1]).co2_daily
         @test climate_forcing(climate[1]).backend_neutral
         @test !hasproperty(climate_forcing(climate[1]), :provenance)

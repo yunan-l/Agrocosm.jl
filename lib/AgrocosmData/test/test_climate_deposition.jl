@@ -84,6 +84,8 @@ end
         block = only(collect(climate_blocks(catalog, grid; co2_path = co2, block_days = 365)))
         forcing = climate_forcing(block)
 
+        @test isnothing(block.wind)
+        @test !hasproperty(forcing, :wind)
         @test size(forcing.no3_deposition) == (365, 1)
         @test size(forcing.nh4_deposition) == (365, 1)
         @test forcing.no3_deposition[15, 1] == 1.0f0

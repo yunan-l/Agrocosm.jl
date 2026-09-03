@@ -111,9 +111,9 @@ function _memory_estimate(
     output_growth_bytes = isnothing(output_stream) ?
         days * cells * max(sizeof(T), sizeof(Int32)) : 0
     host_output_chunk_bytes = isnothing(output_stream) ? 0 : output_bytes
-    # Six time×cell forcing fields (including nitrate and ammonium deposition)
-    # plus one daily global CO₂ vector.
-    forcing_block_bytes = (6 * block_days * cells + block_days) * sizeof(T)
+    # Seven time×cell forcing fields (including wind and both nitrogen
+    # deposition forms) plus one daily global CO₂ vector.
+    forcing_block_bytes = (7 * block_days * cells + block_days) * sizeof(T)
     host_forcing_bytes = forcing_block_bytes * (2 + Int(prefetch))
     # Ten annual soil summaries plus carbon/nitrogen target corrections.
     warmup_history_bytes = warmup_years * cells * 12 * sizeof(T)

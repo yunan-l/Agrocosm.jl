@@ -94,9 +94,9 @@ end
         1, 1; T = Float64, diagnostics = false, block_days = 1,
         backend = :cpu, safety_factor = 1,
     ).persistent_state_bytes == 13358
-    @test estimate.forcing_block_bytes == 56
-    @test prefetched.host_forcing_bytes == estimate.host_forcing_bytes + 56
-    @test prefetched.host_peak_bytes == estimate.host_peak_bytes + 56
+    @test estimate.forcing_block_bytes == 64
+    @test prefetched.host_forcing_bytes == estimate.host_forcing_bytes + 64
+    @test prefetched.host_peak_bytes == estimate.host_peak_bytes + 64
     warmup_estimate = estimate_memory(
         simulation; block_days = 2, warmup_years = 10, safety_factor = 1,
     )

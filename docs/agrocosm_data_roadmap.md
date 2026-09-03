@@ -165,17 +165,17 @@ Replace eager whole-file reads with time-blocked access over the fixed active
 cell set.
 
 Status: complete for the currently required forcing contract: daily
-temperature, precipitation, net longwave, and downward shortwave, with annual
-global CO₂ matched to each block. Gregorian leap days are normalized to the
-model's 365-day calendar, forcing units are converted to the canonical model
-contract, and one-block threaded prefetch is implemented. Real server-I/O
+temperature, precipitation, net longwave, downward shortwave, and wind speed,
+with annual global CO₂ matched to each block. Gregorian leap days are normalized
+to the model's 365-day calendar, forcing units are converted to the canonical
+model contract, and one-block threaded prefetch is implemented. Real server-I/O
 benchmarking remains part of production hardening.
 
 Deliverables:
 
-- climate readers for temperature, precipitation, shortwave, longwave, and CO₂
-  with calendar and unit normalization; add wind/humidity only when a selected
-  process configuration declares them required;
+- climate readers for temperature, precipitation, shortwave, longwave, wind,
+  and CO₂ with calendar and unit normalization; add humidity only when a
+  selected process configuration declares it required;
 - configurable monthly, annual, or multi-year time blocks;
 - optional canonical `time × cell` caches where benchmarks show that direct
   source reads are too slow;

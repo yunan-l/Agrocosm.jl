@@ -35,6 +35,11 @@ include(joinpath(@__DIR__, "..", "..", "scripts", "run_global_cfts_cpu.jl"))
     single_catalog = catalog_from_config(Dict("paths" => Dict("input_directory" => "/tmp/input")))
     @test single_catalog.cfts.ids == Int32.(1:12)
     @test endswith(dataset(single_catalog, :landuse).path, "landuse_24cfts_2015.nc")
+    @test endswith(
+        dataset(single_catalog, :wind).path,
+        "sfcwind_gswp3-w5e5_obsclim_1901-2019.nc",
+    )
+    @test dataset(single_catalog, :wind).variable == "windspeed"
     @test cft_index(single_catalog.cfts, 1) == 1
 
     historical_catalog = catalog_from_config(Dict(

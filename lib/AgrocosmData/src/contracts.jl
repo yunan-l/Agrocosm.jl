@@ -169,6 +169,7 @@ struct ClimateBlock{T <: AbstractFloat, TT}
     precipitation::Matrix{T}
     shortwave::Matrix{T}
     longwave::Matrix{T}
+    wind::Union{Nothing, Matrix{T}}
     no3_deposition::Union{Nothing, Matrix{T}}
     nh4_deposition::Union{Nothing, Matrix{T}}
     co2::Vector{T}

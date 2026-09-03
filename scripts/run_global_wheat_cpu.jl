@@ -83,6 +83,10 @@ function catalog_from_config(config)
         :prec => DatasetSpec(climate_path("precipitation_file", "prec_2015_2016.nc"), "prec"),
         :lwnet => DatasetSpec(climate_path("longwave_file", "lwnet_2015_2016.nc"), "lwnet"),
         :swdown => DatasetSpec(climate_path("shortwave_file", "swdown_2015_2016.nc"), "swdown"),
+        :wind => DatasetSpec(
+            climate_path("wind_file", "sfcwind_gswp3-w5e5_obsclim_1901-2019.nc"),
+            String(get(climate, "wind_variable", "windspeed")),
+        ),
         :co2 => DatasetSpec(climate_path("co2_file", "co2_2015_2016.txt"), "co2"),
     )
     if has_no3_deposition

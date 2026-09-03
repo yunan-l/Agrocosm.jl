@@ -90,9 +90,11 @@ requires manure input when enabled. Tillage is a model configuration switch,
 not a data input.
 
 Climate blocks read only the requested daily rows from `temp`, `prec`, `lwnet`,
-and `swdown`. Annual global CO₂ from the two-column text file is matched by
-calendar year and emitted as a small daily vector, so arbitrary block boundaries
-remain correct.
+`swdown`, and the configured `wind` dataset. Annual global CO₂ from the
+two-column text file is matched by calendar year and emitted as a small daily
+vector, so arbitrary block boundaries remain correct. Generic readers retain
+the legacy no-wind fallback, while the global production scripts always
+configure wind explicitly.
 
 The model calendar is explicitly 365-day. Standard/Gregorian inputs have
 February 29 removed, while `noleap` and `365_day` inputs are retained. A

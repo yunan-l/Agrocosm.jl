@@ -36,6 +36,10 @@ variable = "lwnet"
 path = "/path/to/rsds_gswp3-w5e5_obsclim_1901-2019.nc"
 variable = "swdown"
 
+[datasets.wind]
+path = "/path/to/sfcwind_gswp3-w5e5_obsclim_1901-2019.nc"
+variable = "windspeed"
+
 [datasets.co2]
 path = "/path/to/global_co2_ann_1700_2022.txt"
 variable = "co2"

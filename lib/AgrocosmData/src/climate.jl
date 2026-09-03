@@ -1,4 +1,5 @@
 const _CLIMATE_DATASETS = (:temp, :prec, :lwnet, :swdown)
+const _OPTIONAL_DAILY_CLIMATE_DATASETS = (:wind,)
 const _NITROGEN_DEPOSITION_DATASETS = (:no3_deposition, :nh4_deposition)
 const _NOLEAP_MONTH_LENGTHS = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
 const _LPJML_MONTH_CENTRE_INTERVALS = (30, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
@@ -45,6 +46,13 @@ function _climate_time(catalog::DatasetCatalog)
     metadata = _time_metadata(dataset(catalog, :temp))
     isempty(reference) && throw(ArgumentError("climate time coordinate cannot be empty"))
     for name in _CLIMATE_DATASETS[2:end]
+        candidate = _time_coordinate(dataset(catalog, name), Colon())
+        candidate == reference || throw(ArgumentError("$name time coordinate does not match temp"))
+        _time_metadata(dataset(catalog, name)) == metadata ||
+            throw(ArgumentError("$name time metadata do not match temp"))
+    end
+    for name in _OPTIONAL_DAILY_CLIMATE_DATASETS
+        haskey(catalog.datasets, name) || continue
         candidate = _time_coordinate(dataset(catalog, name), Colon())
         candidate == reference || throw(ArgumentError("$name time coordinate does not match temp"))
         _time_metadata(dataset(catalog, name)) == metadata ||
@@ -149,6 +157,7 @@ function _validate_climate(name::Symbol, values)
     all(isfinite, values) || throw(ArgumentError("$name contains non-finite values"))
     name === :prec && !all(>=(0), values) && throw(ArgumentError("precipitation must be non-negative"))
     name === :swdown && !all(>=(0), values) && throw(ArgumentError("shortwave radiation must be non-negative"))
+    name === :wind && !all(>=(0), values) && throw(ArgumentError("wind speed must be non-negative"))
     name === :temp && !all(value -> -100 <= value <= 70, values) &&
         throw(ArgumentError("temperature must be supplied in degrees Celsius"))
     return values
@@ -176,6 +185,10 @@ function _normalize_climate_units(name::Symbol, values::Matrix{T}, units::Abstra
     elseif name in (:lwnet, :swdown)
         if normalized in ("w/m2", "wm-2", "wm^-2")
             return values, "W/m2"
+        end
+    elseif name === :wind
+        if normalized in ("m/s", "ms-1", "ms^-1", "ms**-1")
+            return values, "m/s"
         end
     elseif name in _NITROGEN_DEPOSITION_DATASETS
         if normalized in (
@@ -285,6 +298,22 @@ function read_climate_block(reader::ClimateBlockReader{T}, block_index::Integer)
     swdown_values, swdown_units = _normalize_climate_units(
         :swdown, Matrix{T}(swdown.values), swdown.provenance.units,
     )
+    wind = if haskey(reader.catalog.datasets, :wind)
+        source = read_compact_variable(
+            dataset(reader.catalog, :wind), reader.grid;
+            selection = reader.selection,
+            selectors = (time = indices,),
+            order = (:time, :cell),
+            T,
+        )
+        values, units = _normalize_climate_units(
+            :wind, Matrix{T}(source.values), source.provenance.units,
+        )
+        _validate_climate(:wind, values)
+        (values = values, units = units, provenance = source.provenance)
+    else
+        nothing
+    end
     _validate_climate(:temp, temp_values)
     _validate_climate(:prec, prec_values)
     _validate_climate(:lwnet, lwnet_values)
@@ -297,6 +326,7 @@ function read_climate_block(reader::ClimateBlockReader{T}, block_index::Integer)
         prec = prec.provenance,
         lwnet = lwnet.provenance,
         swdown = swdown.provenance,
+        wind = isnothing(wind) ? nothing : wind.provenance,
         co2 = reader.co2.provenance,
         no3_deposition = isnothing(no3_deposition) ? nothing : dataset(reader.catalog, :no3_deposition).path,
         nh4_deposition = isnothing(nh4_deposition) ? nothing : dataset(reader.catalog, :nh4_deposition).path,
@@ -305,6 +335,7 @@ function read_climate_block(reader::ClimateBlockReader{T}, block_index::Integer)
             prec = prec_units,
             lwnet = lwnet_units,
             swdown = swdown_units,
+            wind = isnothing(wind) ? nothing : wind.units,
             co2 = "ppm",
             no3_deposition = isnothing(no3_deposition) ? nothing : "g/m2/day",
             nh4_deposition = isnothing(nh4_deposition) ? nothing : "g/m2/day",
@@ -317,6 +348,7 @@ function read_climate_block(reader::ClimateBlockReader{T}, block_index::Integer)
         prec_values,
         swdown_values,
         lwnet_values,
+        isnothing(wind) ? nothing : wind.values,
         no3_deposition,
         nh4_deposition,
         _daily_co2(reader.co2, block_time),
@@ -341,6 +373,7 @@ function climate_forcing(block::ClimateBlock)
         co2_daily = true,
         backend_neutral = true,
     )
+    !isnothing(block.wind) && (forcing = merge(forcing, (wind = block.wind,)))
     !isnothing(block.no3_deposition) && (forcing = merge(forcing, (
         no3_deposition = block.no3_deposition,
     )))

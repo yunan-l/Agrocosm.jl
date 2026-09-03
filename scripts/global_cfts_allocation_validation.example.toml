@@ -8,6 +8,8 @@ temperature_file = "tas_gswp3-w5e5_obsclim_1901-2019.nc"
 precipitation_file = "pr_gswp3-w5e5_obsclim_1901-2019.nc"
 longwave_file = "lwnet_gswp3-w5e5_obsclim_1901-2019.nc"
 shortwave_file = "rsds_gswp3-w5e5_obsclim_1901-2019.nc"
+wind_file = "sfcwind_gswp3-w5e5_obsclim_1901-2019.nc"
+wind_variable = "windspeed"
 co2_file = "global_co2_ann_1700_2022.txt"
 
 [management]

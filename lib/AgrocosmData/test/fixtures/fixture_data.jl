@@ -124,6 +124,9 @@ function write_fixture(directory)
     swdown_path = _write_climate_file(
         joinpath(directory, "swdown.nc"), "swdown", "W/m2", longitude, latitude, 100,
     )
+    wind_path = _write_climate_file(
+        joinpath(directory, "wind.nc"), "windspeed", "m s-1", longitude, latitude, -10,
+    )
     co2_path = joinpath(directory, "co2.txt")
     open(co2_path, "w") do io
         write(io, "# year ppm\n2000 369.5\n2001 371.0\n")
@@ -206,6 +209,11 @@ path = "swdown.nc"
 variable = "swdown"
 units = "W/m2"
 
+[datasets.wind]
+path = "wind.nc"
+variable = "windspeed"
+units = "m s-1"
+
 [datasets.co2]
 path = "co2.txt"
 variable = "co2"
@@ -214,7 +222,7 @@ units = "ppm"
     end
     return (;
         grid_path, soil_path, management_path, temp_path, prec_path, lwnet_path,
-        swdown_path, co2_path, catalog_path,
+        swdown_path, wind_path, co2_path, catalog_path,
     )
 end
 
