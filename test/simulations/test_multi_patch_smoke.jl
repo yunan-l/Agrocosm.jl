@@ -180,4 +180,41 @@ include(joinpath(@__DIR__, "..", "..", "scripts", "run_global_cfts_cpu.jl"))
         @test _resumable_batch(status_path, "different-config") === nothing
     end
 
+    mktempdir() do directory
+        output_directory = joinpath(directory, "output")
+        config_path = joinpath(directory, "missing-input.toml")
+        write_report(config_path, Dict(
+            "paths" => Dict(
+                "input_directory" => joinpath(directory, "missing-input"),
+                "output_directory" => output_directory,
+            ),
+            "management" => Dict("mode" => "fixed", "fixed_year" => 2015),
+            "run" => Dict(
+                "backend" => "cpu",
+                "calibration_only" => true,
+                "production" => false,
+                "resume_completed_batches" => false,
+            ),
+        ))
+
+        caught = try
+            run_global_cfts(config_path; cft_id = 1, irrigated = false)
+            nothing
+        catch exception
+            exception
+        end
+        @test caught !== nothing
+        if caught !== nothing
+            @test occursin("grid.nc", sprint(showerror, caught))
+        end
+
+        failed_status = TOML.parsefile(joinpath(
+            output_directory, "batches", "cft_01_rainfed", "batch_status.toml",
+        ))
+        @test failed_status["status"] == "failed"
+        @test !failed_status["calibration_completed"]
+        @test occursin("grid.nc", failed_status["error"])
+        @test !occursin("calibration_completed", failed_status["error"])
+    end
+
 end

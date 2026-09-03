@@ -227,9 +227,9 @@ function run_global_cfts(
             partition_rank = Int(partition_rank),
             partition_count = Int(partition_count),
         )
+        calibration_output_directory = calibration_directory
+        calibration_completed = false
         try
-            calibration_output_directory = calibration_directory
-            calibration_completed = false
             if calibration_resume === nothing
                 calibration = run_global_wheat(
                     calibration_config;
