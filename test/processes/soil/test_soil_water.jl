@@ -1,6 +1,16 @@
 using Agrocosm
 using Test
 
+@testset "LPJ soil-class anion exclusion" begin
+    medium = Agrocosm.compute_mobile_nitrate_concentration(
+        1.0f0, 10.0f0, 0.3f0, 100.0f0,
+    )
+    high = Agrocosm.compute_mobile_nitrate_concentration(
+        1.0f0, 10.0f0, 0.4f0, 100.0f0,
+    )
+    @test high > medium > 0.0f0
+end
+
 @testset "Staged daily soil-water update" begin
     soil = init_soil(1, soilparams.soildepth, identity)
     crop = init_crop(1, identity)

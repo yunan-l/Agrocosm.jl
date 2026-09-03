@@ -56,12 +56,36 @@ function write_fixture(directory)
     soil_path = joinpath(directory, "soil.nc")
     NCDataset(soil_path, "c") do ds
         _coordinates!(ds, longitude, latitude)
+        soil_class_names = (
+            "(null)",
+            "clay",
+            "silty clay",
+            "sandy clay",
+            "clay loam",
+            "silty clay loam",
+            "sandy clay loam",
+            "loam",
+            "silt loam",
+            "sandy loam",
+            "silt",
+            "loamy sand",
+            "sand",
+            "rock and ice",
+        )
+        defDim(ds, "len", maximum(length, soil_class_names))
+        defDim(ds, "map", length(soil_class_names))
+        soil_map = defVar(ds, "map", Char, ("len", "map"))
+        soil_map_values = fill('\0', maximum(length, soil_class_names), length(soil_class_names))
+        for (index, name) in pairs(soil_class_names)
+            soil_map_values[1:length(name), index] = collect(name)
+        end
+        soil_map[:, :] = soil_map_values
         # Reversed spatial dimension order exercises semantic alignment.
         soilcode = defVar(ds, "soilcode", Int32, ("latitude", "longitude"); fillvalue = Int32(-9999))
         soilph = defVar(ds, "soilph", Float32, ("longitude", "latitude"); fillvalue = -1.0f32)
         codes_lon_lat = Matrix{Union{Missing, Int32}}([
             9 1
-            missing 14
+            missing 13
             6 missing
         ])
         ph_lon_lat = Matrix{Union{Missing, Float32}}([

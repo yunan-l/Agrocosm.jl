@@ -36,6 +36,13 @@ CUDA.allowscalar(false)
     @test soil_loss ≈ uptake atol = 1.0f-6
     @test all(Array(soil.nitrogen.nitrate) .>= 0.0f0)
     @test all(Array(soil.nitrogen.ammonium) .>= 0.0f0)
+
+    plant_before_closed_gate = Array(crop.state.nitrogen.total)[1]
+    crop.auxiliary.photosynthesis.lambda .= 0.0f0
+    crop.fluxes.nitrogen.uptake .= 1.0f0
+    nuptake_crop!(state, cft1, state; require_active_photosynthesis = true)
+    @test Array(crop.state.nitrogen.total)[1] == plant_before_closed_gate
+    @test Array(crop.fluxes.nitrogen.uptake)[1] == 0.0f0
 end
 
 @testset "CUDA automatic fertilizer supplies the remaining demand" begin

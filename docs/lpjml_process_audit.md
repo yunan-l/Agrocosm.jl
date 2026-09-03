@@ -27,7 +27,8 @@ limited lambda operations without changing their common scientific sequence:
 ```text
 climate history → cultivation/tillage/bioturbation → albedo/PET → snow
      → soil hydraulic/litter/thermal preparation
-     → pre-crop soil C–N decomposition → phenology/harvest/residue routing
+     → pre-crop soil C–N decomposition → pre-phenology raw gp snapshot (N path)
+     → phenology/harvest/residue routing
      → interception/infiltration → photosynthesis and water limitation
      → crop carbon and nitrogen → evaporation/water removal
      → denitrification and NH3 volatilization
@@ -49,10 +50,10 @@ thermal and litter/SOM work, then calls `daily_stand()` (and therefore
 | C–N decomposition | `soil_cn_decomposition!` | `daily_littersom.c`, `littersom_nomethane.c` | Aligned / Adapted | Same pre-crop role: decomposition, respiration, mineralization/immobilization, and nitrification make mineral N available to the crop. Agrocosm uses one annual-crop litter class and shared post-spin-up `c_shift` profiles instead of LPJmL's CFT litter list. |
 | Phenology and normal harvest | `phenology_crop!`, `harvest_crop!` | `phenology_crop.c`, `harvest_crop.c` | Aligned / Corrected | Both run before infiltration and daily crop assimilation. Actual daily LAI increment now uses LPJmL's `min(wscal, vscal)` exactly; the former additional `/ 1.5` water scaling was removed. New residues are routed after the day's decomposition, so they begin decomposing the next day. |
 | Interception and infiltration | `interception!`, `soil_infiltration!` | `interception.c`, `infil_perc.c` | Aligned / Adapted | Same placement before water-stressed assimilation. The bounded 4 mm slug loop now uses LPJmL's `MAXITER = 1000`; if it reaches the cap, remaining infiltration is routed to surface runoff rather than left unaccounted. Agrocosm retains an explicit five-layer enthalpy ledger and GPU-safe thermal update schedule. |
-| C3/C4 assimilation and water limitation | `photosynthesis_C3!` / `photosynthesis_C4!`, `transpiration!`, `solve_lambda_*` | `photosynthesis.c`, crop water-stress path | Adapted | The LPJmL-informed potential-capacity → water-limited-λ → final-assimilation sequence is retained. The GPU-compatible λ solver and numerical guards are an implementation adaptation. |
-| Carbon allocation and respiration | `crop_carbon!` | `npp_crop.c`, `allocation_daily_crop.c` | Aligned / Adapted | Agrocosm follows its fixed-organ-N:C crop-respiration configuration. NPP is defined after leaf, root, storage, pool, and growth respiration; organ allocation uses the LPJmL crop pathway as a historical process basis with a fixed-array representation. |
+| C3/C4 assimilation and water limitation | `photosynthesis_C3!` / `photosynthesis_C4!`, `transpiration!`, `solve_lambda_*` | `photosynthesis.c`, `gp_sum.c`, crop water-stress path | Adapted / Corrected | The N-aligned path snapshots raw `gp_sum` from the pre-phenology canopy and uses it for the initial water pass, while the current-canopy pass still supplies the λ solve. No additional `gp × fpar/phen` scaling is applied: it is absent from 5.10 and duplicates canopy scaling already present in APAR/conductance. The GPU-compatible λ solver and numerical guards remain implementation adaptations. |
+| Carbon allocation and respiration | `crop_carbon!` | `npp_crop.c`, `allocation_daily_crop.c` | Aligned / Adapted | Agrocosm defaults to the released LPJmL 6.1.9 configuration's `crop_resp_fix=true`, using fixed organ N:C for crop respiration; the dynamic organ-N:C mode remains an explicit opt-out. The 6.1.9 dynamic storage/pool cap assignments are internally inconsistent and the cap block is absent from 5.7.9, so Agrocosm preserves its existing opt-out behavior rather than copying that extreme-state branch. NPP is defined after leaf, root, storage, pool, and growth respiration; organ allocation uses the LPJmL crop pathway as a historical process basis with a fixed-array representation. |
 | Crop N demand, uptake, and allocation | `crop_nitrogen!`, `allocate_crop_nitrogen!` | `ndemand_crop.c`, `nuptake_crop.c`, `vmaxlimit_crop.c` | Adapted | Soil-N supply, uptake, allocation, and management inputs are active. The optional N-to-`vcmax` feedback remains disabled by default until the full LPJmL feedback sequence is completed. |
-| Soil evaporation and plant water removal | `evaporation!`, `soil_evapotranspiration!` | `waterbalance.c` | Aligned / Adapted | Both apply after crop demand/growth calculations. Agrocosm keeps explicit daily water-flux arrays for conservation and GPU execution. |
+| Soil evaporation and plant water removal | `evaporation!`, `soil_evapotranspiration!` | `waterbalance.c` | Aligned / Adapted / Corrected | Both apply after crop demand/growth calculations. Managed land now uses 6.1.9's `0.1` minimum exposed fraction in both evaporation-energy and litter-cover factors. As in 5.10/6.1, liquid plus ice drives the sigmoid moisture response, while soil evaporation is capped and distributed using only liquid water remaining after transpiration. The low-level explicit legacy switch is retained only for regression tests. Agrocosm keeps explicit daily water-flux arrays for conservation and GPU execution. |
 | Late N losses | `post_crop_nitrogen_losses!` | `denitrification.c`, `volatilization.c` | Aligned | Both occur after the daily stand/crop update, using the updated mineral-N pools and moisture state. |
 
 ## Process coverage by domain
@@ -84,7 +85,7 @@ that execute for the present prescribed annual-crop configuration.
 | --- | --- | --- |
 | Climate history, sowing, phenology, harvest, residue timing | `daily_climbuf()`, `cultivate.c`, `phenology_crop.c`, `harvest_crop.c` | Daily order and prescribed-crop behavior align. Dynamic sowing and crop rotations remain outside the present mode. |
 | Albedo, PET, snow, interception | `albedo_crop.c`, `petpar.c`, `snow.c`, `interception.c` | Snow phase partition, fixed sublimation, melt, and geometry follow the LPJmL pathway. The PET upper cap was a real discrepancy and is corrected below. |
-| Photosynthesis, water stress, lambda solve | `photosynthesis.c`, `water_stressed.c` | Potential assimilation, water-limited lambda closure, and the 30-step primary bisection are consistent with the current LPJmL crop path. Water-table/inundation terms are not represented because Agrocosm has no prognostic water table. |
+| Photosynthesis, water stress, lambda solve | `photosynthesis.c`, `gp_sum.c`, `water_stressed.c` | Potential assimilation, the pre-phenology raw-conductance snapshot, water-limited lambda closure, and the 30-step primary bisection are consistent with the version-screened crop path. The extra 6.1.9 `gp × fpar/phen` operation is deliberately rejected because it is absent in 5.10 and duplicates existing canopy scaling. Water-table/inundation terms are not represented because Agrocosm has no prognostic water table. |
 | Leaf development, respiration, carbon allocation and crop failure | `phenology_crop.c`, `npp_crop.c`, `allocation_daily_crop.c` | LAI water scaling is corrected below. Allocation, senescence pool draw-down, and negative-biomass termination follow the LPJmL control flow. Agrocosm defines NPP after all crop respiration components. |
 | N demand, uptake, allocation, mineralization, nitrification, denitrification, NH₃ | `ndemand_crop.c`, `nuptake_crop.c`, `daily_littersom.c`, `littersom_nomethane.c`, `denitrification.c`, `volatilization.c` | Current fixed-N:C crop-respiration mode and daily ordering are consistent. N-to-`vcmax` feedback stays deliberately disabled by default. Ice treatment in denitrification is an explicit frozen-soil simplification. |
 | Tillage, pedotransfer, infiltration/percolation, evaporation | `cultivate.c`, `pedotransfer.c`, `infil_perc.c`, `waterbalance.c` | Hydraulic parameter update and daily placement are retained. The infiltration cap was a real discrepancy and is corrected below. Full irrigation remains the configured LPJmL-style field-capacity reset, not a water-supply model. |
@@ -97,6 +98,44 @@ that execute for the present prescribed annual-crop configuration.
 | Infiltration/percolation | Stopped after 500 4-mm slugs and could leave the remaining daily input unaccounted. | Uses `MAXITER = 1000`, then routes any remainder to surface runoff and zeros the mutable infiltration input, as in `infil_perc.c`. | `test/processes/soil/test_soil_water.jl` checks the cap and daily water accounting. |
 | Actual LAI development | Multiplied potential LAI growth by `min(wscal / 1.5, vscal)`. | Uses `min(wscal, vscal)`, matching `phenology_crop.c`; both factors are already 0–1. | `test/processes/crop/test_actual_lai.jl` checks a water-limited canopy increment. |
 | Equilibrium evaporation | Clamped PET to `[0, 15]` mm d⁻¹. | Keeps LPJmL's lower-zero clamp only; high-energy values are not artificially capped. | `test/processes/crop/test_radiation_lpjml.jl` checks a value above 15 mm d⁻¹. |
+| Crop conductance timing | Recomputed the initial water-pass conductance from the canopy after the day's phenology update. | The N-aligned path preserves LPJmL 5.10/6.1's pre-phenology raw `gp_sum`, without 6.1.9's additional `fpar/phen` rescaling. | `test/processes/crop/test_lambda_water_coupling.jl` changes the post-phenology canopy inputs and verifies that the stored raw conductance drives demand and water sufficiency. |
+| Managed-land soil evaporation | Used a `0.05` minimum exposed fraction and could diagnose more soil evaporation than the liquid water remaining after transpiration. | Uses 6.1.9's `0.1` managed-land floor in both exposed-fraction terms; liquid plus ice supplies `w_evap`, while post-transpiration liquid water supplies the cap and ratio denominator (`tmpwater`). | `test/processes/soil/test_surface_litter_water.jl` covers both floors, frozen-water response, the dry-soil cap, and the explicit legacy branch. |
+
+The scientific temperature coefficient remains `k_temp = 0.0693`, as declared
+in the LPJmL parameter file and read by 5.10. LPJmL 6.1.9's scanner omits this
+field and therefore leaves its global static value at zero; Agrocosm treats
+that executable behavior as a reader bug rather than a parameter target.
+
+Nitrate transport intentionally retains the 5.10 timing: NO₃ moves within
+each bounded `≤ 4 mm` infiltration substep. Although 6.1.9 defers transport to
+one post-hydrology pass, it resets the local lateral-runoff accumulator inside
+each substep before using that value at day end, so that path is not adopted as
+a scientific reference. Agrocosm therefore keeps the internally consistent
+5.10 operator and its paired `NPERCO = 0.4`, rather than mixing that time scale
+with 6.1.9's `0.3`. This decision is independent of the `NO_METHANE` soil C–N
+order.
+
+Nitrification moisture coefficients are soil properties, not global model
+parameters. Agrocosm maps the LPJ soil classes SaCl, SaClLo, SaLo, LoSa, and Sa
+(`soilcode` 3, 6, 9, 11, and 12) to `(0.55, 1.7, -0.007, 3.22)` and all other
+classes to `(0.45, 1.27, 0.0012, 2.84)`, matching `soil.cjson` and `f_wfps()`.
+The mapping uses the discrete LPJ `soilcode` already carried by the production
+input contract. It does not infer an LPJ class from continuous HWSD texture;
+inputs without a soil code retain the fine/default tuple for compatibility.
+The same initialization maps LPJ's anion-excluded porosity to `0.4` for those
+five sandy classes plus clay-light/rock, and to `0.3` otherwise; nitrate
+transport reads that per-cell property while retaining the selected 5.10
+substep timing and `NPERCO = 0.4`.
+
+The production soil NetCDF maps source code 13 to rock/ice, whereas Agrocosm's
+canonical 14-class lookup uses code 13 for clay-light and 14 for rock. The
+AgrocosmData reader therefore resolves the NetCDF `map` names into canonical
+codes instead of assuming that source numbers are lookup positions. The two
+classes share the N coefficients above, so this correction does not alter the
+N-parameter mapping. It does alter their hydraulic and thermal properties.
+The ten-grid fixture and cell 60866 contain no source-code-13 cells, but the
+global wheat inputs do; derived initial-data and checkpoint artifacts that
+were built with the old positional interpretation must be regenerated.
 
 The infiltration loop retains Agrocosm's `1e-5` residual threshold rather than
 LPJmL's smaller floating-point epsilon. This is a numerical tolerance choice;

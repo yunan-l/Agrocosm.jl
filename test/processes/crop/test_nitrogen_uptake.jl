@@ -24,6 +24,24 @@ function nitrogen_uptake_fixture(device = identity)
     return crop, soil, test_model_state(crop, soil)
 end
 
+@testset "LPJmL photosynthesis gate skips daily nitrogen acquisition" begin
+    crop, soil, state = nitrogen_uptake_fixture()
+    crop.auxiliary.photosynthesis.lambda .= 0.0f0
+    crop.state.nitrogen.sufficiency .= 0.37f0
+    crop.fluxes.nitrogen.uptake .= 99.0f0
+    plant_before = copy(crop.state.nitrogen.total)
+    nitrate_before = copy(soil.nitrogen.nitrate)
+    ammonium_before = copy(soil.nitrogen.ammonium)
+
+    nuptake_crop!(state, cft1, state; require_active_photosynthesis = true)
+
+    @test crop.state.nitrogen.total == plant_before
+    @test soil.nitrogen.nitrate == nitrate_before
+    @test soil.nitrogen.ammonium == ammonium_before
+    @test crop.fluxes.nitrogen.uptake[1] == 0.0f0
+    @test crop.state.nitrogen.sufficiency[1] == 0.37f0
+end
+
 @testset "Separate NO3/NH4 uptake conserves nitrogen" begin
     crop, soil, state = nitrogen_uptake_fixture()
     plant_before = crop.state.nitrogen.total[1]

@@ -17,7 +17,7 @@ function _daily_crop!(
     manure = false,
     fertilizer = :auto,
     with_tillage = true,
-    crop_resp_fix = false,
+    crop_resp_fix = true,
     nitrogen_limit_vcmax = false,
     sowing_mode::Symbol = :prescribed_sdate,
     update_vernalization_requirement::Bool = true,
@@ -169,12 +169,38 @@ function _daily_crop!(
                 fertilizer = fertilizer === :yes,
                 manure,
                 apply_sowing_dose = false,
+                surface_second_manure = nitrogen_limit_vcmax,
                 reset_inputs = false,
                 lpjmlparams = global_params,
             )
         end
         c_shift_response_sum === nothing ||
             accumulate_c_shift_response!(c_shift_response_sum, state)
+
+        if nitrogen_limit_vcmax
+            # LPJmL 5.10 computes `gp_sum` before advancing crop phenology. Keep
+            # that raw conductance in today's auxiliary slot; the post-phenology
+            # APAR/photosynthesis pass below still supplies the lambda solve.
+            _pathway_apar!(
+                pathway, cftparameters, state, pet,
+                soil_snow_prognostic(state).height, maize,
+            )
+            temp_stress(
+                cftparameters, pet, state, dailyWeather.temp;
+                photoparams = photo_params,
+            )
+            photosynthesis!(
+                pathway, cftparameters, state, crop_canopy_auxiliary(state).apar,
+                pet.daylength, dailyWeather.temp, current_co2;
+                comp_vcmax = true,
+                lpjmlparams = global_params,
+                photoparams = photo_params,
+            )
+            prepare_prephenology_canopy_conductance!(
+                cftparameters, state, pet.daylength, current_co2;
+                lpjmlparams = global_params,
+            )
+        end
 
         # --- Discrete calendar harvest event ------------------------------
         phenology_crop!(
@@ -231,6 +257,7 @@ function _daily_crop!(
             crop_fluxes(state).carbon.water_limited_assimilation,
             cftparameters, state, pet, state, current_co2;
             lpjmlparams = global_params,
+            use_precomputed_conductance = nitrogen_limit_vcmax,
         )
         solve_lambda!(
             pathway, cftparameters, state, pet, dailyWeather.temp, current_co2;
@@ -256,10 +283,12 @@ function _daily_crop!(
                 auto_fertilizer = automatic_fertilizer,
                 include_storage_reserve = true,
                 biological_fixation = true,
+                require_active_photosynthesis = true,
                 lpjmlparams = global_params,
             )
             limit_vcmax_by_nitrogen!(
                 state, cftparameters, dailyWeather.temp;
+                require_active_photosynthesis = true,
                 lpjmlparams = global_params,
             )
             photosynthesis!(
@@ -321,7 +350,11 @@ function _daily_crop!(
             )
         end
 
-        evaporation!(pet.eeq, state, state; lpjmlparams = global_params)
+        evaporation!(
+            pet.eeq, state, state;
+            lpjmlparams = global_params,
+            lpjml_managed_evaporation = true,
+        )
         soil_evapotranspiration!(state, state; irrigation)
         record_ecosystem_flux_outputs!(output, state, state; output_row)
         accumulate_season_process_diagnostics!(output, state, state)
@@ -329,6 +362,7 @@ function _daily_crop!(
             state;
             air_temperature = dailyWeather.temp,
             wind_speed = dailyWeather.wind,
+            exact_lpjml_volatilization = nitrogen_limit_vcmax,
             lpjmlparams = global_params,
         )
 

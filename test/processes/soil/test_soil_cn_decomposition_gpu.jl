@@ -5,7 +5,7 @@ using Test
 CUDA.functional() || error("A functional NVIDIA GPU is required for this test")
 CUDA.allowscalar(false)
 
-function run_soil_cn_gpu_fixture(device)
+function run_soil_cn_gpu_fixture(device; exact_lpjml_volatilization = false)
     cells = 2
     soil = init_soil(Float32, cells, Float32.(soilparams.soildepth), device)
     state = test_model_state(soil)
@@ -39,8 +39,17 @@ function run_soil_cn_gpu_fixture(device)
         state;
         air_temperature = device(fill(20.0f0, cells)),
         wind_speed = device(fill(2.0f0, cells)),
+        exact_lpjml_volatilization,
     )
     return soil
+end
+
+@testset "CUDA LPJmL ammonia volatilization" begin
+    cpu = run_soil_cn_gpu_fixture(identity; exact_lpjml_volatilization = true)
+    gpu = run_soil_cn_gpu_fixture(CuArray; exact_lpjml_volatilization = true)
+
+    @test Array(gpu.nitrogen.ammonium) ≈ cpu.nitrogen.ammonium rtol = 2.0f-5 atol = 5.0f-6
+    @test Array(gpu.nitrogen.volatilization) ≈ cpu.nitrogen.volatilization rtol = 2.0f-5 atol = 5.0f-6
 end
 
 @testset "CUDA coupled soil C-N decomposition" begin

@@ -138,8 +138,7 @@ function infil_perc!(soil,
         lpjmlparams,
         thermalparams,
         soil_layers = 5,
-        anion_excl = T(0.3),
-        NPERCO = T(0.4),
+        NPERCO = T(lpjmlparams.NPERCO),
         transfer_heat,
     )
 
@@ -169,6 +168,7 @@ function infil_perc!(soil,
                soil_nitrogen_fluxes(soil).leaching,
                soil_properties(soil).layer_depth,
                soil_properties(soil).sand_fraction,
+               soil_properties(soil).anion_exclusion,
                soil_management_prognostic(soil).tillage_density_factor,
                soil_thermal_prognostic(soil).temperature,
                soil_thermal_fluxes(soil).percolation_energy,
@@ -305,6 +305,7 @@ end
                                     soil_n_leaching::AbstractArray{T},
                                     soil_layer_depth::AbstractArray{T},
                                     soil_sand_fraction::AbstractMatrix{T},
+                                    soil_anion_exclusion::AbstractArray{T},
                                     tillage_density_factor::AbstractMatrix{T},
                                     soil_temperature::AbstractArray{M},
                                     soil_perc_energy::AbstractArray{M},
@@ -320,10 +321,11 @@ end
 
     cell = @index(Global)
 
-    @unpack lpjmlparams, thermalparams, soil_layers, anion_excl, NPERCO,
+    @unpack lpjmlparams, thermalparams, soil_layers, NPERCO,
             transfer_heat = kernel_params
 
     @unpack soil_infil, soil_infil_litter, percthres = lpjmlparams
+    anion_excl = M(soil_anion_exclusion[cell])
 
     freewater = zero(T)
     soil_srunoff[cell] = zero(T)

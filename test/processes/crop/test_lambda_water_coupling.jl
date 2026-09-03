@@ -33,6 +33,61 @@ using Test
     @test crop.auxiliary.canopy.canopy_conductance[1] > cft1.gmin * crop.auxiliary.canopy.fpar[1]
 end
 
+@testset "Pre-phenology raw conductance drives the aligned water pass" begin
+    soil = init_soil(1, soilparams.soildepth, identity)
+    crop = init_crop(1, identity)
+    pet = init_pet(1, identity)
+    state = test_model_state(crop, soil; pet)
+
+    crop.state.phenology.is_growing .= 1
+    crop.state.carbon.root .= 1000.0f0
+    crop.auxiliary.root.distribution .= 0.0f0
+    crop.auxiliary.root.distribution[1] = 1.0f0
+    crop.auxiliary.canopy.fpar .= 0.2f0
+    crop.fluxes.carbon.water_limited_assimilation .= 1.0f0
+    pet.daylength .= 12.0f0
+    co2 = Float32[40.0]
+
+    Agrocosm.prepare_prephenology_canopy_conductance!(
+        cft1, state, pet.daylength, co2,
+    )
+    raw_conductance = Agrocosm.compute_canopy_conductance(
+        1.0f0, 40.0f0, 12.0f0, 0.2f0, cft1.gmin, lpjmlparams.LAMBDA_OPT,
+    )
+    @test crop.auxiliary.canopy.canopy_conductance[1] == raw_conductance
+
+    # Mimic the post-phenology APAR/photosynthesis refresh. The aligned water
+    # pass must retain raw `gp`; no current-fPAR/phenology multiplier is applied.
+    crop.auxiliary.canopy.fpar .= 0.8f0
+    crop.fluxes.carbon.water_limited_assimilation .= 10.0f0
+    crop.auxiliary.canopy.canopy_wet .= 0.0f0
+    soil.water.relative_content .= 0.0f0
+    soil.water.relative_content[1] = 0.1f0
+    soil.water.holding_capacity_storage .= 100.0f0
+    pet.eeq .= 10.0f0
+
+    recomputed_conductance = Agrocosm.compute_canopy_conductance(
+        10.0f0, 40.0f0, 12.0f0, 0.8f0, cft1.gmin, lpjmlparams.LAMBDA_OPT,
+    )
+    @test recomputed_conductance != raw_conductance
+
+    transpiration!(
+        crop.fluxes.carbon.water_limited_assimilation,
+        cft1, state, pet, state, co2;
+        use_precomputed_conductance = true,
+    )
+
+    expected_demand = Agrocosm.compute_transpiration_demand(
+        0.0f0, 10.0f0, lpjmlparams.ALPHAM, lpjmlparams.GM, raw_conductance,
+    )
+    expected_wscal = min(
+        1.0f0,
+        cft1.emax * 0.1f0 / expected_demand,
+    )
+    @test crop.state.water.demand_sum[1] ≈ expected_demand rtol = 1.0f-6
+    @test crop.state.water.sufficiency[1] ≈ expected_wscal rtol = 1.0f-6
+end
+
 @testset "Inactive crop has zero conductance" begin
     soil = init_soil(1, soilparams.soildepth, identity)
     crop = init_crop(1, identity)

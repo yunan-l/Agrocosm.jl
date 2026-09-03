@@ -39,19 +39,27 @@ end
 @testset "Snow thermal resistance" begin
     bare_soil = init_soil(1, soilparams.soildepth, identity)
     snow_soil = init_soil(1, soilparams.soildepth, identity)
+    legacy_snow_soil = init_soil(1, soilparams.soildepth, identity)
     bare_state = test_model_state(bare_soil)
     snow_state = test_model_state(snow_soil)
-    for soil in (bare_soil, snow_soil)
+    legacy_snow_state = test_model_state(legacy_snow_soil)
+    for soil in (bare_soil, snow_soil, legacy_snow_soil)
         soil.thermal.diffusivity_0 .= 0.6f0
         soil.thermal.diffusivity_15 .= 0.7f0
         soil.water.relative_content .= 0.1f0
     end
-    snow_soil.snow.height .= 0.67f0
+    snow_soil.snow.pack .= 100.0f0
+    legacy_snow_soil.snow.pack .= 100.0f0
 
     soil_temperature!(bare_state, Float32[30.0], Float32[0.0])
     soil_temperature!(snow_state, Float32[30.0], Float32[0.0])
+    soil_temperature!(
+        legacy_snow_state, Float32[30.0], Float32[0.0];
+        snowparams = SnowParams{Float32}(; thermal_watertosnow = 6.7f0),
+    )
 
-    @test 0.0f0 < snow_soil.thermal.temperature[1, 1] <
+    @test 0.0f0 < legacy_snow_soil.thermal.temperature[1, 1] <
+                  snow_soil.thermal.temperature[1, 1] <
                   bare_soil.thermal.temperature[1, 1]
     @test sum(snow_soil.thermal.temperature) <
           sum(bare_soil.thermal.temperature)

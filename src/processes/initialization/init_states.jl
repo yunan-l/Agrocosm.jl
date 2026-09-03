@@ -176,6 +176,11 @@ function init_states!(CFT::CFTParameters,
     soil.properties.ph = to_float(soilparams.ph)
     soil.properties.sand_fraction = to_float(soilparams.sand)
     soil.properties.clay_fraction = to_float(soilparams.clay)
+    if hasproperty(soilparams, :soilcode)
+        initialize_soil_class_parameters!(
+            soil.properties, to_integer(soilparams.soilcode),
+        )
+    end
     soil.thermal.diffusivity_0 = to_float(soilparams.tdiff_0)
     soil.thermal.diffusivity_15 = to_float(soilparams.tdiff_15)
 
@@ -190,13 +195,13 @@ function init_states!(CFT::CFTParameters,
     )) : ModelState
     initialize_soil_c_shift!(soil, c_shift_state, c_shift_initialization)
     days_per_year = T(365)
-    soil.carbon.litter_response = device(
-        T[k_litter10.leaf, k_litter10.leaf, k_litter10.root] ./ days_per_year,
-    )
-
-    soil.nitrogen.litter_response = device(
-        T[k_litter10.leaf, k_litter10.leaf, k_litter10.root] ./ days_per_year,
-    )
+    litter_turnover = T[
+        k_litter10.leaf / days_per_year,
+        k_litter10.leaf / days_per_year,
+        lpjmlparams.k_litter10,
+    ]
+    soil.carbon.litter_response = device(copy(litter_turnover))
+    soil.nitrogen.litter_response = device(copy(litter_turnover))
 
     output = init_output(T, cell_size, device)
 

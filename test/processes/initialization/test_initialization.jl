@@ -40,6 +40,11 @@ using Test
     @test crop.auxiliary.calendar isa CropCalendarAuxiliary
     @test crop.auxiliary.photosynthesis isa CropPhotosynthesisAuxiliary
     @test soil.properties isa SoilProperties
+    @test soil.properties.anion_exclusion == fill(0.3f0, cell_size)
+    @test soil.properties.nitrification_a == fill(0.45f0, cell_size)
+    @test soil.properties.nitrification_b == fill(1.27f0, cell_size)
+    @test soil.properties.nitrification_c == fill(0.0012f0, cell_size)
+    @test soil.properties.nitrification_d == fill(2.84f0, cell_size)
     @test soil.water isa SoilWater
     @test soil.thermal isa SoilThermal
     @test length(soil.thermal.initialized) == cell_size
@@ -106,6 +111,7 @@ end
     @test eltype(crop.auxiliary.photosynthesis.lambda) == Float64
     @test eltype(managed_land.latitude) == Float64
     @test eltype(soil.properties.layer_depth) == Float64
+    @test eltype(soil.properties.nitrification_a) == Float64
     @test eltype(soil.water.storage) == Float64
     @test eltype(soil.thermal.enthalpy) == Float64
     @test eltype(soil.carbon.fast) == Float64
@@ -135,11 +141,28 @@ end
     @test parameters64.soil_thermal isa SoilThermalParams{Float64}
     @test parameters64.soil_decomposition isa SoilDecompParams{Float64}
     @test soilparams64 isa SoilParams{Float64}
+    @test soilparams64.silt[1] ≈ 0.24 atol = eps(Float32)
+    @test soilparams64.clay[1] ≈ 0.54 atol = eps(Float32)
+    @test soilparams64.w_sat[14] ≈ 0.08 atol = eps(Float32)
+    @test parameters64.lpjml.theta == 0.99
+    @test parameters64.lpjml.alphac3 == 0.058
+    @test parameters64.lpjml.alphac4 == 0.052
+    @test parameters64.lpjml.temp_response == 46.02
+    @test parameters64.lpjml.GM == 2.2
+    @test parameters64.lpjml.soildepth_evap == 500.0
+    @test parameters64.lpjml.soil_infil_litter == 0.6
+    @test parameters64.lpjml.NPERCO == 0.4
+    @test parameters64.lpjml.k_temp == 0.0693
+    @test parameters64.lpjml.k_litter10 == 0.3 / 365
+    @test parameters64.snow.c_watertosnow == 6.7
+    @test parameters64.snow.thermal_watertosnow == 4.0
 
     layers = 5
     initial_data = (
         latitude = Float32[45, 46],
         soilparams = (
+            # Target audit cells: 60866 is loam/code 7; 624 is sandy loam/code 9.
+            soilcode = Int32[7, 9],
             ph = fill(6.5f0, cells),
             w_sat = fill(0.45f0, layers, cells),
             sand = fill(0.4f0, 1, cells),
@@ -175,6 +198,19 @@ end
     @test crop64.auxiliary.phenology.winter_type == Bool[true, false]
     @test eltype(pet64.eeq) == Float64
     @test eltype(soil64.water.storage) == Float64
+    @test soil64.properties.nitrification_a == Float64[0.45, 0.55]
+    @test soil64.properties.nitrification_b == Float64[1.27, 1.7]
+    @test soil64.properties.nitrification_c == Float64[0.0012, -0.007]
+    @test soil64.properties.nitrification_d == Float64[2.84, 3.22]
+    @test soil64.properties.anion_exclusion == Float64[0.3, 0.4]
+    @test soil64.carbon.litter_response ==
+          Float64[
+              Float64(cft1.k_litter10.leaf) / 365,
+              Float64(cft1.k_litter10.leaf) / 365,
+              Float64(lpjmlparams.k_litter10),
+          ]
+    @test soil64.nitrogen.litter_response == soil64.carbon.litter_response
+    @test soil64.nitrogen.litter_response !== soil64.carbon.litter_response
     @test eltype(managed64.latitude) == Float64
     @test eltype(weather64.temp) == Float64
     @test eltype(output64.crop.npp) == Float64
@@ -229,6 +265,7 @@ end
             residuefrac = fill(0.3f0, cells),
         ),
         soilparam = (
+            soilcode = Int32[1, 3],
             soilph = fill(6.5f0, cells),
             w_sat = fill(0.45f0, layers, cells),
             sand = fill(0.4f0, cells),
@@ -251,6 +288,7 @@ end
     @test eltype(loaded64.ModelState.crop.phu) == Float64
     @test eltype(loaded64.ModelState.crop.sdate) == Int32
     @test eltype(loaded64.ModelState.u0.swc) == Float64
+    @test loaded64.soilparams.soilcode == Int32[1, 3]
 
     fast_shift = repeat(Float32[0.4, 0.25, 0.15, 0.1, 0.1], 1, cells)
     slow_shift = repeat(Float32[0.5, 0.2, 0.15, 0.1, 0.05], 1, cells)

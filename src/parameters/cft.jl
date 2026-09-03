@@ -54,7 +54,7 @@ end
 
 struct K_Litter10{T}
     leaf::T # annual turnover rate at 10 °C (yr⁻¹)
-    root::T # annual below-ground turnover rate at 10 °C (yr⁻¹)
+    root::T # annual PFT wood/root turnover retained from the LPJmL crop table (yr⁻¹)
 end
 
 struct NuptakeKinetics{T}
@@ -212,7 +212,7 @@ function _crop_cft(;
     T = Float32
     return CFTParameters{T, Int32}(
         name = id,
-        plant_type = 1,
+        plant_type = 2,
         path = path,
         temp = Temp{T}(-1000, 1000),
         temp_co2 = TempCO2{T}(temp_co2...),
@@ -271,7 +271,7 @@ function _crop_cft(;
     )
 end
 
-# The order is the LPJmL 6.1.1 CFT/management-band order. Rainfed and irrigated
+# The order is the LPJmL 6.1.9 CFT/management-band order. Rainfed and irrigated
 # variants share the same biological parameter set.
 const cft1 = _crop_cft(id=1, path=1, temp_co2=(0, 40), temp_photos=(12, 17),
     tv_eff=(-4, 17), tv_opt=(3, 10), pb=8, ps=20, basetemp=0,
@@ -293,12 +293,14 @@ const cft3 = _crop_cft(id=3, path=2, temp_co2=(8, 42), temp_photos=(21, 26),
     longevity=.33, emax=10, gmin=1.2, shapesenescencenorm=2, storage_ratio=.83,
     hiopt=.50, himin=.30)
 const cft4 = _crop_cft(id=4, path=2, temp_co2=(6, 55), temp_photos=(20, 45),
-    basetemp=8, fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.85,
+    basetemp=8, sowing_method=SDATE_PRECIPITATION, temp_spring=12,
+    fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.85,
     flaimaxharvest=0, laimax=7, laimin=5, hlimit=299, beta_root=.94,
     longevity=.50, emax=10, gmin=1.6, shapesenescencenorm=2, storage_ratio=.99,
     hiopt=.25, himin=.10)
 const cft5 = _crop_cft(id=5, path=1, temp_co2=(-4, 45), temp_photos=(10, 30),
-    basetemp=1, fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.90,
+    basetemp=1, sowing_method=SDATE_TEMPERATURE_PRECIPITATION, temp_spring=10,
+    fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.90,
     flaimaxharvest=0, laimax=4, laimin=4, hlimit=282, beta_root=.94,
     longevity=.50, emax=8, gmin=1, shapesenescencenorm=2, storage_ratio=.45,
     biological_fixation=true, bnf_temperature_limit=(1, 40),
@@ -306,17 +308,20 @@ const cft5 = _crop_cft(id=5, path=1, temp_co2=(-4, 45), temp_photos=(10, 30),
     bnf_potential=.5, bnf_maximum_npp_fraction=.25, bnf_carbon_cost=6,
     hiopt=.45, himin=.10)
 const cft6 = _crop_cft(id=6, path=1, temp_co2=(-4, 45), temp_photos=(10, 30),
-    basetemp=3, fphuc=.15, flaimaxc=.05, fphuk=.50, fphusen=.75,
+    basetemp=3, sowing_method=SDATE_TEMPERATURE, temp_spring=8,
+    fphuc=.15, flaimaxc=.05, fphuk=.50, fphusen=.75,
     flaimaxharvest=.75, laimax=5, laimin=5, hlimit=299, beta_root=.94,
     longevity=.50, emax=7, gmin=1, shapesenescencenorm=.5, storage_ratio=1.74,
     hiopt=3.5, himin=1.25)
 const cft7 = _crop_cft(id=7, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
-    basetemp=15, fphuc=.15, flaimaxc=.05, fphuk=.50, fphusen=.75,
+    basetemp=15, sowing_method=SDATE_PRECIPITATION, temp_spring=22,
+    fphuc=.15, flaimaxc=.05, fphuk=.50, fphusen=.75,
     flaimaxharvest=.75, laimax=5, laimin=5, hlimit=360, beta_root=.94,
     longevity=.50, emax=10, gmin=1.6, shapesenescencenorm=.5, storage_ratio=3.27,
     hiopt=2, himin=1.10)
 const cft8 = _crop_cft(id=8, path=1, temp_co2=(8, 42), temp_photos=(25, 32),
-    basetemp=6, fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.70,
+    basetemp=6, sowing_method=SDATE_TEMPERATURE, temp_spring=13,
+    fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.70,
     flaimaxharvest=0, laimax=5, laimin=5, hlimit=282, beta_root=.94,
     longevity=.33, emax=7, gmin=1, shapesenescencenorm=2, storage_ratio=1.04,
     hiopt=.40, himin=.20)
@@ -330,7 +335,8 @@ const cft9 = _crop_cft(id=9, path=1, temp_co2=(5, 45), temp_photos=(28, 32),
     bnf_potential=.5, bnf_maximum_npp_fraction=.25, bnf_carbon_cost=6,
     storage_ratio=.42, hiopt=.40, himin=.10)
 const cft10 = _crop_cft(id=10, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
-    basetemp=14, fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.75,
+    basetemp=14, sowing_method=SDATE_PRECIPITATION, temp_spring=15,
+    fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.75,
     flaimaxharvest=0, laimax=5, laimin=5, hlimit=282, pvd_max=70,
     beta_root=.94, longevity=.50, emax=10, gmin=1.6, shapesenescencenorm=.5,
     storage_ratio=.68, hiopt=.40, himin=.30)
@@ -342,7 +348,8 @@ const cft11 = _crop_cft(id=11, path=1, temp_co2=(0, 40), temp_photos=(12, 17),
     longevity=.41, emax=7, gmin=1, shapesenescencenorm=2, storage_ratio=.76,
     hiopt=.30, himin=.15)
 const cft12 = _crop_cft(id=12, path=2, temp_co2=(8, 42), temp_photos=(18, 30),
-    basetemp=12, fphuc=.01, flaimaxc=.01, fphuk=.40, fphusen=.95,
+    basetemp=12, sowing_method=SDATE_TEMPERATURE_PRECIPITATION, temp_spring=14,
+    fphuc=.01, flaimaxc=.01, fphuk=.40, fphusen=.95,
     flaimaxharvest=.50, laimax=6, laimin=2, hlimit=360, beta_root=.94,
     longevity=.66, emax=10, gmin=1.6, shapesenescencenorm=2, storage_ratio=4.57,
     hiopt=.80, himin=.80)

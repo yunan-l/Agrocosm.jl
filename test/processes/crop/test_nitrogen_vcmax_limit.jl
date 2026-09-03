@@ -23,3 +23,21 @@ using Test
     @test crop.auxiliary.photosynthesis.nitrogen_limitation[2] < 1.0f-5
     @test crop.auxiliary.stress.nitrogen_demand_leaf[1] == optimal_leaf_n[1]
 end
+
+@testset "LPJmL photosynthesis gate skips the Vcmax limiter" begin
+    crop = init_crop(1, identity)
+    state = test_model_state(crop)
+    crop.state.phenology.is_growing .= 1
+    crop.state.carbon.leaf .= 100.0f0
+    crop.auxiliary.photosynthesis.lambda .= 0.0f0
+    crop.auxiliary.photosynthesis.potential_vcmax .= 10.0f0
+    crop.auxiliary.stress.nitrogen_demand_leaf .= cft1.ncleaf.low * 100.0f0
+
+    limit_vcmax_by_nitrogen!(
+        state, cft1, Float32[25.0];
+        require_active_photosynthesis = true,
+    )
+
+    @test crop.auxiliary.photosynthesis.vcmax[1] == 10.0f0
+    @test crop.auxiliary.photosynthesis.nitrogen_limitation[1] == 1.0f0
+end

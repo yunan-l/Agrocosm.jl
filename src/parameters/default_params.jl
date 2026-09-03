@@ -17,13 +17,13 @@ water, nitrogen, and management process coefficients.
 @kwdef struct LPJmLParams{T}
     ko25::T = 3.0e4 # Rubisco Michaelis constant for O₂ at 25 °C (Pa).
     kc25::T = 30.0 # Rubisco Michaelis constant for CO₂ at 25 °C (Pa).
-    theta::T = 0.9 # Curvature of the co-limitation transition in photosynthesis.
-    alphac3::T = 0.08 # C3 intrinsic quantum efficiency (mol C mol⁻¹ photons).
-    alphac4::T = 0.053 # C4 intrinsic quantum efficiency (mol C mol⁻¹ photons).
+    theta::T = 0.99 # Curvature of the co-limitation transition in photosynthesis.
+    alphac3::T = 0.058 # C3 intrinsic quantum efficiency (mol C mol⁻¹ photons).
+    alphac4::T = 0.052 # C4 intrinsic quantum efficiency (mol C mol⁻¹ photons).
     k::T = 0.0548 # Extinction/scaling coefficient used by crop respiration and radiation.
     r_growth::T = 0.25 # Fraction of assimilated carbon consumed by growth respiration.
     e0::T = 308.56 # Lloyd–Taylor activation parameter for decomposition (K).
-    temp_response::T = 56.02 # Lloyd–Taylor reference-temperature offset (K).
+    temp_response::T = 46.02 # Lloyd–Taylor reference-temperature offset (K).
     residue_frac::T = 0.95 # fraction of residues to be submerged by tillage
     mixing_efficiency::T = 0.9 # Fraction of the full tillage bulk-density change applied per event.
     # LPJmL parameter `bioturbate = 0.5` is an annual transfer fraction.
@@ -32,16 +32,19 @@ water, nitrogen, and management process coefficients.
     # LPJmL reads annual turnover rates (0.04 and 0.001 yr⁻¹) and converts
     # them to daily rates in fscanparam.c before the process routines use them.
     k_soil10::K_Soil10{T} = K_Soil10{T}(T(0.04 / 365), T(0.001 / 365)) # Fast/slow SOC rates at 10 °C.
+    k_litter10::T = T(0.3 / 365) # Below-ground litter turnover at 10 °C (day⁻¹).
     fastfrac::T = 0.98 # Retained decomposed litter routed to fast soil pool (fraction).
     atmfrac::T = 0.5 # Decomposed litter carbon emitted directly to atmosphere (fraction).
     ALPHAM::T = 1.485 # Priestley–Taylor aerodynamic correction used by LPJmL.
-    GM::T = 2.41 # Empirical canopy-conductance coefficient.
+    GM::T = 2.2 # Empirical canopy-conductance coefficient.
     LAMBDA_OPT::T = 0.8 # Initial/default internal-to-ambient CO₂ ratio.
     PRIESTLEY_TAYLOR::T = 1.32 # Priestley-Taylor coefficient
     MINERALDENS::T = 2700 # mineral density in kg/m3
-    soildepth_evap::T = 300.0 # Effective soil depth available to evaporation (mm).
-    p::T = 25 # Atmospheric-pressure/psychrometric scaling constant used by PET.
-    k_temp::T = 0.0693 # factor of temperature dependence of nitrogen demand for Rubisco activity
+    soildepth_evap::T = 500.0 # Effective soil depth available to evaporation (mm).
+    p::T = 25 # Haxeltine–Prentice coefficient relating Rubisco capacity to leaf N.
+    # Use the value declared in LPJmL 6.1.9's parameter file. Its scanner omits
+    # this field, leaving the C executable at 0; that is a reference-code bug.
+    k_temp::T = 0.0693 # Temperature dependence of Rubisco nitrogen demand.
     T_0::T = -25.0 # parameter in N uptake temperature function
     T_m::T = 15.0 # parameter in N uptake temperature function
     T_r::T = 15.0 # parameter in N uptake temperature function
@@ -49,17 +52,14 @@ water, nitrogen, and management process coefficients.
     k_2::T = 0.01 # fraction of nitrified N lost as N20 flux
     soil_cn_ratio::T = 15.0 # soil organic matter C:N ratio
     immobilization_k::T = 5.0e-3 # half-saturation coefficient for immobilization
-    nitrification_a::T = 0.45 # LPJmL nitrification moisture-response parameter a.
-    nitrification_b::T = 1.27 # LPJmL nitrification moisture-response parameter b.
-    nitrification_c::T = 0.0012 # LPJmL nitrification moisture-response parameter c.
-    nitrification_d::T = 2.84 # LPJmL nitrification moisture-response parameter d.
     CDN::T = 1.2 # shape factor for denitrification (LPJmL soil.h)
     n2o_denit_frac::T = 0.11 # fraction of denitrified N emitted as N2O
     volatil_wind::T = 1.5 # default wind speed (m/s) if no wind forcing is provided
     volatil_length::T = 1.0 # characteristic length scale (m)
     soil_infil::T = 2.0 # default soil infiltration
-    soil_infil_litter::T = 2.0 # soil infiltration intensification by litter cover
+    soil_infil_litter::T = 0.6 # soil infiltration intensification by litter cover
     percthres::T = 1.0 # Percolation threshold/scaling coefficient.
+    NPERCO::T = 0.4 # LPJmL 5.10 surface-layer lateral NO₃ transport multiplier.
     manure_cn::T = 14.5 # CN ration of manure gC/gN
     nfert_split_frac::T = 0.2 # fraction of fertilizer input at sowing
     nmanure_nh4_frac::T = 0.666667 # fraction of NH4 in manure input
@@ -105,9 +105,9 @@ const photoparams = PhotoParams{Float32}()
 Soil texture and hydraulic default lookup vectors used to initialize `SoilParams`.
 """
 sand = Float32.([0.22, 0.06, 0.52, 0.32, 0.10, 0.58, 0.43, 0.17, 0.58, 0.10, 0.82, 0.92, 0.24, 0.99])
-silt = Float32.([0.20, 0.47, 0.06, 0.34, 0.56, 0.15, 0.39, 0.70, 0.32, 0.60, 0.12, 0.05, 0.28, 0.00])
-clay = Float32.([0.58, 0.47, 0.42, 0.34, 0.34, 0.27, 0.18, 0.13, 0.10, 0.30, 0.06, 0.03, 0.48, 0.01])
-w_sat = Float32.([0.468, 0.468, 0.406, 0.465, 0.464, 0.404, 0.439, 0.476, 0.434, 0.476, 0.421, 0.339, 0.468, 0.006])
+silt = Float32.([0.24, 0.47, 0.06, 0.34, 0.56, 0.15, 0.39, 0.70, 0.32, 0.60, 0.12, 0.05, 0.28, 0.00])
+clay = Float32.([0.54, 0.47, 0.42, 0.34, 0.34, 0.27, 0.18, 0.13, 0.10, 0.30, 0.06, 0.03, 0.48, 0.01])
+w_sat = Float32.([0.468, 0.468, 0.406, 0.465, 0.464, 0.404, 0.439, 0.476, 0.434, 0.476, 0.421, 0.339, 0.468, 0.08])
 tdiff_0 = Float32.([0.572, 0.502, 0.785, 0.650, 0.556, 0.780, 0.701, 0.637, 0.640, 0.637, 0.403, 0.201, 0.572, 4.137])
 tdiff_15 = Float32.([0.571, 0.503, 0.791, 0.656, 0.557, 0.808, 0.740, 0.657, 0.713, 0.657, 0.529, 0.196, 0.571, 4.127])
 
@@ -153,6 +153,7 @@ Physical constants for snow accumulation, insulation, and melt processes.
     lambda_snow::T = 0.2 # Snow thermal conductivity (W m⁻¹ K⁻¹).
     c_water2ice::T = 3.0e8 # the energy that is needed/released during water/ice conversion (J/m3)
     c_watertosnow::T = 6.70 # Conversion factor from water to snowdepth, i.e. 1 cm water equals 6.7 cm of snow
+    thermal_watertosnow::T = 4.0 # Settled-snow depth factor used only for soil thermal resistance.
     c_roughness::T = 0.06 # height of vegetation below the canopy
 end
 """

@@ -133,6 +133,14 @@ function merge_mpi_rank_products(
     manifest_path = joinpath(output_root, "cft_batch_manifest.toml"),
 )
     manifests = TOML.parsefile.(rank_manifests)
+    reference_manifest = first(manifests)
+    for manifest in manifests
+        for key in ("crop_resp_fix", "nitrogen_limit_vcmax")
+            manifest[key] == reference_manifest[key] || error(
+                "MPI ranks differ in $key",
+            )
+        end
+    end
     batch_maps = [Dict(String(batch["name"]) => batch for batch in manifest["batches"])
                   for manifest in manifests]
     names = sort!(collect(keys(first(batch_maps))))
@@ -186,6 +194,8 @@ function merge_mpi_rank_products(
     write_report(manifest_path, Dict(
         "schema_version" => "1",
         "repository_commit" => _repository_commit(),
+        "crop_resp_fix" => reference_manifest["crop_resp_fix"],
+        "nitrogen_limit_vcmax" => reference_manifest["nitrogen_limit_vcmax"],
         "partition_count" => length(rank_manifests),
         "batches" => products,
         "created_at" => string(now()),

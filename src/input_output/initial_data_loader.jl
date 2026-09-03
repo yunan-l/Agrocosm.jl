@@ -38,7 +38,7 @@ function InitialDataLoader(data::NamedTuple,
         residuefrac = T.(crop.residuefrac[data_index]),
     ))
 
-    soilparam_set = _adapt_to_device(device, (
+    soilparam_set = (
         ph = T.(soilparam.soilph[data_index]),
         w_sat = T.(soilparam.w_sat[:, data_index]),
         sand = reshape(T.(soilparam.sand[data_index]), (1, :)),
@@ -47,7 +47,13 @@ function InitialDataLoader(data::NamedTuple,
         tdiff_0 = T.(soilparam.tdiff_0[data_index]),
         tdiff_15 = T.(soilparam.tdiff_15[data_index]),
         soildepth = T.(soilparam.soildepth),
-    ))
+    )
+    if hasproperty(soilparam, :soilcode)
+        soilparam_set = merge(soilparam_set, (
+            soilcode = Int32.(soilparam.soilcode[data_index]),
+        ))
+    end
+    soilparam_set = _adapt_to_device(device, soilparam_set)
 
     u0_set = (
         swc = T.(initial_state.swc[:, data_index]),

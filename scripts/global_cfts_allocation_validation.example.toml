@@ -29,6 +29,7 @@ water_systems = ["rainfed", "irrigated"]
 [run]
 resume_completed_batches = true
 backend = "cuda"
+crop_resp_fix = true
 device_id = 0
 memory_safety_factor = 1.2
 simulation_start_year = 2015

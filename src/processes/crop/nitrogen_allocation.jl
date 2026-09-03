@@ -41,17 +41,20 @@ function acquire_crop_nitrogen!(crop,
                                 auto_fertilizer::Bool = true,
                                 include_storage_reserve::Bool = false,
                                 biological_fixation::Bool = false,
+                                require_active_photosynthesis::Bool = false,
                                 lpjmlparams::LPJmLParams = lpjmlparams,
 ) where {T <: AbstractFloat}
     ndemand_crop!(
         crop, CFT, photos_vcmax, temp;
         include_storage_reserve,
+        require_active_photosynthesis,
         lpjmlparams = lpjmlparams,
     )
     nuptake_crop!(
         crop, CFT, soil;
         auto_fertilizer = auto_fertilizer,
         biological_fixation = biological_fixation,
+        require_active_photosynthesis = require_active_photosynthesis,
         lpjmlparams = lpjmlparams,
     )
     return nothing

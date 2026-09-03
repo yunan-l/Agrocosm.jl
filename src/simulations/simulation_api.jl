@@ -123,7 +123,7 @@ function initialize_simulation(
     manure::Bool = false,
     fertilizer = :auto,
     with_tillage::Bool = true,
-    crop_resp_fix::Bool = false,
+    crop_resp_fix::Bool = true,
     nitrogen_limit_vcmax::Bool = false,
     freeze_vernalization_requirement::Bool = false,
     sowing_mode::Symbol = :prescribed_sdate,
@@ -146,9 +146,11 @@ function initialize_simulation(
     else
         c_shift_initialization
     end
+    model_parameters = ModelParameters(T)
     states = init_states!(
         cft, prepared, cells, device;
         T = T,
+        lpjmlparams = model_parameters.lpjml,
         mineral_nitrogen_initialization = mineral_nitrogen_initialization,
         c_shift_initialization = resolved_c_shift_initialization,
     )
@@ -180,7 +182,7 @@ function initialize_simulation(
         carbon_balance = nothing,
         thermal_balance = nothing,
     )
-    processes = ProcessModules(convert_precision(T, cft), ModelParameters(T))
+    processes = ProcessModules(convert_precision(T, cft), model_parameters)
     return CropSimulation(
         processes, state, balances, config, 0,
     )
@@ -474,6 +476,7 @@ function run_simulation!(
 end
 
 const _CHECKPOINT_FORMAT_VERSION = 7
+const _MODEL_STATE_SCHEMA_VERSION = 3
 
 _checkpoint_snapshot(values::AbstractArray) = Array(values)
 _checkpoint_snapshot(values::NamedTuple) = map(_checkpoint_snapshot, values)
@@ -526,7 +529,7 @@ function _simulation_checkpoint(simulation::CropSimulation)
     return (
         format_version = _CHECKPOINT_FORMAT_VERSION,
         metadata = (
-            state_schema_version = 2,
+            state_schema_version = _MODEL_STATE_SCHEMA_VERSION,
             precision = string(simulation.config.T),
             cells = cells,
             cell_ids = copy(simulation.config.execution.domain.cell_ids),
@@ -588,7 +591,8 @@ function _validate_checkpoint_target(simulation::CropSimulation, checkpoint)
     ))
     metadata = checkpoint.metadata
     checks = (
-        ("state schema version", metadata.state_schema_version, 2),
+        ("state schema version", metadata.state_schema_version,
+         _MODEL_STATE_SCHEMA_VERSION),
         ("precision", metadata.precision, string(simulation.config.T)),
         ("cell count", metadata.cells, length(simulation.managed_land.latitude)),
         ("cell ids", metadata.cell_ids, simulation.config.execution.domain.cell_ids),

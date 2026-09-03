@@ -1,13 +1,98 @@
-const DEFAULT_SOIL_LOOKUP_VERSION = v"1.0.0"
+const DEFAULT_SOIL_LOOKUP_VERSION = v"1.1.0"
+
+const _CANONICAL_SOIL_CLASS_NAMES = (
+    "clay",
+    "silty clay",
+    "sandy clay",
+    "clay loam",
+    "silty clay loam",
+    "sandy clay loam",
+    "loam",
+    "silt loam",
+    "sandy loam",
+    "silt",
+    "loamy sand",
+    "sand",
+    "clay (light)",
+    "rock and ice",
+)
+
+_normalize_soil_class_name(name::AbstractString) =
+    lowercase(join(split(strip(replace(name, '\0' => ""))), " "))
+
+function _read_soilcode_map(spec::DatasetSpec, map_variable::AbstractString)
+    return NCDataset(spec.path, "r") do ds
+        haskey(ds, map_variable) || throw(ArgumentError(
+            "soilcode map variable '$map_variable' not found in $(spec.path)",
+        ))
+        variable = ds[map_variable]
+        ndims(variable) == 2 || throw(ArgumentError(
+            "soilcode map variable '$map_variable' must be a two-dimensional character array",
+        ))
+        eltype(variable) <: Char || throw(ArgumentError(
+            "soilcode map variable '$map_variable' must contain characters",
+        ))
+        dimensions = _canonical_dimension.(Symbol.(dimnames(variable)))
+        map_position = _dimension_position(dimensions, :map)
+        raw = _read_all(variable)
+        names = [
+            _normalize_soil_class_name(String(vec(selectdim(raw, map_position, index))))
+            for index in axes(raw, map_position)
+        ]
+        any(isempty, names) && throw(ArgumentError(
+            "soilcode map variable '$map_variable' contains an empty class name",
+        ))
+        allunique(names) || throw(ArgumentError(
+            "soilcode map variable '$map_variable' contains duplicate class names",
+        ))
+        return names
+    end
+end
+
+function _canonical_soilcode_map(source_names::AbstractVector{<:AbstractString})
+    names = _normalize_soil_class_name.(source_names)
+    isempty(names) && throw(ArgumentError("soilcode map cannot be empty"))
+    allunique(names) || throw(ArgumentError("soilcode map contains duplicate class names"))
+    first(names) == "(null)" || throw(ArgumentError(
+        "soilcode map entry 0 must be '(null)'",
+    ))
+    canonical_codes = Dict(name => Int32(index) for
+                           (index, name) in pairs(_CANONICAL_SOIL_CLASS_NAMES))
+    return map(enumerate(names)) do (index, name)
+        name == "(null)" && return Int32(0)
+        haskey(canonical_codes, name) || throw(ArgumentError(
+            "unknown soil class '$name' for source soilcode $(index - 1)",
+        ))
+        return canonical_codes[name]
+    end
+end
+
+function _canonicalize_soilcodes(values::AbstractVector, source_to_canonical::AbstractVector{<:Integer})
+    _require_complete(values, "soilcode")
+    source_codes = Int.(values)
+    canonical = Vector{Int32}(undef, length(source_codes))
+    for index in eachindex(source_codes)
+        source_code = source_codes[index]
+        0 <= source_code < length(source_to_canonical) || throw(ArgumentError(
+            "source soilcode $source_code is outside the NetCDF map range 0:$(length(source_to_canonical) - 1)",
+        ))
+        canonical_code = Int32(source_to_canonical[source_code + 1])
+        canonical_code > 0 || throw(ArgumentError(
+            "selected cell $(index) has null source soilcode $source_code",
+        ))
+        canonical[index] = canonical_code
+    end
+    return canonical
+end
 
 """Return the versioned 14-class soil lookup currently used by Agrocosm."""
 function default_soil_lookup(::Type{T} = Float32) where {T <: AbstractFloat}
     return SoilLookup(
         DEFAULT_SOIL_LOOKUP_VERSION,
         T[0.22, 0.06, 0.52, 0.32, 0.10, 0.58, 0.43, 0.17, 0.58, 0.10, 0.82, 0.92, 0.24, 0.99],
-        T[0.20, 0.47, 0.06, 0.34, 0.56, 0.15, 0.39, 0.70, 0.32, 0.60, 0.12, 0.05, 0.28, 0.00],
-        T[0.58, 0.47, 0.42, 0.34, 0.34, 0.27, 0.18, 0.13, 0.10, 0.30, 0.06, 0.03, 0.48, 0.01],
-        T[0.468, 0.468, 0.406, 0.465, 0.464, 0.404, 0.439, 0.476, 0.434, 0.476, 0.421, 0.339, 0.468, 0.006],
+        T[0.24, 0.47, 0.06, 0.34, 0.56, 0.15, 0.39, 0.70, 0.32, 0.60, 0.12, 0.05, 0.28, 0.00],
+        T[0.54, 0.47, 0.42, 0.34, 0.34, 0.27, 0.18, 0.13, 0.10, 0.30, 0.06, 0.03, 0.48, 0.01],
+        T[0.468, 0.468, 0.406, 0.465, 0.464, 0.404, 0.439, 0.476, 0.434, 0.476, 0.421, 0.339, 0.468, 0.08],
         T[0.572, 0.502, 0.785, 0.650, 0.556, 0.780, 0.701, 0.637, 0.640, 0.637, 0.403, 0.201, 0.572, 4.137],
         T[0.571, 0.503, 0.791, 0.656, 0.557, 0.808, 0.740, 0.657, 0.713, 0.657, 0.529, 0.196, 0.571, 4.127],
         T[200, 300, 500, 1000, 1000],
@@ -58,22 +143,46 @@ function soil_data_from_values(
     )
 end
 
-"""Read aligned soil-code and pH grids and apply the current soil lookup."""
+"""
+Read aligned soil-code and pH grids and apply the current soil lookup.
+
+NetCDF source codes are resolved through `soilcode_map_variable` by class name.
+Set it to `nothing` only when the file already stores canonical 1-based codes.
+"""
 function read_soil_data(
     soilcode_spec::DatasetSpec,
     ph_spec::DatasetSpec,
     grid::GridIndex;
     selection::CellSelection = all_cells(grid),
     lookup::SoilLookup{T} = default_soil_lookup(Float32),
+    soilcode_map_variable::Union{Nothing, AbstractString} = "map",
 ) where {T <: AbstractFloat}
     soilcode = read_static_cell(soilcode_spec, grid; selection)
     ph = read_static_cell(ph_spec, grid; selection)
+    canonical_soilcodes, soilcode_mapping = if isnothing(soilcode_map_variable)
+        soilcode.values, (
+            mode = :canonical_codes,
+            map_variable = nothing,
+            source_names = nothing,
+            source_to_canonical = nothing,
+        )
+    else
+        source_names = _read_soilcode_map(soilcode_spec, soilcode_map_variable)
+        source_to_canonical = _canonical_soilcode_map(source_names)
+        _canonicalize_soilcodes(soilcode.values, source_to_canonical), (
+            mode = :netcdf_map_names,
+            map_variable = String(soilcode_map_variable),
+            source_names = Tuple(source_names),
+            source_to_canonical = Tuple(source_to_canonical),
+        )
+    end
     provenance = (
         soilcode = soilcode.provenance,
         ph = ph.provenance,
         lookup_version = lookup.version,
+        soilcode_mapping,
     )
-    return soil_data_from_values(soilcode.values, ph.values, selection; lookup, provenance)
+    return soil_data_from_values(canonical_soilcodes, ph.values, selection; lookup, provenance)
 end
 
 function read_soil_data(

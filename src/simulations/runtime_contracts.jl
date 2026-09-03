@@ -73,7 +73,7 @@ function SimulationConfiguration(
     manure::Bool = false,
     fertilizer::Symbol = :auto,
     with_tillage::Bool = true,
-    crop_resp_fix::Bool = false,
+    crop_resp_fix::Bool = true,
     nitrogen_limit_vcmax::Bool = false,
     freeze_vernalization_requirement::Bool = false,
     sowing_mode::Symbol = :prescribed_sdate,

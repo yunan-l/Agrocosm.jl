@@ -9,7 +9,8 @@ function transpiration!(photos_adtmm::AbstractArray{T},
                         pet::PetPar,
                         soil,
                         co2::AbstractArray{T};
-                        lpjmlparams::LPJmLParams = lpjmlparams
+                        lpjmlparams::LPJmLParams = lpjmlparams,
+                        use_precomputed_conductance::Bool = false,
 ) where {T <: AbstractFloat}
 
     # Root-zone weighted water availability is accumulated inside the cell
@@ -18,7 +19,11 @@ function transpiration!(photos_adtmm::AbstractArray{T},
     # demand = ifelse.(crop_canopy_auxiliary(crop).canopy_conductance .> 0, (1 .- crop_canopy_auxiliary(crop).canopy_wet) .* pet.eeq * ALPHAM ./ (1 .+ (GM * ALPHAM) ./ crop_canopy_auxiliary(crop).canopy_conductance), zero(T))
     # transp = ifelse.(wr .> 0, min.(supply, demand) ./ wr .* fpc, zero(T)) # here the crop.fpc = 1, so we just omit it in the kernel fucntion
 
-    kernel_params = (lpjmlparams = lpjmlparams, soil_layers = 5)
+    kernel_params = (
+        lpjmlparams = lpjmlparams,
+        soil_layers = 5,
+        use_precomputed_conductance = use_precomputed_conductance,
+    )
 
     launch_1D!(water_demand_supply_kernel!,
                crop_canopy_auxiliary(crop).canopy_conductance,
@@ -42,6 +47,49 @@ function transpiration!(photos_adtmm::AbstractArray{T},
                CFT,
                kernel_params)
 
+end
+
+"""
+    prepare_prephenology_canopy_conductance!(CFT, crop, daylength, co2)
+
+Store LPJmL's raw `gp_sum` crop conductance after photosynthesis has been
+evaluated with the canopy state present before today's phenology update.
+"""
+function prepare_prephenology_canopy_conductance!(
+    CFT::CFTParameters,
+    crop,
+    daylength::AbstractArray{T},
+    co2::AbstractArray{T};
+    lpjmlparams::LPJmLParams = lpjmlparams,
+) where {T <: AbstractFloat}
+    launch_1D!(
+        prepare_prephenology_canopy_conductance_kernel!,
+        crop_canopy_auxiliary(crop).canopy_conductance,
+        crop_fluxes(crop).carbon.water_limited_assimilation,
+        co2,
+        daylength,
+        crop_canopy_auxiliary(crop).fpar,
+        T(CFT.gmin),
+        T(lpjmlparams.LAMBDA_OPT),
+    )
+    return nothing
+end
+
+@kernel inbounds = true function prepare_prephenology_canopy_conductance_kernel!(
+    conductance::AbstractArray{T},
+    assimilation::AbstractArray{T},
+    co2::AbstractArray{T},
+    daylength::AbstractArray{T},
+    fpar::AbstractArray{T},
+    gmin::T,
+    lambda_optimum::T,
+) where {T <: AbstractFloat}
+    cell = @index(Global)
+    co2_cell = co2[length(co2) == 1 ? 1 : cell]
+    conductance[cell] = compute_canopy_conductance(
+        assimilation[cell], co2_cell, daylength[cell], fpar[cell], gmin,
+        lambda_optimum,
+    )
 end
 
 """Return whether LPJmL repeats the water-limited lambda solve after N stress."""
@@ -395,15 +443,17 @@ end
 
     cell = @index(Global)
 
-    @unpack lpjmlparams, soil_layers = kernel_params
+    @unpack lpjmlparams, soil_layers, use_precomputed_conductance = kernel_params
     @unpack ALPHAM, GM, LAMBDA_OPT = lpjmlparams
     @unpack fpc, emax, gmin = CFT
 
     co2_index = length(co2) == 1 ? 1 : cell
-    crop_gp[cell] = compute_canopy_conductance(
-        photos_adtmm[cell], co2[co2_index], daylength[cell], crop_fpar[cell],
-        T(gmin), T(LAMBDA_OPT),
-    )
+    if !use_precomputed_conductance
+        crop_gp[cell] = compute_canopy_conductance(
+            photos_adtmm[cell], co2[co2_index], daylength[cell], crop_fpar[cell],
+            T(gmin), T(LAMBDA_OPT),
+        )
+    end
 
     wr = zero(T)
     rootzone_water = zero(T)

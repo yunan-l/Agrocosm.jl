@@ -324,6 +324,10 @@ function run_global_cfts(
         "repository_commit" => _repository_commit(),
         "config_path" => abspath(config_path),
         "config_fingerprint" => _file_fingerprint(config_path),
+        "crop_resp_fix" => Bool(get(config["run"], "crop_resp_fix", true)),
+        "nitrogen_limit_vcmax" => Bool(get(
+            config["run"], "nitrogen_limit_vcmax", false,
+        )),
         "simulation_start_year" => first(simulation_years),
         "simulation_end_year" => last(simulation_years),
         "partition_rank" => Int(partition_rank),

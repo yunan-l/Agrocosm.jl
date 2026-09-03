@@ -297,7 +297,7 @@ function create_simulation(initial_data, selection, config, days, device, cft_id
         manure = management["manure"],
         fertilizer = Symbol(management["fertilizer"]),
         with_tillage = management["with_tillage"],
-        crop_resp_fix = Bool(get(config["run"], "crop_resp_fix", false)),
+        crop_resp_fix = Bool(get(config["run"], "crop_resp_fix", true)),
         nitrogen_limit_vcmax = Bool(get(config["run"], "nitrogen_limit_vcmax", false)),
         sowing_mode,
         # LPJmL keeps V_req fixed once prescribed crop dates/PHU are fixed.

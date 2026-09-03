@@ -7,12 +7,17 @@ using Test
     daily_start === nothing && error("missing common daily crop driver")
     source = source[first(daily_start):end]
 
-    position = call -> begin
+    position = (call, start = firstindex(source)) -> begin
         pattern = Regex("(?m)^[ \\t]*" * call * "[ \\t]*\\(")
-        location = findfirst(pattern, source)
+        location = findnext(pattern, source, start)
         location === nothing && error("missing $call call in $driver")
         first(location)
     end
+
+    phenology_position = position("phenology_crop!")
+    post_phenology_apar = position("_pathway_apar!", phenology_position)
+    post_phenology_temp_stress = position("temp_stress", phenology_position)
+    post_phenology_photosynthesis = position("photosynthesis!", phenology_position)
 
     @test position("update_climbuf!") < position("cultivate!")
     @test position("litter_tillage!") < position("tillage_hydraulics!") <
@@ -23,12 +28,15 @@ using Test
           position("soil_temperature!")
     @test position("soil_temperature!") < position("soil_cn_decomposition!")
     @test position("soil_cn_decomposition!") < position("nitrogen_deposition!") <
-          position("phenology_crop!")
-    @test position("cultivate!") < position("phenology_crop!") < position("harvest_crop!")
+          phenology_position
+    @test position("_pathway_apar!") < position("temp_stress") <
+          position("photosynthesis!") <
+          position("prepare_prephenology_canopy_conductance!") < phenology_position
+    @test position("cultivate!") < phenology_position < position("harvest_crop!")
     @test position("harvest_crop!") < position("route_harvest_residues!") <
           position("interception!") < position("soil_infiltration!")
-    @test position("soil_infiltration!") < position("_pathway_apar!") <
-          position("temp_stress") < position("photosynthesis!") <
+    @test position("soil_infiltration!") < post_phenology_apar <
+          post_phenology_temp_stress < post_phenology_photosynthesis <
           position("transpiration!") < position("solve_lambda!")
     @test position("solve_lambda!") < position("crop_carbon!") <
           position("terminate_failed_crop!") < position("evaporation!")

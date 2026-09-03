@@ -11,7 +11,7 @@ function respiration!(crop,
                       soil_temperature::AbstractMatrix{T},
                       gross_assimilation::AbstractArray{T},
                       leaf_respiration::AbstractArray{T};
-                      crop_resp_fix::Bool = false,
+                      crop_resp_fix::Bool = true,
                       lpjmlparams::LPJmLParams = lpjmlparams
 ) where {T <: AbstractFloat}
     launch_1D!(
@@ -42,7 +42,7 @@ function respiration!(crop,
                       air_temperature::AbstractVector{T},
                       gross_assimilation::AbstractArray{T},
                       leaf_respiration::AbstractArray{T};
-                      crop_resp_fix::Bool = false,
+                      crop_resp_fix::Bool = true,
                       lpjmlparams::LPJmLParams = lpjmlparams) where {T <: AbstractFloat}
     return respiration!(
         crop, CFT, air_temperature, reshape(air_temperature, 1, :),

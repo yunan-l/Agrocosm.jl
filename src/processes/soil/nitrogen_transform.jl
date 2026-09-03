@@ -55,6 +55,10 @@ function mineralize_nitrify!(soil;
     launch_1D!(
         nitrify_kernel!,
         soil_properties(soil).ph,
+        soil_properties(soil).nitrification_a,
+        soil_properties(soil).nitrification_b,
+        soil_properties(soil).nitrification_c,
+        soil_properties(soil).nitrification_d,
         soil_nitrogen_prognostic(soil).ammonium,
         soil_nitrogen_prognostic(soil).nitrate,
         soil_water_auxiliary(soil).relative_content,
@@ -73,8 +77,9 @@ function mineralize_nitrify!(soil;
 end
 
 """
-    post_crop_nitrogen_losses!(soil; air_temperature=nothing,
-                               wind_speed=nothing, lpjmlparams=lpjmlparams)
+    post_crop_nitrogen_losses!(soil; air_temperature=nothing, wind_speed=nothing,
+                               exact_lpjml_volatilization=false,
+                               lpjmlparams=lpjmlparams)
 
 Apply denitrification and ammonia volatilization after crop uptake, matching
 LPJmL's daily stand ordering.
@@ -82,6 +87,7 @@ LPJmL's daily stand ordering.
 function post_crop_nitrogen_losses!(soil;
                                     air_temperature = nothing,
                                     wind_speed = nothing,
+                                    exact_lpjml_volatilization::Bool = false,
                                     lpjmlparams::LPJmLParams = lpjmlparams)
     soil_layers = size(soil_nitrogen_prognostic(soil).nitrate, 1)
 
@@ -113,16 +119,30 @@ function post_crop_nitrogen_losses!(soil;
     else
         wind_speed
     end
-    launch_1D!(
-        volatilization_kernel!,
-        soil_properties(soil).ph,
-        soil_nitrogen_prognostic(soil).ammonium,
-        volatilization_temperature,
-        volatilization_wind,
-        soil_properties(soil).layer_depth,
-        soil_nitrogen_fluxes(soil).volatilization,
-        lpjmlparams,
-    )
+    # The legacy kernel remains untouched for bitwise-compatible disabled runs.
+    if exact_lpjml_volatilization
+        launch_1D!(
+            lpjml_volatilization_kernel!,
+            soil_properties(soil).ph,
+            soil_nitrogen_prognostic(soil).ammonium,
+            volatilization_temperature,
+            volatilization_wind,
+            soil_properties(soil).layer_depth,
+            soil_nitrogen_fluxes(soil).volatilization,
+            lpjmlparams,
+        )
+    else
+        launch_1D!(
+            volatilization_kernel!,
+            soil_properties(soil).ph,
+            soil_nitrogen_prognostic(soil).ammonium,
+            volatilization_temperature,
+            volatilization_wind,
+            soil_properties(soil).layer_depth,
+            soil_nitrogen_fluxes(soil).volatilization,
+            lpjmlparams,
+        )
+    end
     return nothing
 end
 
@@ -208,9 +228,10 @@ end
 """
     compute_ammonia_volatilization(ammonium, ph, temperature, wind, depth, length)
 
-Return the LPJmL daily NH₃ loss from the upper ammonium pool. All quantities
-are scalar, so the balance-preserving subtraction remains visible in the
-calling kernel.
+Return the legacy daily NH₃ loss from the upper ammonium pool. This preserves
+the historical Float32 dissociation floor for bitwise-compatible disabled
+runs; new LPJmL-compatible process paths use
+`compute_lpjml_ammonia_volatilization`.
 """
 @inline function compute_ammonia_volatilization(ammonium::T,
                                                  ph::T,
@@ -222,6 +243,24 @@ calling kernel.
     kelvin = temperature + T(273.15)
     dissociation = T(10)^(T(0.05) - T(2788) / kelvin)
     aqueous_fraction = one(T) / (one(T) + T(10)^(-ph) / max(dissociation, eps(T)))
+    aqueous_nh3 = aqueous_fraction * available / max(depth, eps(T)) * T(1000)
+    henry = T(0.2138) / kelvin * T(10)^(T(6.123) - T(1825) / kelvin)
+    transfer = T(0.000612) * max(zero(T), wind)^T(0.8) * kelvin^T(0.382) *
+        volatilization_length^T(-0.2)
+    return clamp(T(86400) * transfer * henry * aqueous_nh3, zero(T), available)
+end
+
+"""Evaluate LPJmL's volatilization formula without flooring its small physical Ka."""
+@inline function compute_lpjml_ammonia_volatilization(ammonium::T,
+                                                       ph::T,
+                                                       temperature::T,
+                                                       wind::T,
+                                                       depth::T,
+                                                       volatilization_length::T) where {T <: AbstractFloat}
+    available = max(zero(T), ammonium)
+    kelvin = temperature + T(273.15)
+    dissociation = T(10)^(T(0.05) - T(2788) / kelvin)
+    aqueous_fraction = one(T) / (one(T) + T(10)^(-ph) / dissociation)
     aqueous_nh3 = aqueous_fraction * available / max(depth, eps(T)) * T(1000)
     henry = T(0.2138) / kelvin * T(10)^(T(6.123) - T(1825) / kelvin)
     transfer = T(0.000612) * max(zero(T), wind)^T(0.8) * kelvin^T(0.382) *
@@ -323,6 +362,10 @@ end
 
 @kernel inbounds = true function nitrify_kernel!(
     soil_ph::AbstractArray{T},
+    nitrification_a::AbstractArray{T},
+    nitrification_b::AbstractArray{T},
+    nitrification_c::AbstractArray{T},
+    nitrification_d::AbstractArray{T},
     ammonium::AbstractArray{M},
     nitrate::AbstractArray{M},
     relative_water::AbstractArray{M},
@@ -338,8 +381,15 @@ end
 ) where {T <: AbstractFloat, M <: AbstractFloat}
     cell = @index(Global)
     @unpack lpjmlparams, soil_layers = kernel_params
-    @unpack k_max, k_2, nitrification_a, nitrification_b,
-            nitrification_c, nitrification_d = lpjmlparams
+    @unpack k_max, k_2 = lpjmlparams
+
+    a = M(nitrification_a[cell])
+    b = M(nitrification_b[cell])
+    c = M(nitrification_c[cell])
+    d = M(nitrification_d[cell])
+    n_nit = a - b
+    m_nit = a - c
+    z_nit = d * (b - a) / (a - c)
 
     for layer in 1:soil_layers
         nitrification[layer, cell] = zero(M)
@@ -349,13 +399,8 @@ end
             wilting_storage[layer, cell], wilting_ice_fraction[layer, cell],
             free_water[layer, cell], saturation_storage[layer, cell],
         )
-        n_nit = M(nitrification_a - nitrification_b)
-        m_nit = M(nitrification_a - nitrification_c)
-        z_nit = M(nitrification_d) * M(nitrification_b - nitrification_a) /
-            M(nitrification_a - nitrification_c)
         moisture_factor = compute_nitrification_moisture_response(
-            water_filled_pore_space, M(nitrification_b), M(nitrification_c),
-            M(nitrification_d), n_nit, m_nit, z_nit,
+            water_filled_pore_space, b, c, d, n_nit, m_nit, z_nit,
         )
         temperature_factor = compute_nitrification_temperature_response(
             soil_temperature[layer, cell],
@@ -438,6 +483,25 @@ end
     cell = @index(Global)
     @unpack volatil_length = lpjmlparams
     flux = compute_ammonia_volatilization(
+        ammonium[1, cell], M(soil_ph[cell]), air_temperature[cell], wind_speed[cell],
+        M(layer_depth[1]), M(volatil_length),
+    )
+    ammonium[1, cell] -= flux
+    volatilization[cell] = flux
+end
+
+@kernel inbounds = true function lpjml_volatilization_kernel!(
+    soil_ph::AbstractArray{T},
+    ammonium::AbstractArray{M},
+    air_temperature::AbstractArray{M},
+    wind_speed::AbstractArray{M},
+    layer_depth::AbstractArray{T},
+    volatilization::AbstractArray{M},
+    lpjmlparams::LPJmLParams,
+) where {T <: AbstractFloat, M <: AbstractFloat}
+    cell = @index(Global)
+    @unpack volatil_length = lpjmlparams
+    flux = compute_lpjml_ammonia_volatilization(
         ammonium[1, cell], M(soil_ph[cell]), air_temperature[cell], wind_speed[cell],
         M(layer_depth[1]), M(volatil_length),
     )

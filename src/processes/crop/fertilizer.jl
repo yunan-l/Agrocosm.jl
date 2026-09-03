@@ -11,13 +11,14 @@ function fertilizer!(crop,
                      manure::Bool = false,
                      apply_sowing_dose::Bool = true,
                      apply_second_dose::Bool = true,
+                     surface_second_manure::Bool = false,
                      reset_inputs::Bool = true,
                      lpjmlparams::LPJmLParams = lpjmlparams
 )
 
     kernel_params = (;
         lpjmlparams, fertilizer, manure, apply_sowing_dose,
-        apply_second_dose, reset_inputs,
+        apply_second_dose, surface_second_manure, reset_inputs,
     )
 
     launch_1D!(
@@ -63,7 +64,7 @@ end
     cell = @index(Global)
 
     @unpack lpjmlparams, fertilizer, manure, apply_sowing_dose,
-        apply_second_dose, reset_inputs = kernel_params
+        apply_second_dose, surface_second_manure, reset_inputs = kernel_params
     @unpack manure_cn, nmanure_nh4_frac, nfert_split_frac, nfert_no3_frac = lpjmlparams
 
     if reset_inputs
@@ -105,8 +106,10 @@ end
             manure_input = crop_nmanure[cell]
             crop_manure_input[cell] += manure_input
             soil_NH4[1, cell] += manure_input * nmanure_nh4_frac
-            soil_litter_carbon[2, cell] += manure_input * manure_cn
-            soil_litter_nitrogen[2, cell] += manure_input * (1 - nmanure_nh4_frac)
+            litter_pool = surface_second_manure ? 1 : 2
+            soil_litter_carbon[litter_pool, cell] += manure_input * manure_cn
+            soil_litter_nitrogen[litter_pool, cell] +=
+                manure_input * (one(T) - nmanure_nh4_frac)
             crop_nmanure[cell] = zero(T)
         end
     end

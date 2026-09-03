@@ -19,7 +19,7 @@ using Test
         leaf = T[1, 2, 2]
         crop.fluxes.carbon.gross_assimilation .= gross
         crop.fluxes.carbon.leaf_respiration .= leaf
-        respiration!(state, cft1, air, soil, gross, leaf)
+        respiration!(state, cft1, air, soil, gross, leaf; crop_resp_fix = false)
 
         p = lpjmlparams
         temperature_response(temp) = temp < T(-15) ? zero(T) : exp(
@@ -55,7 +55,7 @@ using Test
     end
 end
 
-@testset "Crop respiration can retain fixed CFT N:C" begin
+@testset "Crop respiration defaults to fixed CFT N:C" begin
     T = Float32
     crop = init_crop(T, 1, identity)
     state = test_model_state(crop)
@@ -72,10 +72,7 @@ end
     leaf = T[2]
     fixed = LPJmLParams{T}()
 
-    respiration!(
-        state, cft1, air, soil, gross, leaf;
-        crop_resp_fix = true, lpjmlparams = fixed,
-    )
+    respiration!(state, cft1, air, soil, gross, leaf; lpjmlparams = fixed)
 
     g(temp) = exp(T(fixed.e0) * (one(T) / (T(fixed.temp_response) + T(10)) -
                                   one(T) / (temp + T(fixed.temp_response))))

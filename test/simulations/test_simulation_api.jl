@@ -93,7 +93,7 @@ end
     @test estimate_memory(
         1, 1; T = Float64, diagnostics = false, block_days = 1,
         backend = :cpu, safety_factor = 1,
-    ).persistent_state_bytes == 13358
+    ).persistent_state_bytes == 13398
     @test estimate.forcing_block_bytes == 64
     @test prefetched.host_forcing_bytes == estimate.host_forcing_bytes + 64
     @test prefetched.host_peak_bytes == estimate.host_peak_bytes + 64
@@ -160,17 +160,17 @@ end
     @test configuration.nitrogen_limit_vcmax
 end
 
-@testset "Crop respiration mode remains explicit" begin
+@testset "Crop respiration defaults to the LPJmL 6.1.9 mode" begin
     default_configuration = SimulationConfiguration(
         Float32, identity, 1, Int64[1], Int32[1],
     )
-    @test !default_configuration.crop_resp_fix
+    @test default_configuration.crop_resp_fix
 
     configuration = SimulationConfiguration(
         Float32, identity, 1, Int64[1], Int32[1];
-        crop_resp_fix = true,
+        crop_resp_fix = false,
     )
-    @test configuration.crop_resp_fix
+    @test !configuration.crop_resp_fix
 end
 
 @testset "Nitrogen-limited daily driver accepts deposition forcing" begin

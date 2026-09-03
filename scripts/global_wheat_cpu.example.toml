@@ -26,6 +26,7 @@ with_tillage = true
 
 [run]
 backend = "cpu"
+crop_resp_fix = true
 # Used by run_global_wheat_gpu.jl; Julia/CUDA device numbering starts at 0.
 device_id = 0
 memory_safety_factor = 1.2

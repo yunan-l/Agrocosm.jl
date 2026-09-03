@@ -10,6 +10,7 @@ function nuptake_crop!(crop,
                        soil;
                        auto_fertilizer::Bool = false,
                        biological_fixation::Bool = false,
+                       require_active_photosynthesis::Bool = false,
                        lpjmlparams::LPJmLParams = lpjmlparams
 )
 
@@ -18,6 +19,7 @@ function nuptake_crop!(crop,
         soil_layers = 5,
         auto_fertilizer = auto_fertilizer,
         biological_fixation = biological_fixation,
+        require_active_photosynthesis = require_active_photosynthesis,
     )
 
     launch_1D!(
@@ -37,6 +39,7 @@ function nuptake_crop!(crop,
         crop_prognostic(crop).nitrogen.sufficiency,
         crop_root_input(crop).distribution,
         crop_prognostic(crop).phenology.is_growing,
+        crop_photosynthesis_auxiliary(crop).lambda,
         soil_water_auxiliary(soil).relative_content,
         soil_water_prognostic(soil).saturation_fraction,
         soil_nitrogen_prognostic(soil).nitrate,
@@ -133,6 +136,7 @@ end
                                       crop_vscal::AbstractArray{T},
                                       crop_rootdist::AbstractArray{T},
                                       crop_isgrowing::AbstractArray{S},
+                                      crop_lambda::AbstractArray{T},
                                       soil_w::AbstractArray{M},
                                       soil_wsat::AbstractArray{M},
                                       soil_NO3::AbstractArray{M},
@@ -145,13 +149,15 @@ end
 
     cell = @index(Global)
 
-    @unpack lpjmlparams, soil_layers, auto_fertilizer, biological_fixation = kernel_params
+    @unpack lpjmlparams, soil_layers, auto_fertilizer, biological_fixation,
+            require_active_photosynthesis = kernel_params
 
     @unpack T_0, T_m, T_r = lpjmlparams
     @unpack ncleaf, knstore, no3_uptake, nh4_uptake = CFT
     bnf = CFT.biological_fixation
 
-    if crop_isgrowing[cell] == 1
+    if crop_isgrowing[cell] == 1 &&
+       (!require_active_photosynthesis || crop_lambda[cell] > zero(T))
         crop_nuptake[cell] = zero(T)
         crop_nautofertilizer[cell] = zero(T)
         crop_bnf[cell] = zero(T)
@@ -283,7 +289,7 @@ end
             crop_vscal[cell] = one(T)
         end
 
-    else
+    elseif crop_isgrowing[cell] != one(S)
         crop_nitrogen[cell] = zero(T)
         crop_nuptake[cell] = zero(T)
         crop_nautofertilizer[cell] = zero(T)
@@ -292,5 +298,13 @@ end
         # A deleted LPJmL stand has no active limitation. Keep the reusable
         # placeholder at the neutral multiplicative value.
         crop_vscal[cell] = one(T)
+    else
+        # LPJmL skips nitrogen_stress when its outer photosynthesis gate is
+        # closed. Preserve plant N and the preceding vscal, but clear daily
+        # acquisition fluxes so a prior day cannot leak into diagnostics.
+        crop_nuptake[cell] = zero(T)
+        crop_nautofertilizer[cell] = zero(T)
+        crop_bnf[cell] = zero(T)
+        crop_bnf_cost[cell] = zero(T)
     end
 end

@@ -24,4 +24,13 @@ CUDA.allowscalar(false)
     @test 0.0f0 < vcmax[2] < 10.0f0
     @test limitation[1] ≈ 1.0f0 atol = 2.0f-6
     @test limitation[2] < 1.0f-5
+
+    crop.auxiliary.photosynthesis.potential_vcmax .= 10.0f0
+    crop.auxiliary.photosynthesis.vcmax .= 0.0f0
+    crop.auxiliary.photosynthesis.lambda .= CuArray(Float32[0.8, 0.0])
+    limit_vcmax_by_nitrogen!(
+        state, cft1, temperature; require_active_photosynthesis = true,
+    )
+    @test Array(crop.auxiliary.photosynthesis.vcmax)[2] == 10.0f0
+    @test Array(crop.auxiliary.photosynthesis.nitrogen_limitation)[2] == 1.0f0
 end

@@ -8,12 +8,14 @@ function ndemand_crop!(crop,
                        photos_vcmax::AbstractArray{T},
                        temp::AbstractArray{T};
                        include_storage_reserve::Bool = false,
+                       require_active_photosynthesis::Bool = false,
                        lpjmlparams::LPJmLParams = lpjmlparams
 ) where {T <: AbstractFloat}
 
     kernel_params = (
         lpjmlparams = lpjmlparams,
         include_storage_reserve = include_storage_reserve,
+        require_active_photosynthesis = require_active_photosynthesis,
     )
 
     launch_1D!(
@@ -25,6 +27,7 @@ function ndemand_crop!(crop,
         crop_prognostic(crop).carbon.storage,
         crop_stress_auxiliary(crop).nitrogen_demand_leaf,
         crop_prognostic(crop).phenology.is_growing,
+        crop_photosynthesis_auxiliary(crop).lambda,
         photos_vcmax,
         temp,
         CFT,
@@ -41,6 +44,7 @@ end
                                       crop_stoc::AbstractArray{T},
                                       crop_ndemand_leaf::AbstractArray{T},
                                       crop_isgrowing::AbstractArray{S},
+                                      crop_lambda::AbstractArray{T},
                                       photos_vcmax::AbstractArray{T},
                                       temp::AbstractArray{T},
                                       CFT::CFTParameters,
@@ -49,12 +53,14 @@ end
 
     cell = @index(Global)
 
-    @unpack lpjmlparams, include_storage_reserve = kernel_params
+    @unpack lpjmlparams, include_storage_reserve,
+            require_active_photosynthesis = kernel_params
 
     @unpack p, k_temp = lpjmlparams
     @unpack ratio, ncleaf, knstore = CFT
 
-    if crop_isgrowing[cell] == 1
+    if crop_isgrowing[cell] == 1 &&
+       (!require_active_photosynthesis || crop_lambda[cell] > zero(T))
         # LPJmL ndemand_crop: Rubisco requirement plus structural minimum leaf N.
         rubisco_demand = T(p) * T(1e-3) * photos_vcmax[cell] /
                          (T(86400) * T(12) * T(1e-6)) *

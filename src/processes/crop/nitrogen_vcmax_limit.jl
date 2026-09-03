@@ -11,6 +11,7 @@ dimensionless retained fraction is stored in
 function limit_vcmax_by_nitrogen!(crop,
                                  CFT::CFTParameters,
                                  temperature::AbstractArray{T};
+                                 require_active_photosynthesis::Bool = false,
                                  lpjmlparams::LPJmLParams = lpjmlparams
 ) where {T <: AbstractFloat}
     launch_1D!(
@@ -21,9 +22,11 @@ function limit_vcmax_by_nitrogen!(crop,
         crop_stress_auxiliary(crop).nitrogen_demand_leaf,
         crop_prognostic(crop).carbon.leaf,
         crop_prognostic(crop).phenology.is_growing,
+        crop_photosynthesis_auxiliary(crop).lambda,
         temperature,
         CFT,
         lpjmlparams,
+        require_active_photosynthesis,
     )
     return nothing
 end
@@ -35,14 +38,17 @@ end
     available_leaf_nitrogen::AbstractArray{T},
     leaf_carbon::AbstractArray{T},
     is_growing::AbstractArray{S},
+    lambda::AbstractArray{T},
     temperature::AbstractArray{T},
     CFT::CFTParameters,
     lpjmlparams::LPJmLParams,
+    require_active_photosynthesis::Bool,
 ) where {T <: AbstractFloat, S <: Integer}
     cell = @index(Global)
     potential = max(zero(T), potential_vcmax[cell])
 
-    if is_growing[cell] == one(S) && potential > zero(T)
+    if is_growing[cell] == one(S) && potential > zero(T) &&
+       (!require_active_photosynthesis || lambda[cell] > zero(T))
         @unpack ncleaf = CFT
         @unpack p, k_temp = lpjmlparams
         rubisco_nitrogen = max(

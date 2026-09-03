@@ -35,6 +35,24 @@ using Test
     @test crop.auxiliary.stress.nitrogen_demand_total[1] >= crop.auxiliary.stress.nitrogen_demand_leaf[1]
 end
 
+@testset "LPJmL photosynthesis gate skips nitrogen demand" begin
+    crop = init_crop(1, identity)
+    state = test_model_state(crop)
+    crop.state.phenology.is_growing .= 1
+    crop.state.carbon.leaf .= 2.0f0
+    crop.auxiliary.photosynthesis.lambda .= 0.0f0
+    crop.auxiliary.stress.nitrogen_demand_leaf .= 9.0f0
+    crop.auxiliary.stress.nitrogen_demand_total .= 9.0f0
+
+    ndemand_crop!(
+        state, cft1, Float32[10.0], Float32[25.0];
+        require_active_photosynthesis = true,
+    )
+
+    @test crop.auxiliary.stress.nitrogen_demand_leaf[1] == 0.0f0
+    @test crop.auxiliary.stress.nitrogen_demand_total[1] == 0.0f0
+end
+
 
 @testset "Compatibility demand excludes the storage reserve" begin
     crop = init_crop(1, identity)

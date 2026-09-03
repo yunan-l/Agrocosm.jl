@@ -287,7 +287,7 @@ declarations contain the units and detailed LPJmL-style field comments.
 | Evaporation/hydrology | `ALPHAM`, `GM`, `PRIESTLEY_TAYLOR`, `soildepth_evap`, `p`, `soil_infil`, `soil_infil_litter`, `percthres`, `maxsnowpack` |
 | Soil physics | `MINERALDENS` |
 | Plant N uptake | `k_temp`, `T_0`, `T_m`, `T_r` |
-| Soil N transformations | `k_max`, `k_2`, `soil_cn_ratio`, `immobilization_k`, `nitrification_a`, `nitrification_b`, `nitrification_c`, `nitrification_d`, `CDN`, `n2o_denit_frac` |
+| Soil N transformations | Global: `k_max`, `k_2`, `soil_cn_ratio`, `immobilization_k`, `CDN`, `n2o_denit_frac`; soil-class arrays: `anion_exclusion`, `nitrification_a`, `nitrification_b`, `nitrification_c`, `nitrification_d` |
 | Volatilization | `volatil_wind`, `volatil_length` |
 | Fertilizer/manure | `manure_cn`, `nfert_split_frac`, `nmanure_nh4_frac`, `nfert_no3_frac` |
 

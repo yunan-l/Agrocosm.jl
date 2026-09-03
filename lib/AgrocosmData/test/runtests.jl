@@ -172,9 +172,16 @@ include("test_climate_deposition.jl")
         @test schedule.fertilizer == transient.fertilizer.values
 
         soil = read_soil_data(catalog, grid)
+        @test DEFAULT_SOIL_LOOKUP_VERSION == v"1.1.0"
         @test soil.soilcode == Int32[1, 6, 9, 14]
         @test soil.ph == Float32[6, 7, 8, 9]
         @test soil.sand == Float32[0.22, 0.58, 0.58, 0.99]
+        @test soil.silt == Float32[0.24, 0.15, 0.32, 0.00]
+        @test soil.clay == Float32[0.54, 0.27, 0.10, 0.01]
+        @test soil.saturation[:, 4] == fill(0.08f0, 5)
+        @test soil.provenance.soilcode_mapping.mode === :netcdf_map_names
+        @test soil.provenance.soilcode_mapping.source_to_canonical ==
+              Tuple(Int32[0; 1:12; 14])
         @test size(soil.saturation) == (5, 4)
         @test soil_properties(soil).soilph === soil.ph
 
@@ -187,6 +194,18 @@ include("test_climate_deposition.jl")
         baseline = soil_data_from_values(baseline_codes, baseline_ph, baseline_selection)
         @test baseline.sand == Float32[0.58, 0.43, 0.58, 0.58, 0.58, 0.58, 0.58, 0.58, 0.58, 0.58]
         @test baseline.saturation[:, 1] == fill(0.404f0, 5)
+
+        canonical_classes = soil_data_from_values(
+            Int32[13, 14], Float32[7, 7], CellSelection(1:2, 0:1),
+        )
+        @test canonical_classes.soilcode == Int32[13, 14]
+        @test canonical_classes.sand == Float32[0.24, 0.99]
+        @test canonical_classes.clay == Float32[0.48, 0.01]
+        @test canonical_classes.saturation[1, :] == Float32[0.468, 0.08]
+        @test_throws ArgumentError AgrocosmData._canonical_soilcode_map([
+            "(null)", "unknown soil class",
+        ])
+        @test_throws ArgumentError AgrocosmData._canonical_soilcode_map(["clay"])
 
         @test_throws ArgumentError validate_management(:landuse, Float32[1.1 0.0])
         @test_throws ArgumentError validate_management(:sowing_date, Float32[0 100]; active = Bool[1 1])

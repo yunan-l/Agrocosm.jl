@@ -32,6 +32,15 @@ CUDA.allowscalar(false)
     @test managed_land.latitude isa CuArray{Float32, 1}
     @test crop.fluxes.carbon.gross_assimilation isa CuArray{Float32, 1}
     @test soil.properties.sand_fraction isa CuArray{Float32, 2}
+    @test soil.properties.nitrification_a isa CuArray{Float32, 1}
+    Agrocosm.initialize_soil_class_parameters!(
+        soil.properties, CuArray(Int32[1, 9]),
+    )
+    @test Array(soil.properties.anion_exclusion) == Float32[0.3, 0.4]
+    @test Array(soil.properties.nitrification_a) == Float32[0.45, 0.55]
+    @test Array(soil.properties.nitrification_b) == Float32[1.27, 1.7]
+    @test Array(soil.properties.nitrification_c) == Float32[0.0012, -0.007]
+    @test Array(soil.properties.nitrification_d) == Float32[2.84, 3.22]
     @test soil.water.storage isa CuArray{Float32, 2}
     @test soil.water.ice_storage isa CuArray{Float32, 2}
     @test soil.water.wilting_ice_fraction isa CuArray{Float32, 2}

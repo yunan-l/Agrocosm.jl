@@ -15,9 +15,9 @@ CUDA.allowscalar(false)
     litter_carbon_2cm = 20.0f0 * soil_thermal_params.litter_carbon_fraction *
                        soil_thermal_params.litter_bulk_density
     soil.carbon.litter[1, 9:16] .= litter_carbon_2cm
-    soil.snow.height[17:24] .= 0.67f0
+    soil.snow.pack[17:24] .= 100.0f0
     soil.carbon.litter[1, 25:32] .= litter_carbon_2cm
-    soil.snow.height[25:32] .= 0.67f0
+    soil.snow.pack[25:32] .= 100.0f0
     update_surface_litter_properties!(state)
 
     air_temperature = CuArray(fill(30.0f0, cell_size))

@@ -37,7 +37,7 @@ function soil_temperature!(soil,
         soil_water_prognostic(soil).ice_storage,
         soil_water_auxiliary(soil).saturation_storage,
         soil_properties(soil).layer_depth,
-        soil_snow_prognostic(soil).height,
+        soil_snow_prognostic(soil).pack,
         soil_surface_litter_prognostic(soil).depth,
         soil_surface_litter_prognostic(soil).water_storage,
         soil_surface_litter_prognostic(soil).temperature,
@@ -46,6 +46,7 @@ function soil_temperature!(soil,
         initial_temperature,
         thermalparams,
         snowparams.lambda_snow,
+        snowparams.thermal_watertosnow,
     )
     # Keep LPJmL's three liquid/ice reservoirs in a small second kernel. This
     # preserves the exact process order while avoiding a monolithic GPU kernel.
@@ -189,7 +190,7 @@ end
     ice_water::AbstractArray{T},
     saturation_storage::AbstractArray{T},
     layer_depth_mm::AbstractArray{T},
-    snow_height::AbstractArray{T},
+    snowpack::AbstractArray{T},
     litter_depth::AbstractArray{T},
     litter_water_storage::AbstractArray{T},
     litter_temperature::AbstractArray{T},
@@ -198,6 +199,7 @@ end
     initial_temperature::AbstractArray{T},
     thermalparams::SoilThermalParams{T},
     snow_conductivity::T,
+    thermal_watertosnow::T,
 ) where {T <: AbstractFloat}
     cell = @index(Global)
     @unpack seconds_per_day, phase_change_substeps, litter_porosity,
@@ -315,9 +317,11 @@ end
         k4 = ff4 * kf4 + (one(T) - ff4) * ku4
         k5 = ff5 * kf5 + (one(T) - ff5) * ku5
 
+        snow_thermal_depth = max(snowpack[cell], zero(T)) *
+            thermal_watertosnow * T(0.001)
         surface_resistance = dz1 / (T(2) * k1) +
             depth_litter / conductivity_litter +
-            max(snow_height[cell], zero(T)) / snow_conductivity
+            snow_thermal_depth / snow_conductivity
         qsurface = (air_temperature[cell] - t1) / max(surface_resistance, eps(T))
         q12 = harmonic_mean(k1, k2) * (t1 - t2) / ((dz1 + dz2) / T(2))
         q23 = harmonic_mean(k2, k3) * (t2 - t3) / ((dz2 + dz3) / T(2))
@@ -370,7 +374,8 @@ end
         final_surface_flux = (air_temperature[cell] - newt1) /
                              max(last_surface_resistance, eps(T))
         litter_temperature[cell] = air_temperature[cell] - final_surface_flux *
-            (max(snow_height[cell], zero(T)) / snow_conductivity +
+            (max(snowpack[cell], zero(T)) * thermal_watertosnow * T(0.001) /
+                 snow_conductivity +
              depth_litter / (T(2) * conductivity_litter))
     else
         litter_temperature[cell] = newt1
