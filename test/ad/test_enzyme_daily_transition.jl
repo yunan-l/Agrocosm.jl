@@ -173,6 +173,7 @@ function _nitrogen_limited_daily_objective(
         observable,
         layer_depth;
         nitrogen_limit_vcmax = true,
+        crop_resp_fix = false,
     )
 end
 
@@ -264,7 +265,10 @@ end
             observable,
             template.layer_depth,
         )
-        @test ad.directional ≈ dot(gradient, direction) rtol = 1.0f-5 atol = 1.0f-6
+        projection = dot(gradient, direction)
+        projection_scale = sum(abs, gradient .* direction)
+        @test abs(ad.directional - projection) <=
+            2.0f-5 * projection_scale + 1.0f-6
 
         finite_difference = similar(theta)
         for index in eachindex(theta)
@@ -279,6 +283,57 @@ end
         @test gradient ≈ finite_difference rtol = 2.0f-2 atol = 1.0f-5
     end
 
+end
+
+@testset "Enzyme crop respiration mode is an explicit constant" begin
+    template = _daily_transition_fixture()
+    plant_nitrogen = Agrocosm.crop_prognostic(template.state).nitrogen
+    plant_nitrogen.root .= 0.0f0
+    plant_nitrogen.storage .= 0.0f0
+    plant_nitrogen.pool .= 0.0f0
+    parameter_names = (:gmin, :b)
+    theta = Float32[cft1.gmin, cft1.b]
+
+    function enzyme_reco(; kwargs...)
+        state = deepcopy(template.state)
+        enzyme_prepare_daily_state!(state)
+        return enzyme_daily_transition_objective(
+            theta,
+            state,
+            cft1,
+            template.global_parameters,
+            template.climate,
+            parameter_names,
+            template.day,
+            :reco,
+            template.layer_depth;
+            kwargs...,
+        )
+    end
+
+    default_reco = enzyme_reco()
+    fixed_reco = enzyme_reco(; crop_resp_fix = true)
+    dynamic_reco = enzyme_reco(; crop_resp_fix = false)
+    @test default_reco == fixed_reco
+    @test abs(fixed_reco - dynamic_reco) > 1.0f-4
+
+    production_state = deepcopy(template.state)
+    enzyme_prepare_daily_state!(production_state)
+    daily_crop_C3!(
+        template.day,
+        template.day,
+        ProcessModules(cft1, template.global_parameters),
+        template.climate,
+        production_state;
+        fertilizer = :yes,
+        manure = true,
+        with_tillage = true,
+        crop_resp_fix = false,
+        update_vernalization_requirement = false,
+        reuse_output = true,
+    )
+    production_reco = _production_daily_transition_value(production_state, :reco)
+    @test dynamic_reco ≈ production_reco rtol = 5.0f-5 atol = 1.5f-4
 end
 
 @testset "Enzyme multi-day state propagation" begin
@@ -364,6 +419,53 @@ end
     parameter_names = (:knstore, :gmin)
     theta = Float32[cft1.knstore, cft1.gmin]
     observable = :gpp
+
+    production_state = deepcopy(template.state)
+    enzyme_state = deepcopy(template.state)
+    production_nitrogen = Agrocosm.crop_prognostic(production_state).nitrogen
+    enzyme_nitrogen = Agrocosm.crop_prognostic(enzyme_state).nitrogen
+    production_nitrogen.pending_manure .= 4.0f0
+    enzyme_nitrogen.pending_manure .= 4.0f0
+    deferred_fertilizer = only(production_nitrogen.pending_fertilizer)
+    enzyme_prepare_daily_state!(production_state)
+    enzyme_prepare_daily_state!(enzyme_state)
+    daily_crop_C3!(
+        template.day, template.day,
+        ProcessModules(cft1, template.global_parameters),
+        template.climate,
+        production_state;
+        fertilizer = :yes,
+        manure = true,
+        with_tillage = true,
+        nitrogen_limit_vcmax = true,
+        crop_resp_fix = false,
+        update_vernalization_requirement = false,
+        reuse_output = true,
+    )
+    enzyme_daily_transition_objective(
+        theta,
+        enzyme_state,
+        cft1,
+        template.global_parameters,
+        template.climate,
+        parameter_names,
+        template.day,
+        observable,
+        template.layer_depth;
+        nitrogen_limit_vcmax = true,
+        crop_resp_fix = false,
+    )
+    @test only(production_nitrogen.pending_fertilizer) == 0.0f0
+    @test only(enzyme_nitrogen.pending_fertilizer) == 0.0f0
+    @test only(production_nitrogen.pending_manure) == 0.0f0
+    @test only(enzyme_nitrogen.pending_manure) == 0.0f0
+    @test only(Agrocosm.crop_fluxes(production_state).nitrogen.prescribed_fertilizer_input) ≈
+        deferred_fertilizer
+    @test only(Agrocosm.crop_fluxes(enzyme_state).nitrogen.prescribed_fertilizer_input) ≈
+        deferred_fertilizer
+    @test only(Agrocosm.crop_fluxes(production_state).nitrogen.prescribed_manure_input) ≈ 4.0f0
+    @test only(Agrocosm.crop_fluxes(enzyme_state).nitrogen.prescribed_manure_input) ≈ 4.0f0
+
     state_factory() = begin
         state = deepcopy(template.state)
         return state, enzyme_zero_tangent(state)

@@ -89,6 +89,7 @@ function Agrocosm.enzyme_management_yield_loss(
     context::Agrocosm.ManagementAdaptationContext;
     irrigation::Bool = false,
     nitrogen_limit_vcmax::Bool = false,
+    crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat}
     length(theta) == 1 || throw(DimensionMismatch(
         "management adaptation expects theta = [total_fertilizer]",
@@ -105,7 +106,7 @@ function Agrocosm.enzyme_management_yield_loss(
         _apply_management_fertilizer!(state, theta[1], context, day, model_parameters.lpjml)
         _enzyme_continuous_transition!(
             state, cft, model_parameters, climate, day, :gpp, layer_depth,
-            irrigation, nitrogen_limit_vcmax,
+            irrigation, nitrogen_limit_vcmax, crop_resp_fix, false,
         )
         day += 1
     end
@@ -137,6 +138,7 @@ function Agrocosm.enzyme_management_yield_split_loss(
     context::Agrocosm.ManagementAdaptationContext;
     irrigation::Bool = false,
     nitrogen_limit_vcmax::Bool = false,
+    crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat}
     length(theta) == 2 || throw(DimensionMismatch(
         "split management adaptation expects theta = [total_fertilizer, first_event_fraction]",
@@ -158,7 +160,7 @@ function Agrocosm.enzyme_management_yield_split_loss(
         )
         _enzyme_continuous_transition!(
             state, cft, model_parameters, climate, day, :gpp, layer_depth,
-            irrigation, nitrogen_limit_vcmax,
+            irrigation, nitrogen_limit_vcmax, crop_resp_fix, false,
         )
         day += 1
     end
@@ -195,6 +197,7 @@ function Agrocosm.enzyme_joint_adaptation_yield_loss(
     context::Agrocosm.ManagementAdaptationContext;
     irrigation::Bool = false,
     nitrogen_limit_vcmax::Bool = false,
+    crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat}
     length(theta) == 6 || throw(DimensionMismatch(
         "joint adaptation expects [fertilizer, split, PHU scale, heat shift, " *
@@ -240,6 +243,8 @@ function Agrocosm.enzyme_joint_adaptation_yield_loss(
             layer_depth,
             irrigation,
             nitrogen_limit_vcmax,
+            crop_resp_fix,
+            false,
         )
         day += 1
     end

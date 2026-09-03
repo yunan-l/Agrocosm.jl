@@ -66,6 +66,7 @@ end
         template.layer_depth,
         context;
         block_days = 2,
+        crop_resp_fix = false,
     )
 
     @test isfinite(result.primal)
@@ -117,6 +118,7 @@ end
         template.layer_depth,
         context;
         block_days = 2,
+        crop_resp_fix = false,
     )
     cft_only = enzyme_seasonal_gradient_blockwise(
         theta_cft,
@@ -129,6 +131,7 @@ end
         template.layer_depth,
         context;
         block_days = 2,
+        crop_resp_fix = false,
     )
     soil_only = enzyme_seasonal_soil_gradient_blockwise(
         theta_soil,
@@ -141,6 +144,7 @@ end
         template.layer_depth,
         context;
         block_days = 2,
+        crop_resp_fix = false,
     )
 
     @test isfinite(joint.primal)

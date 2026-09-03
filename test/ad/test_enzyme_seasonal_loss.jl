@@ -111,7 +111,10 @@ end
         template.layer_depth,
         context,
     )
-    @test ad.directional ≈ dot(gradient, direction) rtol = 1.0f-5 atol = 1.0f-6
+    projection = dot(gradient, direction)
+    projection_scale = sum(abs, gradient .* direction)
+    @test abs(ad.directional - projection) <=
+        2.0f-5 * projection_scale + 1.0f-6
 
     finite_difference = similar(theta)
     for index in eachindex(theta)

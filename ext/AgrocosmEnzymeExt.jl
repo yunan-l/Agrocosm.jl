@@ -174,6 +174,7 @@ function _enzyme_crop_carbon!(
     soil_temperature,
     lpjmlparams,
     include_biological_fixation_cost::Bool,
+    crop_resp_fix::Bool,
 )
     fluxes = Agrocosm.crop_fluxes(state)
     Agrocosm.respiration!(
@@ -183,6 +184,7 @@ function _enzyme_crop_carbon!(
         soil_temperature,
         fluxes.carbon.gross_assimilation,
         fluxes.carbon.leaf_respiration;
+        crop_resp_fix,
         lpjmlparams,
     )
     Agrocosm.carbon_allocation!(
@@ -440,6 +442,22 @@ function _enzyme_refresh_potential_canopy_conductance!(state, cft, pet, co2)
     return nothing
 end
 
+function _enzyme_prepare_prephenology_canopy_conductance!(
+    state, cft, pet, co2, lpjmlparams,
+)
+    T = eltype(Agrocosm.crop_canopy_auxiliary(state).canopy_conductance)
+    canopy = Agrocosm.crop_canopy_auxiliary(state)
+    assimilation = Agrocosm.crop_fluxes(state).carbon.water_limited_assimilation
+    for cell in eachindex(canopy.canopy_conductance)
+        co2_cell = co2[length(co2) == 1 ? 1 : cell]
+        canopy.canopy_conductance[cell] = Agrocosm.compute_canopy_conductance(
+            assimilation[cell], co2_cell, pet.daylength[cell], canopy.fpar[cell],
+            T(cft.gmin), T(lpjmlparams.LAMBDA_OPT),
+        )
+    end
+    return nothing
+end
+
 function _enzyme_finalize_nitrogen_limited_transpiration!(
     state::Agrocosm.ModelState,
     cft::Agrocosm.CFTParameters,
@@ -488,12 +506,18 @@ function _enzyme_finalize_nitrogen_limited_transpiration!(
     return nothing
 end
 
-function _enzyme_evaporation!(state::Agrocosm.ModelState, pet_eeq, lpjmlparams, layer_depth)
+function _enzyme_evaporation!(
+    state::Agrocosm.ModelState,
+    pet_eeq,
+    lpjmlparams,
+    layer_depth,
+)
     T = eltype(pet_eeq)
     crop_fpar = Agrocosm.crop_canopy_auxiliary(state).fpar
     crop_transpiration = Agrocosm.crop_fluxes(state).water.transpiration_layer
     crop_canopy_wet = Agrocosm.crop_canopy_auxiliary(state).canopy_wet
     soil_water = Agrocosm.soil_water_auxiliary(state)
+    soil_water_state = Agrocosm.soil_water_prognostic(state)
     soil_water_flux = Agrocosm.soil_water_fluxes(state)
     surface_litter = Agrocosm.soil_surface_litter_prognostic(state)
     surface_litter_aux = Agrocosm.soil_surface_litter_auxiliary(state)
@@ -501,7 +525,7 @@ function _enzyme_evaporation!(state::Agrocosm.ModelState, pet_eeq, lpjmlparams, 
     priestley_taylor = lpjmlparams.PRIESTLEY_TAYLOR
     for cell in eachindex(pet_eeq)
         evap_energy = pet_eeq[cell] * priestley_taylor *
-            max(one(T) - crop_fpar[cell], T(0.05))
+            max(one(T) - crop_fpar[cell], T(0.1))
         crop_transpiration_sum = crop_transpiration[1, cell] +
             crop_transpiration[2, cell] + crop_transpiration[3, cell] +
             crop_transpiration[4, cell] + crop_transpiration[5, cell]
@@ -529,32 +553,58 @@ function _enzyme_evaporation!(state::Agrocosm.ModelState, pet_eeq, lpjmlparams, 
             soil_water.holding_capacity_storage[4, cell] + soil_water.free_water[4, cell]
         liquid_5 = soil_water.relative_content[5, cell] *
             soil_water.holding_capacity_storage[5, cell] + soil_water.free_water[5, cell]
+        evaporating_liquid_1 = max(liquid_1 - crop_transpiration[1, cell], zero(T))
+        evaporating_liquid_2 = max(liquid_2 - crop_transpiration[2, cell], zero(T))
+        evaporating_liquid_3 = max(liquid_3 - crop_transpiration[3, cell], zero(T))
+        evaporating_liquid_4 = max(liquid_4 - crop_transpiration[4, cell], zero(T))
+        evaporating_liquid_5 = max(liquid_5 - crop_transpiration[5, cell], zero(T))
         evap_ratio = zero(T)
         if evap_energy > T(1e-5) && available_evaporation > T(1e-5)
             soil_depth_evap = T(lpjmlparams.soildepth_evap)
             fraction_1 = min(one(T), max(soil_depth_evap, zero(T)) / layer_depth[1])
-            water_evap = max(liquid_1 - crop_transpiration[1, cell], zero(T)) * fraction_1
+            tmpwater = evaporating_liquid_1 * fraction_1
+            water_evap = (
+                evaporating_liquid_1 + soil_water_state.available_ice_storage[1, cell] +
+                soil_water_state.free_ice_storage[1, cell]
+            ) * fraction_1
             holding_evap = soil_water.holding_capacity_storage[1, cell] * fraction_1
             soil_depth_evap -= layer_depth[1]
             fraction_2 = min(one(T), max(soil_depth_evap, zero(T)) / layer_depth[2])
-            water_evap += max(liquid_2 - crop_transpiration[2, cell], zero(T)) * fraction_2
+            tmpwater += evaporating_liquid_2 * fraction_2
+            water_evap += (
+                evaporating_liquid_2 + soil_water_state.available_ice_storage[2, cell] +
+                soil_water_state.free_ice_storage[2, cell]
+            ) * fraction_2
             holding_evap += soil_water.holding_capacity_storage[2, cell] * fraction_2
             soil_depth_evap -= layer_depth[2]
             fraction_3 = min(one(T), max(soil_depth_evap, zero(T)) / layer_depth[3])
-            water_evap += max(liquid_3 - crop_transpiration[3, cell], zero(T)) * fraction_3
+            tmpwater += evaporating_liquid_3 * fraction_3
+            water_evap += (
+                evaporating_liquid_3 + soil_water_state.available_ice_storage[3, cell] +
+                soil_water_state.free_ice_storage[3, cell]
+            ) * fraction_3
             holding_evap += soil_water.holding_capacity_storage[3, cell] * fraction_3
             soil_depth_evap -= layer_depth[3]
             fraction_4 = min(one(T), max(soil_depth_evap, zero(T)) / layer_depth[4])
-            water_evap += max(liquid_4 - crop_transpiration[4, cell], zero(T)) * fraction_4
+            tmpwater += evaporating_liquid_4 * fraction_4
+            water_evap += (
+                evaporating_liquid_4 + soil_water_state.available_ice_storage[4, cell] +
+                soil_water_state.free_ice_storage[4, cell]
+            ) * fraction_4
             holding_evap += soil_water.holding_capacity_storage[4, cell] * fraction_4
             soil_depth_evap -= layer_depth[4]
             fraction_5 = min(one(T), max(soil_depth_evap, zero(T)) / layer_depth[5])
-            water_evap += max(liquid_5 - crop_transpiration[5, cell], zero(T)) * fraction_5
+            tmpwater += evaporating_liquid_5 * fraction_5
+            water_evap += (
+                evaporating_liquid_5 + soil_water_state.available_ice_storage[5, cell] +
+                soil_water_state.free_ice_storage[5, cell]
+            ) * fraction_5
             holding_evap += soil_water.holding_capacity_storage[5, cell] * fraction_5
-            evap_ratio = Agrocosm.compute_soil_evaporation_ratio(
+            evap_ratio = Agrocosm.compute_lpjml_managed_soil_evaporation_ratio(
                 evap_energy,
                 available_evaporation,
                 water_evap,
+                tmpwater,
                 holding_evap,
                 surface_litter.cover[cell],
             )
@@ -562,19 +612,19 @@ function _enzyme_evaporation!(state::Agrocosm.ModelState, pet_eeq, lpjmlparams, 
 
         soil_depth_evap = T(lpjmlparams.soildepth_evap)
         fraction_1 = min(one(T), max(soil_depth_evap, zero(T)) / layer_depth[1])
-        soil_water_flux.evaporation[1, cell] = liquid_1 * evap_ratio * fraction_1
+        soil_water_flux.evaporation[1, cell] = evaporating_liquid_1 * evap_ratio * fraction_1
         soil_depth_evap -= layer_depth[1]
         fraction_2 = min(one(T), max(soil_depth_evap, zero(T)) / layer_depth[2])
-        soil_water_flux.evaporation[2, cell] = liquid_2 * evap_ratio * fraction_2
+        soil_water_flux.evaporation[2, cell] = evaporating_liquid_2 * evap_ratio * fraction_2
         soil_depth_evap -= layer_depth[2]
         fraction_3 = min(one(T), max(soil_depth_evap, zero(T)) / layer_depth[3])
-        soil_water_flux.evaporation[3, cell] = liquid_3 * evap_ratio * fraction_3
+        soil_water_flux.evaporation[3, cell] = evaporating_liquid_3 * evap_ratio * fraction_3
         soil_depth_evap -= layer_depth[3]
         fraction_4 = min(one(T), max(soil_depth_evap, zero(T)) / layer_depth[4])
-        soil_water_flux.evaporation[4, cell] = liquid_4 * evap_ratio * fraction_4
+        soil_water_flux.evaporation[4, cell] = evaporating_liquid_4 * evap_ratio * fraction_4
         soil_depth_evap -= layer_depth[4]
         fraction_5 = min(one(T), max(soil_depth_evap, zero(T)) / layer_depth[5])
-        soil_water_flux.evaporation[5, cell] = liquid_5 * evap_ratio * fraction_5
+        soil_water_flux.evaporation[5, cell] = evaporating_liquid_5 * evap_ratio * fraction_5
     end
     return nothing
 end
@@ -703,6 +753,8 @@ function _enzyme_continuous_transition!(
     layer_depth,
     irrigation::Bool = false,
     nitrogen_limit_vcmax::Bool = false,
+    crop_resp_fix::Bool = true,
+    apply_deferred_prescribed_inputs::Bool = nitrogen_limit_vcmax,
 )
     T = eltype(Agrocosm.crop_prognostic(state).canopy.lai)
     _enzyme_apply_root_distribution!(state, cft.beta_root)
@@ -763,6 +815,52 @@ function _enzyme_continuous_transition!(
             daily_weather.nh4_deposition,
         )
     end
+    if apply_deferred_prescribed_inputs
+        # Standard nitrogen-limited trajectories carry the fixed second dose
+        # in state; management-adaptation objectives inject their own pulses
+        # and explicitly disable this event.
+        Agrocosm.fertilizer!(
+            state, managed_land, state, day;
+            fertilizer = true,
+            manure = true,
+            apply_sowing_dose = false,
+            surface_second_manure = true,
+            reset_inputs = false,
+            lpjmlparams = global_params,
+        )
+    end
+    if nitrogen_limit_vcmax
+        # Preserve LPJmL's pre-phenology raw `gp_sum` for the initial water
+        # balance. The current-canopy APAR/photosynthesis pass remains below.
+        Agrocosm.apar_crop!(
+            cft,
+            state,
+            pet,
+            Agrocosm.soil_snow_prognostic(state).height,
+        )
+        Agrocosm.temp_stress(
+            cft,
+            pet,
+            state,
+            daily_weather.temp;
+            photoparams = photo_params,
+        )
+        Agrocosm.photosynthesis!(
+            Val(:C3),
+            cft,
+            state,
+            Agrocosm.crop_canopy_auxiliary(state).apar,
+            pet.daylength,
+            daily_weather.temp,
+            current_co2;
+            comp_vcmax = true,
+            lpjmlparams = global_params,
+            photoparams = photo_params,
+        )
+        _enzyme_prepare_prephenology_canopy_conductance!(
+            state, cft, pet, current_co2, global_params,
+        )
+    end
     Agrocosm.phenology_crop!(
         state,
         climbuf.V_req,
@@ -821,6 +919,7 @@ function _enzyme_continuous_transition!(
         state,
         current_co2;
         lpjmlparams = global_params,
+        use_precomputed_conductance = nitrogen_limit_vcmax,
     )
     _enzyme_solve_lambda_c3!(
         state,
@@ -857,12 +956,14 @@ function _enzyme_continuous_transition!(
             auto_fertilizer = false,
             include_storage_reserve = true,
             biological_fixation = true,
+            require_active_photosynthesis = true,
             lpjmlparams = global_params,
         )
         Agrocosm.limit_vcmax_by_nitrogen!(
             state,
             cft,
             daily_weather.temp;
+            require_active_photosynthesis = true,
             lpjmlparams = global_params,
         )
         Agrocosm.photosynthesis!(
@@ -909,6 +1010,7 @@ function _enzyme_continuous_transition!(
         Agrocosm.soil_thermal_prognostic(state).temperature,
         global_params,
         nitrogen_limit_vcmax,
+        crop_resp_fix,
     )
     if nitrogen_limit_vcmax
         # Carbon allocation changes organ weights; redistribute the acquired
@@ -931,6 +1033,7 @@ function _enzyme_continuous_transition!(
         state;
         air_temperature = daily_weather.temp,
         wind_speed = daily_weather.wind,
+        exact_lpjml_volatilization = nitrogen_limit_vcmax,
         lpjmlparams = global_params,
     )
     return nothing
@@ -1265,6 +1368,7 @@ function Agrocosm.enzyme_seasonal_loss(
     context::Agrocosm.ADSeasonContext;
     irrigation::Bool = false,
     nitrogen_limit_vcmax::Bool = false,
+    crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat}
     cft = _replace_cft_parameters(base_cft, theta, parameter_names)
     gpp_loss = zero(T)
@@ -1281,6 +1385,8 @@ function Agrocosm.enzyme_seasonal_loss(
             :et,
             layer_depth,
             irrigation,
+            nitrogen_limit_vcmax,
+            crop_resp_fix,
             nitrogen_limit_vcmax,
         )
         if context.growth_mask[day_index]
@@ -1397,6 +1503,7 @@ function _enzyme_seasonal_loss_block(
     day_range::UnitRange{Int},
     irrigation::Bool,
     nitrogen_limit_vcmax::Bool,
+    crop_resp_fix::Bool,
 ) where {T <: AbstractFloat}
     cft = _replace_cft_parameters(base_cft, theta, parameter_names)
     losses = _ADSeasonalLossAccumulator(zero(T), zero(T), zero(T))
@@ -1410,6 +1517,8 @@ function _enzyme_seasonal_loss_block(
             :et,
             layer_depth,
             irrigation,
+            nitrogen_limit_vcmax,
+            crop_resp_fix,
             nitrogen_limit_vcmax,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
@@ -1438,6 +1547,7 @@ function Agrocosm.enzyme_seasonal_soil_loss(
     layer_depth,
     context::Agrocosm.ADSeasonContext;
     irrigation::Bool = false,
+    crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat}
     model_parameters = _replace_model_parameters(
         base_parameters, theta_soil, soil_parameter_names,
@@ -1453,6 +1563,9 @@ function Agrocosm.enzyme_seasonal_soil_loss(
             :et,
             layer_depth,
             irrigation,
+            false,
+            crop_resp_fix,
+            false,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end
@@ -1483,6 +1596,7 @@ function Agrocosm.enzyme_seasonal_joint_loss(
     layer_depth,
     context::Agrocosm.ADSeasonContext;
     irrigation::Bool = false,
+    crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat}
     cft = _replace_cft_parameters(base_cft, theta_cft, cft_parameter_names)
     model_parameters = _replace_model_parameters(
@@ -1499,6 +1613,9 @@ function Agrocosm.enzyme_seasonal_joint_loss(
             :et,
             layer_depth,
             irrigation,
+            false,
+            crop_resp_fix,
+            false,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end
@@ -1519,6 +1636,7 @@ function _enzyme_seasonal_joint_loss_block(
     context::Agrocosm.ADSeasonContext,
     day_range::UnitRange{Int},
     irrigation::Bool,
+    crop_resp_fix::Bool,
 ) where {T <: AbstractFloat}
     cft = _replace_cft_parameters(base_cft, theta_cft, cft_parameter_names)
     model_parameters = _replace_model_parameters(
@@ -1535,6 +1653,9 @@ function _enzyme_seasonal_joint_loss_block(
             :et,
             layer_depth,
             irrigation,
+            false,
+            crop_resp_fix,
+            false,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end
@@ -1553,6 +1674,7 @@ function _enzyme_seasonal_soil_loss_block(
     context::Agrocosm.ADSeasonContext,
     day_range::UnitRange{Int},
     irrigation::Bool,
+    crop_resp_fix::Bool,
 ) where {T <: AbstractFloat}
     model_parameters = _replace_model_parameters(
         base_parameters, theta_soil, soil_parameter_names,
@@ -1568,6 +1690,9 @@ function _enzyme_seasonal_soil_loss_block(
             :et,
             layer_depth,
             irrigation,
+            false,
+            crop_resp_fix,
+            false,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end
@@ -1587,6 +1712,7 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
     context::Agrocosm.ADSeasonContext;
     block_days::Integer = 30,
     irrigation::Bool = false,
+    crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat, F}
     length(days) == length(context.growth_mask) || throw(DimensionMismatch(
         "days and context must have identical lengths",
@@ -1612,6 +1738,7 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
             context,
             day_range,
             irrigation,
+            crop_resp_fix,
         )
     end
 
@@ -1638,6 +1765,7 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
             Enzyme.Const(context),
             Enzyme.Const(day_range),
             Enzyme.Const(irrigation),
+            Enzyme.Const(crop_resp_fix),
         )
         reverse_primal += result[2]
         gradient .+= block_gradient
@@ -1668,6 +1796,7 @@ function Agrocosm.enzyme_seasonal_joint_gradient_blockwise(
     context::Agrocosm.ADSeasonContext;
     block_days::Integer = 30,
     irrigation::Bool = false,
+    crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat, F}
     length(theta_cft) == length(cft_parameter_names) || throw(DimensionMismatch(
         "CFT parameter values and names must have identical lengths",
@@ -1701,6 +1830,7 @@ function Agrocosm.enzyme_seasonal_joint_gradient_blockwise(
             context,
             day_range,
             irrigation,
+            crop_resp_fix,
         )
     end
 
@@ -1731,6 +1861,7 @@ function Agrocosm.enzyme_seasonal_joint_gradient_blockwise(
             Enzyme.Const(context),
             Enzyme.Const(day_range),
             Enzyme.Const(irrigation),
+            Enzyme.Const(crop_resp_fix),
         )
         reverse_primal += result[2]
         cft_gradient .+= block_cft_gradient
@@ -1785,6 +1916,7 @@ function Agrocosm.enzyme_seasonal_gradient_blockwise(
     block_days::Integer = 30,
     irrigation::Bool = false,
     nitrogen_limit_vcmax::Bool = false,
+    crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat, F}
     length(days) == length(context.growth_mask) || throw(DimensionMismatch(
         "days and context must have identical lengths",
@@ -1811,6 +1943,7 @@ function Agrocosm.enzyme_seasonal_gradient_blockwise(
             day_range,
             irrigation,
             nitrogen_limit_vcmax,
+            crop_resp_fix,
         )
     end
 
@@ -1838,6 +1971,7 @@ function Agrocosm.enzyme_seasonal_gradient_blockwise(
             Enzyme.Const(day_range),
             Enzyme.Const(irrigation),
             Enzyme.Const(nitrogen_limit_vcmax),
+            Enzyme.Const(crop_resp_fix),
         )
         reverse_primal += result[2]
         gradient .+= block_gradient
@@ -1876,11 +2010,12 @@ function Agrocosm.enzyme_daily_transition_objective(
     layer_depth;
     irrigation::Bool = false,
     nitrogen_limit_vcmax::Bool = false,
+    crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat}
     cft = _replace_cft_parameters(base_cft, theta, parameter_names)
     _enzyme_continuous_transition!(
         state, cft, global_parameters, climate, day, observable, layer_depth,
-        irrigation, nitrogen_limit_vcmax,
+        irrigation, nitrogen_limit_vcmax, crop_resp_fix, nitrogen_limit_vcmax,
     )
     return _daily_transition_observable(state, observable)
 end
