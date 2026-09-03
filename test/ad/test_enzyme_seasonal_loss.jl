@@ -113,8 +113,9 @@ end
     )
     projection = dot(gradient, direction)
     projection_scale = sum(abs, gradient .* direction)
+    # Float32 coordinate and directional passes accumulate in different orders.
     @test abs(ad.directional - projection) <=
-        2.0f-5 * projection_scale + 1.0f-6
+        5.0f-5 * projection_scale + 1.0f-6
 
     finite_difference = similar(theta)
     for index in eachindex(theta)
