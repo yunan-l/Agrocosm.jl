@@ -7,7 +7,7 @@ and precipitation forcing.
 function snow!(soil,
                dailyWeather::DailyWeather;
                snowparams::SnowParams = snowparams,
-               lpjmlparams::LPJmLParams = lpjmlparams
+               lpjmlparams::LPJmLParams = lpjmlparams,
 )
 
     kernel_params = (; snowparams, lpjmlparams)
@@ -151,9 +151,6 @@ end
     soil_snowmelt[cell] = melt
     soil_snowpack[cell] -= melt
 
-    # Add melt water to rainfall before interception and infiltration.
-    prec[cell] += soil_snowmelt[cell]
-
     # calculate snow height and fraction of snow coverage
     pack, height, fraction = compute_snow_geometry(
         soil_snowpack[cell], T(c_watertosnow), T(c_roughness),
@@ -162,4 +159,18 @@ end
     soil_snowheight[cell] = height
     soil_snowfraction[cell] = fraction
 
+end
+
+"""Add snowmelt to liquid precipitation after canopy interception."""
+function add_snowmelt_to_precipitation!(precipitation, snowmelt)
+    launch_1D!(add_snowmelt_to_precipitation_kernel!, precipitation, snowmelt)
+    return nothing
+end
+
+@kernel inbounds = true function add_snowmelt_to_precipitation_kernel!(
+    precipitation::AbstractArray{T},
+    snowmelt::AbstractArray{T},
+) where {T <: AbstractFloat}
+    cell = @index(Global)
+    precipitation[cell] += snowmelt[cell]
 end

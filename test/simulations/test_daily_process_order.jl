@@ -34,7 +34,18 @@ using Test
           position("prepare_prephenology_canopy_conductance!") < phenology_position
     @test position("cultivate!") < phenology_position < position("harvest_crop!")
     @test position("harvest_crop!") < position("route_harvest_residues!") <
-          position("interception!") < position("soil_infiltration!")
+          position("interception!") < position("add_snowmelt_to_precipitation!") <
+          position("soil_infiltration!")
+    # The rain/melt routing is common to both nitrogen-limit modes. Keeping
+    # this call at loop scope prevents the legacy (`false`) path from silently
+    # retaining the former pre-interception snowmelt behavior.
+    @test occursin(
+        r"(?m)^        add_snowmelt_to_precipitation!\($",
+        source,
+    )
+    @test position("add_snowmelt_to_precipitation!") <
+          position("record_water_balance_after_snow!") <
+          position("soil_infiltration!")
     @test position("soil_infiltration!") < post_phenology_apar <
           post_phenology_temp_stress < post_phenology_photosynthesis <
           position("transpiration!") < position("solve_lambda!")

@@ -134,12 +134,9 @@ function _daily_crop!(
         )
         sowing_mode === :dynamic_sdate &&
             record_potential_evaporation!(climbuf, pet.eeq, day, global_params)
+        # LPJmL keeps melt separate while liquid rain passes through canopy
+        # interception; melt joins the throughfall before litter/soil uptake.
         snow!(state, dailyWeather; snowparams = snow_params, lpjmlparams = global_params)
-        if water_balance !== nothing
-            record_water_balance_after_snow!(
-                water_balance, diagnostic_day, dailyWeather.prec,
-            )
-        end
 
         pedotransfer!(state; lpjmlparams = global_params)
         update_surface_litter_properties!(state; thermalparams = thermal_params)
@@ -225,6 +222,14 @@ function _daily_crop!(
             state, cftparameters, pet.eeq, dailyWeather.prec;
             lpjmlparams = global_params,
         )
+        add_snowmelt_to_precipitation!(
+            dailyWeather.prec, soil_snow_fluxes(state).melt,
+        )
+        if water_balance !== nothing
+            record_water_balance_after_snow!(
+                water_balance, diagnostic_day, dailyWeather.prec,
+            )
+        end
         pedotransfer!(state; lpjmlparams = global_params)
         soil_infiltration!(
             state, state, dailyWeather.prec;

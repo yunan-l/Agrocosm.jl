@@ -17,17 +17,23 @@ using Test
     @test soil.snow.melt[1] == 0.0f0
     @test soil.snow.runoff[1] == 0.0f0
 
-    # Melt water is added to liquid precipitation before interception and infiltration.
+    # LPJmL keeps melt separate while liquid rain passes through the canopy.
     snow_before = soil.snow.pack[1]
     precipitation = 2.0f0
     weather.temp .= 5.0f0
     weather.prec .= precipitation
     snow!(state, weather)
 
-    @test soil.snow.melt[1] > 0.0f0
-    @test weather.prec[1] ≈ precipitation + soil.snow.melt[1] atol = 1.0f-6
+    melt = soil.snow.melt[1]
+    @test melt > 0.0f0
+    @test weather.prec[1] == precipitation
     @test snow_before + precipitation ≈
-          soil.snow.pack[1] + weather.prec[1] + soil.snow.sublimation[1] atol = 1.0f-5
+          soil.snow.pack[1] + weather.prec[1] + melt +
+          soil.snow.sublimation[1] atol = 1.0f-5
+
+    # Melt is restored only after canopy interception, before litter and soil.
+    Agrocosm.add_snowmelt_to_precipitation!(weather.prec, soil.snow.melt)
+    @test weather.prec[1] ≈ precipitation + melt atol = 1.0f-6
 
     # Snow above the configured capacity is exported as snow runoff.
     small_snowpack_params = LPJmLParams{Float32}(; maxsnowpack = 1.0f0)
