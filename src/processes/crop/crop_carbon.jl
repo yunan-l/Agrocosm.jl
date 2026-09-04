@@ -20,6 +20,7 @@ function crop_carbon!(crop,
         crop_fluxes(crop).carbon.gross_assimilation,
         crop_fluxes(crop).carbon.leaf_respiration;
         crop_resp_fix,
+        include_biological_fixation_cost,
         lpjmlparams = lpjmlparams,
     )
 

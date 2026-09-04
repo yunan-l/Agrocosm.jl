@@ -365,18 +365,22 @@ R_x=C_xr_{coeff}k\rho_{N:C,x}g(T_x).
 ```
 
 Growth respiration is a fixed fraction of carbon remaining after leaf dark
-respiration and maintenance respiration:
+respiration, biological nitrogen-fixation cost, and maintenance respiration:
 
 ```math
 R_g=\max\left[0,
-(A_g-R_d-R_{root}-R_{storage}-R_{pool})r_g\right].
+(A_g-R_d-C_{BNF}-R_{root}-R_{storage}-R_{pool})r_g\right].
 ```
 
 Daily NPP is
 
 ```math
-NPP=A_g-R_d-(R_{root}+R_{storage}+R_{pool}+R_g).
+NPP=A_g-R_d-C_{BNF}-(R_{root}+R_{storage}+R_{pool}+R_g).
 ```
+
+Here ``C_{BNF}`` is zero for non-fixing crops. Paying this cost before growth
+respiration follows the LPJmL crop-NPP order and avoids charging growth
+respiration on carbon already consumed by soybean fixation.
 
 Negative NPP is retained so maintenance can reduce biomass on low-assimilation
 days. A stand is terminated before negative living pools can persist.

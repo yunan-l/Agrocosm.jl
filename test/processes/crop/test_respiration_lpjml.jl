@@ -83,3 +83,36 @@ end
     expected = maintenance + max(zero(T), (gross[1] - leaf[1] - maintenance) * T(fixed.r_growth))
     @test crop.fluxes.carbon.respiration[1] ≈ expected rtol = T(8e-6)
 end
+
+@testset "Soybean fixation cost precedes LPJmL growth respiration" begin
+    T = Float32
+    crop = init_crop(T, 1, identity)
+    state = test_model_state(crop)
+    crop.state.phenology.is_growing .= Int32[1]
+    crop.state.phenology.growing_days .= Int32[1]
+    crop.state.carbon.biomass .= T[100]
+    crop.state.carbon.leaf .= T[20]
+    crop.state.canopy.lai .= T[1]
+    crop.state.nitrogen.sufficiency .= T[1]
+    crop.auxiliary.stress.water_deficit .= T[100]
+    crop.fluxes.carbon.biological_fixation_cost .= T[3]
+    gross = T[12]
+    leaf = T[2]
+
+    respiration!(state, cft9, T[20], reshape(T[20], 1, :), gross, leaf)
+    expected_default_growth_respiration = (T(12) - T(2)) * T(lpjmlparams.r_growth)
+    @test crop.fluxes.carbon.respiration[1] ≈ expected_default_growth_respiration
+
+    respiration!(
+        state, cft9, T[20], reshape(T[20], 1, :), gross, leaf;
+        include_biological_fixation_cost = true,
+    )
+    expected_growth_respiration = (T(12) - T(2) - T(3)) * T(lpjmlparams.r_growth)
+    @test crop.fluxes.carbon.respiration[1] ≈ expected_growth_respiration
+
+    crop.fluxes.carbon.gross_assimilation .= gross
+    crop.fluxes.carbon.leaf_respiration .= leaf
+    carbon_allocation!(cft9, state; include_biological_fixation_cost = true)
+    @test crop.fluxes.carbon.npp[1] ≈
+          T(12) - T(2) - T(3) - expected_growth_respiration
+end

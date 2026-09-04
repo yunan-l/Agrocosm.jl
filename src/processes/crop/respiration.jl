@@ -12,6 +12,7 @@ function respiration!(crop,
                       gross_assimilation::AbstractArray{T},
                       leaf_respiration::AbstractArray{T};
                       crop_resp_fix::Bool = true,
+                      include_biological_fixation_cost::Bool = false,
                       lpjmlparams::LPJmLParams = lpjmlparams
 ) where {T <: AbstractFloat}
     launch_1D!(
@@ -28,9 +29,11 @@ function respiration!(crop,
         soil_temperature,
         gross_assimilation,
         leaf_respiration,
+        crop_fluxes(crop).carbon.biological_fixation_cost,
         CFT,
         lpjmlparams,
         crop_resp_fix,
+        include_biological_fixation_cost,
     )
     return nothing
 end
@@ -43,10 +46,12 @@ function respiration!(crop,
                       gross_assimilation::AbstractArray{T},
                       leaf_respiration::AbstractArray{T};
                       crop_resp_fix::Bool = true,
+                      include_biological_fixation_cost::Bool = false,
                       lpjmlparams::LPJmLParams = lpjmlparams) where {T <: AbstractFloat}
     return respiration!(
         crop, CFT, air_temperature, reshape(air_temperature, 1, :),
-        gross_assimilation, leaf_respiration; crop_resp_fix, lpjmlparams = lpjmlparams,
+        gross_assimilation, leaf_respiration;
+        crop_resp_fix, include_biological_fixation_cost, lpjmlparams = lpjmlparams,
     )
 end
 
@@ -120,9 +125,11 @@ end
     soil_temperature::AbstractMatrix{T},
     gross_assimilation::AbstractVector{T},
     leaf_respiration::AbstractVector{T},
+    biological_fixation_cost::AbstractVector{T},
     CFT::CFTParameters,
     lpjmlparams::LPJmLParams,
     crop_resp_fix::Bool,
+    include_biological_fixation_cost::Bool,
 ) where {T <: AbstractFloat, I <: Integer}
     cell = @index(Global)
     @unpack respcoeff, nc_ratio, ncleaf, ratio = CFT
@@ -156,6 +163,11 @@ end
         pool_carbon[cell], T(respcoeff), T(k), pool_nc, gtemp_air,
     )
     assimilation = gross_assimilation[cell] - leaf_respiration[cell]
+    if include_biological_fixation_cost
+        # LPJmL passes GPP - leaf respiration - BNF cost into npp_crop(),
+        # so growth respiration is calculated after paying the fixation cost.
+        assimilation -= biological_fixation_cost[cell]
+    end
     growth_respiration = compute_growth_respiration(
         assimilation, root_respiration, storage_respiration, pool_respiration,
         T(r_growth),

@@ -185,6 +185,7 @@ function _enzyme_crop_carbon!(
         fluxes.carbon.gross_assimilation,
         fluxes.carbon.leaf_respiration;
         crop_resp_fix,
+        include_biological_fixation_cost,
         lpjmlparams,
     )
     Agrocosm.carbon_allocation!(
