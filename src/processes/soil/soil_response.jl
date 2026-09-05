@@ -4,7 +4,7 @@ soil_decomp_response!(soil; lpjmlparams=lpjmlparams, soil_decomp_params=soil_dec
 Compute and store shared LPJmL decomposition response terms:
 - `soil_decomposition_auxiliary(soil).response` for soil layers;
 - row 1 of `litter_response` for surface litter using litter temperature and
-  wetness;
+  wetness, without the mineral-soil upper bound of one;
 - rows 2–3 for incorporated and below-ground litter using the top soil layer.
 """
 
@@ -192,8 +192,9 @@ end
     surface_response = surface_temperature_factor * surface_moisture_factor
     surface_wetness_scratch[cell] = surface_wetness
     surface_temperature_scratch[cell] = surface_response
+    # LPJmL 5.10/6.1 NO_METHANE caps soil response, not surface leaf litter.
     litter_response[1, cell] = top_temperature_response > zero(T) ?
-        clamp(surface_response, zero(T), one(T)) : zero(T)
+        max(surface_response, zero(T)) : zero(T)
     litter_response[2, cell] = response[1, cell]
     litter_response[3, cell] = response[1, cell]
 end

@@ -43,6 +43,35 @@ end
           soil.surface_litter.water_capacity[1]
 end
 
+@testset "Post-decomposition litter refresh updates today's water boundary" begin
+    soil = init_soil(1, soilparams.soildepth, identity)
+    state = test_model_state(soil)
+    soil.carbon.litter[1, 1] = 100.0f0
+    soil.nitrogen.litter[1, 1] = 100.0f0 / 15.0f0
+    soil.carbon.litter_response[1] = 0.1f0
+    soil.thermal.temperature .= 25.0f0
+    soil.surface_litter.temperature .= 25.0f0
+    update_surface_litter_properties!(state)
+    soil.surface_litter.water_storage .= soil.surface_litter.water_capacity
+    soil.water.storage[1, 1] = 5.0f0
+    capacity_before = soil.surface_litter.water_capacity[1]
+    cover_before = soil.surface_litter.cover[1]
+    water_before = sum(soil.water.storage) + sum(soil.surface_litter.water_storage)
+
+    soil_cn_decomposition!(state)
+    update_surface_litter_properties!(state)
+
+    dry_matter = soil.carbon.litter[1, 1] / 0.42f0
+    @test soil.surface_litter.water_capacity[1] ≈ 2.0f-3 * dry_matter
+    @test soil.surface_litter.cover[1] ≈ 1.0f0 - exp(-6.0f-3 * dry_matter)
+    @test soil.surface_litter.water_capacity[1] < capacity_before
+    @test soil.surface_litter.cover[1] < cover_before
+    @test soil.surface_litter.water_storage[1] == soil.surface_litter.water_capacity[1]
+    @test soil.water.storage[1, 1] > 5.0f0
+    @test sum(soil.water.storage) + sum(soil.surface_litter.water_storage) ≈
+          water_before atol = 1.0f-6
+end
+
 @testset "Wet litter evaporation" begin
     soil = init_soil(1, soilparams.soildepth, identity)
     crop = init_crop(1, identity)

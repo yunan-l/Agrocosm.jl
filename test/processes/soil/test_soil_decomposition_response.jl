@@ -48,3 +48,34 @@ using Test
     @test decay_soil.carbon.decomposed_slow[1, 1] ≈
         -100.0f0 * expm1(-0.001f0 / 365.0f0 * response) rtol = 2.0f-4
 end
+
+@testset "Surface litter response is not capped with mineral soil" begin
+    for T in (Float32, Float64)
+        soil = init_soil(T, 3, T.(soilparams.soildepth), identity)
+        state = test_model_state(soil)
+        soil.thermal.temperature .= reshape(T[25, 10, -20], 1, 3)
+        soil.surface_litter.temperature .= T[25, 10, 25]
+        soil.surface_litter.water_capacity .= one(T)
+        soil.surface_litter.water_storage .= T(0.6)
+        soil.water.saturation_storage .= T(100)
+        soil.water.holding_capacity_storage .= T(100)
+        soil.water.wilting_storage .= zero(T)
+        soil.water.free_water .= zero(T)
+        soil.water.relative_content .= T(0.6)
+        soil.carbon.litter .= T(100)
+        soil.nitrogen.litter .= soil.carbon.litter ./ T(15)
+        soil.carbon.litter_response .= T[0.97 / 365, 0.97 / 365, 0.3 / 365]
+
+        soil_cn_decomposition!(state; lpjmlparams = LPJmLParams{T}())
+
+        # Original LPJmL 6.1.9 NO_METHANE C oracle, also uncapped in 5.10.0.
+        expected_response = T[2.9683781149847515, 0.9274415597600001, 0]
+        @test soil.decomposition.litter_response[1, :] ≈ expected_response rtol = 2e-5
+        @test soil.decomposition.response[1, :] ≈ min.(expected_response, one(T)) rtol = 2e-5
+        @test soil.decomposition.litter_response[2, :] == soil.decomposition.response[1, :]
+        @test soil.decomposition.litter_response[3, :] == soil.decomposition.response[1, :]
+        @test soil.carbon.decomposed_litter[1, :] ≈
+              T[0.7857533412465187, 0.24616728086105866, 0] rtol = 2e-5
+        @test soil.nitrogen.decomposed_litter ≈ soil.carbon.decomposed_litter ./ T(15) rtol = 2e-5
+    end
+end

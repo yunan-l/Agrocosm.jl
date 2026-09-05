@@ -813,6 +813,8 @@ function _enzyme_continuous_transition!(
         lpjmlparams = global_params,
         soil_decomp_params = decomp_params,
     )
+    # Keep the post-decomposition litter refresh identical to production.
+    Agrocosm.update_surface_litter_properties!(state; thermalparams = thermal_params)
     if hasproperty(climate, :no3_deposition) || hasproperty(climate, :nh4_deposition)
         Agrocosm.nitrogen_deposition!(
             state,

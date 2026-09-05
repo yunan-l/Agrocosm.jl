@@ -29,6 +29,12 @@ using Test
     @test position("soil_temperature!") < position("soil_cn_decomposition!")
     @test position("soil_cn_decomposition!") < position("nitrogen_deposition!") <
           phenology_position
+    litter_refreshes = findall(r"(?m)^        update_surface_litter_properties!\(", source)
+    @test length(litter_refreshes) == 2
+    if length(litter_refreshes) == 2
+        @test position("soil_cn_decomposition!") < first(litter_refreshes[2]) <
+              position("nitrogen_deposition!")
+    end
     @test position("_pathway_apar!") < position("temp_stress") <
           position("photosynthesis!") <
           position("prepare_prephenology_canopy_conductance!") < phenology_position
@@ -59,4 +65,16 @@ using Test
           position("allocate_crop_nitrogen!")
     @test position("evaporation!") <
           position("soil_evapotranspiration!") < position("post_crop_nitrogen_losses!")
+end
+
+@testset "Enzyme daily path refreshes litter after decomposition" begin
+    source = read(joinpath(@__DIR__, "..", "..", "ext", "AgrocosmEnzymeExt.jl"), String)
+    # Unconditional calls preserve the common true/false process contract.
+    litter_refreshes = findall(r"(?m)^    Agrocosm\.update_surface_litter_properties!\(", source)
+    @test length(litter_refreshes) == 2
+    if length(litter_refreshes) == 2
+        decomposition = findfirst(r"(?m)^    Agrocosm\.soil_cn_decomposition!\(", source)
+        deposition = findfirst(r"(?m)^        Agrocosm\.nitrogen_deposition!\(", source)
+        @test first(decomposition) < first(litter_refreshes[2]) < first(deposition)
+    end
 end

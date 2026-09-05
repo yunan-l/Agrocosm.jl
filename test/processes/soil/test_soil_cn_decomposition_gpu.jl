@@ -5,7 +5,8 @@ using Test
 CUDA.functional() || error("A functional NVIDIA GPU is required for this test")
 CUDA.allowscalar(false)
 
-function run_soil_cn_gpu_fixture(device; exact_lpjml_volatilization = false)
+function run_soil_cn_gpu_fixture(device; exact_lpjml_volatilization = false,
+                                 warm_surface = false)
     cells = 2
     soil = init_soil(Float32, cells, Float32.(soilparams.soildepth), device)
     state = test_model_state(soil)
@@ -28,6 +29,11 @@ function run_soil_cn_gpu_fixture(device; exact_lpjml_volatilization = false)
     end
     soil.thermal.temperature .= 10.0f0
     soil.surface_litter.temperature .= 10.0f0
+    if warm_surface
+        soil.surface_litter.temperature .= 25.0f0
+        soil.surface_litter.water_capacity .= 1.0f0
+        soil.surface_litter.water_storage .= 0.6f0
+    end
     soil.water.saturation_storage .= 100.0f0
     soil.water.holding_capacity_storage .= 60.0f0
     soil.water.wilting_storage .= 10.0f0
@@ -42,6 +48,23 @@ function run_soil_cn_gpu_fixture(device; exact_lpjml_volatilization = false)
         exact_lpjml_volatilization,
     )
     return soil
+end
+
+@testset "CUDA warm litter response and post-decomposition refresh" begin
+    cpu = run_soil_cn_gpu_fixture(identity; warm_surface = true)
+    gpu = run_soil_cn_gpu_fixture(CuArray; warm_surface = true)
+    @test all(cpu.decomposition.litter_response[1, :] .> 1.0f0)
+    @test Array(gpu.decomposition.litter_response) ≈ cpu.decomposition.litter_response rtol = 2.0f-5
+    @test Array(gpu.carbon.decomposed_litter) ≈ cpu.carbon.decomposed_litter rtol = 2.0f-5
+    @test Array(gpu.nitrogen.decomposed_litter) ≈ cpu.nitrogen.decomposed_litter rtol = 2.0f-5
+
+    water_before = sum(Array(gpu.water.storage)) + sum(Array(gpu.surface_litter.water_storage))
+    update_surface_litter_properties!(test_model_state(cpu))
+    update_surface_litter_properties!(test_model_state(gpu))
+    @test Array(gpu.surface_litter.water_capacity) ≈ cpu.surface_litter.water_capacity
+    @test Array(gpu.surface_litter.cover) ≈ cpu.surface_litter.cover
+    @test Array(gpu.water.storage) ≈ cpu.water.storage
+    @test sum(Array(gpu.water.storage)) + sum(Array(gpu.surface_litter.water_storage)) ≈ water_before
 end
 
 @testset "CUDA LPJmL ammonia volatilization" begin

@@ -151,6 +151,8 @@ function _daily_crop!(
             lpjmlparams = global_params,
             soil_decomp_params = decomp_params,
         )
+        # Decomposition changes today's litter cover/capacity in both N modes.
+        update_surface_litter_properties!(state; thermalparams = thermal_params)
         # Match LPJmL: add atmospheric mineral N after litter/SOM turnover and
         # before the crop's daily nitrogen uptake and nitrogen losses.
         if hasproperty(climate, :no3_deposition) || hasproperty(climate, :nh4_deposition)

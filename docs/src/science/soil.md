@@ -89,8 +89,10 @@ R_l=\operatorname{clamp}\left[
 f_T(T_l)(a_0+a_1\omega_l+a_2\omega_l^2+a_3\omega_l^3),0,1\right].
 ```
 
-Surface litter uses surface-litter temperature and wetness; incorporated and
-root litter use the topsoil response.
+Surface litter uses surface-litter temperature and wetness **without** the
+upper bound of one, following LPJmL 5.10/6.1's methane-disabled pathway. Its
+response is zero when the topsoil temperature response is zero. Incorporated
+and root litter retain the bounded topsoil response above.
 
 ## Soil carbon
 
@@ -124,6 +126,9 @@ R_h=f_{atm}\Delta C_{lit}+
 Tillage changes topsoil hydraulic properties and routes incorporated litter;
 bioturbation provides the no-tillage vertical pathway. Harvest inputs are
 routed after decomposition, so new residue first decomposes the following day.
+Surface-litter cover and water capacity are refreshed immediately after
+decomposition, before the day's interception and evaporation. Water exceeding
+the reduced litter capacity returns to the topsoil, conserving total water.
 
 ## Organic nitrogen and immobilization
 
