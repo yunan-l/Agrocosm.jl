@@ -81,4 +81,33 @@ end
         template, updated_theta, parameter_names, days, context,
     )
     @test updated_loss < result.forward_primal
+
+    soil_parameter_names = (
+        :k_soil10_fast,
+        :PRIESTLEY_TAYLOR,
+        :soildepth_evap,
+        :soil_infil,
+    )
+    lpjml = template.global_parameters.lpjml
+    soil_theta = Float32[
+        lpjml.k_soil10.fast,
+        lpjml.PRIESTLEY_TAYLOR,
+        lpjml.soildepth_evap,
+        lpjml.soil_infil,
+    ]
+    soil_result = enzyme_seasonal_soil_gradient_blockwise(
+        soil_theta,
+        state_factory,
+        cft1,
+        template.global_parameters,
+        soil_parameter_names,
+        template.climate,
+        days,
+        template.layer_depth,
+        context;
+        block_days = 1,
+        nitrogen_limit_vcmax = true,
+    )
+    @test isfinite(soil_result.primal)
+    @test all(isfinite, soil_result.gradient)
 end

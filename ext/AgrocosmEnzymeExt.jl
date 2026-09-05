@@ -1548,6 +1548,7 @@ function Agrocosm.enzyme_seasonal_soil_loss(
     layer_depth,
     context::Agrocosm.ADSeasonContext;
     irrigation::Bool = false,
+    nitrogen_limit_vcmax::Bool = false,
     crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat}
     model_parameters = _replace_model_parameters(
@@ -1564,9 +1565,9 @@ function Agrocosm.enzyme_seasonal_soil_loss(
             :et,
             layer_depth,
             irrigation,
-            false,
+            nitrogen_limit_vcmax,
             crop_resp_fix,
-            false,
+            nitrogen_limit_vcmax,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end
@@ -1597,6 +1598,7 @@ function Agrocosm.enzyme_seasonal_joint_loss(
     layer_depth,
     context::Agrocosm.ADSeasonContext;
     irrigation::Bool = false,
+    nitrogen_limit_vcmax::Bool = false,
     crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat}
     cft = _replace_cft_parameters(base_cft, theta_cft, cft_parameter_names)
@@ -1614,9 +1616,9 @@ function Agrocosm.enzyme_seasonal_joint_loss(
             :et,
             layer_depth,
             irrigation,
-            false,
+            nitrogen_limit_vcmax,
             crop_resp_fix,
-            false,
+            nitrogen_limit_vcmax,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end
@@ -1637,6 +1639,7 @@ function _enzyme_seasonal_joint_loss_block(
     context::Agrocosm.ADSeasonContext,
     day_range::UnitRange{Int},
     irrigation::Bool,
+    nitrogen_limit_vcmax::Bool,
     crop_resp_fix::Bool,
 ) where {T <: AbstractFloat}
     cft = _replace_cft_parameters(base_cft, theta_cft, cft_parameter_names)
@@ -1654,9 +1657,9 @@ function _enzyme_seasonal_joint_loss_block(
             :et,
             layer_depth,
             irrigation,
-            false,
+            nitrogen_limit_vcmax,
             crop_resp_fix,
-            false,
+            nitrogen_limit_vcmax,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end
@@ -1675,6 +1678,7 @@ function _enzyme_seasonal_soil_loss_block(
     context::Agrocosm.ADSeasonContext,
     day_range::UnitRange{Int},
     irrigation::Bool,
+    nitrogen_limit_vcmax::Bool,
     crop_resp_fix::Bool,
 ) where {T <: AbstractFloat}
     model_parameters = _replace_model_parameters(
@@ -1691,9 +1695,9 @@ function _enzyme_seasonal_soil_loss_block(
             :et,
             layer_depth,
             irrigation,
-            false,
+            nitrogen_limit_vcmax,
             crop_resp_fix,
-            false,
+            nitrogen_limit_vcmax,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end
@@ -1713,6 +1717,7 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
     context::Agrocosm.ADSeasonContext;
     block_days::Integer = 30,
     irrigation::Bool = false,
+    nitrogen_limit_vcmax::Bool = false,
     crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat, F}
     length(days) == length(context.growth_mask) || throw(DimensionMismatch(
@@ -1739,6 +1744,7 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
             context,
             day_range,
             irrigation,
+            nitrogen_limit_vcmax,
             crop_resp_fix,
         )
     end
@@ -1766,6 +1772,7 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
             Enzyme.Const(context),
             Enzyme.Const(day_range),
             Enzyme.Const(irrigation),
+            Enzyme.Const(nitrogen_limit_vcmax),
             Enzyme.Const(crop_resp_fix),
         )
         reverse_primal += result[2]
@@ -1797,6 +1804,7 @@ function Agrocosm.enzyme_seasonal_joint_gradient_blockwise(
     context::Agrocosm.ADSeasonContext;
     block_days::Integer = 30,
     irrigation::Bool = false,
+    nitrogen_limit_vcmax::Bool = false,
     crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat, F}
     length(theta_cft) == length(cft_parameter_names) || throw(DimensionMismatch(
@@ -1831,6 +1839,7 @@ function Agrocosm.enzyme_seasonal_joint_gradient_blockwise(
             context,
             day_range,
             irrigation,
+            nitrogen_limit_vcmax,
             crop_resp_fix,
         )
     end
@@ -1862,6 +1871,7 @@ function Agrocosm.enzyme_seasonal_joint_gradient_blockwise(
             Enzyme.Const(context),
             Enzyme.Const(day_range),
             Enzyme.Const(irrigation),
+            Enzyme.Const(nitrogen_limit_vcmax),
             Enzyme.Const(crop_resp_fix),
         )
         reverse_primal += result[2]
