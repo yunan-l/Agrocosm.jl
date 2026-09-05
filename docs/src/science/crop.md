@@ -277,6 +277,10 @@ E_i=E_{eq}\alpha_{PT}f_{wet}f_{pc}.
 ```
 
 The remaining atmospheric capacity constrains litter and soil evaporation.
+For transpiration demand and its conductance inversion only, canopy wetness
+is capped at 0.99, matching LPJmL's `water_stressed`. Interception and the
+litter/soil evaporation energy budget retain the original fraction above
+(`wet_all` in LPJmL), rather than recomputing interception with the lower cap.
 Wet-litter evaporation is
 
 ```math

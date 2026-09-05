@@ -5,6 +5,25 @@ using Test
 CUDA.functional() || error("A functional NVIDIA GPU is required for this test")
 CUDA.allowscalar(false)
 
+@testset "CUDA LPJmL water-stress wetness cap" begin
+    wetness = Float32[0, 0.5, 0.99, 0.9999]
+    alpha, shape = Float32(lpjmlparams.ALPHAM), Float32(lpjmlparams.GM)
+    expected_demand = (1.0f0 .- min.(wetness, 0.99f0)) .* 2.0f0 .* alpha ./
+                      (1.0f0 + shape * alpha / 10.0f0)
+    gpu_wetness = CuArray(wetness)
+    demand = Agrocosm.compute_transpiration_demand.(gpu_wetness, 2.0f0, alpha, shape, 10.0f0)
+    supply = demand ./ 2.0f0
+    conductance = Agrocosm.compute_actual_canopy_conductance.(
+        10.0f0, supply, demand, gpu_wetness, 2.0f0, alpha, shape,
+    )
+    expected_supply = expected_demand ./ 2.0f0
+    expected_conductance = shape .* alpha .* expected_supply ./
+        ((1.0f0 .- min.(wetness, 0.99f0)) .* 2.0f0 .* alpha .- expected_supply)
+    @test Array(demand) ≈ expected_demand
+    @test Array(conductance) ≈ expected_conductance
+    @test Array(gpu_wetness) == wetness
+end
+
 @testset "CUDA fused daily climate and crop kernels" begin
     cells = 4096
     days = 3

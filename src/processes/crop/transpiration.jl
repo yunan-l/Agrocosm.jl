@@ -370,7 +370,7 @@ end
 ) where {T <: AbstractFloat} =
     maximum_supply * root_water * (one(T) - exp(T(-0.04) * root_carbon))
 
-"""Compute canopy transpiration demand from conductance and wet-canopy fraction."""
+"""Compute transpiration demand with LPJmL's 0.99 water-stress wetness cap."""
 @inline function compute_transpiration_demand(
     canopy_wet::T,
     equilibrium_evaporation::T,
@@ -379,7 +379,9 @@ end
     conductance::T,
 ) where {T <: AbstractFloat}
     conductance > zero(T) || return zero(T)
-    return (one(T) - canopy_wet) * equilibrium_evaporation * alpha /
+    # Interception/soil evaporation retain the original stand wetness (wet_all
+    # in LPJmL). Only water_stressed uses a canopy wetness capped at 0.99.
+    return (one(T) - min(canopy_wet, T(0.99))) * equilibrium_evaporation * alpha /
            (one(T) + (conductance_shape * alpha) / conductance)
 end
 
@@ -414,7 +416,8 @@ end
     conductance_shape::T,
 ) where {T <: AbstractFloat}
     actual_supply < demand && equilibrium_evaporation > zero(T) || return current_conductance
-    denominator = (one(T) - canopy_wet) * equilibrium_evaporation * alpha - actual_supply
+    denominator = (one(T) - min(canopy_wet, T(0.99))) *
+                  equilibrium_evaporation * alpha - actual_supply
     return denominator > zero(T) ? conductance_shape * alpha * actual_supply / denominator : zero(T)
 end
 
