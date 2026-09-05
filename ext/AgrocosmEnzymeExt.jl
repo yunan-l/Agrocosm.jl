@@ -314,6 +314,7 @@ function _enzyme_solve_lambda_c3!(
     co2,
     lpjmlparams,
     photoparams,
+    constrain_to_upper_bound::Bool = false,
 )
     T = eltype(Agrocosm.crop_photosynthesis_auxiliary(state).lambda)
     lambda = Agrocosm.crop_photosynthesis_auxiliary(state).lambda
@@ -341,6 +342,9 @@ function _enzyme_solve_lambda_c3!(
                 pet.daylength[cell],
                 lpjmlparams,
                 photoparams,
+                T(0.85),
+                30,
+                constrain_to_upper_bound,
             )
         else
             zero(T)
@@ -930,6 +934,7 @@ function _enzyme_continuous_transition!(
         current_co2,
         global_params,
         photo_params,
+        nitrogen_limit_vcmax,
     )
     Agrocosm.photosynthesis!(
         Val(:C3),

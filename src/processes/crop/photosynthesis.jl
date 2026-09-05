@@ -57,7 +57,11 @@ end
         (light_limited + rubisco_limited) * (light_limited + rubisco_limited) -
         T(4) * curvature * light_limited * rubisco_limited,
     )
-    return (light_limited + rubisco_limited - sqrt(discriminant)) /
+    # Do not evaluate sqrt(0) on the reverse path. Its primal is valid, but
+    # the singular derivative can turn a zero cotangent into NaN when both
+    # limiting rates vanish under nitrogen stress.
+    root = discriminant > zero(T) ? sqrt(discriminant) : zero(T)
+    return (light_limited + rubisco_limited - root) /
            (T(2) * curvature) * daylength
 end
 

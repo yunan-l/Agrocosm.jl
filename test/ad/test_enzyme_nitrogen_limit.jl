@@ -21,6 +21,25 @@ function _nitrogen_limited_seasonal_value(
     )
 end
 
+function _zero_co_limited_assimilation(theta)
+    return Agrocosm.compute_co_limited_assimilation(
+        theta[1], theta[2], 0.9f0, 12.0f0,
+    )
+end
+
+@testset "Zero photosynthesis limit has a finite reverse derivative" begin
+    theta = zeros(Float32, 2)
+    gradient = zeros(Float32, 2)
+    result = Enzyme.autodiff(
+        Enzyme.ReverseWithPrimal,
+        _zero_co_limited_assimilation,
+        Enzyme.Duplicated(theta, gradient),
+    )
+
+    @test result[2] == 0.0f0
+    @test all(isfinite, gradient)
+end
+
 @testset "Enzyme nitrogen-limited parameter optimization" begin
     template = _nitrogen_limited_transition_fixture()
     days = (11, 12, 13)
