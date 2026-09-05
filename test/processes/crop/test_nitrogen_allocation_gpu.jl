@@ -31,3 +31,25 @@ CUDA.allowscalar(false)
     @test second_sum ≈ first_sum atol = 1.0f-6
     @test second_leafn ≈ first_leafn atol = 1.0f-7
 end
+
+@testset "CUDA living leafless crops retain organ nitrogen" begin
+    crop = init_crop(4, CuArray)
+    state = test_model_state(crop)
+    crop.state.phenology.is_growing .= CuArray(Int32[1, 1, 1, 0])
+    crop.state.nitrogen.total .= 2.0f0
+    crop.state.carbon.leaf .= CuArray(Float32[0, 1e-8, 1e-7, 0])
+    crop.state.carbon.root .= 100.0f0
+    crop.state.carbon.storage .= 200.0f0
+    crop.state.carbon.pool .= 100.0f0
+    crop.state.nitrogen.leaf .= 0.0f0
+    crop.state.nitrogen.root .= 0.5f0
+    crop.state.nitrogen.storage .= 1.0f0
+    crop.state.nitrogen.pool .= 0.5f0
+
+    Agrocosm.allocate_crop_nitrogen!(state, cft1)
+
+    @test all(iszero, Array(crop.state.nitrogen.leaf))
+    @test Array(crop.state.nitrogen.root) == Float32[0.5, 0.5, 0.5, 0]
+    @test Array(crop.state.nitrogen.storage) == Float32[1, 1, 1, 0]
+    @test Array(crop.state.nitrogen.pool) == Float32[0.5, 0.5, 0.5, 0]
+end

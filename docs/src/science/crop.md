@@ -424,6 +424,12 @@ C_{pool}=C_{bio}-C_{leaf}-C_{root}-C_{storage}.
 During senescence a negative residual is repaired conservatively in storage,
 root, then leaf order while preserving total biomass.
 
+Organ nitrogen is redistributed after carbon allocation when leaf carbon and
+total plant nitrogen are positive. Following LPJmL, a living crop with leaf
+carbon at or below the numerical threshold retains its previous organ nitrogen;
+skipping repartitioning does not clear those stocks. Inactive crops still clear
+their derived organ pools.
+
 ## Harvest and failed crops
 
 At normal harvest, storage carbon becomes yield. The configured residue

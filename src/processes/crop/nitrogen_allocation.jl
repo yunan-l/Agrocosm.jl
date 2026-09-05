@@ -66,6 +66,8 @@ end
 Redistribute the complete plant nitrogen stock among crop organs. Organ pools
 are derived stocks, not daily uptake fluxes, so repeated calls with unchanged
 carbon and total nitrogen are idempotent.
+Living crops without positive leaf carbon and plant nitrogen retain their
+existing organ stocks, matching LPJmL's skipped repartitioning branch.
 """
 function allocate_crop_nitrogen!(crop,
                                  CFT::CFTParameters)
@@ -127,7 +129,9 @@ end
                crop_ston[cell] = zero(T)
                crop_pooln[cell] = zero(T)
           end
-     else
+     elseif crop_isgrowing[cell] != 1
+          # A living crop keeps its previous organ N when repartitioning is
+          # skipped. Only inactive crops clear these derived stocks.
           crop_leafn[cell] = zero(T)
           crop_rootn[cell] = zero(T)
           crop_ston[cell] = zero(T)

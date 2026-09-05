@@ -34,22 +34,39 @@ using Test
     @test sum(second_allocation) ≈ crop.state.nitrogen.total[1] atol = 1.0f-6
 end
 
-@testset "Zero leaf carbon clears organ nitrogen safely" begin
-    crop = init_crop(1, identity)
-    state = test_model_state(crop)
-    crop.state.phenology.is_growing .= 1
-    crop.state.nitrogen.total .= 0.7f0
-    crop.state.carbon.leaf .= 0.0f0
-    crop.state.carbon.root .= 3.0f0
-    crop.state.nitrogen.leaf .= 1.0f0
-    crop.state.nitrogen.root .= 1.0f0
+@testset "Living leafless crops retain organ nitrogen like LPJmL" begin
+    for cft in (cft1, cft2, cft3, cft9)
+        crop = init_crop(3, identity)
+        state = test_model_state(crop)
+        crop.state.phenology.is_growing .= 1
+        crop.state.phenology.senescence .= true
+        crop.state.nitrogen.total .= 2.0f0
+        crop.state.carbon.leaf .= Float32[0, 1e-8, 1e-7]
+        crop.state.carbon.root .= 100.0f0
+        crop.state.carbon.storage .= 200.0f0
+        crop.state.carbon.pool .= 100.0f0
+        crop.state.nitrogen.leaf .= 0.0f0
+        crop.state.nitrogen.root .= 0.5f0
+        crop.state.nitrogen.storage .= 1.0f0
+        crop.state.nitrogen.pool .= 0.5f0
 
-    Agrocosm.allocate_crop_nitrogen!(state, cft1)
+        Agrocosm.allocate_crop_nitrogen!(state, cft)
 
-    @test crop.state.nitrogen.leaf[1] == 0.0f0
-    @test crop.state.nitrogen.root[1] == 0.0f0
-    @test crop.state.nitrogen.storage[1] == 0.0f0
-    @test crop.state.nitrogen.pool[1] == 0.0f0
+        @test all(iszero, crop.state.nitrogen.leaf)
+        @test crop.state.nitrogen.root == fill(0.5f0, 3)
+        @test crop.state.nitrogen.storage == fill(1.0f0, 3)
+        @test crop.state.nitrogen.pool == fill(0.5f0, 3)
+        @test crop.state.nitrogen.total == crop.state.nitrogen.leaf .+
+              crop.state.nitrogen.root .+ crop.state.nitrogen.storage .+ crop.state.nitrogen.pool
+
+        # Harvested/inactive columns must still clear their derived organ stocks.
+        crop.state.phenology.is_growing .= 0
+        Agrocosm.allocate_crop_nitrogen!(state, cft)
+        @test all(iszero, crop.state.nitrogen.leaf)
+        @test all(iszero, crop.state.nitrogen.root)
+        @test all(iszero, crop.state.nitrogen.storage)
+        @test all(iszero, crop.state.nitrogen.pool)
+    end
 end
 
 @testset "Integrated automatic-fertilizer nitrogen cycle" begin
