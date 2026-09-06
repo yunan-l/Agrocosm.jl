@@ -30,6 +30,10 @@ using Test
     senescent = Agrocosm.compute_phenology_lai_fraction(
         T(0.8), T(0.05), T(0.05), T(0.45), T(0.45), T(0.7), T(0), T(1),
     )
+    mature = Agrocosm.compute_phenology_lai_fraction(
+        T(1), T(0.05), T(0.05), T(0.45), T(0.45), T(0.7), T(0), T(0.5),
+    )
     @test zero(T) < presenescent < one(T)
     @test senescent ≈ T(2 / 3) atol = eps(T)
+    @test mature == zero(T)
 end

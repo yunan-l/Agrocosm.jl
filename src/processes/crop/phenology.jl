@@ -100,6 +100,7 @@ end
     harvest_fraction::T,
     senescence_shape::T,
 ) where {T <: AbstractFloat}
+    fphu >= one(T) && return harvest_fraction
     if fphu < senescence_fraction
         c = fphuc / flaimaxc - fphuc
         k = fphuk / flaimaxk - fphuk

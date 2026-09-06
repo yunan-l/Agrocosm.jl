@@ -3,6 +3,34 @@ using Enzyme
 using LinearAlgebra
 using Test
 
+function _mature_lai_fraction(theta)
+    fphu = min(1.0f0, theta[1])
+    return Agrocosm.compute_phenology_lai_fraction(
+        fphu,
+        0.15f0,
+        0.05f0,
+        0.50f0,
+        0.50f0,
+        theta[2],
+        0.0f0,
+        0.5f0,
+    )
+end
+
+@testset "Mature phenology has a finite reverse derivative" begin
+    theta = Float32[1.01, cft9.fphusen]
+    gradient = zeros(Float32, 2)
+    result = Enzyme.autodiff(
+        Enzyme.set_runtime_activity(Enzyme.ReverseWithPrimal),
+        _mature_lai_fraction,
+        Enzyme.Duplicated(theta, gradient),
+    )
+
+    @test result[2] == 0.0f0
+    @test all(isfinite, gradient)
+    @test gradient == zeros(Float32, 2)
+end
+
 function _daily_transition_fixture(climate_days::Int = 16, initial_end_day::Int = 10)
     T = Float32
     cells = 1
