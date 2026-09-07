@@ -1,7 +1,7 @@
 # Agrocosm.jl
 
-**Agrocosm.jl is a process-based, GPU-capable Julia model of crop–soil carbon,
-water, nitrogen, and energy dynamics.** It is designed for transparent daily
+**Agrocosm.jl is a process-based crop model with carbon, water, 
+nitrogen, and energy dynamics.** It is designed for transparent daily
 simulation from individual sites to batches of independent grid cells.
 
 The current model provides C3 and C4 crop pathways, phenology and management,
@@ -25,9 +25,8 @@ line-by-line translation.
 
 The established single-CFT C3/C4 pathway is covered by CPU and CUDA-oriented
 regression tests. The multi-CFT drivers can execute selected CFT and
-water-system patches in independent batches. The model is under active research
-development: crop rotations, Penman–Monteith/Medlyn alternatives, and
-end-to-end automatic differentiation are not yet production features.
+water-system patches in independent batches. The model now surpports
+end-to-end automatic differentiation.
 
 Start with [Getting started](@ref), then read [Model overview](@ref) and
 [State variables](@ref) before extending a process.
