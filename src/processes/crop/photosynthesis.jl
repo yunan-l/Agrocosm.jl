@@ -120,19 +120,27 @@ end
     gammastar = T(po2) / (T(2) * tau)
 
     if comp_vcmax
-        internal_co2 = T(lambdamc3) * co2_cell
-        c1 = stress * T(alphac3) *
-            ((internal_co2 - gammastar) / (internal_co2 + T(2) * gammastar))
-        c2 = (internal_co2 - gammastar) / (internal_co2 + fac)
-        s = T(24) / daylength[cell] * T(b)
-        sigma = one(T) - (c2 - s) / (c2 - T(theta) * s)
-        sigma = sqrt(max(zero(T), sigma))
         lambda[cell] = T(LAMBDA_OPT)
-        potential = (one(T) / T(b)) * (c1 / c2) *
-            ((T(2) * T(theta) - one(T)) * s -
-             (T(2) * T(theta) * s - c2) * sigma) *
-            apar[cell] * T(cmass) * T(cq)
-        vcmax[cell] = inactive ? zero(T) : max(zero(T), potential)
+        if inactive || apar[cell] <= zero(T) || daylength[cell] <= zero(T)
+            # With no absorbed radiation, potential Rubisco capacity is zero.
+            # Gate before the analytical sigma term: in Float32,
+            # `c2 - theta*s` can round to zero and otherwise turn 0 APAR into
+            # an invalid Inf * 0 product.
+            vcmax[cell] = zero(T)
+        else
+            internal_co2 = T(lambdamc3) * co2_cell
+            c1 = stress * T(alphac3) *
+                ((internal_co2 - gammastar) / (internal_co2 + T(2) * gammastar))
+            c2 = (internal_co2 - gammastar) / (internal_co2 + fac)
+            s = T(24) / daylength[cell] * T(b)
+            sigma = one(T) - (c2 - s) / (c2 - T(theta) * s)
+            sigma = sqrt(max(zero(T), sigma))
+            potential = (one(T) / T(b)) * (c1 / c2) *
+                ((T(2) * T(theta) - one(T)) * s -
+                 (T(2) * T(theta) * s - c2) * sigma) *
+                apar[cell] * T(cmass) * T(cq)
+            vcmax[cell] = max(zero(T), potential)
+        end
         potential_vcmax[cell] = vcmax[cell]
         nitrogen_limitation[cell] = vcmax[cell] > zero(T) ? one(T) : zero(T)
     end
@@ -218,16 +226,20 @@ photosynthesis!(::Val{:C4}, CFT, crop, apar, daylength, temperature, co2; kwargs
     stress = temperature_stress[cell]
     inactive = stress < T(1e-2)
     if comp_vcmax
-        c1 = stress * T(alphac4)
-        s = T(24) / daylength[cell] * T(b)
-        sigma = one(T) - (one(T) - s) / (one(T) - T(theta) * s)
-        sigma = sqrt(max(zero(T), sigma))
         lambda[cell] = T(LAMBDA_OPT)
-        potential = (one(T) / T(b)) * c1 *
-            ((T(2) * T(theta) - one(T)) * s -
-             (T(2) * T(theta) * s - one(T)) * sigma) *
-            apar[cell] * T(cmass) * T(cq)
-        vcmax[cell] = inactive ? zero(T) : max(zero(T), potential)
+        if inactive || apar[cell] <= zero(T) || daylength[cell] <= zero(T)
+            vcmax[cell] = zero(T)
+        else
+            c1 = stress * T(alphac4)
+            s = T(24) / daylength[cell] * T(b)
+            sigma = one(T) - (one(T) - s) / (one(T) - T(theta) * s)
+            sigma = sqrt(max(zero(T), sigma))
+            potential = (one(T) / T(b)) * c1 *
+                ((T(2) * T(theta) - one(T)) * s -
+                 (T(2) * T(theta) * s - one(T)) * sigma) *
+                apar[cell] * T(cmass) * T(cq)
+            vcmax[cell] = max(zero(T), potential)
+        end
         potential_vcmax[cell] = vcmax[cell]
         nitrogen_limitation[cell] = vcmax[cell] > zero(T) ? one(T) : zero(T)
     end

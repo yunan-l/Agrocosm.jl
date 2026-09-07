@@ -74,6 +74,38 @@ end
     @test all(iszero, crop.fluxes.carbon.water_limited_assimilation)
 end
 
+@testset "C3 zero-radiation Vcmax singularity regression" begin
+    crop = init_crop(1, identity)
+    state = test_model_state(crop)
+    photos = crop.auxiliary.photosynthesis
+    photos.temperature_stress .= 0.7534869f0
+
+    names = fieldnames(typeof(cft1))
+    values = map(names) do name
+        name === :b ? 0.07916511f0 : getfield(cft1, name)
+    end
+    fitted_cft = CFTParameters{Float32, Int32}(; NamedTuple{names}(values)...)
+
+    photosynthesis_C3!(
+        fitted_cft,
+        state,
+        Float32[0.0],
+        Float32[11.771176],
+        Float32[33.04117],
+        Float32[30.14];
+        comp_vcmax = true,
+    )
+
+    @test photos.lambda == Float32[0.8]
+    @test photos.potential_vcmax == Float32[0.0]
+    @test photos.vcmax == Float32[0.0]
+    @test photos.nitrogen_limitation == Float32[0.0]
+    @test crop.fluxes.carbon.gross_assimilation == Float32[0.0]
+    @test crop.fluxes.carbon.leaf_respiration == Float32[0.0]
+    @test crop.fluxes.carbon.net_assimilation == Float32[0.0]
+    @test crop.fluxes.carbon.water_limited_assimilation == Float32[0.0]
+end
+
 @testset "C4 photosynthesis CPU smoke test" begin
     crop = init_crop(1, identity)
     state = test_model_state(crop)
