@@ -106,23 +106,70 @@ for cft_id in (isempty(ARGS) ? (1, 3) : Tuple(parse.(Int, ARGS)))
         sowing_day = parse(Int, get(ENV, "WEATHER_TEST_SOWING_DAY", "100"))
         diurnal_config = DiurnalConfig(; steps = 24, shape = DIURNAL_SINUSOID)
 
-        # G1/G2 in a real Enzyme pipeline: steps = 1 must degenerate exactly
-        # onto the daily kernel, both in the ordinary replay and in the
-        # gradient it feeds into `enzyme_weather_harvest_gradient`. This is
-        # the same conservation property `test_diurnal.jl` checks in isolation,
-        # now checked end-to-end through the actual AD path that had no
-        # `diurnal_config` wiring at all before 2026-09-08.
-        degenerate_config = DiurnalConfig(; steps = 1, shape = DIURNAL_SINUSOID)
+        # G1/G2 in a real Enzyme pipeline: the sub-daily path must degenerate
+        # exactly onto the daily kernel in every case the design says it does,
+        # both in the ordinary replay and in the gradient that feeds
+        # `enzyme_weather_harvest_gradient`. The exact-degeneracy rows are
+        # tabulated in `src/processes/crop/photosynthesis_subdaily.jl`: a zero
+        # diurnal range under any shape, and `:flat` or `:daytime_neutral`
+        # under any range. `:sinusoid` with a nonzero range is deliberately
+        # NOT one of them -- a single sub-step of a sinusoid sits at the
+        # solar-noon temperature, not the daily mean -- so it is asserted
+        # below as documented behaviour instead. This is checked end-to-end
+        # through the AD path, which had no `diurnal_config` wiring at all
+        # before 2026-09-08.
         daily_case = weather_attribution_fixture(cft_id; T, window_days = 8, sowing_day)
-        degenerate_case = weather_attribution_fixture(cft_id; T, window_days = 8, sowing_day,
-            diurnal_config = degenerate_config, diurnal_amplitude = T(10))
         daily_reference = weather_harvest_replay(daily_case.forcing, daily_case.state,
             daily_case.cft, daily_case.parameters, daily_case.climate, daily_case.days,
             daily_case.harvest_day)
-        degenerate_reference = weather_harvest_replay(degenerate_case.forcing, degenerate_case.state,
-            degenerate_case.cft, degenerate_case.parameters, degenerate_case.climate,
-            degenerate_case.days, degenerate_case.harvest_day; diurnal_config = degenerate_config)
+        subdaily_replay = (config; amplitude = T(10)) -> begin
+            replay_case = weather_attribution_fixture(cft_id; T, window_days = 8, sowing_day,
+                diurnal_config = config, diurnal_amplitude = amplitude)
+            replay = weather_harvest_replay(replay_case.forcing, replay_case.state,
+                replay_case.cft, replay_case.parameters, replay_case.climate,
+                replay_case.days, replay_case.harvest_day; diurnal_config = config)
+            return (replay_case, replay)
+        end
+
+        degenerate_config = DiurnalConfig(; steps = 1, shape = DIURNAL_FLAT)
+        degenerate_case, degenerate_reference = subdaily_replay(degenerate_config)
         @test degenerate_reference.yield == daily_reference.yield
+        # Many sub-steps, flat shape: the radiation weights must sum to one and
+        # every sub-step sees the daily mean. This is the row that actually
+        # catches a mis-normalized integration weight, which a single-sub-step
+        # check cannot see. Equality here is up to round-off, not bitwise:
+        # summing `steps` contributions is not associative in floating point,
+        # so the tolerance is a few hundred eps rather than zero. A real
+        # normalization error is O(1), nowhere near this band.
+        @test isapprox(last(subdaily_replay(DiurnalConfig(; steps = 24, shape = DIURNAL_FLAT))).yield,
+            daily_reference.yield; rtol = 1000 * eps(T))
+        # A zero diurnal range removes the temperature spread, so at one
+        # sub-step every shape collapses onto the daily state exactly.
+        @test last(subdaily_replay(DiurnalConfig(; steps = 1, shape = DIURNAL_SINUSOID);
+            amplitude = T(0))).yield == daily_reference.yield
+        # But a zero range does NOT make a non-flat shape degenerate once there
+        # is more than one sub-step: the shape still redistributes the day's
+        # PAR across sub-steps, and co-limited assimilation is concave in
+        # light, so integrating it over an uneven light course gives less than
+        # evaluating it once at the mean. That is the sub-daily scheme's second
+        # Jensen channel -- light curvature -- and it is active independently
+        # of the temperature curvature the diurnal range drives. Asserted
+        # explicitly so the two channels cannot be silently conflated.
+        light_only = last(subdaily_replay(DiurnalConfig(; steps = 24, shape = DIURNAL_SINUSOID);
+            amplitude = T(0))).yield
+        @test light_only != daily_reference.yield
+        @test light_only < daily_reference.yield
+        # `:daytime_neutral` subtracts its own closed-form sub-step mean, which
+        # at one sub-step is the solar-noon value itself.
+        @test last(subdaily_replay(DiurnalConfig(; steps = 1, shape = DIURNAL_DAYTIME_NEUTRAL))).yield ==
+            daily_reference.yield
+        # The documented non-degenerate row, pinned so a future change to the
+        # shape machinery cannot silently turn it into degeneracy: one sub-step
+        # of `:sinusoid` integrates at the solar-noon temperature, so it must
+        # differ from the daily kernel while remaining a valid harvest.
+        noon_reference = last(subdaily_replay(DiurnalConfig(; steps = 1, shape = DIURNAL_SINUSOID)))
+        @test noon_reference.yield != daily_reference.yield
+        @test isfinite(noon_reference.yield) && noon_reference.yield > zero(T)
         daily_gradient = enzyme_weather_harvest_gradient(daily_case.forcing, daily_case.state,
             daily_case.cft, daily_case.parameters, daily_case.climate, daily_case.days,
             daily_case.harvest_day; block_days = 4)

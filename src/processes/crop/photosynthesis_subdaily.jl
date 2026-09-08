@@ -47,6 +47,24 @@
 # The `:daytime_neutral` row holds because its single sub-step subtracts the
 # closed-form sub-step mean, which at `steps == 1` is the solar-noon value
 # itself.
+#
+# Every row above is `steps == 1`. With more sub-steps only `:flat` degenerates,
+# and then only up to round-off, because summing `steps` contributions is not
+# associative in floating point:
+#
+# | steps | shape     | diurnal range | identical to daily kernel        |
+# | ----- | --------- | ------------- | -------------------------------- |
+# | > 1   | :flat     | any           | yes, to a few eps                |
+# | > 1   | :sinusoid | 0             | no; light curvature alone        |
+#
+# That last row is easy to misread as a bug and is not one. A zero diurnal
+# range removes the temperature spread, but a non-flat shape still distributes
+# the day's PAR unevenly across sub-steps, and `compute_co_limited_assimilation`
+# is concave in light. Integrating a concave response over an uneven light
+# course yields less than evaluating it once at the mean course. So the scheme
+# has two independent Jensen channels: temperature curvature, which the diurnal
+# range drives, and light curvature, which the shape drives on its own. Only
+# `:flat` switches both off.
 
 """
     DiurnalForcing(config, range)
