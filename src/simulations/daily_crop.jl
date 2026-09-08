@@ -19,6 +19,7 @@ function _daily_crop!(
     with_tillage = true,
     crop_resp_fix = true,
     nitrogen_limit_vcmax = false,
+    diurnal_config = nothing,
     sowing_mode::Symbol = :prescribed_sdate,
     update_vernalization_requirement::Bool = true,
     water_balance = nothing,
@@ -56,6 +57,18 @@ function _daily_crop!(
         throw(ArgumentError("water-balance diagnostics currently support rainfed simulations only"))
     end
 
+    # Sub-daily integration needs the diurnal temperature range alongside the
+    # other forcings. It is read as a row view of the (day, cell) matrix, so no
+    # extra buffer and no change to the climate kernels is required.
+    if diurnal_config !== nothing
+        hasproperty(climate, :diurnal_range) || throw(ArgumentError(
+            "sub-daily photosynthesis requires a `diurnal_range` climate field (tasmax - tasmin)",
+        ))
+        size(climate.diurnal_range) == size(climate.temp) || throw(DimensionMismatch(
+            "diurnal_range must have the same shape as the temperature forcing",
+        ))
+    end
+
     annual_rows = count(
         climate_day -> (climate_day + simulation_day_offset) % 365 == 0,
         start_day:end_day,
@@ -73,6 +86,9 @@ function _daily_crop!(
         output_row = output_rows.first_daily_row + block_day - 1
         day_of_year = day % 365 != 0 ? day % 365 : 365
         current_co2 = readclimate!(climate, dailyWeather, climate_day)
+        diurnal = diurnal_config === nothing ? nothing : DiurnalForcing(
+            diurnal_config, view(climate.diurnal_range, climate_day, :),
+        )
 
         if carbon_balance !== nothing
             record_carbon_balance_start!(carbon_balance, diagnostic_day, state, state)
@@ -190,7 +206,7 @@ function _daily_crop!(
             )
             photosynthesis!(
                 pathway, cftparameters, state, crop_canopy_auxiliary(state).apar,
-                pet.daylength, dailyWeather.temp, current_co2;
+                pet.daylength, dailyWeather.temp, current_co2, diurnal;
                 comp_vcmax = true,
                 lpjmlparams = global_params,
                 photoparams = photo_params,
@@ -254,7 +270,7 @@ function _daily_crop!(
         )
         photosynthesis!(
             pathway, cftparameters, state, crop_canopy_auxiliary(state).apar,
-            pet.daylength, dailyWeather.temp, current_co2;
+            pet.daylength, dailyWeather.temp, current_co2, diurnal;
             comp_vcmax = true,
             lpjmlparams = global_params,
             photoparams = photo_params,
@@ -273,7 +289,7 @@ function _daily_crop!(
         )
         photosynthesis!(
             pathway, cftparameters, state, crop_canopy_auxiliary(state).apar,
-            pet.daylength, dailyWeather.temp, current_co2;
+            pet.daylength, dailyWeather.temp, current_co2, diurnal;
             comp_vcmax = false,
             lpjmlparams = global_params,
             photoparams = photo_params,
@@ -300,7 +316,7 @@ function _daily_crop!(
             )
             photosynthesis!(
                 pathway, cftparameters, state, crop_canopy_auxiliary(state).apar,
-                pet.daylength, dailyWeather.temp, current_co2;
+                pet.daylength, dailyWeather.temp, current_co2, diurnal;
                 comp_vcmax = false,
                 lpjmlparams = global_params,
                 photoparams = photo_params,
@@ -313,7 +329,7 @@ function _daily_crop!(
             )
             photosynthesis!(
                 pathway, cftparameters, state, crop_canopy_auxiliary(state).apar,
-                pet.daylength, dailyWeather.temp, current_co2;
+                pet.daylength, dailyWeather.temp, current_co2, diurnal;
                 comp_vcmax = false,
                 lpjmlparams = global_params,
                 photoparams = photo_params,

@@ -764,6 +764,7 @@ function _enzyme_continuous_transition!(
     apply_deferred_prescribed_inputs::Bool = nitrogen_limit_vcmax,
     weather_controls = nothing,
     pathway = Val(:C3),
+    diurnal_config = nothing,
 )
     T = eltype(Agrocosm.crop_prognostic(state).canopy.lai)
     _enzyme_apply_root_distribution!(state, cft.beta_root)
@@ -781,6 +782,14 @@ function _enzyme_continuous_transition!(
     current_co2 = Agrocosm.readclimate!(climate, daily_weather, day)
     weather_controls === nothing ||
         Agrocosm.apply_weather_forcing!(daily_weather, weather_controls, day)
+    # Sub-daily integration is opt-in and reads a fixed (non-differentiated)
+    # diurnal range auxiliary from `climate`, mirroring `_daily_crop!`. When
+    # `climate` is `Enzyme.Const` (the weather-attribution AD path), this
+    # auxiliary is Const too; only the daily-mean weather channels already in
+    # `WEATHER_VARIABLES` remain differentiated.
+    diurnal = diurnal_config === nothing ? nothing : Agrocosm.DiurnalForcing(
+        diurnal_config, view(climate.diurnal_range, day, :),
+    )
     Agrocosm.update_climbuf!(
         cft,
         daily_weather.temp,
@@ -866,7 +875,7 @@ function _enzyme_continuous_transition!(
             Agrocosm.crop_canopy_auxiliary(state).apar,
             pet.daylength,
             daily_weather.temp,
-            current_co2;
+            current_co2, diurnal;
             comp_vcmax = true,
             lpjmlparams = global_params,
             photoparams = photo_params,
@@ -921,7 +930,7 @@ function _enzyme_continuous_transition!(
         Agrocosm.crop_canopy_auxiliary(state).apar,
         pet.daylength,
         daily_weather.temp,
-        current_co2;
+        current_co2, diurnal;
         comp_vcmax = true,
         lpjmlparams = global_params,
         photoparams = photo_params,
@@ -954,7 +963,7 @@ function _enzyme_continuous_transition!(
         Agrocosm.crop_canopy_auxiliary(state).apar,
         pet.daylength,
         daily_weather.temp,
-        current_co2;
+        current_co2, diurnal;
         comp_vcmax = false,
         lpjmlparams = global_params,
         photoparams = photo_params,
@@ -990,7 +999,7 @@ function _enzyme_continuous_transition!(
             Agrocosm.crop_canopy_auxiliary(state).apar,
             pet.daylength,
             daily_weather.temp,
-            current_co2;
+            current_co2, diurnal;
             comp_vcmax = false,
             lpjmlparams = global_params,
             photoparams = photo_params,
@@ -1012,7 +1021,7 @@ function _enzyme_continuous_transition!(
             Agrocosm.crop_canopy_auxiliary(state).apar,
             pet.daylength,
             daily_weather.temp,
-            current_co2;
+            current_co2, diurnal;
             comp_vcmax = false,
             lpjmlparams = global_params,
             photoparams = photo_params,

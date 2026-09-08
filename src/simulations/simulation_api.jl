@@ -202,6 +202,9 @@ function _prepare_climate(simulation::CropSimulation, climate::NamedTuple)
         if hasproperty(climate, :wind)
             prepared = merge(prepared, (wind = T.(climate.wind),))
         end
+        if hasproperty(climate, :diurnal_range)
+            prepared = merge(prepared, (diurnal_range = T.(climate.diurnal_range),))
+        end
         for name in (:no3_deposition, :nh4_deposition)
             hasproperty(climate, name) || continue
             values = T.(getproperty(climate, name))
@@ -278,6 +281,7 @@ function _transition_range!(
         with_tillage = simulation.config.with_tillage,
         crop_resp_fix = simulation.config.crop_resp_fix,
         nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
+        diurnal_config = diurnal_configuration(simulation.config),
         update_vernalization_requirement = !simulation.config.freeze_vernalization_requirement,
         sowing_mode = simulation.config.sowing_mode,
         water_balance = simulation.water_balance,

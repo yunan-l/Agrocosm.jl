@@ -63,6 +63,10 @@ export albedo!, petpar!, apar_crop!, apar_crop_maize!
 # CROP
 export photosynthesis_C3!, photosynthesis_C4!, carbon_allocation!, respiration!
 export photosynthesis!, solve_lambda!
+export DiurnalConfig, DiurnalForcing, diurnal_configuration, diurnal_shape_code
+export DIURNAL_FLAT, DIURNAL_SINUSOID, DIURNAL_DAYTIME_NEUTRAL
+export photosynthesis_subdaily_C3!, photosynthesis_subdaily_C4!
+export diurnal_temperature, diurnal_radiation_fraction, diurnal_heat_exposure
 export phenology_crop!, lai_crop!, cultivate!, dynamic_sowing_date!, update_dynamic_sowing_calendar!, harvest_crop!, fertilizer!
 export transpiration!, interception!
 export crop_carbon!, crop_nitrogen!, ndemand_crop!, nuptake_crop!
@@ -161,6 +165,7 @@ include("diagnostics/thermal_balance.jl")
 # Climate
 include("processes/climate/climbuf.jl")
 include("processes/climate/temp_stress.jl")
+include("processes/climate/diurnal.jl")
 include("processes/climate/spinup_climbuf.jl")
 include("processes/climate/readclimate.jl")
 include("processes/climate/snow.jl")
@@ -170,6 +175,7 @@ include("processes/crop/cultivate.jl")
 include("processes/crop/dynamic_sowing.jl")
 include("processes/crop/phenology.jl")
 include("processes/crop/photosynthesis.jl")
+include("processes/crop/photosynthesis_subdaily.jl")
 include("processes/crop/lambda_solver.jl")
 include("processes/crop/carbon_allocation.jl")
 include("processes/crop/crop_carbon.jl")

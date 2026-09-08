@@ -60,6 +60,9 @@ struct SimulationConfiguration{T <: AbstractFloat, D, E}
     with_tillage::Bool
     crop_resp_fix::Bool
     nitrogen_limit_vcmax::Bool
+    subdaily_photosynthesis::Bool
+    subdaily_steps::Int
+    diurnal_shape::Symbol
     freeze_vernalization_requirement::Bool
     sowing_mode::Symbol
     execution::E
@@ -75,12 +78,19 @@ function SimulationConfiguration(
     with_tillage::Bool = true,
     crop_resp_fix::Bool = true,
     nitrogen_limit_vcmax::Bool = false,
+    subdaily_photosynthesis::Bool = false,
+    subdaily_steps::Integer = 1,
+    diurnal_shape::Symbol = :sinusoid,
     freeze_vernalization_requirement::Bool = false,
     sowing_mode::Symbol = :prescribed_sdate,
 ) where {T <: AbstractFloat}
     days > 0 || throw(ArgumentError("days must be positive"))
     sowing_mode in (:prescribed_sdate, :dynamic_sdate) || throw(ArgumentError(
         "sowing_mode must be :prescribed_sdate or :dynamic_sdate",
+    ))
+    subdaily_steps >= 1 || throw(ArgumentError("subdaily_steps must be at least 1"))
+    diurnal_shape in (:flat, :sinusoid, :daytime_neutral) || throw(ArgumentError(
+        "diurnal_shape must be :flat, :sinusoid or :daytime_neutral",
     ))
     execution = ExecutionContext(T, device, active_indices; cell_ids)
     source_indices = indices === nothing ? nothing : Int.(indices)
@@ -89,9 +99,23 @@ function SimulationConfiguration(
     }(
         source_indices, device, T, Int(days), irrigation, manure, fertilizer,
         with_tillage, crop_resp_fix, nitrogen_limit_vcmax,
+        subdaily_photosynthesis, Int(subdaily_steps), diurnal_shape,
         freeze_vernalization_requirement, sowing_mode, execution,
     )
 end
+
+"""
+    diurnal_configuration(config)
+
+Zero-size `DiurnalConfig` for this run, or `nothing` when sub-daily integration
+is switched off. `nothing` routes every assimilation call to the existing daily
+kernel, so production is bitwise unchanged.
+"""
+diurnal_configuration(config::SimulationConfiguration) =
+    config.subdaily_photosynthesis ?
+        DiurnalConfig(; steps = config.subdaily_steps,
+                        shape = diurnal_shape_code(config.diurnal_shape)) :
+        nothing
 
 float_type(::ExecutionContext{T}) where {T} = T
 array_device(::HostArchitecture) = identity
