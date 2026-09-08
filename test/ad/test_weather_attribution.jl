@@ -176,7 +176,18 @@ for cft_id in (isempty(ARGS) ? (1, 3) : Tuple(parse.(Int, ARGS)))
         degenerate_gradient = enzyme_weather_harvest_gradient(degenerate_case.forcing, degenerate_case.state,
             degenerate_case.cft, degenerate_case.parameters, degenerate_case.climate,
             degenerate_case.days, degenerate_case.harvest_day; block_days = 4, diurnal_config = degenerate_config)
-        @test degenerate_gradient.gradient == daily_gradient.gradient
+        # The forward yield is bitwise identical (checked above), but the
+        # gradient is not: Enzyme differentiates two different source-code
+        # shapes here (the daily kernel's direct expression vs. the sub-daily
+        # kernel's single-iteration loop), and the resulting adjoint code sums
+        # floating-point contributions in a different order. That is a
+        # non-associativity effect, not a modelling difference, so it is
+        # bounded by a handful of ULP rather than zero -- confirmed directly:
+        # of 1825 entries exactly one differs, by a relative 1.3e-7, which is
+        # eps(Float32) itself. A real wiring bug would be orders of magnitude
+        # larger.
+        @test isapprox(degenerate_gradient.gradient, daily_gradient.gradient;
+            rtol = 1000 * eps(T), atol = 1000 * eps(T))
 
         # The actual sub-daily case: 24 steps, a physically sized diurnal
         # range. This is the first time this repository differentiates
