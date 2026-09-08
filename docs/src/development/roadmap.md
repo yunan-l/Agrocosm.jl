@@ -15,7 +15,8 @@ convergence gate and explicit memory accounting; process, initialization, and
 output updates use backend kernels with synchronization at lifecycle
 boundaries rather than after every kernel. Legacy `_reference!` paths have
 been removed. Process and diagnostics tests now exercise the same `ModelState`
-interface as the runtime; the full local `Pkg.test()` suite passes.
+interface as the runtime. Validation scope is documented separately from
+experiment-specific test results.
 
 The AgrocosmData core is also substantially complete:
 
@@ -26,65 +27,36 @@ The AgrocosmData core is also substantially complete:
 - bounded climate-block reading, calendar/unit normalization, annual CO₂, and
   one-block prefetch;
 - model-facing `model_initial_data` and `climate_forcings` adapters.
-- a configuration-driven server utility that extracts one rainfed wheat band
-  from 2015 multi-CFT management data and the 2015–2016 daily forcing.
+- configuration-driven extraction of selected CFT management bands and
+  climate periods using bounded input reads.
 
 This means new grids no longer require an LPJmL restart. It does not yet mean
 that the global production workflow is complete.
 
-## Current phase: global production readiness
+## Production validation requirements
 
-Work in this phase is ordered as follows:
+- Derive compact cells from the configured crop mask. Land fraction does not
+  multiply crop or soil process equations.
+- Preserve data provenance, uncertainty and quality-control reports for
+  initialization products.
+- Verify bounded memory, grid reconstruction, finite/non-negative state,
+  CPU/GPU agreement, balance closure and cross-year checkpoint continuity.
+- Apply the declared warm-up allocation and convergence criteria; a completed
+  warm-up is not automatically an equilibrium initial state.
+- Validate each selected CFT and water-system configuration on the relevant
+  backend before relying on its output scientifically.
 
-1. Use 2015 rainfed-wheat `landfrac > 0` only to select the fixed compact cell
-   set. Land fraction is not a multiplier in crop or soil process equations;
-   all other management inputs are likewise fixed at their 2015 values.
-2. The local ten-cell HWSD + 2015–2016 forcing smoke test and restartable
-   streamed `agricultural_warmup!` are complete. Native post-warm-up and 2015
-   boundary checkpoint/restart are now part of the production runner.
-3. The canonical-grid HWSD pipeline and QC/fallback contracts are implemented;
-   retain the server product and its QC report with every production run.
-4. Submit the current bounded-memory CPU and single-GPU workflows through
-   Slurm rather than interactive nodes. Both jobs run their complete backend
-   regression suite before entering production. CPU and GPU outputs and
-   checkpoints must use separate directories.
-5. Validate memory, throughput, grid reconstruction, finite/non-negative state,
-   CPU/GPU agreement, sampled C/N/water/energy closure, and 2015→2016 native
-   checkpoint continuity. The latest server CUDA suite passed 1866 checks; its
-   one remaining cancellation-sensitive thermal-residual comparison is fixed
-   locally and requires a fresh server rerun.
-6. Use target-constrained warm-up with a strict production gate. A previous
-   100-year global diagnostic reached about 96.15% converged cells, so the
-   current code must identify and review the remaining cells rather than
-   silently writing a production checkpoint.
-7. Retain the interim HWSD 40:60 fast/slow split as the reproducible first-run
-   baseline, but keep it under review. The real ten-cell warm-up remains
-   transient after ten years; changing only the initial ratio would not resolve
-   the continuing total C/N decline.
+Experiment periods, management scenarios, scheduler settings, run progress and
+case-specific results are maintained outside the public package documentation.
 
-The global CFT 1 rainfed GPU calibration now provides the first full-domain
-evidence: 33,025 selected cells completed 600 years under a repeated 30-year
-climate cycle, with 98.31% satisfying the strict per-cell drift rule and late
-aggregate C/N drift near `10^-7`. It is a calibration product, not yet a
-production initial state: the remaining cells must be inspected and the
-derived allocation must be rerun through 2015–2016 checkpoint/restart.
+## Differentiable transition
 
-The phase is complete when the current commit passes both full backend suites
-and every selected CFT × water-regime patch can be initialized from native data,
-warmed under the declared allocation/convergence contract, checkpointed, run
-across a year boundary, and reconstructed to the canonical grid without
-LPJmL-derived state.
-
-## Later method work: differentiable transition
-
-1. Declare the active parameter/state boundary for the existing one-day
-   transition.
-2. Add Enzyme CPU smoke tests, finite-difference gradient checks, and explicit
-   policies for discrete sowing, harvest, fertilization, clamps, and failed
-   crops.
-3. Add CUDA differentiation only after the CPU gradient path is stable.
-4. Keep data loading, warm-up, checkpoints, and reporting outside the
-   differentiated region.
+The optional Enzyme extension supports parameter objectives and fixed-event
+C3/C4 weather-to-yield sensitivities on CPU. Development priorities include
+broader gradient regression coverage and explicit treatment of nonsmooth
+events. Keep data loading, warm-up, checkpoints and reporting outside the
+differentiated region. Full-model CUDA differentiation requires separate
+validation; CPU/GPU forcing-copy equivalence alone does not establish it.
 
 ## Later production extensions
 

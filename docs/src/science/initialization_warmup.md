@@ -94,8 +94,8 @@ Liquid soil water begins at field capacity:
 W_l=W_{fc,l}.
 ```
 
-The 40:60 partition approximates the mean legacy ten-cell partition but is an
-explicit initialization assumption, not an HWSD measurement.
+The 40:60 partition is an explicit initialization assumption, not an HWSD
+measurement or an equilibrium solution.
 
 ## Adaptive target-constrained agricultural warm-up
 
@@ -133,8 +133,8 @@ Production time and output remain unchanged,
 d_{production}=0,\qquad Y_{production}=\varnothing,
 ```
 
-until the formal run begins. In the global production configuration, the
-1901--1930 forcing block is repeated five times for 150 years. Same-phase
+until the formal run begins. The forcing period and duration are run
+configuration choices. Same-phase
 total-C/N changes, fast-pool fraction changes, and target corrections are
 checked against their thresholds for the configured consecutive years. Annual
 reports retain convergence status,
@@ -143,7 +143,7 @@ The final state is saved as a native Agrocosm checkpoint.
 
 ## Interpretation
 
-The fixed 150-year duration is not by itself an equilibrium claim. A run that
+A fixed duration is not by itself an equilibrium claim. A run that
 reaches its maximum duration without satisfying the per-cell criteria is
 reported as `target_constrained_maximum_years` and remains a baseline rather
 than an accepted equilibrium initialization. The annual correction itself is

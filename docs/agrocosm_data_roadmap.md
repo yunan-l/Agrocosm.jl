@@ -9,9 +9,9 @@ spin-up dynamics, and device execution in `Agrocosm.jl`.
 
 - `grid.nc` is the only canonical spatial reference. Every record is keyed by
   its `cellid`; array order and source dimension names are never assumed.
-- The current global rainfed-wheat experiment selects cells only where 2015
-  `landfrac > 0`. The fraction is selection/provenance data, not a multiplier
-  in model processes. All management values are fixed at 2015 levels.
+- Crop masks use the configured CFT, water system and management years.
+  `landfrac > 0` selects active cells; the fraction is selection/provenance
+  data, not a multiplier in model processes.
 - All allocated crop cells run together on one CPU or GPU when memory permits.
   Climate forcing is streamed in time blocks. Spatial batches are an explicit
   out-of-memory fallback, not the default execution model.
@@ -29,12 +29,11 @@ spin-up dynamics, and device execution in `Agrocosm.jl`.
 ## Current status
 
 The package core is substantially complete. Milestones 1–5 have implemented
-and fixture-tested contracts. A configuration-driven utility now extracts the
-rainfed-wheat band for 2015 from the 64/32/24/16-band server files and the
-2015–2016 daily forcing without loading the full datasets. Remaining work is
-concentrated in full-grid HWSD quality control and the global smoke test. Large production files
-remain on the server; their mappings are explicit code contracts tested with
-small dimension-permuted fixtures.
+and fixture-tested contracts. A configuration-driven utility extracts selected
+CFT bands and forcing periods without loading complete source datasets. Input
+mappings are explicit code contracts tested with small dimension-permuted
+fixtures. Dataset-specific quality-control reports and deployment plans are
+maintained outside the package.
 
 ## Milestone 1 — package and data contracts
 
@@ -62,8 +61,8 @@ Acceptance:
 
 ## Milestone 2 — canonical grid and crop masks
 
-Status: complete in AgrocosmData. For the current experiment, the 2015 positive
-fraction mask defines the fixed compact selection. Fraction and activity arrays
+Status: complete in AgrocosmData. The configured crop mask defines the compact
+selection. Fraction and activity arrays
 remain data products but are not model process inputs.
 
 Build a reusable compact index from the `720 × 280` grid:
@@ -83,8 +82,8 @@ Deliverables:
 Acceptance:
 
 - compact-to-grid round trips preserve every value and `cellid`;
-- masks exclude missing grid cells and include every cell with positive
-  2015 land-use fraction for the current production experiment;
+- masks exclude missing grid cells and include cells selected by the declared
+  CFT, water-system and management-year policy;
 - changing NetCDF dimension names or order does not change the result.
 
 ## Milestone 3 — current soil and management inputs
@@ -197,7 +196,7 @@ Default execution:
 
 ```text
 grid + CFT + years
-  → cells with 2015 landfrac > 0
+  → cells selected by the configured land-use mask
   → all active cells on one backend
   → streamed climate blocks
   → cellid-keyed output/checkpoint
@@ -207,7 +206,7 @@ Deliverables:
 
 - memory estimation and automatic selection between whole-mask execution and
   spatial fallback batches;
-- fixed 2015 management reused across production years;
+- explicit fixed-year or transient management across production years;
 - output reconstruction to `720 × 280` using `cellid`;
 - per-shard checkpoints and deterministic merge for fallback batching;
 - reproducibility metadata containing CFT, years, masks, source versions, and
@@ -226,10 +225,10 @@ output, scratch, forcing-transfer, warm-up history, cached forcing, and
 prefetched-host memory. Streamed selected output, identity-checked
 checkpoint/restart, asynchronous one-block prefetch, canonical HWSD
 preprocessing/QC, and full selected-domain CPU/GPU runners are implemented.
-The first ten selected cells pass the HWSD-backed CPU workflow. Non-interactive
-Slurm templates now submit full CPU and single-GPU jobs. Current remaining work
-is server backend validation and, only if whole-mask device memory is
-insufficient, deterministic spatial fallback batching.
+Backend validation must cover the selected input contracts and precision.
+Deployment-specific scheduler settings and run evidence are maintained outside
+the package. Spatial fallback batching must preserve deterministic reassembly
+when a selected domain exceeds device memory.
 
 ## Milestone 7 — spin-up handoff and production hardening
 
@@ -244,13 +243,12 @@ pools, and initializes water at field capacity. New data use the neutral
 top-level `initial_state` contract.
 compatibility path only.
 
-`agricultural_warmup!` now cycles the configured 1901–1930 forcing for five
-complete cycles (150 years) without advancing the production
-clock or retaining production outputs. It supports target-constrained annual
+`agricultural_warmup!` cycles the configured complete-year forcing without
+advancing the production clock or retaining production outputs. It supports target-constrained annual
 corrections, same-climate-phase convergence, a strict production checkpoint
-gate, restartable climate-block readers, and annual C/N/water diagnostics. The
-150-year global result will determine whether a reusable target-constrained
-pool-allocation product is needed.
+gate, restartable climate-block readers, and annual C/N/water diagnostics.
+The forcing period, duration and acceptance criteria are experiment configuration,
+not fixed data-package policy.
 
 Deliverables:
 

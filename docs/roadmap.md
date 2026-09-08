@@ -48,31 +48,31 @@ Milestones 1–5 are substantially complete at the code and fixture-test level:
   streaming; annual CO₂ alignment; 365-day normalization; block prefetch;
 - full ten-cell equivalence through `model_initial_data` and
   `climate_forcings`.
-- configuration-driven extraction of the 2015 rainfed-wheat management fields
-  and 2015–2016 daily climate for a bounded global test dataset.
+- configuration-driven extraction of selected CFT management fields and
+  climate periods without materializing complete source datasets.
 
 Remaining data-layer work is production hardening rather than new loader
 architecture:
 
-- execute and quality-control the full canonical-grid HWSD product;
-- preserve full source/provenance manifests for server runs;
-- benchmark real server NetCDF access and add a canonical cache only if direct
+- validate canonical-grid HWSD coverage and stock conservation;
+- preserve source/provenance manifests for generated data products;
+- benchmark representative NetCDF access and add a canonical cache only if direct
   compact reads are too slow.
 
 Warm-up, backend transfer, state evolution, and global
 execution remain responsibilities of Agrocosm.jl, not AgrocosmData.jl.
 
-## 3. Immediate production sequence
+## 3. Simulation acceptance criteria
 
-### 3.1 Fixed 2015 wheat domain
+### 3.1 Configured crop domain
 
-- Select compact cells where 2015 rainfed-wheat `landfrac > 0`.
+- Select compact cells from the configured CFT, water system, years and land-use mask.
 - Use `landfrac` only for selection and provenance; do not multiply any model
   process or reported crop quantity by fractional area.
-- Reuse the 2015 sowing date, PHU, fertilizer, manure, and residue settings in
-  every simulated production year, matching the chosen ISIMIP experiment.
+- Resolve sowing date, PHU, fertilizer, manure and residue settings through
+  the configured fixed or transient management policy.
 
-Acceptance: every selected cell runs one rainfed-wheat stand in stable compact
+Acceptance: every selected cell runs one crop stand in stable compact
 ordering, and changing a positive land fraction without changing its sign does
 not alter a cell-level model trajectory.
 
@@ -91,16 +91,14 @@ final prognostic state and annual report.
 
 Status: the streamed/eager implementation and equivalence regression are
 complete. The production runner writes and exactly restores the warm-up state,
-then repeats checkpoint/restart at the end of 2015.
+then checks checkpoint/restart at a production-year boundary.
 
-### 3.3 Global rainfed-wheat smoke test
+### 3.3 Backend and scale validation
 
-- The local subset contains fixed 2015 management and 2015–2016 forcing. Its
-  first ten `landfrac > 0` cells pass a 730-day CPU smoke test with HWSD state.
-- Generate the complete canonical-grid HWSD product and review its
+- Validate initialization and cross-year state propagation on a bounded fixture.
+- Review the canonical-grid HWSD product's
   coverage and conservation summaries.
-- Start with one rainfed wheat CFT over all cells selected by land use.
-- Run CPU and a single GPU using identical compact cell ordering.
+- Compare CPU and GPU execution using identical compact cell ordering.
 - Stream climate and monthly/annual output; avoid full daily global ledgers.
 - Check NaN/Inf, invalid negative pools, crop lifecycle failures, memory peak,
   throughput, restart continuity, and sampled or online balance closure.
@@ -112,31 +110,23 @@ Acceptance: the complete year finishes within estimated memory, CPU/GPU
 differences meet declared tolerances, and the second-year restart/reassembly is
 deterministic.
 
-Current launch status: non-interactive Slurm CPU/GPU templates are maintained
-in the workspace `outputs` directory. The global CFT 1 rainfed GPU calibration
-completed 600 years for 33,025 selected cells with a repeated 30-year climate
-cycle: 98.31% met the strict per-cell drift rule and late aggregate C/N drift
-was approximately `10^-7`. This establishes a useful calibration baseline,
-but is not an accepted production checkpoint until the remaining cells are
-characterized and the derived allocation is validated through 2015→2016
-restart.
+Experiment-specific launch plans, convergence summaries and acceptance records
+are maintained outside the package. A completed calibration alone does not
+establish suitability for every production configuration.
 
 ### 3.4 HWSD pool-allocation decision
 
 The current native initialization conserves HWSD layer SOC and total N using a
 documented 40:60 fast/slow split and zero litter. Do not add an elaborate
-equilibrium allocator without evidence. First inspect the ten-year warm-up for
+equilibrium allocator without evidence. Inspect configured warm-up diagnostics for
 initial respiration pulses, litter/fast-pool stabilization, mineral-N drift,
 and total C/N trajectories. If needed, implement a constrained allocation that
 preserves every layer total and records uncertainty.
 
-Current decision: retain 40:60 as the first global production baseline, not as
-an equilibrium claim. In the real ten-cell ten-year warm-up, total C fell
-13.3%, total N fell 11.1%, and the fast-C fraction moved from 0.400 to 0.314.
-Year 10 still lost 1.27% C and 0.97% N, so the report correctly returns
-`review_pool_allocation`. Because the total pools are still drifting, changing
-only the initial fast/slow ratio is not a defensible fix; reconsider it together
-with a longer or target-constrained spin-up after the global baseline run.
+The 40:60 initialization is not an equilibrium claim. Review total-stock drift
+as well as pool fractions; changing only the initial ratio does not establish
+equilibrium. Allocation and convergence decisions belong to the declared
+initialization contract of each experiment.
 
 ## 4. Differentiable daily transition
 
@@ -164,8 +154,7 @@ leaf-energy balance and plant hydraulics are later extensions.
 - Each `(cft_id, irrigated)` patch has independent crop, soil, litter, and
   management state. `landfrac` selects patches and weights reconstructed
   outputs; it does not scale cell-level process equations.
-- Derive and store one soil-pool allocation product per patch batch, validate
-  the CFT 1 rainfed reference first, then execute the full 24-batch matrix.
+- Derive and store one soil-pool allocation product per selected patch batch.
 - Verify each batch on CPU/GPU, native checkpoint/restart, sampled balance
   closure, and canonical-grid aggregation before adding rotations.
 

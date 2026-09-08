@@ -29,18 +29,16 @@ water_systems = ["rainfed", "irrigated"]
 ```
 
 `run_global_wheat_cpu.jl` remains the shared low-level batch executor used by
-the CFT driver. It is retained for compatibility, but new server tests should
+the CFT driver. It is retained for compatibility, but new applications should
 use the unified CFT entry points above.
 
 To calibrate and initialize a separate soil-pool state for every selected patch
-in one workflow, add a `[free_warmup]` section. The supplied
-`global_cfts_allocation_validation.example.toml` is the canonical template.
-Every calibration phase runs a fixed 600-year target-constrained warm-up and
-writes an allocation. The default free-settling phase reloads that allocation,
-runs five 30-year climate cycles (150 years) without target correction, then
-uses the resulting state for production. It writes the convergence and drift
-diagnostics but does not require free equilibrium; therefore its outputs are a
-production baseline, not a claimed long-term soil equilibrium.
+in one workflow, add a `[free_warmup]` section. A target-constrained calibration
+phase writes an allocation, and the free-settling phase reloads it and evolves
+the state without target correction before production. Configure the forcing
+cycle, durations and convergence requirements explicitly; example settings are
+not universal scientific recommendations. A finite free-settling run does not
+establish long-term soil equilibrium unless its declared criteria are met.
 
 ```bash
 julia --project=. scripts/run_global_cfts_cpu.jl \
@@ -63,7 +61,7 @@ julia --project=. scripts/run_global_cfts_gpu.jl \
 With `resume_completed_batches = true` under `[run]`, a valid completed batch
 is skipped. If calibration completed but the later free warm-up or production
 stage stopped, the driver verifies the recorded allocation fingerprint and
-resumes at production rather than recalibrating the 600-year allocation.
+resumes at production rather than recalibrating the allocation.
 
 The extracted management files are ordered as rainfed CFTs `1:12`, irrigated
 CFTs `13:24`, and 12 residue bands shared by the two water systems. Before a

@@ -1,6 +1,6 @@
 # AgrocosmData.jl
 
-For bounded server-side extraction of all 12 crops in rainfed and irrigated
+For bounded extraction of all 12 crops in rainfed and irrigated
 form, see `scripts/prepare_global_cft_subset.jl` and
 `config/global_cft_subset.example.toml`. The complete workflow is documented
 in the Agrocosm manual under **Global CFT input data**.
@@ -121,10 +121,10 @@ For a real-data check after downloading the official `HWSD2.bil` and
 
 ```bash
 julia --project=. lib/AgrocosmData/scripts/extract_hwsd_cell.jl \
-  /path/to/HWSD2 /path/to/grid.nc 172 197 /path/to/hwsd_cn_test.nc 0
+  /path/to/HWSD2 /path/to/grid.nc LONGITUDE_INDEX LATITUDE_INDEX /path/to/hwsd_cn_test.nc 0
 ```
 
-The longitude and latitude arguments are one-based indices into the canonical
+Replace `LONGITUDE_INDEX` and `LATITUDE_INDEX` with one-based indices into the canonical
 `grid.nc`; the script reads their coordinates instead of reconstructing the
 grid from an assumed origin. It reads all 3600 source pixels within that 0.5°
 cell, mixes soil components by HWSD `SHARE`, aggregates stocks by spherical

@@ -128,8 +128,7 @@ Consequently,
 N_{fast,l}+N_{slow,l}+N_{NO_3,l}+N_{NH_4,l}=N_{HWSD,l}.
 ```
 
-The 40:60 split matches the mean partition of the legacy ten-cell spun-up
-fixture. It is only a reproducible starting guess, not an HWSD observation or
+The 40:60 split is an explicit initialization assumption, not an HWSD observation or
 an equilibrium claim.
 
 ## Target-constrained agricultural warm-up
@@ -181,20 +180,19 @@ number of consecutive years:
   relative tolerance. The correction may remain non-zero under persistent
   external inputs such as atmospheric nitrogen deposition.
 
-The global CPU workflow cycles 1901--1930 climate five times and runs every
-selected cell for 150 years. It still reports whether each cell passes for
-three consecutive years. Keeping all cells on the same fixed calendar makes
-the checkpoint deterministic and exposes the residual unconverged fraction.
+Warm-up reports per-cell convergence against the configured forcing cycle and
+consecutive-year requirement. A fixed-calendar run must still expose the
+unconverged fraction rather than treating its duration as convergence evidence.
 
 Recommended procedure:
 
 1. Build the HWSD state and initialize water at field capacity.
-2. Run the 150-year target-constrained agricultural warm-up, using
+2. Configure a target-constrained agricultural warm-up, using
    the same crop, fertilization, irrigation, residue, and tillage configuration
    as the target experiment.
 3. Use observed historical forcing when available. If forcing must be cycled,
    pass a complete multi-year block rather than one anomalous year.
-4. Evaluate convergence after the five complete 30-year forcing cycles.
+4. Evaluate same-phase convergence over complete forcing cycles.
 5. Discard warm-up outputs but save the final native Agrocosm checkpoint.
 6. Use a separate diagnostic run when daily C, N, water, and energy closure
    must be audited; the production warm-up deliberately does not allocate
@@ -249,27 +247,27 @@ corrections, converged-cell fractions, and host-side matrices for total soil
 C/N, litter, fast and slow C/N, mineral N, and soil water. Warm-up outputs and
 balance ledgers are not mixed with the production run.
 
-The server production script exposes the same controls:
+The simulation runner exposes the same controls. These values illustrate a
+configuration, not a prescribed experiment duration:
 
 ```toml
 [run]
 warmup_target_constrained = true
-warmup_minimum_years = 150
-warmup_maximum_years = 150
 warmup_consecutive_years = 3
 warmup_relative_tolerance = 0.01
 warmup_pool_fraction_tolerance = 0.01
 warmup_required_converged_fraction = 1.0
 ```
 
-The global production configuration cycles the 1901--1930 climate five times,
-for a fixed 150-year target-constrained warm-up. Convergence compares states at
-the same position in the 30-year forcing cycle. HWSD mineral-soil C and total-N
+Set `warmup_minimum_years` and `warmup_maximum_years` explicitly for the intended
+initialization contract.
+
+Convergence compares states at the same position in the configured forcing
+cycle. HWSD mineral-soil C and total-N
 targets remain fixed while litter and the fast/slow pool allocation develop
 under the model processes.
 
-For the complete canonical grid, run the bounded-memory HWSD raster pipeline
-on the server:
+For a canonical-grid product, use the bounded-memory HWSD raster pipeline:
 
 ```bash
 julia --project=lib/AgrocosmData \

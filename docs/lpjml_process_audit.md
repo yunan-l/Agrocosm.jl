@@ -75,7 +75,7 @@ thermal and litter/SOM work, then calls `daily_stand()` (and therefore
 | Litter routing and soil C–N decomposition | `litter_routing.jl`, `soil_carbon.jl`, `soil_nitrogen.jl` | `daily_littersom.c`, `littersom_nomethane.c` | Aligned / Adapted |
 | N transformations and losses | `nitrogen_transform.jl` | `denitrification.c`, `volatilization.c` | Aligned |
 
-## 2026-07 source comparison pass
+## Source comparison
 
 This pass compared the active daily crop route against the named LPJmL source
 files, rather than only checking numerical outputs.  It covers the processes
@@ -133,9 +133,8 @@ AgrocosmData reader therefore resolves the NetCDF `map` names into canonical
 codes instead of assuming that source numbers are lookup positions. The two
 classes share the N coefficients above, so this correction does not alter the
 N-parameter mapping. It does alter their hydraulic and thermal properties.
-The ten-grid fixture and cell 60866 contain no source-code-13 cells, but the
-global wheat inputs do; derived initial-data and checkpoint artifacts that
-were built with the old positional interpretation must be regenerated.
+Derived initial-data and checkpoint artifacts containing source-code-13 cells
+must be regenerated if they were built with the old positional interpretation.
 
 The infiltration loop retains Agrocosm's `1e-5` residual threshold rather than
 LPJmL's smaller floating-point epsilon. This is a numerical tolerance choice;
@@ -167,7 +166,7 @@ thermal resistance numerically.
 
 ## Next audit actions
 
-1. Once a public checkpoint restore API exists, test uninterrupted versus
-   save/restore continuation on CPU and CUDA, rather than only payload shape.
+1. Keep uninterrupted-versus-save/restore continuation tests aligned with the
+   public checkpoint API on CPU and CUDA, rather than testing only payload shape.
 2. Re-run this audit whenever a new selectable process model is introduced in
    Phase 2.
