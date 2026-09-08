@@ -315,6 +315,7 @@ function _enzyme_solve_lambda_c3!(
     lpjmlparams,
     photoparams,
     constrain_to_upper_bound::Bool = false,
+    pathway = Val(:C3),
 )
     T = eltype(Agrocosm.crop_photosynthesis_auxiliary(state).lambda)
     lambda = Agrocosm.crop_photosynthesis_auxiliary(state).lambda
@@ -331,7 +332,7 @@ function _enzyme_solve_lambda_c3!(
         lambda[cell] = if gpd > T(1e-5) &&
                           temperature_stress[cell] >= T(1e-2) &&
                           pet.daylength[cell] > zero(T) && co2_cell > zero(T)
-            _enzyme_smooth_lambda_c3(
+            _enzyme_weather_lambda(pathway,
                 fac,
                 vcmax[cell],
                 temperature_stress[cell],
@@ -361,6 +362,7 @@ function _enzyme_recouple_nitrogen_water_c3!(
     co2,
     lpjmlparams,
     photoparams,
+    pathway = Val(:C3),
 )
     T = eltype(Agrocosm.crop_photosynthesis_auxiliary(state).lambda)
     photosynthesis = Agrocosm.crop_photosynthesis_auxiliary(state)
@@ -405,7 +407,7 @@ function _enzyme_recouple_nitrogen_water_c3!(
                     canopy.fpar[cell], co2_cell,
                 )
                 if gpd > T(1e-5) && pet.daylength[cell] > zero(T) && co2_cell > zero(T)
-                    photosynthesis.lambda[cell] = _enzyme_smooth_lambda_c3(
+                    photosynthesis.lambda[cell] = _enzyme_weather_lambda(pathway,
                         fac,
                         photosynthesis.vcmax[cell],
                         photosynthesis.temperature_stress[cell],
@@ -760,6 +762,8 @@ function _enzyme_continuous_transition!(
     nitrogen_limit_vcmax::Bool = false,
     crop_resp_fix::Bool = true,
     apply_deferred_prescribed_inputs::Bool = nitrogen_limit_vcmax,
+    weather_controls = nothing,
+    pathway = Val(:C3),
 )
     T = eltype(Agrocosm.crop_prognostic(state).canopy.lai)
     _enzyme_apply_root_distribution!(state, cft.beta_root)
@@ -775,6 +779,8 @@ function _enzyme_continuous_transition!(
     daily_weather = state.inputs.weather
 
     current_co2 = Agrocosm.readclimate!(climate, daily_weather, day)
+    weather_controls === nothing ||
+        Agrocosm.apply_weather_forcing!(daily_weather, weather_controls, day)
     Agrocosm.update_climbuf!(
         cft,
         daily_weather.temp,
@@ -789,7 +795,7 @@ function _enzyme_continuous_transition!(
     Agrocosm.tillage_hydraulics!(state; lpjmlparams = global_params)
     Agrocosm.litter_bioturbation!(state; lpjmlparams = global_params)
 
-    Agrocosm.albedo!(cft, state, state, pet)
+    Agrocosm._pathway_albedo!(pathway, cft, state, state, pet, true)
     Agrocosm.petpar!(
         pet,
         day % 365 == 0 ? 365 : day % 365,
@@ -827,7 +833,7 @@ function _enzyme_continuous_transition!(
         # in state; management-adaptation objectives inject their own pulses
         # and explicitly disable this event.
         Agrocosm.fertilizer!(
-            state, managed_land, state, day;
+            state, managed_land, state, weather_controls === nothing ? day : mod1(day, 365);
             fertilizer = true,
             manure = true,
             apply_sowing_dose = false,
@@ -839,11 +845,12 @@ function _enzyme_continuous_transition!(
     if nitrogen_limit_vcmax
         # Preserve LPJmL's pre-phenology raw `gp_sum` for the initial water
         # balance. The current-canopy APAR/photosynthesis pass remains below.
-        Agrocosm.apar_crop!(
-            cft,
+        Agrocosm._pathway_apar!(
+            pathway, cft,
             state,
             pet,
             Agrocosm.soil_snow_prognostic(state).height,
+            true,
         )
         Agrocosm.temp_stress(
             cft,
@@ -853,7 +860,7 @@ function _enzyme_continuous_transition!(
             photoparams = photo_params,
         )
         Agrocosm.photosynthesis!(
-            Val(:C3),
+            pathway,
             cft,
             state,
             Agrocosm.crop_canopy_auxiliary(state).apar,
@@ -893,11 +900,12 @@ function _enzyme_continuous_transition!(
         lpjmlparams = global_params,
         thermalparams = thermal_params,
     )
-    Agrocosm.apar_crop!(
-        cft,
+    Agrocosm._pathway_apar!(
+        pathway, cft,
         state,
         pet,
         Agrocosm.soil_snow_prognostic(state).height,
+        true,
     )
     Agrocosm.temp_stress(
         cft,
@@ -907,7 +915,7 @@ function _enzyme_continuous_transition!(
         photoparams = photo_params,
     )
     Agrocosm.photosynthesis!(
-        Val(:C3),
+        pathway,
         cft,
         state,
         Agrocosm.crop_canopy_auxiliary(state).apar,
@@ -937,9 +945,10 @@ function _enzyme_continuous_transition!(
         global_params,
         photo_params,
         nitrogen_limit_vcmax,
+        pathway,
     )
     Agrocosm.photosynthesis!(
-        Val(:C3),
+        pathway,
         cft,
         state,
         Agrocosm.crop_canopy_auxiliary(state).apar,
@@ -975,7 +984,7 @@ function _enzyme_continuous_transition!(
             lpjmlparams = global_params,
         )
         Agrocosm.photosynthesis!(
-            Val(:C3),
+            pathway,
             cft,
             state,
             Agrocosm.crop_canopy_auxiliary(state).apar,
@@ -994,9 +1003,10 @@ function _enzyme_continuous_transition!(
             current_co2,
             global_params,
             photo_params,
+            pathway,
         )
         Agrocosm.photosynthesis!(
-            Val(:C3),
+            pathway,
             cft,
             state,
             Agrocosm.crop_canopy_auxiliary(state).apar,
@@ -2039,5 +2049,6 @@ function Agrocosm.enzyme_daily_transition_objective(
 end
 
 include("management_adaptation.jl")
+include("weather_attribution.jl")
 
 end

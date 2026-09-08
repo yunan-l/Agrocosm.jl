@@ -134,9 +134,16 @@ function infil_perc!(soil,
                      thermalparams::SoilThermalParams{T} = soil_thermal_params,
                      transfer_heat::Bool = true) where {T <: AbstractFloat}
     # One-cell kernel launch; each thread updates the full vertical soil column for that cell.
+    # Pass only the coefficients used here. Packing the entire model bundles
+    # creates a large mixed register that Enzyme's weather-forward pass cannot
+    # reliably type, especially in Float64. The process equations are unchanged.
     kernel_params = (;
-        lpjmlparams,
-        thermalparams,
+        soil_infil = T(lpjmlparams.soil_infil),
+        soil_infil_litter = T(lpjmlparams.soil_infil_litter),
+        percthres = T(lpjmlparams.percthres),
+        water_heat_capacity = T(thermalparams.water_heat_capacity),
+        ice_heat_capacity = T(thermalparams.ice_heat_capacity),
+        volumetric_fusion_heat = T(thermalparams.volumetric_fusion_heat),
         soil_layers = 5,
         NPERCO = T(lpjmlparams.NPERCO),
         transfer_heat,
@@ -321,10 +328,9 @@ end
 
     cell = @index(Global)
 
-    @unpack lpjmlparams, thermalparams, soil_layers, NPERCO,
-            transfer_heat = kernel_params
-
-    @unpack soil_infil, soil_infil_litter, percthres = lpjmlparams
+    @unpack soil_layers, NPERCO, transfer_heat,
+            soil_infil, soil_infil_litter, percthres,
+            water_heat_capacity, ice_heat_capacity, volumetric_fusion_heat = kernel_params
     anion_excl = M(soil_anion_exclusion[cell])
 
     freewater = zero(T)
@@ -348,8 +354,6 @@ end
         soil_perc_energy[l, cell] = zero(T)
     end
 
-    @unpack water_heat_capacity, ice_heat_capacity,
-            volumetric_fusion_heat = thermalparams
     total_top_water = max(precipitation[cell], zero(T))
     melt_top_water = min(max(snowmelt[cell], zero(T)), total_top_water)
     rain_top_water = max(total_top_water - melt_top_water, zero(T))

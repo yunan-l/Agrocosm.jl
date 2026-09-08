@@ -111,6 +111,8 @@ export enzyme_seasonal_joint_loss
 export enzyme_seasonal_joint_gradient_blockwise
 export enzyme_management_yield_loss, enzyme_management_yield_split_loss
 export enzyme_joint_adaptation_yield_loss
+export WEATHER_VARIABLES, weather_forcing, weather_harvest_replay
+export enzyme_weather_harvest_gradient, enzyme_weather_forward_directional
 
 
 # process-based crop model
@@ -221,5 +223,6 @@ include("simulations/memory_estimate.jl")
 # The Enzyme implementation is an optional package extension. This file only
 # defines the dependency-free season contract and fallback API.
 include("ad/adapter.jl")
+include("ad/weather_attribution.jl")
 
 end
