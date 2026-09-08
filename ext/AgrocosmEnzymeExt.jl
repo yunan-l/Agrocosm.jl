@@ -765,6 +765,7 @@ function _enzyme_continuous_transition!(
     weather_controls = nothing,
     pathway = Val(:C3),
     diurnal_config = nothing,
+    organ_temperature::Bool = false,
 )
     T = eltype(Agrocosm.crop_prognostic(state).canopy.lai)
     _enzyme_apply_root_distribution!(state, cft.beta_root)
@@ -790,6 +791,24 @@ function _enzyme_continuous_transition!(
     diurnal = diurnal_config === nothing ? nothing : Agrocosm.DiurnalForcing(
         diurnal_config, view(climate.diurnal_range, day, :),
     )
+    # Organ temperature, mirroring `_daily_crop!`. Humidity and pressure come
+    # off `climate` and so inherit its Const-ness, exactly like `diurnal_range`.
+    # Wind, shortwave and longwave do NOT: they are differentiated weather
+    # channels 5, 3 and 4, written by `apply_weather_forcing!` just above. That
+    # is deliberate rather than tolerated -- leaf temperature genuinely depends
+    # on them, so d(yield)/d(wind) and d(yield)/d(shortwave) now propagate
+    # through the energy balance as well as through the daily kernel, which is
+    # a more complete gradient than before, not a leak.
+    organ = organ_temperature ? Agrocosm.OrganTemperatureForcing(
+        view(climate.specific_humidity, day, :),
+        view(climate.surface_pressure, day, :),
+        daily_weather.wind,
+        daily_weather.swr,
+        daily_weather.lwr,
+        pet.albedo,
+        Agrocosm.crop_canopy_auxiliary(state).actual_lai,
+        Agrocosm.crop_canopy_auxiliary(state).canopy_conductance,
+    ) : nothing
     Agrocosm.update_climbuf!(
         cft,
         daily_weather.temp,
@@ -964,7 +983,7 @@ function _enzyme_continuous_transition!(
         pet.daylength,
         daily_weather.temp,
         current_co2, diurnal;
-        comp_vcmax = false,
+        comp_vcmax = false, organ,
         lpjmlparams = global_params,
         photoparams = photo_params,
     )
@@ -1000,7 +1019,7 @@ function _enzyme_continuous_transition!(
             pet.daylength,
             daily_weather.temp,
             current_co2, diurnal;
-            comp_vcmax = false,
+            comp_vcmax = false, organ,
             lpjmlparams = global_params,
             photoparams = photo_params,
         )
@@ -1022,7 +1041,7 @@ function _enzyme_continuous_transition!(
             pet.daylength,
             daily_weather.temp,
             current_co2, diurnal;
-            comp_vcmax = false,
+            comp_vcmax = false, organ,
             lpjmlparams = global_params,
             photoparams = photo_params,
         )

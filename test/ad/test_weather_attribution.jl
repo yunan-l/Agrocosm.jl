@@ -241,3 +241,104 @@ for cft_id in (isempty(ARGS) ? (1, 3) : Tuple(parse.(Int, ARGS)))
             no_range_case.days, no_range_case.harvest_day; diurnal_config)
     end
 end
+
+# E7 of docs/04_organ_temperature_design.md. Step 1 shipped a sub-daily kernel
+# that reached the forward replay but not the gradient, because
+# `_enzyme_continuous_transition!` is a separate hand-written daily step. That
+# gap made the sub-daily effect invisible to the paper's central deliverable
+# and was caught only by a test like this one, so organ temperature gets the
+# same treatment before it is trusted anywhere.
+for cft_id in (isempty(ARGS) ? (1, 3) : Tuple(parse.(Int, ARGS)))
+    @testset "CFT $cft_id weather AD with organ temperature" begin
+        T = get(ENV, "WEATHER_TEST_PRECISION", "64") == "32" ? Float32 : Float64
+        sowing_day = parse(Int, get(ENV, "WEATHER_TEST_SOWING_DAY", "100"))
+        diurnal_config = DiurnalConfig(; steps = 24, shape = DIURNAL_SINUSOID)
+
+        organ_case(; organ_temperature, humidity = T(0.006)) =
+            weather_attribution_fixture(cft_id; T, window_days = 8, sowing_day,
+                diurnal_config, diurnal_amplitude = T(10), organ_temperature,
+                specific_humidity = humidity)
+
+        # The energy balance has to actually reach the replay, or everything
+        # below would be testing the sub-daily path a second time.
+        without = organ_case(organ_temperature = false)
+        with = organ_case(organ_temperature = true)
+        plain = weather_harvest_replay(without.forcing, without.state, without.cft,
+            without.parameters, without.climate, without.days, without.harvest_day;
+            diurnal_config)
+        warmed = weather_harvest_replay(with.forcing, with.state, with.cft,
+            with.parameters, with.climate, with.days, with.harvest_day;
+            diurnal_config, organ_temperature = true)
+        @test warmed.schedule_matches
+        @test warmed.yield > 0
+        @test warmed.yield != plain.yield
+
+        (; forcing, state, cft, parameters, climate, days, harvest_day) = with
+        original = deepcopy(forcing)
+        result = enzyme_weather_harvest_gradient(forcing, state, cft, parameters,
+            climate, days, harvest_day; block_days = 4, diurnal_config,
+            organ_temperature = true)
+        @test result.primal ≈ result.production_yield rtol = 1e-3 atol = 1e-5
+        @test result.reverse_primal ≈ result.primal rtol = 1e-10 atol = 1e-12
+        @test all(isfinite, result.gradient)
+        @test forcing == original
+        @test all(iszero, result.gradient[1:(first(days) - 1), :, :])
+        @test all(iszero, result.gradient[harvest_day:end, :, :])
+
+        # Temperature: the channel the energy balance reshapes most directly.
+        direction = zeros(T, size(forcing))
+        direction[first(days):(first(days) + 2), 1, 1] .= one(T)
+        projection = sum(result.gradient .* direction)
+        epsilon = T === Float32 ? T(0.05) : T(0.01)
+        plus = weather_harvest_replay(forcing .+ epsilon .* direction, state, cft,
+            parameters, climate, days, harvest_day; diurnal_config,
+            organ_temperature = true)
+        minus = weather_harvest_replay(forcing .- epsilon .* direction, state, cft,
+            parameters, climate, days, harvest_day; diurnal_config,
+            organ_temperature = true)
+        @test plus.schedule_matches && minus.schedule_matches
+        fd = (plus.yield - minus.yield) / (2epsilon)
+        @info "Organ-temperature weather directional validation" cft_id ad = projection fd
+        flush(stderr)
+        @test projection ≈ fd rtol = 0.03 atol = 2e-5
+
+        # Wind is the discriminating channel: without organ temperature it has
+        # no route into assimilation at all, so agreement here is evidence the
+        # gradient passes through the boundary-layer conductance rather than
+        # around it.
+        #
+        # It is NOT asserted to be nonzero. The default window is the last eight
+        # days before harvest, by which point this fixture's canopy has senesced
+        # (`actual_lai == 0`, gross assimilation zero), so nothing that acts
+        # only through photosynthesis can move yield and both sides are legitimately
+        # zero -- the pre-existing daily wind channel reads zero in this window
+        # for the same reason. Measured over the full season instead
+        # (`WEATHER_TEST_WINDOW=season`), the derivative is real and
+        # scale-consistent: fd = 1.373e-3 at a 0.05 perturbation and 1.435e-3 at
+        # 0.5. Asserting nonzero here would only encode the fixture's phenology.
+        wind_probe = zeros(T, size(forcing))
+        wind_probe[first(days):(first(days) + 2), 1, 5] .= one(T)
+        wind_ad = sum(result.gradient .* wind_probe)
+        delta = T(0.05)
+        upper = weather_harvest_replay(forcing .+ delta .* wind_probe, state, cft,
+            parameters, climate, days, harvest_day; diurnal_config,
+            organ_temperature = true)
+        lower = weather_harvest_replay(forcing .- delta .* wind_probe, state, cft,
+            parameters, climate, days, harvest_day; diurnal_config,
+            organ_temperature = true)
+        @test upper.schedule_matches && lower.schedule_matches
+        wind_fd = (upper.yield - lower.yield) / (2delta)
+        @info "Organ-temperature wind channel" cft_id ad = wind_ad fd = wind_fd
+        flush(stderr)
+        @test wind_ad ≈ wind_fd rtol = 0.05 atol = 2e-5
+
+        # Both guards must fire on the AD entry point too, not only in the
+        # production driver.
+        @test_throws ArgumentError weather_harvest_replay(forcing, state, cft,
+            parameters, climate, days, harvest_day; organ_temperature = true)
+        @test_throws ArgumentError weather_harvest_replay(without.forcing,
+            without.state, without.cft, without.parameters, without.climate,
+            without.days, without.harvest_day; diurnal_config,
+            organ_temperature = true)
+    end
+end

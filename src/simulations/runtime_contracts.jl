@@ -63,6 +63,7 @@ struct SimulationConfiguration{T <: AbstractFloat, D, E}
     subdaily_photosynthesis::Bool
     subdaily_steps::Int
     diurnal_shape::Symbol
+    organ_temperature::Bool
     freeze_vernalization_requirement::Bool
     sowing_mode::Symbol
     execution::E
@@ -81,6 +82,7 @@ function SimulationConfiguration(
     subdaily_photosynthesis::Bool = false,
     subdaily_steps::Integer = 1,
     diurnal_shape::Symbol = :sinusoid,
+    organ_temperature::Bool = false,
     freeze_vernalization_requirement::Bool = false,
     sowing_mode::Symbol = :prescribed_sdate,
 ) where {T <: AbstractFloat}
@@ -92,6 +94,12 @@ function SimulationConfiguration(
     diurnal_shape in (:flat, :sinusoid, :daytime_neutral) || throw(ArgumentError(
         "diurnal_shape must be :flat, :sinusoid or :daytime_neutral",
     ))
+    # Leaf temperature is solved inside the sub-daily loop, so it cannot be
+    # switched on by itself. Rejecting the combination here keeps the invalid
+    # configuration from reaching the kernel, where it could only be ignored.
+    !organ_temperature || subdaily_photosynthesis || throw(ArgumentError(
+        "organ_temperature requires subdaily_photosynthesis",
+    ))
     execution = ExecutionContext(T, device, active_indices; cell_ids)
     source_indices = indices === nothing ? nothing : Int.(indices)
     return SimulationConfiguration{
@@ -100,7 +108,7 @@ function SimulationConfiguration(
         source_indices, device, T, Int(days), irrigation, manure, fertilizer,
         with_tillage, crop_resp_fix, nitrogen_limit_vcmax,
         subdaily_photosynthesis, Int(subdaily_steps), diurnal_shape,
-        freeze_vernalization_requirement, sowing_mode, execution,
+        organ_temperature, freeze_vernalization_requirement, sowing_mode, execution,
     )
 end
 

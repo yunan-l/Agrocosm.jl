@@ -89,8 +89,12 @@ diurnal_shape(forcing::DiurnalForcing) = diurnal_shape(forcing.config)
 
 # `nothing` keeps the existing daily behaviour, so every call site can pass the
 # argument unconditionally and stay type-stable.
+# `organ` is swallowed here rather than forwarded: leaf temperature is solved
+# per sub-step, so it has nowhere to live without the sub-daily loop. The
+# configuration layer rejects "organ temperature on, sub-daily off" outright,
+# which is where that combination should fail.
 photosynthesis!(pathway, CFT, crop, apar, daylength, temperature, co2,
-                ::Nothing; kwargs...) =
+                ::Nothing; organ = nothing, kwargs...) =
     photosynthesis!(pathway, CFT, crop, apar, daylength, temperature, co2; kwargs...)
 
 photosynthesis!(::Val{:C3}, CFT, crop, apar, daylength, temperature, co2,
@@ -112,7 +116,8 @@ function photosynthesis_subdaily_C3!(CFT::CFTParameters,
                                      diurnal::DiurnalForcing;
                                      lpjmlparams::LPJmLParams = lpjmlparams,
                                      photoparams::PhotoParams = photoparams,
-                                     comp_vcmax = false
+                                     comp_vcmax = false,
+                                     organ = nothing,
 ) where {T <: AbstractFloat}
     launch_1D!(
         photosynthesis_subdaily_c3_kernel!,
@@ -135,6 +140,7 @@ function photosynthesis_subdaily_C3!(CFT::CFTParameters,
         photoparams,
         comp_vcmax,
         diurnal.config,
+        organ,
     )
     return nothing
 end
@@ -159,9 +165,11 @@ end
     photoparams::PhotoParams,
     comp_vcmax::Bool,
     ::DiurnalConfig{STEPS, SHAPE},
+    organ,
 ) where {T <: AbstractFloat, STEPS, SHAPE}
     cell = @index(Global)
     @unpack b, path, temp_co2, temp_photos = CFT
+    @unpack leaf_dimension, leaf_emissivity, lightextcoeff = CFT
     @unpack ko25, kc25, alphac3, theta, LAMBDA_OPT = lpjmlparams
     @unpack q10ko, q10kc, po2, tau25, q10tau, cmass, cq, p, lambdamc3 = photoparams
     @unpack tmc3, tmc4 = photoparams
@@ -212,23 +220,35 @@ end
         temperature_substep = diurnal_temperature(
             index, STEPS, temperature_cell, range_cell, daylength_cell, SHAPE,
         )
+        radiation_fraction = diurnal_radiation_fraction(index, STEPS, SHAPE, T)
+        # With organ temperature off this is compile-time dead and the loop is
+        # bitwise what step 1 produced.
+        shortwave_substep = organ === nothing ? zero(T) : diurnal_shortwave_rate(
+            radiation_fraction, STEPS, organ.shortwave[cell], daylength_cell,
+        )
+        # Every temperature-dependent term below is a leaf process, so all of
+        # them follow the leaf, not the air: the stress response and the
+        # Michaelis-Menten and specificity constants alike are enzyme kinetics
+        # happening inside the leaf.
+        leaf_substep = organ_leaf_temperature(
+            organ, temperature_substep, cell, shortwave_substep,
+            T(leaf_dimension), T(leaf_emissivity), T(lightextcoeff),
+        )
         stress_substep = compute_photosynthesis_temperature_stress(
-            daylength_cell, temperature_substep, path, temp_co2, temp_photos,
+            daylength_cell, leaf_substep, path, temp_co2, temp_photos,
             T(tmc3), T(tmc4),
         )
-        # Michaelis-Menten and specificity terms follow the sub-step temperature.
-        ko_substep = T(ko25) * T(q10ko)^((temperature_substep - T(25)) * T(0.1))
-        kc_substep = T(kc25) * T(q10kc)^((temperature_substep - T(25)) * T(0.1))
+        ko_substep = T(ko25) * T(q10ko)^((leaf_substep - T(25)) * T(0.1))
+        kc_substep = T(kc25) * T(q10kc)^((leaf_substep - T(25)) * T(0.1))
         fac_substep = kc_substep * (one(T) + T(po2) / ko_substep)
-        tau_substep = T(tau25) * T(q10tau)^((temperature_substep - T(25)) * T(0.1))
+        tau_substep = T(tau25) * T(q10tau)^((leaf_substep - T(25)) * T(0.1))
         gammastar_substep = T(po2) / (T(2) * tau_substep)
 
         c1 = stress_substep * T(alphac3) *
             ((internal_co2 - gammastar_substep) /
              (internal_co2 + T(2) * gammastar_substep))
         c2 = (internal_co2 - gammastar_substep) / (internal_co2 + fac_substep)
-        apar_substep = diurnal_radiation_fraction(index, STEPS, SHAPE, T) *
-            T(STEPS) * apar[cell]
+        apar_substep = radiation_fraction * T(STEPS) * apar[cell]
         je = c1 * apar_substep * T(cmass) * T(cq) / (daylength_cell + T(1e-5))
         jc = c2 * rubisco_capacity
         agd = compute_co_limited_assimilation(je, jc, T(theta), interval)
@@ -256,7 +276,8 @@ function photosynthesis_subdaily_C4!(CFT::CFTParameters,
                                      diurnal::DiurnalForcing;
                                      lpjmlparams::LPJmLParams = lpjmlparams,
                                      photoparams::PhotoParams = photoparams,
-                                     comp_vcmax = false
+                                     comp_vcmax = false,
+                                     organ = nothing,
 ) where {T <: AbstractFloat}
     launch_1D!(
         photosynthesis_subdaily_c4_kernel!,
@@ -278,6 +299,7 @@ function photosynthesis_subdaily_C4!(CFT::CFTParameters,
         photoparams,
         comp_vcmax,
         diurnal.config,
+        organ,
     )
     return nothing
 end
@@ -301,9 +323,11 @@ end
     photoparams::PhotoParams,
     comp_vcmax::Bool,
     ::DiurnalConfig{STEPS, SHAPE},
+    organ,
 ) where {T <: AbstractFloat, STEPS, SHAPE}
     cell = @index(Global)
     @unpack b, path, temp_co2, temp_photos = CFT
+    @unpack leaf_dimension, leaf_emissivity, lightextcoeff = CFT
     @unpack alphac4, theta, LAMBDA_OPT = lpjmlparams
     @unpack lambdamc4, cmass, cq, p, tmc3, tmc4 = photoparams
 
@@ -342,13 +366,20 @@ end
         temperature_substep = diurnal_temperature(
             index, STEPS, temperature_cell, range_cell, daylength_cell, SHAPE,
         )
+        radiation_fraction = diurnal_radiation_fraction(index, STEPS, SHAPE, T)
+        shortwave_substep = organ === nothing ? zero(T) : diurnal_shortwave_rate(
+            radiation_fraction, STEPS, organ.shortwave[cell], daylength_cell,
+        )
+        leaf_substep = organ_leaf_temperature(
+            organ, temperature_substep, cell, shortwave_substep,
+            T(leaf_dimension), T(leaf_emissivity), T(lightextcoeff),
+        )
         stress_substep = compute_photosynthesis_temperature_stress(
-            daylength_cell, temperature_substep, path, temp_co2, temp_photos,
+            daylength_cell, leaf_substep, path, temp_co2, temp_photos,
             T(tmc3), T(tmc4),
         )
         c1 = stress_substep * phipi * T(alphac4)
-        apar_substep = diurnal_radiation_fraction(index, STEPS, SHAPE, T) *
-            T(STEPS) * apar[cell]
+        apar_substep = radiation_fraction * T(STEPS) * apar[cell]
         je = c1 * apar_substep * T(cmass) * T(cq) / (daylength_cell + T(1e-5))
         agd = compute_co_limited_assimilation(je, rubisco_capacity, T(theta), interval)
         gross += (stress_substep < T(1e-2)) ? zero(T) : max(zero(T), agd)

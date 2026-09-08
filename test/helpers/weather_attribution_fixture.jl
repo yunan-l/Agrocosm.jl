@@ -1,5 +1,7 @@
 function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu = 607, sowing_day = 100,
     diurnal_config = nothing, diurnal_amplitude = T(10),
+    organ_temperature = false, specific_humidity = T(0.006),
+    surface_pressure = T(101325),
 )
     forcing_days = 365 * cld(sowing_day + 200, 365)
     cft = Agrocosm.convert_precision(T, cft_id == 1 ? Agrocosm.cft1 : Agrocosm.cft3)
@@ -47,6 +49,13 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
     climate = diurnal_config === nothing ? climate_fields : merge(climate_fields, (;
         diurnal_range = fill(T(diurnal_amplitude), forcing_days, 1),
     ))
+    # Organ temperature additionally needs humidity and pressure. Constant
+    # synthetic values, as with the diurnal range: the point is to exercise the
+    # energy balance under AD, not to reproduce a real cell.
+    organ_temperature && (climate = merge(climate, (;
+        specific_humidity = fill(T(specific_humidity), forcing_days, 1),
+        surface_pressure = fill(T(surface_pressure), forcing_days, 1),
+    )))
     parameters = Agrocosm.ModelParameters(T)
     state = Agrocosm.model_state(climbuf, crop, pet, soil, management, weather, output)
     processes = Agrocosm.ProcessModules(cft, parameters)
@@ -55,6 +64,7 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
     driver(sowing_day, sowing_day + 200, processes, climate, ordinary;
         fertilizer = :yes, manure = true, with_tillage = true,
         nitrogen_limit_vcmax = true, crop_resp_fix = true, diurnal_config,
+        organ_temperature,
         update_vernalization_requirement = false, reuse_output = true)
     events = findall(!iszero, vec(ordinary.output.calendar.harvest_event))
     isempty(events) && error("fixture did not harvest")
@@ -64,6 +74,7 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
     driver(sowing_day, first_day - 1, processes, climate, state;
         fertilizer = :yes, manure = true, with_tillage = true,
         nitrogen_limit_vcmax = true, crop_resp_fix = true, diurnal_config,
+        organ_temperature,
         update_vernalization_requirement = false, reuse_output = true)
     return (; state, cft, parameters, climate, days = first_day:(harvest_day - 1),
         harvest_day, forcing = cat(climate.temp, climate.prec, climate.sw, climate.lw,

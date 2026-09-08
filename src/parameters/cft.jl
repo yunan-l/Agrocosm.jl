@@ -172,6 +172,12 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     biological_fixation::BiologicalNitrogenFixation{T, S} # Crop biological N-fixation traits.
     hiopt::T                # Optimal harvest index.
     himin::T                # Minimum harvest index under stress.
+    # Canopy energy balance. Defaulted rather than required so every existing
+    # CFT definition stays untouched; both are inert unless organ temperature
+    # is switched on. 0.04 m is CLM5's uniform characteristic leaf dimension,
+    # kept until crop-specific values are sourced from a primary reference.
+    leaf_dimension::T = 0.04   # Characteristic leaf dimension along the flow (m).
+    leaf_emissivity::T = 0.98  # Leaf longwave emissivity (0–1).
 end
 
 """Return a CFT parameter set whose floating fields consistently use `T`."""

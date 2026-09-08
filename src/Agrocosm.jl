@@ -67,6 +67,9 @@ export DiurnalConfig, DiurnalForcing, diurnal_configuration, diurnal_shape_code
 export DIURNAL_FLAT, DIURNAL_SINUSOID, DIURNAL_DAYTIME_NEUTRAL
 export photosynthesis_subdaily_C3!, photosynthesis_subdaily_C4!
 export diurnal_temperature, diurnal_radiation_fraction, diurnal_heat_exposure
+export leaf_temperature_departure, leaf_energy_residual
+export saturation_vapour_pressure, vapour_pressure_from_specific_humidity
+export OrganTemperatureForcing, organ_leaf_temperature, diurnal_shortwave_rate
 export phenology_crop!, lai_crop!, cultivate!, dynamic_sowing_date!, update_dynamic_sowing_calendar!, harvest_crop!, fertilizer!
 export transpiration!, interception!
 export crop_carbon!, crop_nitrogen!, ndemand_crop!, nuptake_crop!
@@ -166,6 +169,7 @@ include("diagnostics/thermal_balance.jl")
 include("processes/climate/climbuf.jl")
 include("processes/climate/temp_stress.jl")
 include("processes/climate/diurnal.jl")
+include("processes/climate/leaf_energy.jl")
 include("processes/climate/spinup_climbuf.jl")
 include("processes/climate/readclimate.jl")
 include("processes/climate/snow.jl")
