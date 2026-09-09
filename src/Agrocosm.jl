@@ -63,6 +63,9 @@ export albedo!, petpar!, apar_crop!, apar_crop_maize!
 # CROP
 export photosynthesis_C3!, photosynthesis_C4!, carbon_allocation!, respiration!
 export photosynthesis!, solve_lambda!
+export AblationStep, ABLATION_LADDER, ablation_rungs, ablation_step
+export ablation_configuration, ablation_ladder_settings
+export ablation_metrics, ablation_report
 export DiurnalConfig, DiurnalForcing, diurnal_configuration, diurnal_shape_code
 export DIURNAL_FLAT, DIURNAL_SINUSOID, DIURNAL_DAYTIME_NEUTRAL
 export photosynthesis_subdaily_C3!, photosynthesis_subdaily_C4!
@@ -231,6 +234,8 @@ include("utils/tools.jl")
 # Daily crop simulations
 include("simulations/daily_crop.jl")
 include("simulations/simulation_api.jl")
+# After `simulation_api.jl`: `ablation_metrics` dispatches on `CropSimulation`.
+include("simulations/ablation.jl")
 include("simulations/agricultural_warmup.jl")
 include("simulations/memory_estimate.jl")
 
