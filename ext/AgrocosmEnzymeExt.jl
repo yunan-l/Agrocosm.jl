@@ -3,6 +3,33 @@ module AgrocosmEnzymeExt
 import Agrocosm
 import Enzyme
 
+# Enzyme's type analysis walks a struct only up to a byte offset limit, and
+# past that limit a reverse-mode derivative comes back as an exact zero - no
+# error, no warning, and a correct primal. `CFTParameters{Float64, Int32}` is
+# 640 bytes, so the default limit truncates it, and what falls in the truncated
+# tail is precisely this project's new physics:
+#
+#   hiopt 576, himin 584, leaf_dimension 592, leaf_emissivity 600,
+#   flowering_start 608, flowering_end 616, sterility_temperature 624,
+#   sterility_rate 632
+#
+# Fields below the cut (`b` at 240, `gmin` at 432, `knstore` at 440) are
+# differentiated correctly in the same reverse sweep, which is why the existing
+# AD suite never saw this: every parameter it differentiates is below the cut.
+# A silent zero is the worst possible failure here - calibrating
+# `sterility_rate` against a gradient that is structurally zero would read as a
+# converged insensitivity rather than as a broken derivative.
+#
+# The limit must be raised before the first thunk touching these types is
+# compiled, so it belongs in `__init__` rather than in any entry point; setting
+# it after a thunk is cached has no effect. `test/ad/test_cft_offset_gradient.jl`
+# is the regression guard, and it differentiates a field above the cut for
+# exactly that reason.
+function __init__()
+    Enzyme.API.maxtypeoffset!(4096)
+    return nothing
+end
+
 # Output buffers are diagnostics for this scalar transition objective. They
 # are still executed by the primal function, but do not participate in its
 # derivative. Keeping these rules in the optional extension avoids changing
