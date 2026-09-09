@@ -75,11 +75,13 @@ function _daily_crop!(
     # without the sub-daily loop; that combination is rejected here rather than
     # silently ignored. Humidity and pressure ride on `climate` as row views of
     # (day, cell) matrices, exactly like `diurnal_range`.
-    # The sterility accumulator is fed leaf temperature per sub-step, so the
-    # sink cannot stand on its own any more than organ temperature can stand
-    # without the sub-daily loop.
-    reproductive_sink && !organ_temperature && throw(ArgumentError(
-        "reproductive sink requires organ temperature to be enabled",
+    # The sterility accumulator is filled per sub-step, so the sink needs the
+    # sub-daily loop. It does NOT need organ temperature: without it the
+    # accumulator integrates duration at sub-daily air temperature instead of
+    # leaf temperature, which is the ablation cell that separates the mechanism
+    # from the departure that triggers it. See `runtime_contracts.jl`.
+    reproductive_sink && diurnal_config === nothing && throw(ArgumentError(
+        "reproductive sink requires sub-daily photosynthesis to be enabled",
     ))
     if organ_temperature
         diurnal_config === nothing && throw(ArgumentError(

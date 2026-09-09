@@ -16,12 +16,21 @@
 # identical validation. A registry that could describe a configuration the
 # constructor rejects would be worse than no registry.
 #
-# It does not decide the order. The order is forced by the prerequisites, which
-# are physical rather than editorial: leaf temperature is solved inside the
-# sub-daily loop, and the sterility accumulator reads leaf temperature per
-# sub-step. That is why the ladder has exactly one valid sequence, and why
-# "which order did you switch them on" is not a degree of freedom a reviewer
-# needs to worry about here.
+# It does not decide the order. Leaf temperature is solved inside the sub-daily
+# loop and the sterility accumulator is filled per sub-step, so both later steps
+# rest on the first for physical reasons rather than editorial ones, and the
+# cumulative sequence below is the only one in which each rung is a superset of
+# the one before it.
+#
+# The sink is the one step whose prerequisite is weaker than its position:
+# it needs the sub-daily loop, not organ temperature. Running it *without*
+# organ temperature is not an ordering variant, it is a deliberate off-ladder
+# comparison - the accumulator then integrates duration at air temperature
+# instead of leaf temperature, which separates the sink mechanism from the
+# leaf-air departure that triggers it. `docs/07_ablation_framework.md` explains
+# why that cell is load-bearing: on these cells organ temperature's entire yield
+# effect arrives through the sink, so the two cannot be attributed apart without
+# it.
 
 """
     AblationStep
@@ -47,10 +56,19 @@ end
 
 The controlled ablation sequence, in the only order its prerequisites permit.
 
-Rung zero is `:ggcm`, which is not a step but the baseline the ladder departs
-from: a daily time step driven by daily-mean air temperature, i.e. what the
-GGCM ensemble does. Each subsequent entry switches on one process and leaves
-every earlier one on.
+Rung zero is `:daily`, which is not a step but the baseline the ladder departs
+from: a daily time step, daily-mean air temperature everywhere, no reproductive
+sink, so the harvest index is a constant and yield is set entirely by assimilated
+carbon.
+
+It was called `:ggcm` and that name overclaimed. This is *this model with three
+processes off*, not a GGCM: it still carries LPJmL's physiology, and it carries
+this project's own departures from LPJmL - `senescent_leaf_release = 1`, and the
+grain-carbon protection in `carbon_allocation`, which has no switch at all.
+Whether rung zero actually reproduces the ensemble's underestimation is an
+empirical claim to be checked against GGCMI, not something the ladder
+establishes by construction. What the ladder does establish is internal: the
+rungs differ in exactly these three fields and nothing else.
 
 `docs/05_reproductive_sink_design.md` and `docs/01_subdaily_design.md` carry the
 physics; the point of the table is that the *paper's* ladder and the code's are
@@ -69,7 +87,10 @@ const ABLATION_LADDER = (
         "off is bitwise the sub-daily rung",
     ),
     AblationStep(
-        :reproductive_sink, :reproductive_sink, :organ_temperature,
+        # `requires` is the prerequisite the constructor enforces, which for the
+        # sink is the sub-daily loop rather than the rung immediately below it.
+        # The ladder still places it last because the rungs are cumulative.
+        :reproductive_sink, :reproductive_sink, :subdaily,
         "accumulate flowering-window heat exposure and cap the harvest index by grain set",
         "off is bitwise the organ-temperature rung; on with sterility_rate=0 is too",
     ),
@@ -78,9 +99,9 @@ const ABLATION_LADDER = (
 """
     ablation_rungs()
 
-Names of the ladder's rungs, baseline first: `(:ggcm, :subdaily, ...)`.
+Names of the ladder's rungs, baseline first: `(:daily, :subdaily, ...)`.
 """
-ablation_rungs() = (:ggcm, map(step -> step.name, ABLATION_LADDER)...)
+ablation_rungs() = (:daily, map(step -> step.name, ABLATION_LADDER)...)
 
 """
     ablation_step(name) -> AblationStep
@@ -130,14 +151,42 @@ function ablation_configuration(rung::Symbol; kwargs...)
             "overriding it, or the run is no longer a point on the ladder",
         ))
     end
-    # On for every step up to and including `rung`, off above it. `:ggcm` is
+    # On for every step up to and including `rung`, off above it. `:daily` is
     # below the first step, so nothing is on.
-    cut = rung === :ggcm ? 0 : findfirst(step -> step.name === rung, ABLATION_LADDER)
+    cut = rung === :daily ? 0 : findfirst(step -> step.name === rung, ABLATION_LADDER)
     settings = (
         step.field => index <= cut
         for (index, step) in enumerate(ABLATION_LADDER)
     )
     return (; settings..., kwargs...)
+end
+
+"""
+    ablation_air_driven_sink_configuration(; kwargs...)
+
+The off-ladder cell that runs the reproductive sink on **air** temperature: the
+sub-daily loop and the sink on, organ temperature off.
+
+Comparing it against the `:reproductive_sink` rung is what separates the sink
+mechanism from the leaf-air departure that triggers it. Both runs have the same
+sink, the same threshold and the same sub-daily resolution; only the temperature
+the accumulator integrates differs. It is also the closest thing in this model
+to an air-temperature-driven GGCM sterility function, so the difference is a
+statement about the baseline as much as about our own module.
+
+Deliberately not a rung: it is not a structural deficiency of the baseline being
+repaired, and folding it into the cumulative ladder would let the headline
+decomposition absorb it.
+"""
+function ablation_air_driven_sink_configuration(; kwargs...)
+    owned = map(step -> step.field, ABLATION_LADDER)
+    for key in keys(kwargs)
+        key in owned && throw(ArgumentError(
+            "$key is set by this configuration; it is a fixed comparison cell",
+        ))
+    end
+    return (; subdaily_photosynthesis = true, organ_temperature = false,
+            reproductive_sink = true, kwargs...)
 end
 
 """
@@ -226,7 +275,7 @@ the experiment's control, not a convenience.
 `rows` is one `ablation_metrics` per rung with its name attached. `marginal`
 gives each rung's change in `yield_per_season` against the rung below it, which
 is the decomposition the paper reports; `total` gives its change against
-`:ggcm`. Both are differences in t ha-1, signed, so a rung that *raises* yield
+`:daily`. Both are differences in t ha-1, signed, so a rung that *raises* yield
 is visible rather than folded into a magnitude.
 """
 function ablation_report(run_rung; kwargs...)

@@ -443,9 +443,29 @@ for cft_id in (isempty(ARGS) ? (1,) : Tuple(parse.(Int, ARGS)))
         flush(stderr)
         @test projection ≈ fd rtol = 0.05 atol = 2e-5
 
-        # The sink cannot stand without organ temperature, on the AD path either.
-        @test_throws ArgumentError weather_harvest_replay(forcing, state, cft,
+        # The sink without organ temperature is legal and meaningful, not an
+        # error: the accumulator then integrates duration at sub-daily AIR
+        # temperature, which is the ablation cell that separates the sink
+        # mechanism from the leaf-air departure triggering it. It has to work on
+        # the AD path too, because that comparison is a paper number. Its yield
+        # must sit between the organ-temperature rung (sink off) and the
+        # leaf-driven sink, since it applies the same mechanism to a cooler
+        # temperature.
+        air_driven = weather_harvest_replay(forcing, state, cft,
             parameters, climate, days, harvest_day; diurnal_config,
             reproductive_sink = true)
+        @test air_driven.schedule_matches
+        @test damaged.yield < air_driven.yield <= intact.yield
+
+        air_gradient = enzyme_weather_harvest_gradient(forcing, state, cft,
+            parameters, climate, days, harvest_day; block_days = 8,
+            diurnal_config, reproductive_sink = true)
+        @test all(isfinite, air_gradient.gradient)
+        @test air_gradient.primal ≈ air_gradient.production_yield rtol = 1e-3 atol = 1e-5
+
+        # But it still cannot stand without the sub-daily loop, which is the
+        # prerequisite that did not get relaxed.
+        @test_throws ArgumentError weather_harvest_replay(forcing, state, cft,
+            parameters, climate, days, harvest_day; reproductive_sink = true)
     end
 end

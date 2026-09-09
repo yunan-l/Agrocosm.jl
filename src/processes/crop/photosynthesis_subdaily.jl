@@ -410,7 +410,16 @@ end
         gross += (stress_substep < T(1e-2)) ? zero(T) : max(zero(T), agd)
     end
     gross_assimilation[cell] = gross
-    heat_exposure_hours[cell] = organ === nothing ? zero(T) : exposure
+    # Written whether or not organ temperature is on, and the difference is the
+    # point. With `organ` present this is duration above the threshold at LEAF
+    # temperature; without it, `organ_leaf_temperature` returns the sub-step air
+    # temperature, so the same accumulator measures duration at AIR temperature.
+    # Running the reproductive sink on the second is the ablation cell that
+    # separates the sink mechanism from the leaf-air departure that triggers it,
+    # and it is also what an air-temperature-driven GGCM sterility function
+    # actually does. Zeroing it here, as this line used to, made that comparison
+    # inexpressible.
+    heat_exposure_hours[cell] = exposure
 
     leaf = inactive ? zero(T) : T(b) * vcmax[cell]
     leaf_respiration[cell] = leaf
@@ -559,7 +568,16 @@ end
         gross += (stress_substep < T(1e-2)) ? zero(T) : max(zero(T), agd)
     end
     gross_assimilation[cell] = gross
-    heat_exposure_hours[cell] = organ === nothing ? zero(T) : exposure
+    # Written whether or not organ temperature is on, and the difference is the
+    # point. With `organ` present this is duration above the threshold at LEAF
+    # temperature; without it, `organ_leaf_temperature` returns the sub-step air
+    # temperature, so the same accumulator measures duration at AIR temperature.
+    # Running the reproductive sink on the second is the ablation cell that
+    # separates the sink mechanism from the leaf-air departure that triggers it,
+    # and it is also what an air-temperature-driven GGCM sterility function
+    # actually does. Zeroing it here, as this line used to, made that comparison
+    # inexpressible.
+    heat_exposure_hours[cell] = exposure
 
     leaf = inactive ? zero(T) : T(b) * vcmax[cell]
     leaf_respiration[cell] = leaf

@@ -13,8 +13,8 @@ _configuration(; kwargs...) = Agrocosm.SimulationConfiguration(
 )
 
 @testset "Ablation ladder is consistent with the configuration contract" begin
-    @test first(ablation_rungs()) === :ggcm
-    @test ablation_rungs() == (:ggcm, :subdaily, :organ_temperature, :reproductive_sink)
+    @test first(ablation_rungs()) === :daily
+    @test ablation_rungs() == (:daily, :subdaily, :organ_temperature, :reproductive_sink)
     @test length(ABLATION_LADDER) == length(ablation_rungs()) - 1
 
     # Every step must name a real field, or `ablation_configuration` would
@@ -26,12 +26,19 @@ _configuration(; kwargs...) = Agrocosm.SimulationConfiguration(
         @test !isempty(step.retreat)
     end
 
-    # The declared prerequisite chain has to be the ladder order itself,
-    # otherwise "each rung adds one process to the one below" is false.
+    # Every declared prerequisite must name a step strictly below the one that
+    # declares it, so the cumulative sequence is well founded. Note this is
+    # weaker than "the previous step": the sink's prerequisite is the sub-daily
+    # loop, not organ temperature, which is exactly what makes the air-driven
+    # sink cell expressible.
     @test ABLATION_LADDER[1].requires === nothing
+    names = map(step -> step.name, ABLATION_LADDER)
     for index in 2:length(ABLATION_LADDER)
-        @test ABLATION_LADDER[index].requires === ABLATION_LADDER[index - 1].name
+        required = ABLATION_LADDER[index].requires
+        @test required !== nothing
+        @test findfirst(==(required), names) < index
     end
+    @test ablation_step(:reproductive_sink).requires === :subdaily
 
     @test_throws ArgumentError ablation_step(:nonexistent)
     @test ablation_step(:subdaily).field === :subdaily_photosynthesis
@@ -39,13 +46,45 @@ end
 
 @testset "Ablation prerequisites are enforced, not just documented" begin
     # This is the drift guard. If someone relaxes the validation in
-    # `SimulationConfiguration`, the ladder's claim that its order is forced
-    # becomes untrue and this fails - even though the registry still reads fine.
+    # `SimulationConfiguration`, a registry entry claiming a prerequisite becomes
+    # untrue and this fails - even though the registry still reads fine.
     for index in 2:length(ABLATION_LADDER)
         step = ABLATION_LADDER[index]
-        prerequisite = ABLATION_LADDER[index - 1]
+        prerequisite = ablation_step(step.requires)
         @test_throws ArgumentError _configuration(;
             step.field => true, prerequisite.field => false,
+        )
+    end
+end
+
+@testset "The air-driven sink cell is expressible and off the ladder" begin
+    # The comparison that separates the sink mechanism from the leaf-air
+    # departure triggering it: same sink, same threshold, same sub-daily
+    # resolution, air temperature instead of leaf temperature.
+    settings = ablation_air_driven_sink_configuration(; subdaily_steps = 24)
+    @test settings.subdaily_photosynthesis
+    @test !settings.organ_temperature
+    @test settings.reproductive_sink
+    configuration = _configuration(; settings...)
+    @test configuration.reproductive_sink
+    @test !configuration.organ_temperature
+
+    # It is deliberately NOT a rung, so no rung reproduces it. Every ladder rung
+    # with the sink on also has organ temperature on.
+    for rung in ablation_rungs()
+        rung_settings = ablation_configuration(rung)
+        rung_settings.reproductive_sink && @test rung_settings.organ_temperature
+        @test rung_settings != settings
+    end
+
+    # And the sink still cannot stand without the sub-daily loop, which is the
+    # prerequisite that did not get relaxed.
+    @test_throws ArgumentError _configuration(;
+        reproductive_sink = true, subdaily_photosynthesis = false,
+    )
+    for field in (:subdaily_photosynthesis, :organ_temperature, :reproductive_sink)
+        @test_throws ArgumentError ablation_air_driven_sink_configuration(;
+            field => true,
         )
     end
 end
@@ -58,7 +97,7 @@ end
         # patch on whatever the defaults happen to be. Fig 1's "identical
         # parameters" control depends on this.
         @test Set(keys(settings)) == Set(owned)
-        # On up to the rung, off above it. `:ggcm` is position 1, below every
+        # On up to the rung, off above it. `:daily` is position 1, below every
         # step, so nothing is on there.
         for (index, step) in enumerate(ABLATION_LADDER)
             @test settings[step.field] == (index <= position - 1)
@@ -70,7 +109,7 @@ end
         end
     end
 
-    @test all(iszero, values(ablation_configuration(:ggcm)))
+    @test all(iszero, values(ablation_configuration(:daily)))
     @test all(values(ablation_configuration(last(ablation_rungs()))))
     @test_throws ArgumentError ablation_configuration(:hourly)
 end
@@ -91,7 +130,7 @@ end
     # while still labelling it with a rung name, which is the one mistake this
     # interface exists to prevent.
     for step in ABLATION_LADDER
-        @test_throws ArgumentError ablation_configuration(:ggcm; step.field => true)
+        @test_throws ArgumentError ablation_configuration(:daily; step.field => true)
         @test_throws ArgumentError ablation_configuration(:subdaily; step.field => false)
     end
 

@@ -109,10 +109,16 @@ function SimulationConfiguration(
     !organ_temperature || subdaily_photosynthesis || throw(ArgumentError(
         "organ_temperature requires subdaily_photosynthesis",
     ))
-    # Sterility is accumulated from leaf temperature per sub-step, so the sink
-    # inherits organ temperature's prerequisite as well as its own.
-    !reproductive_sink || organ_temperature || throw(ArgumentError(
-        "reproductive_sink requires organ_temperature",
+    # Sterility is accumulated per sub-step, so the sink needs the sub-daily
+    # loop - but not necessarily organ temperature. With organ temperature on it
+    # integrates duration at leaf temperature, which is the default and the
+    # physically right choice; with it off the same accumulator integrates
+    # duration at sub-daily AIR temperature. That second combination is not a
+    # mistake to be rejected, it is the ablation cell that separates the sink
+    # mechanism from the leaf-air departure that triggers it, and the one an
+    # air-temperature-driven GGCM sterility function corresponds to.
+    !reproductive_sink || subdaily_photosynthesis || throw(ArgumentError(
+        "reproductive_sink requires subdaily_photosynthesis",
     ))
     execution = ExecutionContext(T, device, active_indices; cell_ids)
     source_indices = indices === nothing ? nothing : Int.(indices)
