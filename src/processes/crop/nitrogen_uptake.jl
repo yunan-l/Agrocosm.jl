@@ -163,9 +163,13 @@ end
         crop_bnf[cell] = zero(T)
         crop_bnf_cost[cell] = zero(T)
 
+        # `guarded_quotient` for the same reason as `leaf_nc` below: root carbon
+        # normally keeps this positive, but a failed or fully senesced stand can
+        # zero both terms.
         mobile_carbon = crop_leafc[cell] + crop_rootc[cell]
         NCplant = mobile_carbon > zero(T) ?
-                  (crop_leafn[cell] + crop_rootn[cell]) / mobile_carbon : T(ncleaf.low)
+                  guarded_quotient(crop_leafn[cell] + crop_rootn[cell], mobile_carbon) :
+                  T(ncleaf.low)
         nc_reference = T(2) / (one(T) / T(ncleaf.low) + one(T) / T(ncleaf.high))
         f_NCplant = clamp(
             (NCplant - T(ncleaf.high)) / (nc_reference - T(ncleaf.high)),
@@ -173,8 +177,12 @@ end
             one(T),
         )
 
+        # `crop_leafc` reaches exactly zero whenever the senescence branch of
+        # `carbon_allocation_kernel!` zeroes it, which the senescent leaf
+        # release makes routine; `guarded_quotient` documents why the obvious
+        # `x > 0 ? n / x : 0` is not differentiable there.
         leaf_nc = crop_leafc[cell] > zero(T) ?
-                  crop_leafn[cell] / crop_leafc[cell] : zero(T)
+                  guarded_quotient(crop_leafn[cell], crop_leafc[cell]) : zero(T)
         total_potential_uptake = zero(T)
 
         if leaf_nc < T(ncleaf.high) * (one(T) + T(knstore))
@@ -201,7 +209,10 @@ end
         n_uptake = min(total_potential_uptake, remaining_demand)
 
         if n_uptake > zero(T) && total_potential_uptake > zero(T)
-            uptake_scale = n_uptake / total_potential_uptake
+            # `total_potential_uptake` is exactly zero whenever every layer's
+            # root factor vanishes, which makes this `0 / 0` on the iterations
+            # the enclosing condition discards.
+            uptake_scale = guarded_quotient(n_uptake, total_potential_uptake)
 
             # Second pass: remove exactly the accepted uptake from each pool.
             for l in 1:soil_layers

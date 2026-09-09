@@ -4,7 +4,12 @@ using Test
 
 run_full_suite = "--full" in ARGS
 
+# `test_zero_leaf_carbon_gradient.jl` builds a crop state directly, so it needs
+# the same fixture helpers the unit suite uses.
+include("helpers/model_state_fixture.jl")
+
 @testset "Agrocosm Enzyme adapter" begin
+    include("ad/test_zero_leaf_carbon_gradient.jl")
     include("ad/test_enzyme_daily_transition.jl")
     include("ad/test_enzyme_seasonal_loss.jl")
     include("ad/test_enzyme_365day.jl")

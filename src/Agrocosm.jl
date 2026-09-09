@@ -76,6 +76,7 @@ export crop_carbon!, crop_nitrogen!, ndemand_crop!, nuptake_crop!
 export limit_vcmax_by_nitrogen!
 export root_distribution, temp_stress
 export lpj_bisect, solve_lambda_c3_lpj, solve_lambda_c4_lpj
+export guarded_quotient
 export solve_lambda_c3!, solve_lambda_c4!
 
 # SOIL
@@ -128,6 +129,7 @@ include("parameters/default_params.jl")
 include("parameters/cft.jl")
 
 # Numerics
+include("numerics/guarded_quotient.jl")
 include("numerics/lpj_bisect.jl")
 
 # Backend adaptation

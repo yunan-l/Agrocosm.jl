@@ -67,10 +67,15 @@ end
                          exp(-T(k_temp) * (temp[cell] - T(25)))
         crop_ndemand_leaf[cell] = rubisco_demand + T(ncleaf.low) * crop_leafc[cell]
 
-        nc_ratio = zero(T)
-        if crop_leafc[cell] > zero(T)
-            nc_ratio = crop_ndemand_leaf[cell] / crop_leafc[cell]
-        end
+        # `crop_leafc` reaches exactly zero whenever the senescence branch of
+        # `carbon_allocation_kernel!` zeroes it, and a plain
+        # `leafc > 0 ? n / leafc : 0` is not differentiable there - see
+        # `guarded_quotient` for why the obvious guards do not survive LLVM.
+        # The `> 0` test still decides the value; the floor only keeps the
+        # tangent finite.
+        nc_ratio = crop_leafc[cell] > zero(T) ?
+                   guarded_quotient(crop_ndemand_leaf[cell], crop_leafc[cell]) :
+                   zero(T)
 
         if nc_ratio > ncleaf.high
             nc_ratio = ncleaf.high

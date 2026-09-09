@@ -4,6 +4,7 @@ include("helpers/model_state_fixture.jl")
 
 @testset "Agrocosm.jl" begin
     include("helpers/crop_lifecycle_fixture.jl")
+    include("numerics/test_guarded_quotient.jl")
     include("numerics/test_lpj_bisect.jl")
     include("processes/initialization/test_initialization.jl")
     include("processes/climate/test_snow.jl")
