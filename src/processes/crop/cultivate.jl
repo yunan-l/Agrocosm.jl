@@ -36,6 +36,7 @@ function cultivate!(crop,
         crop_prognostic(crop).phenology.senescence,
         crop_prognostic(crop).phenology.senescence_previous,
         crop_prognostic(crop).phenology.growing_days,
+        crop_prognostic(crop).phenology.grain_set_fraction,
         current_phu,
         current_winter_type,
         prescribed_phu,
@@ -92,6 +93,7 @@ end
     senescence::AbstractVector{B},
     senescence_previous::AbstractVector{B},
     growing_days::AbstractVector{S},
+    grain_set_fraction::AbstractVector{T},
     phu::AbstractVector{T},
     winter_type::AbstractVector{B},
     prescribed_phu::AbstractVector{T},
@@ -139,6 +141,9 @@ end
         senescence[cell] = false
         senescence_previous[cell] = false
         growing_days[cell] = zero(S)
+        # A new season starts with full grain-set potential. Without this the
+        # irreversible sterility of one season would carry into the next.
+        grain_set_fraction[cell] = one(T)
         phu[cell] = prescribed_phu[cell]
         winter_type[cell] = prescribed_winter_type[cell]
         lai[cell] = seed_lai

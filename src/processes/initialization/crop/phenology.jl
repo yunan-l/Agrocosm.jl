@@ -8,6 +8,11 @@ mutable struct CropPhenology{A, B, I}
     harvesting_previous::B # Previous-day harvest-readiness flag used to detect harvest.
     growing_days::I        # Number of simulated days since cultivation (day).
     is_growing::I          # Active crop-presence/growth mode (0/1).
+    # Surviving fraction of potential grain set (0-1), reduced irreversibly by
+    # heat exposure during flowering and reset to one at sowing. Prognostic
+    # rather than diagnostic precisely so the damage cannot be undone by a cool
+    # spell after the event.
+    grain_set_fraction::A
 end
 
 """Static and current-day algebraically derived phenology variables."""
@@ -31,6 +36,7 @@ function init_crop_phenology(::Type{T}, cell_size::Int, device) where {T <: Abst
         bool_state(true),
         device(zeros(Int32, cell_size)),
         device(zeros(Int32, cell_size)),
+        device(ones(T, cell_size)),
     )
 end
 

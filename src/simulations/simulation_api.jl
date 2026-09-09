@@ -126,11 +126,14 @@ function initialize_simulation(
     crop_resp_fix::Bool = true,
     nitrogen_limit_vcmax::Bool = false,
     subdaily_photosynthesis::Bool = false,
-    subdaily_steps::Integer = 1,
+    subdaily_steps::Integer = 24,
     diurnal_shape::Symbol = :sinusoid,
+    subdaily_capacity_optimum::Bool = false,
     organ_temperature::Bool = false,
+    reproductive_sink::Bool = false,
     freeze_vernalization_requirement::Bool = false,
     sowing_mode::Symbol = :prescribed_sdate,
+    model_parameters::Union{Nothing, ModelParameters} = nothing,
     mineral_nitrogen_initialization::Symbol = :from_slow_organic_nitrogen,
     c_shift_initialization::Symbol = :auto,
 )
@@ -150,11 +153,16 @@ function initialize_simulation(
     else
         c_shift_initialization
     end
-    model_parameters = ModelParameters(T)
+    # `nothing` builds the defaults, so the ordinary call is unchanged. Passing
+    # a struct is how a run perturbs a global coefficient - the sensitivity
+    # experiments for `senescent_leaf_release` and friends need this, and there
+    # was previously no way in.
+    resolved_parameters = model_parameters === nothing ? ModelParameters(T) :
+        convert_precision(T, model_parameters)
     states = init_states!(
         cft, prepared, cells, device;
         T = T,
-        lpjmlparams = model_parameters.lpjml,
+        lpjmlparams = resolved_parameters.lpjml,
         mineral_nitrogen_initialization = mineral_nitrogen_initialization,
         c_shift_initialization = resolved_c_shift_initialization,
     )
@@ -174,7 +182,9 @@ function initialize_simulation(
         subdaily_photosynthesis,
         subdaily_steps,
         diurnal_shape,
+        subdaily_capacity_optimum,
         organ_temperature,
+        reproductive_sink,
         freeze_vernalization_requirement,
         sowing_mode,
     )
@@ -190,7 +200,7 @@ function initialize_simulation(
         carbon_balance = nothing,
         thermal_balance = nothing,
     )
-    processes = ProcessModules(convert_precision(T, cft), model_parameters)
+    processes = ProcessModules(convert_precision(T, cft), resolved_parameters)
     return CropSimulation(
         processes, state, balances, config, 0,
     )
@@ -281,7 +291,16 @@ function _transition_range!(
     start_day::Integer,
     end_day::Integer,
     ; reuse_output::Bool = false,
-    simulation_day_offset::Integer = simulation.simulated_days,
+    # `_daily_crop!` forms the phenological day as `climate_day + offset`, so the
+    # offset has to carry the climate index back to the simulation clock:
+    # the first day of this range is simulation day `simulated_days + 1`
+    # whatever climate row it reads. Dropping the `- start_day` term made a
+    # resumed range double-count its own start (resuming at day d gave
+    # phenological day 2d-1, silently shifting sowing and collapsing yield),
+    # and it is the reason this differs from `transition_day!` at line 347 and
+    # from `agricultural_warmup.jl`. It happens to be harmless for a single
+    # range that starts at day 1, which is why it survived.
+    simulation_day_offset::Integer = simulation.simulated_days + 1 - start_day,
     selected_output::Union{Nothing, Set{Tuple{Symbol, Symbol}}} = nothing,
     prescribed_phu = nothing,
     prescribed_winter_type = nothing,
@@ -295,6 +314,7 @@ function _transition_range!(
         nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
         diurnal_config = diurnal_configuration(simulation.config),
         organ_temperature = simulation.config.organ_temperature,
+        reproductive_sink = simulation.config.reproductive_sink,
         update_vernalization_requirement = !simulation.config.freeze_vernalization_requirement,
         sowing_mode = simulation.config.sowing_mode,
         water_balance = simulation.water_balance,
@@ -492,7 +512,7 @@ function run_simulation!(
     return simulation
 end
 
-const _CHECKPOINT_FORMAT_VERSION = 7
+const _CHECKPOINT_FORMAT_VERSION = 8
 const _MODEL_STATE_SCHEMA_VERSION = 3
 
 _checkpoint_snapshot(values::AbstractArray) = Array(values)
@@ -559,6 +579,17 @@ function _simulation_checkpoint(simulation::CropSimulation)
             with_tillage = simulation.config.with_tillage,
             crop_resp_fix = simulation.config.crop_resp_fix,
             nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
+            # The sub-daily, organ-temperature and reproductive-sink switches
+            # change what the daily step computes, so a checkpoint written by
+            # one configuration is not a valid starting state for another.
+            # Without these entries a daily checkpoint restores silently into a
+            # sub-daily run. Adding them is why the format version is 8.
+            subdaily_photosynthesis = simulation.config.subdaily_photosynthesis,
+            subdaily_steps = simulation.config.subdaily_steps,
+            diurnal_shape = simulation.config.diurnal_shape,
+            subdaily_capacity_optimum = simulation.config.subdaily_capacity_optimum,
+            organ_temperature = simulation.config.organ_temperature,
+            reproductive_sink = simulation.config.reproductive_sink,
             sowing_mode = simulation.config.sowing_mode,
             parameter_fingerprint = _checkpoint_fingerprint((
                 cft = simulation.cft,
@@ -624,6 +655,16 @@ function _validate_checkpoint_target(simulation::CropSimulation, checkpoint)
          simulation.config.crop_resp_fix),
         ("nitrogen Vcmax limitation", metadata.nitrogen_limit_vcmax,
          simulation.config.nitrogen_limit_vcmax),
+        ("sub-daily photosynthesis", metadata.subdaily_photosynthesis,
+         simulation.config.subdaily_photosynthesis),
+        ("sub-daily steps", metadata.subdaily_steps, simulation.config.subdaily_steps),
+        ("diurnal shape", metadata.diurnal_shape, simulation.config.diurnal_shape),
+        ("sub-daily capacity optimum", metadata.subdaily_capacity_optimum,
+         simulation.config.subdaily_capacity_optimum),
+        ("organ temperature", metadata.organ_temperature,
+         simulation.config.organ_temperature),
+        ("reproductive sink", metadata.reproductive_sink,
+         simulation.config.reproductive_sink),
         ("sowing mode", metadata.sowing_mode, simulation.config.sowing_mode),
         ("parameter fingerprint", metadata.parameter_fingerprint,
          _checkpoint_fingerprint((

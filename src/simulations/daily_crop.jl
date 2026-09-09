@@ -21,6 +21,7 @@ function _daily_crop!(
     nitrogen_limit_vcmax = false,
     diurnal_config = nothing,
     organ_temperature::Bool = false,
+    reproductive_sink::Bool = false,
     sowing_mode::Symbol = :prescribed_sdate,
     update_vernalization_requirement::Bool = true,
     water_balance = nothing,
@@ -74,6 +75,12 @@ function _daily_crop!(
     # without the sub-daily loop; that combination is rejected here rather than
     # silently ignored. Humidity and pressure ride on `climate` as row views of
     # (day, cell) matrices, exactly like `diurnal_range`.
+    # The sterility accumulator is fed leaf temperature per sub-step, so the
+    # sink cannot stand on its own any more than organ temperature can stand
+    # without the sub-daily loop.
+    reproductive_sink && !organ_temperature && throw(ArgumentError(
+        "reproductive sink requires organ temperature to be enabled",
+    ))
     if organ_temperature
         diurnal_config === nothing && throw(ArgumentError(
             "organ temperature requires sub-daily photosynthesis to be enabled",
@@ -374,6 +381,10 @@ function _daily_crop!(
             )
         end
 
+        # Before allocation: today's exposure has been written by the
+        # assimilation calls above, and the harvest index that allocation is
+        # about to use has to already reflect any grain set lost.
+        reproductive_sink && reproductive_sink!(cftparameters, state)
         crop_carbon!(
             state, output, cftparameters, dailyWeather.temp,
             soil_thermal_prognostic(state).temperature;

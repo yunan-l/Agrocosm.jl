@@ -63,7 +63,9 @@ struct SimulationConfiguration{T <: AbstractFloat, D, E}
     subdaily_photosynthesis::Bool
     subdaily_steps::Int
     diurnal_shape::Symbol
+    subdaily_capacity_optimum::Bool
     organ_temperature::Bool
+    reproductive_sink::Bool
     freeze_vernalization_requirement::Bool
     sowing_mode::Symbol
     execution::E
@@ -80,9 +82,11 @@ function SimulationConfiguration(
     crop_resp_fix::Bool = true,
     nitrogen_limit_vcmax::Bool = false,
     subdaily_photosynthesis::Bool = false,
-    subdaily_steps::Integer = 1,
+    subdaily_steps::Integer = 24,
     diurnal_shape::Symbol = :sinusoid,
+    subdaily_capacity_optimum::Bool = false,
     organ_temperature::Bool = false,
+    reproductive_sink::Bool = false,
     freeze_vernalization_requirement::Bool = false,
     sowing_mode::Symbol = :prescribed_sdate,
 ) where {T <: AbstractFloat}
@@ -94,11 +98,21 @@ function SimulationConfiguration(
     diurnal_shape in (:flat, :sinusoid, :daytime_neutral) || throw(ArgumentError(
         "diurnal_shape must be :flat, :sinusoid or :daytime_neutral",
     ))
+    # Re-solving Rubisco capacity against the sub-daily light course is a
+    # property of that light course, so it is meaningless without it.
+    !subdaily_capacity_optimum || subdaily_photosynthesis || throw(ArgumentError(
+        "subdaily_capacity_optimum requires subdaily_photosynthesis",
+    ))
     # Leaf temperature is solved inside the sub-daily loop, so it cannot be
     # switched on by itself. Rejecting the combination here keeps the invalid
     # configuration from reaching the kernel, where it could only be ignored.
     !organ_temperature || subdaily_photosynthesis || throw(ArgumentError(
         "organ_temperature requires subdaily_photosynthesis",
+    ))
+    # Sterility is accumulated from leaf temperature per sub-step, so the sink
+    # inherits organ temperature's prerequisite as well as its own.
+    !reproductive_sink || organ_temperature || throw(ArgumentError(
+        "reproductive_sink requires organ_temperature",
     ))
     execution = ExecutionContext(T, device, active_indices; cell_ids)
     source_indices = indices === nothing ? nothing : Int.(indices)
@@ -108,7 +122,9 @@ function SimulationConfiguration(
         source_indices, device, T, Int(days), irrigation, manure, fertilizer,
         with_tillage, crop_resp_fix, nitrogen_limit_vcmax,
         subdaily_photosynthesis, Int(subdaily_steps), diurnal_shape,
-        organ_temperature, freeze_vernalization_requirement, sowing_mode, execution,
+        subdaily_capacity_optimum, organ_temperature, reproductive_sink,
+        freeze_vernalization_requirement,
+        sowing_mode, execution,
     )
 end
 
@@ -122,7 +138,8 @@ kernel, so production is bitwise unchanged.
 diurnal_configuration(config::SimulationConfiguration) =
     config.subdaily_photosynthesis ?
         DiurnalConfig(; steps = config.subdaily_steps,
-                        shape = diurnal_shape_code(config.diurnal_shape)) :
+                        shape = diurnal_shape_code(config.diurnal_shape),
+                        capacity_optimum = config.subdaily_capacity_optimum) :
         nothing
 
 float_type(::ExecutionContext{T}) where {T} = T

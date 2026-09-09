@@ -6,6 +6,7 @@ Partition crop biomass among leaf/root/storage/pool carbon compartments.
 function carbon_allocation!(CFT::CFTParameters,
                             crop;
                             include_biological_fixation_cost::Bool = false,
+                            lpjmlparams::LPJmLParams = lpjmlparams,
 )
     # 1D cell-wise allocation; crop_prognostic(crop).carbon.storage provides launch length and kernel arg #1.
     T = eltype(crop_prognostic(crop).carbon.storage)
@@ -13,6 +14,7 @@ function carbon_allocation!(CFT::CFTParameters,
         FROOTMAX = T(0.4),
         FROOTMIN = T(0.3),
         include_biological_fixation_cost = include_biological_fixation_cost,
+        senescent_leaf_release = T(lpjmlparams.senescent_leaf_release),
     )
 
     launch_1D!(carbon_allocation_kernel!,
@@ -24,6 +26,7 @@ function carbon_allocation!(CFT::CFTParameters,
                crop_prognostic(crop).nitrogen.sufficiency,
                crop_stress_auxiliary(crop).nitrogen_deficit,
                crop_stress_auxiliary(crop).water_deficit,
+               crop_prognostic(crop).phenology.grain_set_fraction,
                crop_phenology_auxiliary(crop).fphu,
                crop_prognostic(crop).phenology.senescence,
                crop_prognostic(crop).carbon.biomass,
@@ -113,6 +116,7 @@ end
                                            crop_vscal::AbstractArray{T},
                                            crop_ndf::AbstractArray{T},
                                            crop_wdf::AbstractArray{T},
+                                           crop_grain_set::AbstractArray{T},
                                            crop_fphu::AbstractArray{T},
                                            crop_senescence::AbstractArray{B},
                                            crop_biomass::AbstractArray{T},
@@ -135,6 +139,7 @@ end
 
     @unpack sla, hiopt, himin = CFT
     @unpack FROOTMAX, FROOTMIN, include_biological_fixation_cost = kernel_params
+    @unpack senescent_leaf_release = kernel_params
 
     if crop_isgrowing[cell] == 1
         # LPJmL preserves the potential phenological LAI and applies the NPP
@@ -167,16 +172,57 @@ end
             )
             crop_rootc[cell] = froot * crop_biomass[cell]
 
+            # Grain filling is irreversible: carbon already deposited in the
+            # storage organ cannot be taken back to build leaves. Reserve it
+            # before leaf allocation, capped by the above-ground carbon that
+            # actually exists.
+            #
+            # Without this, the two phenological branches disagree about
+            # priority. Senescence (below) protects storage and makes leaves
+            # give way; pre-senescence used to do the opposite, letting leaves
+            # claim all above-ground carbon and driving storage to zero via
+            # `compute_storage_carbon`'s `leaf + root < biomass` guard. Measured
+            # on the Michigan soybean cell, that reversed 6.7 gC of already-set
+            # grain across four days with the canopy still standing. Crops that
+            # never approach carbon limitation (wheat, rice, maize here) never
+            # took that branch, so this changes nothing for them.
+            deposited = min(crop_stoc[cell],
+                            max(zero(T), crop_biomass[cell] - crop_rootc[cell]))
+            leaf_available = max(zero(T),
+                                 crop_biomass[cell] - crop_rootc[cell] - deposited)
+
             # Leaf carbon is constrained by LAI and SLA; in senescence it is mass-balanced.
             if !crop_senescence[cell]
-                if (crop_biomass[cell] - crop_rootc[cell]) >= (crop_lai[cell] / sla)
+                if leaf_available >= (crop_lai[cell] / sla)
                     crop_leafc[cell] = crop_lai[cell] / sla
                     crop_lai_nppdeficit[cell] = zero(T)
                 else
-                    crop_leafc[cell] = crop_biomass[cell] - crop_rootc[cell]
+                    crop_leafc[cell] = leaf_available
                     crop_lai_nppdeficit[cell] = crop_lai[cell] - crop_leafc[cell] * sla
                 end
             else
+                # Senesced leaf area no longer stands, so the carbon that
+                # supported it stops being leaf carbon. LPJmL keeps `leaf`
+                # frozen at its last pre-senescence value and only ever trims it
+                # through the mass-balance clamp below, which leaves a crop
+                # holding a canopy's worth of carbon at LAI = 0 while
+                # `compute_storage_carbon`'s `biomass - leaf - root` cap denies
+                # that same carbon to the grain. The released carbon goes to the
+                # mobile pool via the balance closure further down, where the
+                # harvest index still decides how much of it becomes grain, so
+                # this removes a bookkeeping constraint rather than adding a
+                # flux. `senescent_leaf_release = 0` is LPJmL, bitwise.
+                standing_leaf = max(
+                    zero(T), crop_lai[cell] - crop_lai_nppdeficit[cell],
+                ) / sla
+                surplus = crop_leafc[cell] - standing_leaf
+                # A branch rather than `leafc -= release * max(0, surplus)`.
+                # Once the canopy is gone both sides are zero, and the
+                # subtract-a-max form does arithmetic on that exact tie every
+                # remaining day; the branch touches nothing there.
+                if surplus > zero(T)
+                    crop_leafc[cell] -= senescent_leaf_release * surplus
+                end
                 if (crop_leafc[cell] + crop_rootc[cell] + crop_stoc[cell]) > crop_biomass[cell]
                     crop_leafc[cell] = crop_biomass[cell] - crop_rootc[cell] - crop_stoc[cell]
                 end
@@ -186,10 +232,20 @@ end
             end
 
             # Storage carbon (harvest index branch) is computed after leaf/root partitioning.
-            hi = compute_harvest_index(crop_fphu[cell], T(hiopt), T(himin), crop_wdf[cell])
-            crop_stoc[cell] = compute_storage_carbon(
+            # Grain that failed to set caps the harvest index. The carbon denied
+            # to storage stays in the pool below, so biomass is conserved while
+            # yield falls -- the signature of flowering heat damage that a
+            # photosynthesis-only path cannot produce.
+            hi = compute_harvest_index(crop_fphu[cell], T(hiopt), T(himin), crop_wdf[cell]) *
+                 crop_grain_set[cell]
+            # Never below what is already deposited: the harvest-index formula
+            # describes how much grain the crop is filling towards, not a
+            # quantity that can be un-filled. Mass still closes, because
+            # `deposited` was capped at the available above-ground carbon and
+            # leaves were allocated from what remained after it.
+            crop_stoc[cell] = max(deposited, compute_storage_carbon(
                 crop_biomass[cell], crop_leafc[cell], crop_rootc[cell], froot, hi, T(hiopt),
-            )
+            ))
 
             # Pool carbon closes biomass balance and is clipped during senescence if negative.
             crop_poolc[cell] = crop_biomass[cell] - crop_leafc[cell] - crop_rootc[cell] - crop_stoc[cell]

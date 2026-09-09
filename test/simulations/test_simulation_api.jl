@@ -93,7 +93,7 @@ end
     @test estimate_memory(
         1, 1; T = Float64, diagnostics = false, block_days = 1,
         backend = :cpu, safety_factor = 1,
-    ).persistent_state_bytes == 13398
+    ).persistent_state_bytes == 13414
     @test estimate.forcing_block_bytes == 64
     @test prefetched.host_forcing_bytes == estimate.host_forcing_bytes + 64
     @test prefetched.host_peak_bytes == estimate.host_peak_bytes + 64
@@ -550,6 +550,24 @@ end
 
         wrong_domain = create(; cell_ids = [202])
         @test_throws ArgumentError restore_checkpoint!(wrong_domain, path)
+
+        # The sub-daily, organ-temperature and reproductive-sink switches change
+        # what the daily step computes, so a checkpoint written by one of them
+        # is not a valid starting state for another. Before format version 8 the
+        # metadata did not record them and this restore succeeded silently.
+        for switched in (
+            (; subdaily_photosynthesis = true),
+            (; subdaily_photosynthesis = true, subdaily_steps = 48),
+            (; subdaily_photosynthesis = true, diurnal_shape = :flat),
+            (; subdaily_photosynthesis = true, subdaily_capacity_optimum = true),
+        )
+            mismatched = initialize_simulation(
+                cft1, initial;
+                indices = [1], cell_ids = [101], T = Float32, days = 4,
+                fertilizer = :yes, switched...,
+            )
+            @test_throws ArgumentError restore_checkpoint!(mismatched, path)
+        end
 
         checkpoint = JLD2.load(path, "checkpoint")
         incompatible_metadata = merge(

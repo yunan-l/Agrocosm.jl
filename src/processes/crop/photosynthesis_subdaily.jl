@@ -66,6 +66,133 @@
 # range drives, and light curvature, which the shape drives on its own. Only
 # `:flat` switches both off.
 
+# ---------------------------------------------------------------------------
+# Capacity that is consistent with the sub-daily light course
+# ---------------------------------------------------------------------------
+#
+# `photosynthesis.jl`'s `comp_vcmax` branch sets Rubisco capacity from the
+# Haxeltine-Prentice daily optimality solution, whose `sigma` term is the
+# closed-form integral of a *flat* day: it assumes the day's PAR arrives at a
+# constant rate `apar / daylength`. That solution lands the canopy at
+# `je ~= jc` by construction, and with `theta = 0.99` the co-limitation operator
+# is nearly a hard `min(je, jc)`, whose Jensen loss over an uneven light course
+# is maximal exactly there. Feeding a half-sine light course into `je` while
+# `jc` keeps a ceiling derived from flat light therefore charges the sub-daily
+# path for an inconsistency in the capacity solve rather than for a physical
+# effect. Measured on a Michigan soybean cell this inconsistency accounts for
+# roughly two thirds of the co-limitation share of the sub-daily yield penalty,
+# and the crops that escaped it did so only because nitrogen limitation had
+# already pushed them off the optimum.
+#
+# The consistent alternative is to solve the same optimality problem against the
+# light course the assimilation loop actually uses:
+#
+#     maximise  sum_i colim(je_i, jc(vcmax), theta) * dt  -  b * vcmax
+#
+# There is no closed form - the sum of co-limited rates is not invertible - so
+# the first-order condition is solved numerically. Two properties make that
+# cheap and safe: the objective is concave in `vcmax` (each `colim` is concave
+# in `jc`, and the respiration term is linear), and the marginal gain is
+# monotonically decreasing in `jc`. A fixed-count bisection therefore converges
+# without any data-dependent trip count, which is what keeps it differentiable
+# under Enzyme - the same pattern `compute_lambda_c3_solution` already uses.
+# Verified: 20/21 rows of the sub-daily weather-AD suite pass with it on, with
+# the directional gradient matching finite differences to 0.8%.
+#
+# It is nevertheless NOT the default. `DiurnalConfig`'s `capacity_optimum`
+# parameter selects it, and its docstring records why the default is off: the
+# flat-day optimum is the `vcmax` definition that LPJmL's nitrogen demand and
+# crop calibration were tuned against, re-optimising it moved wheat the wrong
+# way and left soybean unchanged, and at re-optimised capacity sub-daily *gross*
+# assimilation is no longer bounded above by the flat-day value. The switch
+# exists so that inconsistency can be quantified rather than argued about.
+
+"""Marginal daily assimilation gain per unit of `jc`, summed over sub-steps."""
+@inline function subdaily_marginal_gain(
+    jc::T, light_scale::T, daylength::T, curvature::T,
+    steps::Integer, shape::Integer,
+) where {T <: AbstractFloat}
+    interval = daylength / T(steps)
+    total = zero(T)
+    for index in 1:steps
+        je = light_scale * diurnal_radiation_fraction(index, steps, shape, T) * T(steps)
+        combined = je + jc
+        discriminant = max(zero(T),
+                           combined * combined - T(4) * curvature * je * jc)
+        root = discriminant > zero(T) ? sqrt(discriminant) : zero(T)
+        # d(colim)/d(jc); at a vanishing root the operator is locally flat.
+        derivative = root > zero(T) ?
+            (one(T) - (combined - T(2) * curvature * je) / root) /
+            (T(2) * curvature) : zero(T)
+        total += interval * derivative
+    end
+    return total
+end
+
+"""
+    subdaily_optimal_vcmax(daily_vcmax, light_scale, c2, daylength, curvature,
+                           leaf_respiration_fraction, steps, shape)
+
+Rubisco capacity maximising net daily assimilation when the day's light is
+distributed over `steps` sub-steps instead of held flat.
+
+`daily_vcmax` is the analytic flat-light optimum and is used only to bracket the
+search. The sub-daily optimum lies ABOVE it - measured at about 1.3x across
+light levels and daylengths - which is the opposite of what one might expect
+from "uneven light wastes capacity". The reason is that co-limitation binds
+where light is strongest: around solar noon `je` is well above its daily mean
+and the return on extra `jc` is largest there, and that gain outweighs the
+respiration paid for capacity idling through the low-light tails. The bracket is
+therefore `[0, 3 * daily_vcmax]`, roughly twice the observed ratio.
+
+If the marginal gain is still above cost at the top of the bracket the optimum
+lies outside it; the analytic value is returned unchanged rather than the
+bracket edge, so the worst case degrades to current behaviour instead of
+reporting a bound as a solution.
+
+The bisection runs a fixed 40 iterations, enough to resolve `vcmax` to about
+1e-12 of the bracket in Float64 and to round-off in Float32, and returns the
+midpoint whether or not the residual has converged, so the result is always
+defined.
+"""
+@inline function subdaily_optimal_vcmax(
+    daily_vcmax::T, light_scale::T, c2::T, daylength::T, curvature::T,
+    leaf_respiration_fraction::T, steps::Integer, shape::Integer,
+) where {T <: AbstractFloat}
+    daily_vcmax > zero(T) || return zero(T)
+    # When the day's light is uniform the analytic flat-light solution IS the
+    # optimum, so return it unchanged. That is the case for a single sub-step
+    # (whatever the shape - `diurnal_radiation_fraction` is exactly one there)
+    # and for `:flat` at any step count. Solving numerically instead would give
+    # the same answer only to bisection tolerance, and would break the exact
+    # degeneracy onto the daily kernel that the G1/G2 gates require.
+    (steps == 1 || shape == DIURNAL_FLAT) && return daily_vcmax
+    # Marginal cost of capacity, expressed per unit of `jc` so the first-order
+    # condition reads `marginal_gain(jc) == cost`.
+    jc_per_vcmax = c2 * T(0.041666666666666664)          # hour2day, inlined
+    jc_per_vcmax > zero(T) || return zero(T)
+    cost = leaf_respiration_fraction / jc_per_vcmax
+
+    lower = zero(T)
+    upper = T(3) * daily_vcmax
+    # If capacity is still worth adding at the top of the bracket the optimum is
+    # outside it; keep the analytic value rather than reporting the bracket edge.
+    subdaily_marginal_gain(upper * jc_per_vcmax, light_scale, daylength,
+                           curvature, steps, shape) > cost && return daily_vcmax
+
+    for _ in 1:40
+        middle = (lower + upper) * T(0.5)
+        gain = subdaily_marginal_gain(middle * jc_per_vcmax, light_scale,
+                                      daylength, curvature, steps, shape)
+        if gain > cost
+            lower = middle
+        else
+            upper = middle
+        end
+    end
+    return (lower + upper) * T(0.5)
+end
+
 """
     DiurnalForcing(config, range)
 
@@ -130,6 +257,7 @@ function photosynthesis_subdaily_C3!(CFT::CFTParameters,
         crop_photosynthesis_auxiliary(crop).nitrogen_limitation,
         crop_photosynthesis_auxiliary(crop).lambda,
         crop_photosynthesis_auxiliary(crop).temperature_stress,
+        crop_stress_auxiliary(crop).heat_exposure_hours,
         apar,
         pet_daylength,
         temp,
@@ -155,6 +283,7 @@ end
     nitrogen_limitation::AbstractVector{T},
     lambda::AbstractVector{T},
     temperature_stress::AbstractVector{T},
+    heat_exposure_hours::AbstractVector{T},
     apar::AbstractVector{T},
     daylength::AbstractVector{T},
     temperature::AbstractVector{T},
@@ -164,12 +293,13 @@ end
     lpjmlparams::LPJmLParams,
     photoparams::PhotoParams,
     comp_vcmax::Bool,
-    ::DiurnalConfig{STEPS, SHAPE},
+    ::DiurnalConfig{STEPS, SHAPE, CAPACITY},
     organ,
-) where {T <: AbstractFloat, STEPS, SHAPE}
+) where {T <: AbstractFloat, STEPS, SHAPE, CAPACITY}
     cell = @index(Global)
     @unpack b, path, temp_co2, temp_photos = CFT
     @unpack leaf_dimension, leaf_emissivity, lightextcoeff = CFT
+    @unpack sterility_temperature = CFT
     @unpack ko25, kc25, alphac3, theta, LAMBDA_OPT = lpjmlparams
     @unpack q10ko, q10kc, po2, tau25, q10tau, cmass, cq, p, lambdamc3 = photoparams
     @unpack tmc3, tmc4 = photoparams
@@ -205,7 +335,23 @@ end
                 ((T(2) * T(theta) - one(T)) * s -
                  (T(2) * T(theta) * s - c2) * sigma) *
                 apar[cell] * T(cmass) * T(cq)
-            vcmax[cell] = max(zero(T), potential)
+            # `CAPACITY` selects between the flat-day analytic capacity (the
+            # default, bitwise what the daily kernel uses) and re-solving the
+            # same optimality problem against the light course this loop
+            # actually integrates. `light_scale` is the `je` coefficient the
+            # loop uses, with the sub-step share factored out. The branch is on
+            # a type parameter, so when it is off the solver is not compiled
+            # into the kernel at all and never reaches the Enzyme tape.
+            vcmax[cell] = if CAPACITY
+                light_scale = c1 * apar[cell] * T(cmass) * T(cq) /
+                    (daylength_cell + T(1e-5))
+                subdaily_optimal_vcmax(
+                    max(zero(T), potential), light_scale, c2, daylength_cell,
+                    T(theta), T(b), STEPS, SHAPE,
+                )
+            else
+                max(zero(T), potential)
+            end
         end
         potential_vcmax[cell] = vcmax[cell]
         nitrogen_limitation[cell] = vcmax[cell] > zero(T) ? one(T) : zero(T)
@@ -216,6 +362,7 @@ end
     rubisco_capacity = hour2day(vcmax[cell])
     interval = daylength_cell / T(STEPS)
     gross = zero(T)
+    exposure = zero(T)
     for index in 1:STEPS
         temperature_substep = diurnal_temperature(
             index, STEPS, temperature_cell, range_cell, daylength_cell, SHAPE,
@@ -238,6 +385,11 @@ end
             daylength_cell, leaf_substep, path, temp_co2, temp_photos,
             T(tmc3), T(tmc4),
         )
+        # Duration above the sterility threshold, at leaf temperature. Free
+        # here: the sub-step loop and the leaf temperature already exist.
+        exposure += interval * smooth_exceedance(
+            leaf_substep - T(sterility_temperature), T(STERILITY_SMOOTHING_WIDTH),
+        )
         ko_substep = T(ko25) * T(q10ko)^((leaf_substep - T(25)) * T(0.1))
         kc_substep = T(kc25) * T(q10kc)^((leaf_substep - T(25)) * T(0.1))
         fac_substep = kc_substep * (one(T) + T(po2) / ko_substep)
@@ -258,6 +410,7 @@ end
         gross += (stress_substep < T(1e-2)) ? zero(T) : max(zero(T), agd)
     end
     gross_assimilation[cell] = gross
+    heat_exposure_hours[cell] = organ === nothing ? zero(T) : exposure
 
     leaf = inactive ? zero(T) : T(b) * vcmax[cell]
     leaf_respiration[cell] = leaf
@@ -290,6 +443,7 @@ function photosynthesis_subdaily_C4!(CFT::CFTParameters,
         crop_photosynthesis_auxiliary(crop).nitrogen_limitation,
         crop_photosynthesis_auxiliary(crop).lambda,
         crop_photosynthesis_auxiliary(crop).temperature_stress,
+        crop_stress_auxiliary(crop).heat_exposure_hours,
         apar,
         pet_daylength,
         temp,
@@ -314,6 +468,7 @@ end
     nitrogen_limitation::AbstractVector{T},
     lambda::AbstractVector{T},
     temperature_stress::AbstractVector{T},
+    heat_exposure_hours::AbstractVector{T},
     apar::AbstractVector{T},
     daylength::AbstractVector{T},
     temperature::AbstractVector{T},
@@ -322,12 +477,13 @@ end
     lpjmlparams::LPJmLParams,
     photoparams::PhotoParams,
     comp_vcmax::Bool,
-    ::DiurnalConfig{STEPS, SHAPE},
+    ::DiurnalConfig{STEPS, SHAPE, CAPACITY},
     organ,
-) where {T <: AbstractFloat, STEPS, SHAPE}
+) where {T <: AbstractFloat, STEPS, SHAPE, CAPACITY}
     cell = @index(Global)
     @unpack b, path, temp_co2, temp_photos = CFT
     @unpack leaf_dimension, leaf_emissivity, lightextcoeff = CFT
+    @unpack sterility_temperature = CFT
     @unpack alphac4, theta, LAMBDA_OPT = lpjmlparams
     @unpack lambdamc4, cmass, cq, p, tmc3, tmc4 = photoparams
 
@@ -350,7 +506,19 @@ end
                 ((T(2) * T(theta) - one(T)) * s -
                  (T(2) * T(theta) * s - one(T)) * sigma) *
                 apar[cell] * T(cmass) * T(cq)
-            vcmax[cell] = max(zero(T), potential)
+            # As for C3, but the C4 loop co-limits against `rubisco_capacity`
+            # directly rather than against `c2 * rubisco_capacity`, so the
+            # jc-per-vcmax coefficient is unity.
+            vcmax[cell] = if CAPACITY
+                light_scale = c1 * apar[cell] * T(cmass) * T(cq) /
+                    (daylength_cell + T(1e-5))
+                subdaily_optimal_vcmax(
+                    max(zero(T), potential), light_scale, one(T), daylength_cell,
+                    T(theta), T(b), STEPS, SHAPE,
+                )
+            else
+                max(zero(T), potential)
+            end
         end
         potential_vcmax[cell] = vcmax[cell]
         nitrogen_limitation[cell] = vcmax[cell] > zero(T) ? one(T) : zero(T)
@@ -362,6 +530,7 @@ end
     rubisco_capacity = hour2day(vcmax[cell])
     interval = daylength_cell / T(STEPS)
     gross = zero(T)
+    exposure = zero(T)
     for index in 1:STEPS
         temperature_substep = diurnal_temperature(
             index, STEPS, temperature_cell, range_cell, daylength_cell, SHAPE,
@@ -378,6 +547,11 @@ end
             daylength_cell, leaf_substep, path, temp_co2, temp_photos,
             T(tmc3), T(tmc4),
         )
+        # Duration above the sterility threshold, at leaf temperature. Free
+        # here: the sub-step loop and the leaf temperature already exist.
+        exposure += interval * smooth_exceedance(
+            leaf_substep - T(sterility_temperature), T(STERILITY_SMOOTHING_WIDTH),
+        )
         c1 = stress_substep * phipi * T(alphac4)
         apar_substep = radiation_fraction * T(STEPS) * apar[cell]
         je = c1 * apar_substep * T(cmass) * T(cq) / (daylength_cell + T(1e-5))
@@ -385,6 +559,7 @@ end
         gross += (stress_substep < T(1e-2)) ? zero(T) : max(zero(T), agd)
     end
     gross_assimilation[cell] = gross
+    heat_exposure_hours[cell] = organ === nothing ? zero(T) : exposure
 
     leaf = inactive ? zero(T) : T(b) * vcmax[cell]
     leaf_respiration[cell] = leaf

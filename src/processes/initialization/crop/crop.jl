@@ -20,6 +20,11 @@ mutable struct CropStressAuxiliary{A}
     nitrogen_demand_leaf::A  # Potential leaf nitrogen demand (gN m⁻² day⁻¹).
     nitrogen_deficit::A      # Unmet crop nitrogen demand (gN m⁻² day⁻¹).
     water_deficit::A         # Water-deficit factor used by allocation (percent, 0–100).
+    # Daylight hours above the sterility threshold, at organ temperature, for
+    # the current day. Overwritten rather than accumulated: `photosynthesis!`
+    # runs several times per day, and the reproductive-sink kernel consumes
+    # this once per day.
+    heat_exposure_hours::A
 end
 
 """Static root geometry plus the current-day root-zone water diagnostic."""
@@ -109,7 +114,7 @@ function init_crop(::Type{T},
             init_crop_photosynthesis_auxiliary(T, cell_size, device),
             CropStressAuxiliary(
                 float_auxiliary(), float_auxiliary(), float_auxiliary(),
-                float_auxiliary(),
+                float_auxiliary(), float_auxiliary(),
             ),
         ),
         init_crop_events(cell_size, device),

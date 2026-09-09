@@ -70,6 +70,7 @@ export diurnal_temperature, diurnal_radiation_fraction, diurnal_heat_exposure
 export leaf_temperature_departure, leaf_energy_residual
 export saturation_vapour_pressure, vapour_pressure_from_specific_humidity
 export OrganTemperatureForcing, organ_leaf_temperature, diurnal_shortwave_rate
+export reproductive_sink!, flowering_weight, grain_set_loss
 export phenology_crop!, lai_crop!, cultivate!, dynamic_sowing_date!, update_dynamic_sowing_calendar!, harvest_crop!, fertilizer!
 export transpiration!, interception!
 export crop_carbon!, crop_nitrogen!, ndemand_crop!, nuptake_crop!
@@ -182,6 +183,7 @@ include("processes/crop/dynamic_sowing.jl")
 include("processes/crop/phenology.jl")
 include("processes/crop/photosynthesis.jl")
 include("processes/crop/photosynthesis_subdaily.jl")
+include("processes/crop/reproductive_sink.jl")
 include("processes/crop/lambda_solver.jl")
 include("processes/crop/carbon_allocation.jl")
 include("processes/crop/crop_carbon.jl")

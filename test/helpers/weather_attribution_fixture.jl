@@ -2,9 +2,21 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
     diurnal_config = nothing, diurnal_amplitude = T(10),
     organ_temperature = false, specific_humidity = T(0.006),
     surface_pressure = T(101325),
+    reproductive_sink = false, sterility_rate = nothing,
+    sterility_temperature = nothing,
+    model_parameters = nothing,
 )
     forcing_days = 365 * cld(sowing_day + 200, 365)
     cft = Agrocosm.convert_precision(T, cft_id == 1 ? Agrocosm.cft1 : Agrocosm.cft3)
+    # The synthetic fixture runs at a constant 19/25 C, far below any real
+    # sterility threshold, so the sink can only be exercised by lowering it here.
+    if sterility_rate !== nothing || sterility_temperature !== nothing
+        cft = Agrocosm.CFTParameters{T, Int32}(;
+            (f => (f === :sterility_rate && sterility_rate !== nothing ? T(sterility_rate) :
+                   f === :sterility_temperature && sterility_temperature !== nothing ?
+                       T(sterility_temperature) : getfield(cft, f))
+             for f in fieldnames(Agrocosm.CFTParameters))...)
+    end
     initial_data = (
         latitude = T[45],
         soilparams = (
@@ -56,7 +68,10 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
         specific_humidity = fill(T(specific_humidity), forcing_days, 1),
         surface_pressure = fill(T(surface_pressure), forcing_days, 1),
     )))
-    parameters = Agrocosm.ModelParameters(T)
+    # A caller-supplied bundle is how a test perturbs one global coefficient,
+    # e.g. `senescent_leaf_release`, without editing the defaults.
+    parameters = model_parameters === nothing ? Agrocosm.ModelParameters(T) :
+        Agrocosm.convert_precision(T, model_parameters)
     state = Agrocosm.model_state(climbuf, crop, pet, soil, management, weather, output)
     processes = Agrocosm.ProcessModules(cft, parameters)
     driver = cft_id == 1 ? Agrocosm.daily_crop_C3! : Agrocosm.daily_crop_C4!
@@ -64,7 +79,7 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
     driver(sowing_day, sowing_day + 200, processes, climate, ordinary;
         fertilizer = :yes, manure = true, with_tillage = true,
         nitrogen_limit_vcmax = true, crop_resp_fix = true, diurnal_config,
-        organ_temperature,
+        organ_temperature, reproductive_sink,
         update_vernalization_requirement = false, reuse_output = true)
     events = findall(!iszero, vec(ordinary.output.calendar.harvest_event))
     isempty(events) && error("fixture did not harvest")
@@ -74,7 +89,7 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
     driver(sowing_day, first_day - 1, processes, climate, state;
         fertilizer = :yes, manure = true, with_tillage = true,
         nitrogen_limit_vcmax = true, crop_resp_fix = true, diurnal_config,
-        organ_temperature,
+        organ_temperature, reproductive_sink,
         update_vernalization_requirement = false, reuse_output = true)
     return (; state, cft, parameters, climate, days = first_day:(harvest_day - 1),
         harvest_day, forcing = cat(climate.temp, climate.prec, climate.sw, climate.lw,

@@ -31,10 +31,17 @@ end
     @test gradient == zeros(Float32, 2)
 end
 
-function _daily_transition_fixture(climate_days::Int = 16, initial_end_day::Int = 10)
-    T = Float32
+# `T` is a keyword with the historical default, so every existing caller is
+# unchanged. Float64 exists for the finite-difference checks: a Float32 central
+# difference cannot resolve a gradient component of order 1e-2 against a loss of
+# order 1e1 -- the loss difference lands at ~1e-5 relative, which is two digits
+# of Float32. `test_enzyme_management_adaptation.jl` records the step sweep that
+# showed this.
+function _daily_transition_fixture(climate_days::Int = 16, initial_end_day::Int = 10;
+                                   T::Type{<:AbstractFloat} = Float32)
     cells = 1
     layers = 5
+    cft = Agrocosm.convert_precision(T, cft1)
     days = climate_days
     initial_data = (
         latitude = T[45],
@@ -67,7 +74,7 @@ function _daily_transition_fixture(climate_days::Int = 16, initial_end_day::Int 
         ),
     )
     climbuf, crop, pet, soil, managed_land, weather, output = init_states!(
-        cft1, initial_data, cells, identity; T,
+        cft, initial_data, cells, identity; T,
     )
     climbuf.atemp .= T(10)
     climbuf.temp .= T(10)
@@ -84,7 +91,7 @@ function _daily_transition_fixture(climate_days::Int = 16, initial_end_day::Int 
     )
     state = model_state(climbuf, crop, pet, soil, managed_land, weather, output)
     global_parameters = ModelParameters(T)
-    processes = ProcessModules(cft1, global_parameters)
+    processes = ProcessModules(cft, global_parameters)
     if initial_end_day > 0
         daily_crop_C3!(1, initial_end_day, processes, climate, state;
             fertilizer = :yes,
@@ -96,7 +103,8 @@ function _daily_transition_fixture(climate_days::Int = 16, initial_end_day::Int 
     end
     enzyme_prepare_daily_state!(state)
     layer_depth = Tuple(state.inputs.soil.properties.layer_depth)
-    return (; state, climate, global_parameters, layer_depth, day = initial_end_day + 1)
+    return (; state, climate, global_parameters, layer_depth, cft,
+        day = initial_end_day + 1)
 end
 
 function _daily_transition_value(template, theta, parameter_names, observable)

@@ -189,7 +189,7 @@ function _enzyme_crop_carbon!(
         lpjmlparams,
     )
     Agrocosm.carbon_allocation!(
-        cft, state; include_biological_fixation_cost,
+        cft, state; include_biological_fixation_cost, lpjmlparams,
     )
     return nothing
 end
@@ -766,6 +766,7 @@ function _enzyme_continuous_transition!(
     pathway = Val(:C3),
     diurnal_config = nothing,
     organ_temperature::Bool = false,
+    reproductive_sink::Bool = false,
 )
     T = eltype(Agrocosm.crop_prognostic(state).canopy.lai)
     _enzyme_apply_root_distribution!(state, cft.beta_root)
@@ -1049,6 +1050,10 @@ function _enzyme_continuous_transition!(
             state, cft, pet, current_co2, global_params,
         )
     end
+    # Same placement as the production driver: today's exposure has been written
+    # by the assimilation calls, and allocation is about to consume the harvest
+    # index that grain set caps.
+    reproductive_sink && Agrocosm.reproductive_sink!(cft, state)
     _enzyme_crop_carbon!(
         state,
         cft,

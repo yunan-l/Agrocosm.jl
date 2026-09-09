@@ -62,7 +62,13 @@ end
 # Includes the dynamic-sowing climate calendar: monthly PET and its rolling
 # climatology (24 values), annual PET history (365 values), and four Int32
 # calendar fields per cell.
-const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1643
+#
+# This count must be updated whenever a per-cell float field is added to the
+# persistent state, or `estimate_memory(cells, days; ...)` silently disagrees
+# with `estimate_memory(simulation)`, which walks the real object. Two fields
+# were added for the organ-temperature and reproductive-sink modules:
+# `stress.heat_exposure_hours` and `phenology.grain_set_fraction`.
+const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1645
 const _PERSISTENT_NONFLOAT_BYTES_PER_CELL = 46
 const _PERSISTENT_FIXED_FLOAT_VALUES = 26
 

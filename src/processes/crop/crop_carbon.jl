@@ -25,7 +25,7 @@ function crop_carbon!(crop,
     )
 
     # compute crop carbon allocation
-    carbon_allocation!(CFT, crop; include_biological_fixation_cost)
+    carbon_allocation!(CFT, crop; include_biological_fixation_cost, lpjmlparams)
 
     sources = (
         gpp = crop_fluxes(crop).carbon.gross_assimilation,

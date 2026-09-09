@@ -74,20 +74,60 @@ slow or its type analysis gives up. A statically known count lets LLVM unroll th
 loop and leaves Enzyme straight-line code. Nothing here carries a scientific
 coefficient, so it does not belong in `LPJmLParams`.
 
-`steps == 1` with a non-flat shape reproduces the daily kernel exactly, so this
-is safe to leave in place while switched down.
-"""
-struct DiurnalConfig{STEPS, SHAPE} end
+`capacity_optimum` selects how Rubisco capacity is set when the assimilation
+kernel computes it (`comp_vcmax`). The default `false` keeps the Haxeltine-
+Prentice analytic solution, whose `sigma` term integrates a *flat* day, exactly
+as the daily kernel uses it. `true` re-solves the same optimality problem
+against the sub-daily light course the kernel actually integrates
+(`subdaily_optimal_vcmax`).
 
-function DiurnalConfig(; steps::Integer = 1, shape::Integer = DIURNAL_SINUSOID)
+`true` is the internally consistent choice within the optimality hypothesis and
+raises capacity by about 1.3x, but it is NOT the default, for three reasons
+measured on real cells:
+
+  * The flat-day optimum is not an approximation inside LPJmL, it is the
+    definition of `vcmax` that leaf nitrogen demand, `b` and every crop
+    calibration coefficient were tuned against. Re-solving it rescales the
+    nitrogen cycle away from that calibration, and the four-crop check moved
+    wheat's yield the wrong way (-20.9% -> -23.2% sub-daily penalty) while
+    leaving soybean untouched.
+  * At re-optimised capacity the sub-daily *gross* assimilation is no longer
+    bounded above by the flat-day value, so the module's headline mechanism -
+    resolving the day lowers assimilation - stops being provable.
+  * The solve is a 40-iteration bisection in the innermost kernel and appears
+    on the AD tape.
+
+Off it is compile-time dead: the branch disappears and the kernel is bitwise
+what the flat-day capacity produces. On, it is the sensitivity experiment that
+answers "is your sub-daily loss an artifact of holding capacity at the flat-day
+optimum?" with a number - it recovers about 4 pp of rice's 32% penalty and none
+of soybean's.
+
+`steps == 1` degenerates onto the daily kernel exactly only for `:flat` and
+`:daytime_neutral`, or for any shape at a zero diurnal range. With `:sinusoid`
+and a non-zero range it does NOT: the single sub-step samples the midpoint of
+the daylight window, i.e. the solar-noon temperature, not the daily mean. The
+authoritative table is in `photosynthesis_subdaily.jl`. Measured on a Michigan
+soybean cell, `steps = 1, :sinusoid` costs 33% of yield against the daily
+kernel, and the step sweep is non-monotone below 8 (-33/-16/-41/-47/-49/-49 at
+1/2/3/4/6/8), converging by 8. Treat `steps = 1` as a degeneracy probe, not as
+a way to switch the scheme down.
+"""
+struct DiurnalConfig{STEPS, SHAPE, CAPACITY} end
+
+function DiurnalConfig(; steps::Integer = 1, shape::Integer = DIURNAL_SINUSOID,
+                       capacity_optimum::Bool = false)
     steps >= 1 || throw(ArgumentError("steps must be at least 1"))
     shape in (DIURNAL_FLAT, DIURNAL_SINUSOID, DIURNAL_DAYTIME_NEUTRAL) ||
         throw(ArgumentError("shape must be DIURNAL_FLAT, DIURNAL_SINUSOID or DIURNAL_DAYTIME_NEUTRAL"))
-    return DiurnalConfig{Int(steps), Int(shape)}()
+    return DiurnalConfig{Int(steps), Int(shape), capacity_optimum}()
 end
 
 diurnal_steps(::DiurnalConfig{STEPS}) where {STEPS} = STEPS
 diurnal_shape(::DiurnalConfig{STEPS, SHAPE}) where {STEPS, SHAPE} = SHAPE
+diurnal_capacity_optimum(
+    ::DiurnalConfig{STEPS, SHAPE, CAPACITY},
+) where {STEPS, SHAPE, CAPACITY} = CAPACITY
 
 """
     diurnal_shape_code(shape::Symbol)

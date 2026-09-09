@@ -155,10 +155,23 @@ for cft_id in (isempty(ARGS) ? (1, 3) : Tuple(parse.(Int, ARGS)))
         # Jensen channel -- light curvature -- and it is active independently
         # of the temperature curvature the diurnal range drives. Asserted
         # explicitly so the two channels cannot be silently conflated.
-        light_only = last(subdaily_replay(DiurnalConfig(; steps = 24, shape = DIURNAL_SINUSOID);
-            amplitude = T(0))).yield
+        light_case = last(subdaily_replay(DiurnalConfig(; steps = 24, shape = DIURNAL_SINUSOID);
+            amplitude = T(0)))
+        light_only = light_case.yield
         @test light_only != daily_reference.yield
         @test light_only < daily_reference.yield
+        # Where the replay window is still photosynthetically active, assert the
+        # channel on gross assimilation itself, which is where the inequality is
+        # a theorem rather than an outcome. The C3 fixture's window is the last
+        # eight days before harvest and is fully senescent - GPP is identically
+        # zero there - so for that CFT the yield difference above is inherited
+        # from the season the fixture ran before the window, not produced inside
+        # it. Saying so here keeps the assertion from being read as evidence for
+        # something it cannot measure.
+        if sum(daily_reference.daily.gpp) > zero(T)
+            @test light_case.daily.day == daily_reference.daily.day
+            @test sum(light_case.daily.gpp) < sum(daily_reference.daily.gpp)
+        end
         # `:daytime_neutral` subtracts its own closed-form sub-step mean, which
         # at one sub-step is the solar-noon value itself.
         @test last(subdaily_replay(DiurnalConfig(; steps = 1, shape = DIURNAL_DAYTIME_NEUTRAL))).yield ==
@@ -340,5 +353,99 @@ for cft_id in (isempty(ARGS) ? (1, 3) : Tuple(parse.(Int, ARGS)))
             without.state, without.cft, without.parameters, without.climate,
             without.days, without.harvest_day; diurnal_config,
             organ_temperature = true)
+    end
+end
+
+# S8 of docs/05_reproductive_sink_design.md. Steps 1 and 2 only ever added
+# stateless, compile-time-constant configuration to the differentiated path.
+# This step adds a prognostic state carried across days and updated through a
+# `clamp`, which is a genuinely new AD risk rather than a repeat of a solved
+# one, so it gets its own testset.
+#
+# Two fixture departures from the sub-daily testsets above, both forced:
+#   - The season window, because the default eight-day window ends after
+#     flowering and `flowering_weight` would be zero throughout.
+#   - `phu = 1800`, because the default 32-day fixture is so carbon-limited that
+#     `compute_storage_carbon` is capped by `biomass - leaf - root` rather than
+#     by the harvest index. Sink limitation is then structurally invisible: grain
+#     set can fall to 0.55 with yield unchanged to the last bit. Measured across
+#     season lengths, the sink moves yield by 0% at 31 days, 6% at 63 and 54% at
+#     94. Testing AD through a path that cannot move the answer would prove
+#     nothing.
+for cft_id in (isempty(ARGS) ? (1,) : Tuple(parse.(Int, ARGS)))
+    @testset "CFT $cft_id weather AD with reproductive sink" begin
+        T = get(ENV, "WEATHER_TEST_PRECISION", "64") == "32" ? Float32 : Float64
+        sowing_day = parse(Int, get(ENV, "WEATHER_TEST_SOWING_DAY", "100"))
+        diurnal_config = DiurnalConfig(; steps = 24, shape = DIURNAL_SINUSOID)
+
+        case = weather_attribution_fixture(cft_id; T, window_days = :season,
+            sowing_day, phu = 1800, diurnal_config, diurnal_amplitude = T(10),
+            organ_temperature = true, reproductive_sink = true,
+            sterility_rate = 0.004, sterility_temperature = 19)
+        (; forcing, state, cft, parameters, climate, days, harvest_day) = case
+
+        # The sink has to be able to move the answer, or nothing below is a test.
+        intact = weather_harvest_replay(forcing, state, cft, parameters, climate,
+            days, harvest_day; diurnal_config, organ_temperature = true)
+        damaged = weather_harvest_replay(forcing, state, cft, parameters, climate,
+            days, harvest_day; diurnal_config, organ_temperature = true,
+            reproductive_sink = true)
+        @test intact.yield > 0
+        @test damaged.yield > 0
+        @test damaged.yield < intact.yield
+        @info "Reproductive sink replay" cft_id intact = intact.yield damaged = damaged.yield
+        flush(stderr)
+
+        original = deepcopy(forcing)
+        result = enzyme_weather_harvest_gradient(forcing, state, cft, parameters,
+            climate, days, harvest_day; block_days = 8, diurnal_config,
+            organ_temperature = true, reproductive_sink = true)
+        @test result.primal ≈ result.production_yield rtol = 1e-3 atol = 1e-5
+        @test result.reverse_primal ≈ result.primal rtol = 1e-10 atol = 1e-12
+        @test all(isfinite, result.gradient)
+        @test forcing == original
+        @test all(iszero, result.gradient[harvest_day:end, :, :])
+
+        # Temperature is the channel the sterility accumulator reads, so this is
+        # the finite-difference check that actually exercises the new state.
+        direction = zeros(T, size(forcing))
+        direction[first(days):(first(days) + 2), 1, 1] .= one(T)
+        projection = sum(result.gradient .* direction)
+        # 0.05 K in both precisions, and the Float64 step is the interesting
+        # one: it was 0.01 on the reasoning that Float64 can afford a smaller
+        # step, which is wrong here because the limit is not arithmetic
+        # precision but the model's own non-smoothness. Measured on this
+        # fixture, disagreement against the AD projection at
+        # 0.1 / 0.05 / 0.02 / 0.01 / 0.005 / 0.002 / 0.001 / 0.0005 K:
+        #
+        #   0.93%  0.73%  7.6%  13.1%  13.5%  31.3%  75.1%  67.4%
+        #
+        # Monotonically worse as the step shrinks, in Float64. A season is a
+        # chain of `min`/`max`/`clamp` decisions whose switching points move
+        # with the perturbation, so below about 0.02 K the secant samples that
+        # structure instead of the local slope. An independent bound on the
+        # same thing: `result.primal` and `result.production_yield` differ by
+        # 6.9e-7 here, which already exceeds the 6.3e-7 numerator a 0.001 K
+        # central difference produces. Do not shrink this step to make the
+        # check look sharper - it makes it meaningless. `rtol` stays at 5%
+        # because 0.73% is the honest resolution of this measurement, not a
+        # claim that the gradient is only good to 5%.
+        epsilon = T(0.05)
+        plus = weather_harvest_replay(forcing .+ epsilon .* direction, state, cft,
+            parameters, climate, days, harvest_day; diurnal_config,
+            organ_temperature = true, reproductive_sink = true)
+        minus = weather_harvest_replay(forcing .- epsilon .* direction, state, cft,
+            parameters, climate, days, harvest_day; diurnal_config,
+            organ_temperature = true, reproductive_sink = true)
+        @test plus.schedule_matches && minus.schedule_matches
+        fd = (plus.yield - minus.yield) / (2epsilon)
+        @info "Reproductive sink directional validation" cft_id ad = projection fd
+        flush(stderr)
+        @test projection ≈ fd rtol = 0.05 atol = 2e-5
+
+        # The sink cannot stand without organ temperature, on the AD path either.
+        @test_throws ArgumentError weather_harvest_replay(forcing, state, cft,
+            parameters, climate, days, harvest_day; diurnal_config,
+            reproductive_sink = true)
     end
 end

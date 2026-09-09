@@ -178,6 +178,15 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     # kept until crop-specific values are sourced from a primary reference.
     leaf_dimension::T = 0.04   # Characteristic leaf dimension along the flow (m).
     leaf_emissivity::T = 0.98  # Leaf longwave emissivity (0–1).
+    # Reproductive sink. Defaulted like the energy-balance pair above, and inert
+    # unless the sink is switched on. The thresholds are the conventional
+    # per-crop values; `sterility_rate` is a placeholder and must be calibrated
+    # before any of its numbers are reported. See
+    # docs/05_reproductive_sink_design.md.
+    flowering_start::T = 0.45       # `fphu` at which grain set becomes sensitive.
+    flowering_end::T = 0.70         # `fphu` at which sensitivity ends.
+    sterility_temperature::T = 35.0 # Organ-temperature threshold for sterility (°C).
+    sterility_rate::T = 0.0         # Grain set lost per exposure-hour; 0 = inert.
 end
 
 """Return a CFT parameter set whose floating fields consistently use `T`."""

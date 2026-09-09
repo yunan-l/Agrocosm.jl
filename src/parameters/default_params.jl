@@ -65,6 +65,28 @@ water, nitrogen, and management process coefficients.
     nmanure_nh4_frac::T = 0.666667 # fraction of NH4 in manure input
     nfert_no3_frac::T = 0.5 # fraction of NO3 in fertilizer input
     maxsnowpack::T = 20000.0 # maximum snowpack (mm)
+    # Fraction of the carbon in senesced (no-longer-standing) leaf area that
+    # returns to the mobile pool. LPJmL's crop allocation freezes `leaf` at its
+    # last pre-senescence value and never trims it as LAI declines, so a crop
+    # can finish the season holding most of its carbon in a canopy with zero
+    # leaf area - and `compute_storage_carbon`'s `biomass - leaf - root` cap
+    # then denies exactly that carbon to the grain. Measured on the Michigan
+    # soybean cell: 126 gC (60% of the plant) held in leaves at LAI = 0, with
+    # storage pinned to the cap rather than to the harvest index.
+    #
+    # `1` keeps `leaf` equal to the standing canopy's carbon, which is the
+    # invariant the pre-senescence branch already maintains. `0` reproduces
+    # LPJmL bitwise. Read anything between as a per-day rate on the *current*
+    # surplus, not a one-off split: the rule runs every senescence day, so an
+    # intermediate value decays the surplus geometrically. Measured on the maize
+    # cell, 0.5 leaves 9.4 / 4.7 / 2.4 / 1.2 gC on successive days and lands
+    # within 1% of the yield `1` gives, so the two ends are the settings that
+    # mean anything.
+    #
+    # This is not a new carbon flux: released carbon lands in the mobile pool,
+    # which the harvest index still caps, and `harvest_crop!` routes leaf and
+    # pool identically, so soil inputs are untouched.
+    senescent_leaf_release::T = 1.0
 end
 """
 lpjmlparams
