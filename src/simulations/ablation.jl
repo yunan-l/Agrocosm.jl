@@ -215,9 +215,23 @@ argument is in `docs/07_ablation_framework.md`. Three findings make it:
 `organ_temperature` is the one switch this cell exposes, because leaf against air
 is the comparison that separates the sink mechanism from the departure that
 triggers it - the same comparison `ablation_air_driven_sink_configuration` makes
-on the sub-daily kernel, and it must stay expressible here too. It defaults to
-the leaf, which is the physically right choice and the one the 50-84% exposure
-loss at air temperature justifies.
+on the sub-daily kernel, and it must stay expressible here too.
+
+It defaults to the leaf on PHYSIOLOGICAL grounds only: the enzymes are in the
+leaf, and a sterility threshold calibrated against air temperature bakes an
+air-temperature calibration into a reproductive module. The empirical case runs
+the other way and this docstring used to make it, wrongly. Air temperature does
+lose 50-84% of the exposure hours, but `grain_set_loss` is exactly linear in
+`sterility_rate`, so that loss is absorbed by rescaling the rate; bounding both
+paths separately against the observational band and comparing perturbation B at
+each one's own bound has AIR responding more strongly at every cell (rice
+-18.9% against -16.0% at a shared bound of 0.01, maize -43.5% against -35.8%).
+The canopy energy balance damps the leaf's response to an air-temperature
+perturbation - d(leaf)/d(air) is 0.88-0.94 and falls as the air warms - so organ
+temperature raises baseline exposure and lowers event sensitivity.
+`docs/07_ablation_framework.md` carries the measurement. None of this transfers
+to the assimilation kernel, where leaf temperature drives enzyme kinetics that
+have nothing to do with the sink.
 
 Deliberately not a rung. The ladder is a sequence of structural deficiencies of
 the baseline being repaired one at a time; this is a claim about which of two
