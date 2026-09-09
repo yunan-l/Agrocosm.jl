@@ -3,7 +3,11 @@ using Enzyme
 using LinearAlgebra
 using Test
 
-function _daily_transition_fixture(climate_days::Int = 16, initial_end_day::Int = 10)
+function _daily_transition_fixture(
+    climate_days::Int = 16,
+    initial_end_day::Int = 10;
+    base_cft = cft1,
+)
     T = Float32
     cells = 1
     layers = 5
@@ -39,7 +43,7 @@ function _daily_transition_fixture(climate_days::Int = 16, initial_end_day::Int 
         ),
     )
     climbuf, crop, pet, soil, managed_land, weather, output = init_states!(
-        cft1, initial_data, cells, identity; T,
+        base_cft, initial_data, cells, identity; T,
     )
     climbuf.atemp .= T(10)
     climbuf.temp .= T(10)
@@ -56,9 +60,10 @@ function _daily_transition_fixture(climate_days::Int = 16, initial_end_day::Int 
     )
     state = model_state(climbuf, crop, pet, soil, managed_land, weather, output)
     global_parameters = ModelParameters(T)
-    processes = ProcessModules(cft1, global_parameters)
+    processes = ProcessModules(base_cft, global_parameters)
     if initial_end_day > 0
-        daily_crop_C3!(1, initial_end_day, processes, climate, state;
+        daily_crop! = base_cft.path == 1 ? daily_crop_C3! : daily_crop_C4!
+        daily_crop!(1, initial_end_day, processes, climate, state;
             fertilizer = :yes,
             manure = true,
             with_tillage = true,
@@ -68,7 +73,14 @@ function _daily_transition_fixture(climate_days::Int = 16, initial_end_day::Int 
     end
     enzyme_prepare_daily_state!(state)
     layer_depth = Tuple(state.inputs.soil.properties.layer_depth)
-    return (; state, climate, global_parameters, layer_depth, day = initial_end_day + 1)
+    return (;
+        state,
+        climate,
+        global_parameters,
+        layer_depth,
+        day = initial_end_day + 1,
+        base_cft,
+    )
 end
 
 function _daily_transition_value(template, theta, parameter_names, observable)
@@ -77,7 +89,7 @@ function _daily_transition_value(template, theta, parameter_names, observable)
     return enzyme_daily_transition_objective(
         theta,
         state,
-        cft1,
+        template.base_cft,
         template.global_parameters,
         template.climate,
         parameter_names,
@@ -141,7 +153,7 @@ function _multi_day_transition_value(template, theta, parameter_names, days, obs
     return _multi_day_transition_objective(
         theta,
         state,
-        cft1,
+        template.base_cft,
         template.global_parameters,
         template.climate,
         parameter_names,
@@ -224,6 +236,97 @@ end
         @test gradient ≈ finite_difference rtol = 2.0f-2 atol = 1.0f-5
     end
 
+end
+
+@testset "Enzyme C4 one-day ModelState transition" begin
+    template = _daily_transition_fixture(; base_cft = cft3)
+    parameter_names = (
+        :laimax, :sla, :alphaa, :lightextcoeff, :gmin,
+        :b, :respcoeff, :intc, :knstore, :albedo_leaf,
+        :basetemp_low, :fphusen,
+    )
+    theta = Float32[
+        name === :basetemp_low ? cft3.basetemp.low : getproperty(cft3, name)
+        for name in parameter_names
+    ]
+    @test length(theta) == 12
+
+    state_factory() = begin
+        state = deepcopy(template.state)
+        return state, enzyme_zero_tangent(state)
+    end
+
+    for observable in (:gpp, :reco, :et)
+        production_state = deepcopy(template.state)
+        enzyme_prepare_daily_state!(production_state)
+        production_processes = ProcessModules(cft3, template.global_parameters)
+        daily_crop_C4!(
+            template.day, template.day, production_processes,
+            template.climate, production_state;
+            fertilizer = :yes,
+            manure = true,
+            with_tillage = true,
+            update_vernalization_requirement = false,
+            reuse_output = true,
+        )
+        production_value = _production_daily_transition_value(production_state, observable)
+        adapter_value = _daily_transition_value(template, theta, parameter_names, observable)
+        @test adapter_value ≈ production_value rtol = 5.0f-5 atol = 1.5f-4
+
+        gradient = enzyme_forward_gradient(
+            enzyme_daily_transition_objective,
+            theta,
+            state_factory,
+            cft3,
+            template.global_parameters,
+            template.climate,
+            parameter_names,
+            template.day,
+            observable,
+            template.layer_depth,
+        )
+        @test all(isfinite, gradient)
+
+        finite_difference = similar(theta)
+        for index in eachindex(theta)
+            step = 1.0f-3 * max(abs(theta[index]), 1.0f0)
+            delta = zeros(Float32, length(theta))
+            delta[index] = step
+            finite_difference[index] = (
+                _daily_transition_value(template, theta .+ delta, parameter_names, observable) -
+                _daily_transition_value(template, theta .- delta, parameter_names, observable)
+            ) / (2.0f0 * step)
+        end
+        @test gradient ≈ finite_difference rtol = 2.0f-2 atol = 1.0f-5
+    end
+
+    days = (template.day, template.day + 1, template.day + 2)
+    context = ADSeasonContext(
+        trues(length(days)),
+        (gpp = trues(length(days)), reco = trues(length(days)), et = trues(length(days))),
+        (
+            gpp = zeros(Float32, length(days)),
+            reco = zeros(Float32, length(days)),
+            et = zeros(Float32, length(days)),
+        ),
+        (gpp = 1.0f0, reco = 1.0f0, et = 1.0f0),
+    )
+    blockwise = enzyme_seasonal_gradient_blockwise(
+        theta,
+        state_factory,
+        cft3,
+        template.global_parameters,
+        template.climate,
+        parameter_names,
+        days,
+        template.layer_depth,
+        context;
+        block_days = 2,
+    )
+    @test length(blockwise.gradient) == 12
+    @test all(isfinite, blockwise.gradient)
+    @test isfinite(blockwise.primal)
+    @test blockwise.primal ≈ blockwise.forward_primal rtol = 2.0f-5 atol = 2.0f-6
 end
 
 @testset "Enzyme multi-day state propagation" begin

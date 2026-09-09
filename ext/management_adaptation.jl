@@ -103,7 +103,8 @@ function Agrocosm.enzyme_management_yield_loss(
     while day <= final_day
         _apply_management_fertilizer!(state, theta[1], context, day, model_parameters.lpjml)
         _enzyme_continuous_transition!(
-            state, cft, model_parameters, climate, day, :gpp, layer_depth, irrigation,
+            state, cft, model_parameters, climate, day, :gpp, layer_depth,
+            irrigation, false, Val(:C3),
         )
         day += 1
     end
@@ -154,7 +155,8 @@ function Agrocosm.enzyme_management_yield_split_loss(
             state, theta[1], theta[2], context, day, model_parameters.lpjml,
         )
         _enzyme_continuous_transition!(
-            state, cft, model_parameters, climate, day, :gpp, layer_depth, irrigation,
+            state, cft, model_parameters, climate, day, :gpp, layer_depth,
+            irrigation, false, Val(:C3),
         )
         day += 1
     end
@@ -234,6 +236,8 @@ function Agrocosm.enzyme_joint_adaptation_yield_loss(
             :gpp,
             layer_depth,
             irrigation,
+            false,
+            Val(:C3),
         )
         day += 1
     end

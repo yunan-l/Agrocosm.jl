@@ -290,10 +290,74 @@ end
     return lambda
 end
 
+@inline _enzyme_smooth_lambda(::Val{:C3}, args...) =
+    _enzyme_smooth_lambda_c3(args...)
+
+@inline function _enzyme_smooth_lambda(
+    ::Val{:C4},
+    fac::T,
+    vcmax,
+    stress,
+    b,
+    co2,
+    temperature,
+    apar,
+    daylength,
+    lpjmlparams,
+    photoparams,
+) where {T}
+    lambda = Agrocosm.compute_lambda_c4_solution(
+        fac,
+        vcmax,
+        stress,
+        b,
+        temperature,
+        apar,
+        daylength,
+        lpjmlparams,
+        photoparams,
+    )
+    for _ in 1:8
+        assimilation = Agrocosm.c4_adtmm_scalar_impl(
+            lambda,
+            vcmax,
+            stress,
+            b,
+            temperature,
+            apar,
+            daylength,
+            lpjmlparams,
+            photoparams,
+        )
+        phipi = min(one(T), lambda / T(photoparams.lambdamc4))
+        light = stress * T(lpjmlparams.alphac4) * apar *
+            T(photoparams.cmass) * T(photoparams.cq) / daylength
+        je = phipi * light
+        jc = vcmax / T(24)
+        je_slope = lambda < T(photoparams.lambdamc4) ?
+            light / T(photoparams.lambdamc4) : zero(T)
+        total = je + jc
+        root = sqrt(max(
+            zero(T),
+            total * total - T(4) * T(lpjmlparams.theta) * je * jc,
+        ))
+        root_slope = root > zero(T) ?
+            (total - T(2) * T(lpjmlparams.theta) * jc) * je_slope / root :
+            zero(T)
+        gross_slope = (je_slope - root_slope) * daylength /
+            (T(2) * T(lpjmlparams.theta))
+        scale = (temperature + T(273.15)) / T(photoparams.p) * T(8.314) /
+            T(photoparams.cmass) * T(1000)
+        slope = -fac - (assimilation > zero(T) ? gross_slope * scale : zero(T))
+        lambda -= (fac * (one(T) - lambda) - assimilation) / slope
+    end
+    return lambda
+end
+
 # The production lambda wrapper packs active CFT scalars into a NamedTuple
 # before launching its kernel. Keep the AD path scalar and explicit so Enzyme
 # can carry the CFT tangent through the continuous fixed-iteration solve.
-function _enzyme_solve_lambda_c3!(
+function _enzyme_solve_lambda!(
     state::Agrocosm.ModelState,
     cft::Agrocosm.CFTParameters,
     pet,
@@ -301,6 +365,7 @@ function _enzyme_solve_lambda_c3!(
     co2,
     lpjmlparams,
     photoparams,
+    pathway::Union{Val{:C3}, Val{:C4}},
 )
     T = eltype(Agrocosm.crop_photosynthesis_auxiliary(state).lambda)
     lambda = Agrocosm.crop_photosynthesis_auxiliary(state).lambda
@@ -317,7 +382,8 @@ function _enzyme_solve_lambda_c3!(
         lambda[cell] = if gpd > T(1e-5) &&
                           temperature_stress[cell] >= T(1e-2) &&
                           pet.daylength[cell] > zero(T) && co2_cell > zero(T)
-            _enzyme_smooth_lambda_c3(
+            _enzyme_smooth_lambda(
+                pathway,
                 fac,
                 vcmax[cell],
                 temperature_stress[cell],
@@ -534,6 +600,12 @@ end
     return Agrocosm.convert_precision(T, parameters)
 end
 
+@inline function _enzyme_pathway(cft::Agrocosm.CFTParameters)
+    cft.path == 1 && return Val(:C3)
+    cft.path == 2 && return Val(:C4)
+    throw(ArgumentError("unsupported crop photosynthesis path $(cft.path)"))
+end
+
 """
     _enzyme_continuous_transition!(state, cft, global_parameters, climate, day, observable)
 
@@ -549,8 +621,9 @@ function _enzyme_continuous_transition!(
     day::Integer,
     observable::Symbol,
     layer_depth,
-    irrigation::Bool = false,
-    nitrogen_limit_vcmax::Bool = false,
+    irrigation::Bool,
+    nitrogen_limit_vcmax::Bool,
+    pathway::Union{Val{:C3}, Val{:C4}},
 )
     T = eltype(Agrocosm.crop_prognostic(state).canopy.lai)
     _enzyme_apply_root_distribution!(state, cft.beta_root)
@@ -580,7 +653,7 @@ function _enzyme_continuous_transition!(
     Agrocosm.tillage_hydraulics!(state; lpjmlparams = global_params)
     Agrocosm.litter_bioturbation!(state; lpjmlparams = global_params)
 
-    Agrocosm.albedo!(cft, state, state, pet)
+    Agrocosm._pathway_albedo!(pathway, cft, state, state, pet, true)
     Agrocosm.petpar!(
         pet,
         day % 365 == 0 ? 365 : day % 365,
@@ -636,11 +709,13 @@ function _enzyme_continuous_transition!(
         lpjmlparams = global_params,
         thermalparams = thermal_params,
     )
-    Agrocosm.apar_crop!(
+    Agrocosm._pathway_apar!(
+        pathway,
         cft,
         state,
         pet,
         Agrocosm.soil_snow_prognostic(state).height,
+        true,
     )
     Agrocosm.temp_stress(
         cft,
@@ -650,7 +725,7 @@ function _enzyme_continuous_transition!(
         photoparams = photo_params,
     )
     Agrocosm.photosynthesis!(
-        Val(:C3),
+        pathway,
         cft,
         state,
         Agrocosm.crop_canopy_auxiliary(state).apar,
@@ -670,7 +745,7 @@ function _enzyme_continuous_transition!(
         current_co2;
         lpjmlparams = global_params,
     )
-    _enzyme_solve_lambda_c3!(
+    _enzyme_solve_lambda!(
         state,
         cft,
         pet,
@@ -678,6 +753,7 @@ function _enzyme_continuous_transition!(
         current_co2,
         global_params,
         photo_params,
+        pathway,
     )
     if nitrogen_limit_vcmax
         # Match the nitrogen-limited production path: derive demand and acquire
@@ -700,7 +776,7 @@ function _enzyme_continuous_transition!(
         )
     end
     Agrocosm.photosynthesis!(
-        Val(:C3),
+        pathway,
         cft,
         state,
         Agrocosm.crop_canopy_auxiliary(state).apar,
@@ -1073,6 +1149,7 @@ function Agrocosm.enzyme_seasonal_loss(
     context::Agrocosm.ADSeasonContext;
     irrigation::Bool = false,
 ) where {T <: AbstractFloat}
+    pathway = _enzyme_pathway(base_cft)
     cft = _replace_cft_parameters(base_cft, theta, parameter_names)
     gpp_loss = zero(T)
     reco_loss = zero(T)
@@ -1088,6 +1165,8 @@ function Agrocosm.enzyme_seasonal_loss(
             :et,
             layer_depth,
             irrigation,
+            false,
+            pathway,
         )
         if context.growth_mask[day_index]
             crop_flux = Agrocosm.crop_fluxes(state)
@@ -1202,6 +1281,7 @@ function _enzyme_seasonal_loss_block(
     context::Agrocosm.ADSeasonContext,
     day_range::UnitRange{Int},
     irrigation::Bool,
+    pathway::Union{Val{:C3}, Val{:C4}},
 ) where {T <: AbstractFloat}
     cft = _replace_cft_parameters(base_cft, theta, parameter_names)
     losses = _ADSeasonalLossAccumulator(zero(T), zero(T), zero(T))
@@ -1215,6 +1295,8 @@ function _enzyme_seasonal_loss_block(
             :et,
             layer_depth,
             irrigation,
+            false,
+            pathway,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end
@@ -1243,6 +1325,7 @@ function Agrocosm.enzyme_seasonal_soil_loss(
     context::Agrocosm.ADSeasonContext;
     irrigation::Bool = false,
 ) where {T <: AbstractFloat}
+    pathway = _enzyme_pathway(base_cft)
     model_parameters = _replace_model_parameters(
         base_parameters, theta_soil, soil_parameter_names,
     )
@@ -1257,6 +1340,8 @@ function Agrocosm.enzyme_seasonal_soil_loss(
             :et,
             layer_depth,
             irrigation,
+            false,
+            pathway,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end
@@ -1288,6 +1373,7 @@ function Agrocosm.enzyme_seasonal_joint_loss(
     context::Agrocosm.ADSeasonContext;
     irrigation::Bool = false,
 ) where {T <: AbstractFloat}
+    pathway = _enzyme_pathway(base_cft)
     cft = _replace_cft_parameters(base_cft, theta_cft, cft_parameter_names)
     model_parameters = _replace_model_parameters(
         base_parameters, theta_soil, soil_parameter_names,
@@ -1303,6 +1389,8 @@ function Agrocosm.enzyme_seasonal_joint_loss(
             :et,
             layer_depth,
             irrigation,
+            false,
+            pathway,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end
@@ -1323,6 +1411,7 @@ function _enzyme_seasonal_joint_loss_block(
     context::Agrocosm.ADSeasonContext,
     day_range::UnitRange{Int},
     irrigation::Bool,
+    pathway::Union{Val{:C3}, Val{:C4}},
 ) where {T <: AbstractFloat}
     cft = _replace_cft_parameters(base_cft, theta_cft, cft_parameter_names)
     model_parameters = _replace_model_parameters(
@@ -1339,6 +1428,8 @@ function _enzyme_seasonal_joint_loss_block(
             :et,
             layer_depth,
             irrigation,
+            false,
+            pathway,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end
@@ -1357,6 +1448,7 @@ function _enzyme_seasonal_soil_loss_block(
     context::Agrocosm.ADSeasonContext,
     day_range::UnitRange{Int},
     irrigation::Bool,
+    pathway::Union{Val{:C3}, Val{:C4}},
 ) where {T <: AbstractFloat}
     model_parameters = _replace_model_parameters(
         base_parameters, theta_soil, soil_parameter_names,
@@ -1372,6 +1464,8 @@ function _enzyme_seasonal_soil_loss_block(
             :et,
             layer_depth,
             irrigation,
+            false,
+            pathway,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end
@@ -1397,6 +1491,7 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
     ))
     ranges = _seasonal_block_ranges(days, Int(block_days))
     isempty(ranges) && throw(ArgumentError("days must not be empty"))
+    pathway = _enzyme_pathway(base_cft)
 
     state, _ = _state_and_shadow(state_factory)
     Agrocosm.enzyme_prepare_daily_state!(state)
@@ -1416,6 +1511,7 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
             context,
             day_range,
             irrigation,
+            pathway,
         )
     end
 
@@ -1442,6 +1538,7 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
             Enzyme.Const(context),
             Enzyme.Const(day_range),
             Enzyme.Const(irrigation),
+            Enzyme.Const(pathway),
         )
         reverse_primal += result[2]
         gradient .+= block_gradient
@@ -1484,6 +1581,7 @@ function Agrocosm.enzyme_seasonal_joint_gradient_blockwise(
     ))
     ranges = _seasonal_block_ranges(days, Int(block_days))
     isempty(ranges) && throw(ArgumentError("days must not be empty"))
+    pathway = _enzyme_pathway(base_cft)
 
     state, _ = _state_and_shadow(state_factory)
     Agrocosm.enzyme_prepare_daily_state!(state)
@@ -1505,6 +1603,7 @@ function Agrocosm.enzyme_seasonal_joint_gradient_blockwise(
             context,
             day_range,
             irrigation,
+            pathway,
         )
     end
 
@@ -1535,6 +1634,7 @@ function Agrocosm.enzyme_seasonal_joint_gradient_blockwise(
             Enzyme.Const(context),
             Enzyme.Const(day_range),
             Enzyme.Const(irrigation),
+            Enzyme.Const(pathway),
         )
         reverse_primal += result[2]
         cft_gradient .+= block_cft_gradient
@@ -1594,6 +1694,7 @@ function Agrocosm.enzyme_seasonal_gradient_blockwise(
     ))
     ranges = _seasonal_block_ranges(days, Int(block_days))
     isempty(ranges) && throw(ArgumentError("days must not be empty"))
+    pathway = _enzyme_pathway(base_cft)
 
     state, _ = _state_and_shadow(state_factory)
     Agrocosm.enzyme_prepare_daily_state!(state)
@@ -1613,6 +1714,7 @@ function Agrocosm.enzyme_seasonal_gradient_blockwise(
             context,
             day_range,
             irrigation,
+            pathway,
         )
     end
 
@@ -1639,6 +1741,7 @@ function Agrocosm.enzyme_seasonal_gradient_blockwise(
             Enzyme.Const(context),
             Enzyme.Const(day_range),
             Enzyme.Const(irrigation),
+            Enzyme.Const(pathway),
         )
         reverse_primal += result[2]
         gradient .+= block_gradient
@@ -1677,10 +1780,11 @@ function Agrocosm.enzyme_daily_transition_objective(
     layer_depth;
     irrigation::Bool = false,
 ) where {T <: AbstractFloat}
+    pathway = _enzyme_pathway(base_cft)
     cft = _replace_cft_parameters(base_cft, theta, parameter_names)
     _enzyme_continuous_transition!(
         state, cft, global_parameters, climate, day, observable, layer_depth,
-        irrigation,
+        irrigation, false, pathway,
     )
     return _daily_transition_observable(state, observable)
 end
