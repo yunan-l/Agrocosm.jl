@@ -197,7 +197,7 @@ With `x = T_leaf - T_air` and `m = T_expansion - T_air`, the balance reduces to
 which at `m == 0` is the ordinary first-order form. Calling this twice, the
 second time with the first estimate as the expansion point, is algebraically a
 single Newton correction and cuts the worst-case linearisation error from
-0.46 K to 0.003 K.
+0.46 C to 0.003 C.
 """
 @inline function _departure_about(
     expansion_temperature::T,

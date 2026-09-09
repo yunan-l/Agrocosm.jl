@@ -411,21 +411,21 @@ for cft_id in (isempty(ARGS) ? (1,) : Tuple(parse.(Int, ARGS)))
         direction = zeros(T, size(forcing))
         direction[first(days):(first(days) + 2), 1, 1] .= one(T)
         projection = sum(result.gradient .* direction)
-        # 0.05 K in both precisions, and the Float64 step is the interesting
+        # 0.05 C in both precisions, and the Float64 step is the interesting
         # one: it was 0.01 on the reasoning that Float64 can afford a smaller
         # step, which is wrong here because the limit is not arithmetic
         # precision but the model's own non-smoothness. Measured on this
         # fixture, disagreement against the AD projection at
-        # 0.1 / 0.05 / 0.02 / 0.01 / 0.005 / 0.002 / 0.001 / 0.0005 K:
+        # 0.1 / 0.05 / 0.02 / 0.01 / 0.005 / 0.002 / 0.001 / 0.0005 C:
         #
         #   0.93%  0.73%  7.6%  13.1%  13.5%  31.3%  75.1%  67.4%
         #
         # Monotonically worse as the step shrinks, in Float64. A season is a
         # chain of `min`/`max`/`clamp` decisions whose switching points move
-        # with the perturbation, so below about 0.02 K the secant samples that
+        # with the perturbation, so below about 0.02 C the secant samples that
         # structure instead of the local slope. An independent bound on the
         # same thing: `result.primal` and `result.production_yield` differ by
-        # 6.9e-7 here, which already exceeds the 6.3e-7 numerator a 0.001 K
+        # 6.9e-7 here, which already exceeds the 6.3e-7 numerator a 0.001 C
         # central difference produces. Do not shrink this step to make the
         # check look sharper - it makes it meaningless. `rtol` stays at 5%
         # because 0.73% is the honest resolution of this measurement, not a

@@ -83,7 +83,7 @@ end
     # A thinner boundary layer welds the leaf to the air. The sweep stops at
     # 1e-3 m because `leaf_boundary_layer_conductance` floors the characteristic
     # dimension there to keep the square root away from zero, so this limit is
-    # asymptotic, not exact: at the floor a residual departure of order 0.1 K
+    # asymptotic, not exact: at the floor a residual departure of order 0.1 C
     # survives. The ablation experiment's exact "organ temperature off" arm
     # therefore has to come from the configuration switch, never from shrinking
     # this parameter.
@@ -125,11 +125,11 @@ end
         worst_error = max(worst_error, abs(air + estimate - truth))
     end
     @info "E3 closed-form accuracy" worst_residual worst_error
-    # The temperature threshold is the meaningful one: 0.05 K is an order of
+    # The temperature threshold is the meaningful one: 0.05 C is an order of
     # magnitude below the scheme's own structural biases (no stability
     # correction, conductance frozen across sub-steps), so tightening it further
     # would be measuring noise against a much larger systematic error. The flux
-    # threshold is the same statement rescaled - a 0.05 K miss against a typical
+    # threshold is the same statement rescaled - a 0.05 C miss against a typical
     # denominator of ~60 W m-2 K-1 is ~3 W m-2, itself under 1% of the several
     # hundred W m-2 of net radiation being balanced.
     @test worst_error < 0.05       # K
