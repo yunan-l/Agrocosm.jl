@@ -13,6 +13,14 @@ mutable struct CropPhenology{A, B, I}
     # rather than diagnostic precisely so the damage cannot be undone by a cool
     # spell after the event.
     grain_set_fraction::A
+    # Surviving fraction of potential grain FILLING (0-1), reduced irreversibly
+    # by heat exposure after anthesis and reset to one at sowing. Separate from
+    # `grain_set_fraction` because the two damage different things at different
+    # times: grain set fixes the NUMBER of grains around flowering, filling
+    # fixes their WEIGHT afterwards, and a model carrying only the first cannot
+    # express terminal heat at all. Prognostic for the same reason as its
+    # sibling - starch not deposited is not deposited later.
+    grain_fill_fraction::A
 end
 
 """Static and current-day algebraically derived phenology variables."""
@@ -36,6 +44,7 @@ function init_crop_phenology(::Type{T}, cell_size::Int, device) where {T <: Abst
         bool_state(true),
         device(zeros(Int32, cell_size)),
         device(zeros(Int32, cell_size)),
+        device(ones(T, cell_size)),
         device(ones(T, cell_size)),
     )
 end

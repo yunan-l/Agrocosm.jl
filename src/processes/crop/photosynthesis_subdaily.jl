@@ -258,6 +258,7 @@ function photosynthesis_subdaily_C3!(CFT::CFTParameters,
         crop_photosynthesis_auxiliary(crop).lambda,
         crop_photosynthesis_auxiliary(crop).temperature_stress,
         crop_stress_auxiliary(crop).heat_exposure_hours,
+        crop_stress_auxiliary(crop).filling_exposure_hours,
         apar,
         pet_daylength,
         temp,
@@ -284,6 +285,7 @@ end
     lambda::AbstractVector{T},
     temperature_stress::AbstractVector{T},
     heat_exposure_hours::AbstractVector{T},
+    filling_exposure_hours::AbstractVector{T},
     apar::AbstractVector{T},
     daylength::AbstractVector{T},
     temperature::AbstractVector{T},
@@ -299,7 +301,7 @@ end
     cell = @index(Global)
     @unpack b, path, temp_co2, temp_photos = CFT
     @unpack leaf_dimension, leaf_emissivity, lightextcoeff = CFT
-    @unpack sterility_temperature = CFT
+    @unpack sterility_temperature, filling_temperature = CFT
     @unpack ko25, kc25, alphac3, theta, LAMBDA_OPT = lpjmlparams
     @unpack q10ko, q10kc, po2, tau25, q10tau, cmass, cq, p, lambdamc3 = photoparams
     @unpack tmc3, tmc4 = photoparams
@@ -363,6 +365,7 @@ end
     interval = daylength_cell / T(STEPS)
     gross = zero(T)
     exposure = zero(T)
+    filling = zero(T)
     for index in 1:STEPS
         temperature_substep = diurnal_temperature(
             index, STEPS, temperature_cell, range_cell, daylength_cell, SHAPE,
@@ -389,6 +392,12 @@ end
         # here: the sub-step loop and the leaf temperature already exist.
         exposure += interval * smooth_exceedance(
             leaf_substep - T(sterility_temperature), T(STERILITY_SMOOTHING_WIDTH),
+        )
+        # An independent accumulator at the lower grain-filling threshold, for
+        # terminal heat. It adds one exceedance per sub-step and reads nothing
+        # else, so every other quantity this loop produces is unchanged bitwise.
+        filling += interval * smooth_exceedance(
+            leaf_substep - T(filling_temperature), T(STERILITY_SMOOTHING_WIDTH),
         )
         ko_substep = T(ko25) * T(q10ko)^((leaf_substep - T(25)) * T(0.1))
         kc_substep = T(kc25) * T(q10kc)^((leaf_substep - T(25)) * T(0.1))
@@ -420,6 +429,7 @@ end
     # actually does. Zeroing it here, as this line used to, made that comparison
     # inexpressible.
     heat_exposure_hours[cell] = exposure
+    filling_exposure_hours[cell] = filling
 
     leaf = inactive ? zero(T) : T(b) * vcmax[cell]
     leaf_respiration[cell] = leaf
@@ -453,6 +463,7 @@ function photosynthesis_subdaily_C4!(CFT::CFTParameters,
         crop_photosynthesis_auxiliary(crop).lambda,
         crop_photosynthesis_auxiliary(crop).temperature_stress,
         crop_stress_auxiliary(crop).heat_exposure_hours,
+        crop_stress_auxiliary(crop).filling_exposure_hours,
         apar,
         pet_daylength,
         temp,
@@ -478,6 +489,7 @@ end
     lambda::AbstractVector{T},
     temperature_stress::AbstractVector{T},
     heat_exposure_hours::AbstractVector{T},
+    filling_exposure_hours::AbstractVector{T},
     apar::AbstractVector{T},
     daylength::AbstractVector{T},
     temperature::AbstractVector{T},
@@ -492,7 +504,7 @@ end
     cell = @index(Global)
     @unpack b, path, temp_co2, temp_photos = CFT
     @unpack leaf_dimension, leaf_emissivity, lightextcoeff = CFT
-    @unpack sterility_temperature = CFT
+    @unpack sterility_temperature, filling_temperature = CFT
     @unpack alphac4, theta, LAMBDA_OPT = lpjmlparams
     @unpack lambdamc4, cmass, cq, p, tmc3, tmc4 = photoparams
 
@@ -540,6 +552,7 @@ end
     interval = daylength_cell / T(STEPS)
     gross = zero(T)
     exposure = zero(T)
+    filling = zero(T)
     for index in 1:STEPS
         temperature_substep = diurnal_temperature(
             index, STEPS, temperature_cell, range_cell, daylength_cell, SHAPE,
@@ -561,6 +574,12 @@ end
         exposure += interval * smooth_exceedance(
             leaf_substep - T(sterility_temperature), T(STERILITY_SMOOTHING_WIDTH),
         )
+        # An independent accumulator at the lower grain-filling threshold, for
+        # terminal heat. It adds one exceedance per sub-step and reads nothing
+        # else, so every other quantity this loop produces is unchanged bitwise.
+        filling += interval * smooth_exceedance(
+            leaf_substep - T(filling_temperature), T(STERILITY_SMOOTHING_WIDTH),
+        )
         c1 = stress_substep * phipi * T(alphac4)
         apar_substep = radiation_fraction * T(STEPS) * apar[cell]
         je = c1 * apar_substep * T(cmass) * T(cq) / (daylength_cell + T(1e-5))
@@ -578,6 +597,7 @@ end
     # actually does. Zeroing it here, as this line used to, made that comparison
     # inexpressible.
     heat_exposure_hours[cell] = exposure
+    filling_exposure_hours[cell] = filling
 
     leaf = inactive ? zero(T) : T(b) * vcmax[cell]
     leaf_respiration[cell] = leaf

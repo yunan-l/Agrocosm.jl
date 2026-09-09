@@ -178,15 +178,84 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     # kept until crop-specific values are sourced from a primary reference.
     leaf_dimension::T = 0.04   # Characteristic leaf dimension along the flow (m).
     leaf_emissivity::T = 0.98  # Leaf longwave emissivity (0–1).
-    # Reproductive sink. Defaulted like the energy-balance pair above, and inert
-    # unless the sink is switched on. The thresholds are the conventional
-    # per-crop values; `sterility_rate` is a placeholder and must be calibrated
-    # before any of its numbers are reported. See
-    # docs/05_reproductive_sink_design.md.
+    # Reproductive sink. Inert unless the sink is switched on, and inert unless
+    # something fills `heat_exposure_hours`. The thresholds are the conventional
+    # per-crop values. See docs/05_reproductive_sink_design.md.
+    #
+    # `sterility_rate` was 0.0, which made the sink inert in every run that did
+    # not override it - so every event-response number this project reported
+    # came from a driver script rather than from the parameter set. 0.01 is not
+    # a fit. It is an UPPER BOUND, and the distinction matters because yield
+    # falls monotonically in the rate: rate = 0 gives the highest yield, so
+    # there is no interior optimum for a reference to find and none was sought.
+    #
+    # The bound comes from `tools/sterility_calibration.jl`, which sweeps the
+    # rate at five cells against the 100 km GDHY neighbourhood spread for each
+    # harvest year - the spread rather than a single grid cell, because it is
+    # 3-12x wider than the choice of trend estimator. The binding cell is rice
+    # (Mekong): 0.01 gives 3.95 t/ha against a reference of 3.99 and a band of
+    # [3.67, 4.91], while 0.03 gives 3.14 and leaves the band. Maize admits up
+    # to 0.03. The value is uniform across crops rather than per-crop because
+    # there is one cell per crop, and differentiating four rates on four cells
+    # would be fitting noise.
+    #
+    # What the bound buys is the project's dual criterion with a provenanced
+    # number: at 0.01 the rice cell is inside the observed band AND loses 16.0%
+    # of its yield to a five-day widening of the diurnal range that leaves the
+    # daily mean untouched.
+    #
+    # What it does not buy: at two of the five cells no rate helps, because the
+    # mean-yield deficit runs the wrong way - Morocco wheat is above the band's
+    # ceiling and Michigan soybean below its floor, and the sink can only ever
+    # subtract. And at the hot-wheat cell the sink is inert at every rate up to
+    # 0.1, which is the measured case for the missing grain-FILLING mechanism:
+    # grain set cannot reach terminal heat.
     flowering_start::T = 0.45       # `fphu` at which grain set becomes sensitive.
     flowering_end::T = 0.70         # `fphu` at which sensitivity ends.
     sterility_temperature::T = 35.0 # Organ-temperature threshold for sterility (°C).
-    sterility_rate::T = 0.0         # Grain set lost per exposure-hour; 0 = inert.
+    sterility_rate::T = 0.01        # Grain set lost per exposure-hour; 0 = inert.
+    # Terminal heat, acting on grain FILLING rather than grain set. A separate
+    # window, a separate threshold and a separate rate, because it is separate
+    # physiology: heat after anthesis shortens filling duration and inhibits
+    # starch deposition, reducing grain WEIGHT, where the sink above reduces
+    # grain NUMBER. See docs/08_terminal_heat_design.md.
+    #
+    # The window opens where the flowering window closes and runs to near
+    # maturity. The threshold is lower than `sterility_temperature`, and the
+    # measurement that forces it is at the hot-wheat gate cell: in the filling
+    # window it accumulates 75.8 leaf-temperature exposure hours above 30 C but
+    # only 0.4 above 35 C, with a peak leaf temperature of 34.5 C. A mechanism
+    # sharing the sterility threshold would be exactly as inert there as the
+    # sink is, which is the whole reason this exists.
+    #
+    # `filling_rate` is an UPPER BOUND, on the same footing as `sterility_rate`
+    # and from the same sweep. The bounds come out an order of magnitude tighter,
+    # exactly as the exposure predicted: the filling window carries far more
+    # exposure than the flowering window at every gate cell (rice 552.8 h above
+    # 30 C, maize 71.5 h, hot wheat 75.8 h), so the same rate is a much larger
+    # intervention here.
+    #
+    #   rice   <= 0.001     maize  <= 0.001     hot wheat <= 0.003
+    #   Morocco wheat and Michigan soybean: no rate accepted, the deficit runs
+    #   the wrong way at both, as it does for the sink.
+    #
+    # 0.001 is the binding bound and is uniform across crops for the same reason
+    # the sterility rate is: one cell per crop cannot justify four rates. That is
+    # a real limitation here rather than a formality, because terminal-heat
+    # sensitivity genuinely differs by crop - wheat filling is far more heat
+    # sensitive than rice, which is adapted to warm filling - so a crop-specific
+    # rate is the first thing more validation cells should buy.
+    #
+    # What the bound buys: at the hot-wheat cell, where the grain-set sink is
+    # inert at every rate up to 0.1 because the sterility threshold is never
+    # crossed, 0.001 takes yield from 4.39 to 4.22 t/ha and the harvest index
+    # from 0.485 to 0.466, and 0.003 - still inside the observed band - takes
+    # them to 3.87 and 0.427. The mechanism reaches the case it was built for,
+    # which is the thing the sink demonstrably could not do.
+    filling_start::T = 0.70         # `fphu` at which grain filling becomes sensitive.
+    filling_end::T = 0.95           # `fphu` at which sensitivity ends.
+    filling_temperature::T = 30.0   # Organ-temperature threshold for filling damage (°C).
+    filling_rate::T = 0.001         # Filling capacity lost per exposure-hour; 0 = inert.
 end
 
 """Return a CFT parameter set whose floating fields consistently use `T`."""

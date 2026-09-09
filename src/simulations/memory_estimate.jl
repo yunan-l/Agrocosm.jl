@@ -65,10 +65,13 @@ end
 #
 # This count must be updated whenever a per-cell float field is added to the
 # persistent state, or `estimate_memory(cells, days; ...)` silently disagrees
-# with `estimate_memory(simulation)`, which walks the real object. Two fields
-# were added for the organ-temperature and reproductive-sink modules:
-# `stress.heat_exposure_hours` and `phenology.grain_set_fraction`.
-const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1645
+# with `estimate_memory(simulation)`, which walks the real object. Four fields
+# were added by this project's modules: `stress.heat_exposure_hours` and
+# `phenology.grain_set_fraction` for organ temperature and the reproductive
+# sink, then `stress.filling_exposure_hours` and
+# `phenology.grain_fill_fraction` for terminal heat. `test_simulation_api.jl`
+# compares the two estimates and is what catches an omission here.
+const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1647
 const _PERSISTENT_NONFLOAT_BYTES_PER_CELL = 46
 const _PERSISTENT_FIXED_FLOAT_VALUES = 26
 

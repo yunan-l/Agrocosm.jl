@@ -25,6 +25,15 @@ mutable struct CropStressAuxiliary{A}
     # runs several times per day, and the reproductive-sink kernel consumes
     # this once per day.
     heat_exposure_hours::A
+    # The same quantity at the grain-FILLING threshold, which is lower: wheat
+    # grain filling is impaired well below the sterility threshold. Two fields
+    # rather than one because the two thresholds are genuinely different
+    # physiology, and at the hot-wheat gate cell the difference is the whole
+    # mechanism - 75.8 exposure hours above 30 C in the filling window against
+    # 0.4 above 35 C, with a peak leaf temperature of 34.5 C that never reaches
+    # the sterility threshold at all. Filled by the same kernels, in the same
+    # loop, from the same leaf temperature.
+    filling_exposure_hours::A
 end
 
 """Static root geometry plus the current-day root-zone water diagnostic."""
@@ -114,7 +123,7 @@ function init_crop(::Type{T},
             init_crop_photosynthesis_auxiliary(T, cell_size, device),
             CropStressAuxiliary(
                 float_auxiliary(), float_auxiliary(), float_auxiliary(),
-                float_auxiliary(), float_auxiliary(),
+                float_auxiliary(), float_auxiliary(), float_auxiliary(),
             ),
         ),
         init_crop_events(cell_size, device),

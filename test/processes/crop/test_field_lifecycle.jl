@@ -90,9 +90,14 @@ end
         :nitrogen_demand_leaf,
         :nitrogen_deficit,
         :water_deficit,
-        # Written by the sub-daily assimilation kernels at organ temperature and
-        # consumed once per day by the reproductive sink.
+        # Written at organ temperature by whichever of the three exposure
+        # kernels the run enables, and consumed once per day by the
+        # reproductive sink.
         :heat_exposure_hours,
+        # The same quantity at the lower grain-filling threshold, consumed by
+        # terminal heat. Two fields because the thresholds are different
+        # physiology, not a tolerance.
+        :filling_exposure_hours,
     )
     @test crop.auxiliary.root.distribution isa AbstractVector
     @test :canopy ∈ propertynames(crop.state)
@@ -105,6 +110,10 @@ end
         :harvesting, :harvesting_previous, :growing_days, :is_growing,
         # Prognostic, monotone, reset at sowing: heat-driven loss of grain set.
         :grain_set_fraction,
+        # The same contract for grain FILLING, which terminal heat reduces.
+        # Separate state because the harvest index multiplies the two, so
+        # neither can stand in for the other.
+        :grain_fill_fraction,
     )
     @test propertynames(crop.auxiliary.phenology) == (:phu, :winter_type, :fphu)
     @test propertynames(crop.auxiliary.calendar) == (:sowing_date, :prescribed_sowing_date)

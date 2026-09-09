@@ -8,6 +8,32 @@ using Test
 # "does the constructor actually enforce what the table claims" and "does every
 # rung the table offers actually build".
 
+
+"""Drive `ablation_metrics`' reduction on synthetic annual output.
+
+Mirrors the real reduction rather than re-deriving it, so the test fails if the
+reduction changes. Built as a minimal stand-in for a finished `CropSimulation`'s
+annual rows: `yield` and `harvest_aboveground_carbon` in gC, and the annual
+`harvest_date`, which is nonzero for any season that ended - destroyed or not.
+"""
+function _fake_metrics(season_yield, season_above, harvest_date)
+    scale = Agrocosm.GRAMS_PER_M2_TO_TONNES_PER_HECTARE /
+            Agrocosm.CARBON_FRACTION_OF_DRY_MATTER
+    completed = count(>(0), harvest_date)
+    with_grain = count(>(0), season_yield)
+    ended = [(g, a) for (g, a) in zip(season_yield, season_above) if a > 0]
+    total = sum(filter(>(0), season_yield); init = 0.0) * scale
+    return (
+        seasons = completed,
+        seasons_with_grain = with_grain,
+        seasons_destroyed = completed - with_grain,
+        yield_total = total,
+        yield_per_season = completed == 0 ? 0.0 : total / completed,
+        harvest_index = isempty(ended) ? 0.0 :
+            sum(g / a for (g, a) in ended) / length(ended),
+    )
+end
+
 _configuration(; kwargs...) = Agrocosm.SimulationConfiguration(
     Float32, identity, 10, [1], [1]; kwargs...,
 )
@@ -89,6 +115,114 @@ end
     end
 end
 
+@testset "The daily-assimilation sink cell is expressible and off the ladder" begin
+    # The configuration today's separability measurement argues for: the sink
+    # and leaf temperature without the sub-daily assimilation loop, so the
+    # calibrated daily kernel grows the canopy that the exposure integral then
+    # reads. See docs/07_ablation_framework.md.
+    settings = ablation_daily_assimilation_sink_configuration()
+    @test !settings.subdaily_photosynthesis
+    @test settings.subdaily_heat_exposure
+    @test settings.organ_temperature
+    @test settings.reproductive_sink
+    configuration = _configuration(; settings...)
+    @test !configuration.subdaily_photosynthesis
+    @test configuration.subdaily_heat_exposure
+    @test configuration.reproductive_sink
+    # Exactly one loop is live, which is what makes the exposure field have one
+    # writer.
+    @test Agrocosm.diurnal_configuration(configuration) === nothing
+    @test Agrocosm.heat_exposure_configuration(configuration) !== nothing
+
+    # The leaf/air comparison has to survive into this architecture too, since
+    # air temperature loses most of the exposure hours.
+    air = ablation_daily_assimilation_sink_configuration(; organ_temperature = false)
+    @test !air.organ_temperature
+    @test air.subdaily_heat_exposure
+    @test _configuration(; air...).reproductive_sink
+
+    # Not a rung: no point on the ladder reproduces it, because every rung with
+    # the sink on also has the sub-daily assimilation loop on.
+    for rung in ablation_rungs()
+        rung_settings = ablation_configuration(rung)
+        @test !haskey(rung_settings, :subdaily_heat_exposure)
+        rung_settings.reproductive_sink && @test rung_settings.subdaily_photosynthesis
+    end
+
+    # A fixed comparison cell apart from `organ_temperature`, so the switches it
+    # owns cannot be overridden into something still carrying its name.
+    for field in (:subdaily_photosynthesis, :subdaily_heat_exposure, :reproductive_sink)
+        @test_throws ArgumentError ablation_daily_assimilation_sink_configuration(;
+            field => true,
+        )
+    end
+end
+
+@testset "The daily-statistic floor cell is expressible and off the ladder" begin
+    # The cell that keeps "a daily model responds exactly zero" from being a
+    # definition: tasmax rises when the range widens, so a criterion built on it
+    # is not inert, and the cell measures what it recovers.
+    settings = ablation_daily_statistic_sink_configuration()
+    @test settings.daily_statistic_exposure
+    @test !settings.subdaily_photosynthesis
+    @test !settings.subdaily_heat_exposure
+    @test !settings.organ_temperature
+    @test settings.reproductive_sink
+    configuration = _configuration(; settings...)
+    @test Agrocosm.daily_statistic_exposure_enabled(configuration)
+    @test Agrocosm.diurnal_configuration(configuration) === nothing
+    @test Agrocosm.heat_exposure_configuration(configuration) === nothing
+
+    # No rung reproduces it, and it owns every switch it sets.
+    for rung in ablation_rungs()
+        @test !haskey(ablation_configuration(rung), :daily_statistic_exposure)
+    end
+    for field in (:subdaily_photosynthesis, :subdaily_heat_exposure,
+                  :daily_statistic_exposure, :organ_temperature, :reproductive_sink)
+        @test_throws ArgumentError ablation_daily_statistic_sink_configuration(;
+            field => true,
+        )
+    end
+
+    # The closed form has no sub-steps, so it cannot host a canopy energy
+    # balance; asking for one is a contradiction rather than a silent no-op.
+    @test_throws ArgumentError _configuration(;
+        daily_statistic_exposure = true, organ_temperature = true,
+    )
+end
+
+@testset "heat_exposure_hours has exactly one writer" begin
+    # Two writers would leave the field carrying whichever kernel ran last, so
+    # every ablation cell reading it would silently stop measuring what it
+    # claims. The constructor is where that has to fail.
+    for (a, b) in ((:subdaily_photosynthesis, :subdaily_heat_exposure),
+                   (:subdaily_photosynthesis, :daily_statistic_exposure),
+                   (:subdaily_heat_exposure, :daily_statistic_exposure))
+        @test_throws ArgumentError _configuration(; a => true, b => true)
+    end
+    @test_throws ArgumentError _configuration(;
+        subdaily_photosynthesis = true, subdaily_heat_exposure = true,
+        daily_statistic_exposure = true,
+    )
+    # All three satisfy the sink; only the two sub-daily loops satisfy organ
+    # temperature, and nothing is satisfied by no source at all.
+    for host in (:subdaily_photosynthesis, :subdaily_heat_exposure,
+                 :daily_statistic_exposure)
+        @test _configuration(; host => true, reproductive_sink = true).reproductive_sink
+    end
+    for host in (:subdaily_photosynthesis, :subdaily_heat_exposure)
+        @test _configuration(; host => true, reproductive_sink = true).reproductive_sink
+        @test _configuration(; host => true, organ_temperature = true).organ_temperature
+    end
+    @test_throws ArgumentError _configuration(; reproductive_sink = true)
+    @test_throws ArgumentError _configuration(; organ_temperature = true)
+    # The capacity solve belongs to the assimilation light course, so the
+    # standalone pass does not host it.
+    @test_throws ArgumentError _configuration(;
+        subdaily_heat_exposure = true, subdaily_capacity_optimum = true,
+    )
+end
+
 @testset "Each ablation rung is a complete, buildable structure statement" begin
     owned = map(step -> step.field, ABLATION_LADDER)
     for (position, rung) in enumerate(ablation_rungs())
@@ -141,4 +275,34 @@ end
     @test all(pair -> last(pair).subdaily_steps == 24, ladder)
     @test !last(ladder[1]).subdaily_photosynthesis
     @test last(ladder[end]).reproductive_sink
+end
+
+@testset "A destroyed season lowers the ablation metric" begin
+    # The defect this guards against is subtle and was live: dividing yield by
+    # the count of seasons that YIELDED removes a destroyed season from the
+    # numerator and the denominator together, so an event that annihilates a
+    # crop reports no change at all. On an extreme-event ladder that is not a
+    # rough edge, it is the metric being blind to the outcome it exists to
+    # measure. Two seasons, one destroyed, must read lower than two intact
+    # ones.
+    intact = _fake_metrics([200.0, 200.0], [400.0, 400.0], Int32[150, 515])
+    ruined = _fake_metrics([200.0, 0.0], [400.0, 400.0], Int32[150, 515])
+    absent = _fake_metrics([200.0, 0.0], [400.0, 0.0], Int32[150, 0])
+
+    @test intact.seasons == 2 && intact.seasons_with_grain == 2
+    @test intact.seasons_destroyed == 0
+    @test ruined.seasons == 2 && ruined.seasons_with_grain == 1
+    @test ruined.seasons_destroyed == 1
+    @test ruined.yield_per_season < intact.yield_per_season
+    @test ruined.yield_per_season ≈ intact.yield_per_season / 2
+    # And the harvest index registers it too: a season with above-ground carbon
+    # and no grain contributes a genuine zero.
+    @test ruined.harvest_index ≈ intact.harvest_index / 2
+
+    # A row where no season happened at all is not a destroyed season: no
+    # harvest date, no above-ground carbon, so it must not dilute either mean.
+    @test absent.seasons == 1
+    @test absent.seasons_destroyed == 0
+    @test absent.yield_per_season ≈ intact.yield_per_season
+    @test absent.harvest_index ≈ intact.harvest_index
 end

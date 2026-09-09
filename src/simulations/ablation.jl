@@ -190,6 +190,144 @@ function ablation_air_driven_sink_configuration(; kwargs...)
 end
 
 """
+    ablation_daily_assimilation_sink_configuration(; organ_temperature = true, kwargs...)
+
+The off-ladder cell that runs the reproductive sink on a **daily** assimilation
+kernel: sub-daily photosynthesis off, the standalone heat-exposure pass on, the
+sink on.
+
+This is the configuration the ladder's own measurements argue for, and the
+argument is in `docs/07_ablation_framework.md`. Three findings make it:
+
+  - The exposure accumulator reads only daily state, so it never needed the
+    assimilation loop it currently sits inside. Reproducing it externally
+    matches the kernel to within 0.04-3.29% at the five gate cells.
+  - Sub-daily *assimilation* contributes only -0.1 to -2.3% of the
+    daily-invisible event response, while the sink contributes 69-99% of it. The
+    expensive half of the sub-daily loop is not the half carrying the signal.
+  - Sub-daily assimilation under-assimilates, thinning the canopy and thereby
+    overheating the leaf, so the yield deficit against the observational
+    reference and the size of the event response are one coupled defect rather
+    than two results. The perturbation-B exposure response survives on the daily
+    trajectory and at rice is more than twice as large, because a canopy at 39 C
+    has already saturated the sterility logistic.
+
+`organ_temperature` is the one switch this cell exposes, because leaf against air
+is the comparison that separates the sink mechanism from the departure that
+triggers it - the same comparison `ablation_air_driven_sink_configuration` makes
+on the sub-daily kernel, and it must stay expressible here too. It defaults to
+the leaf, which is the physically right choice and the one the 50-84% exposure
+loss at air temperature justifies.
+
+Deliberately not a rung. The ladder is a sequence of structural deficiencies of
+the baseline being repaired one at a time; this is a claim about which of two
+repairs to keep, and folding it in would let the headline decomposition absorb
+the comparison it exists to make.
+"""
+function ablation_daily_assimilation_sink_configuration(;
+    organ_temperature::Bool = true, kwargs...,
+)
+    owned = (map(step -> step.field, ABLATION_LADDER)..., :subdaily_heat_exposure)
+    for key in keys(kwargs)
+        key in owned && throw(ArgumentError(
+            "$key is set by this configuration; it is a fixed comparison cell " *
+            "apart from organ_temperature, which is a named argument",
+        ))
+    end
+    return (; subdaily_photosynthesis = false, subdaily_heat_exposure = true,
+            organ_temperature, reproductive_sink = true, kwargs...)
+end
+
+"""
+    ablation_daily_statistic_sink_configuration(; kwargs...)
+
+The off-ladder floor: the reproductive sink driven by a closed-form duration
+above the threshold, computed from the daily mean and the daily range alone -
+no sub-step loop, no canopy energy balance, air temperature.
+
+It exists to keep one objection answerable. The paper's control claims a
+daily-mean kernel cannot see a perturbation that widens the diurnal range while
+holding the mean, and for *this model's* daily kernel that is exactly true. It
+is not true of the models the paper positions itself against: they read `tasmax`
+and `tasmin`, so widening the range raises their maximum, and a sterility
+criterion built on that maximum is not inert. This cell measures what such a
+criterion recovers instead of assuming it recovers nothing, which makes the
+comparison a result rather than a definition.
+
+Compared upward against `ablation_daily_assimilation_sink_configuration` it
+isolates what the canopy energy balance adds over air temperature; compared
+against `:daily` it bounds how much of the response a conventional model could
+have reached with the forcing it already reads.
+
+The threshold is hard here, where the sub-daily paths smooth it with a 1 C
+logistic, and that difference is not incidental - see
+`docs/07_ablation_framework.md`, where the smoothing is measured to supply the
+majority of accumulated exposure at three of five cells. Reading this cell as
+"the closed form loses information" without holding the threshold sharpness
+fixed would attribute that smoothing to the integration method.
+"""
+function ablation_daily_statistic_sink_configuration(; kwargs...)
+    owned = (map(step -> step.field, ABLATION_LADDER)...,
+             :subdaily_heat_exposure, :daily_statistic_exposure)
+    for key in keys(kwargs)
+        key in owned && throw(ArgumentError(
+            "$key is set by this configuration; it is a fixed comparison cell",
+        ))
+    end
+    return (; subdaily_photosynthesis = false, subdaily_heat_exposure = false,
+            daily_statistic_exposure = true, organ_temperature = false,
+            reproductive_sink = true, kwargs...)
+end
+
+"""
+    ablation_terminal_heat_configuration(; organ_temperature = true,
+                                         daily_statistic = false, kwargs...)
+
+The off-ladder cell that carries terminal heat and **not** the grain-set sink:
+heat damage to grain filling, alone.
+
+Isolating it is the point. The two mechanisms limit different quantities in
+sequence, and the harvest index multiplies them, so a run carrying both cannot
+say which one a loss came from - and at the hot-wheat cell the answer is not
+obvious in advance, because the sink is inert there while the filling window
+holds 75.8 exposure hours above 30 C against 0.4 above 35 C. Bounding
+`filling_rate` against the observational reference also requires the sink off,
+or the bound absorbs grain-set damage at the same cell.
+
+`daily_statistic = true` swaps the sub-daily leaf-temperature pass for the
+closed-form daily-statistic path, giving the same floor comparison the sink
+cells have. `organ_temperature` is then necessarily off and passing it is an
+error rather than a silent override.
+
+`reproductive_sink = true` turns both mechanisms on, which is the complete
+reproductive configuration rather than an ablation cell - useful for the
+production run and for showing that the two losses compose multiplicatively
+rather than one masking the other. It defaults off because the cell's purpose
+is isolation.
+"""
+function ablation_terminal_heat_configuration(; organ_temperature::Bool = true,
+                                              daily_statistic::Bool = false,
+                                              reproductive_sink::Bool = false,
+                                              kwargs...)
+    owned = (map(step -> step.field, ABLATION_LADDER)...,
+             :subdaily_heat_exposure, :daily_statistic_exposure, :terminal_heat)
+    for key in keys(kwargs)
+        key in owned && throw(ArgumentError(
+            "$key is set by this configuration; it is a fixed comparison cell",
+        ))
+    end
+    daily_statistic && organ_temperature && throw(ArgumentError(
+        "the daily-statistic closed form has no sub-steps to solve a canopy " *
+        "energy balance at; pass organ_temperature = false with it",
+    ))
+    return (; subdaily_photosynthesis = false,
+            subdaily_heat_exposure = !daily_statistic,
+            daily_statistic_exposure = daily_statistic,
+            organ_temperature, reproductive_sink, terminal_heat = true,
+            kwargs...)
+end
+
+"""
     ablation_ladder_settings(; kwargs...)
 
 The whole ladder as `rung => settings` pairs, in order, for a driver that runs
@@ -226,11 +364,23 @@ domains the ladder is exercised on; a global run should reduce
 `simulation.output` directly rather than collapse it here.
 
 `harvest_index` is grain carbon over above-ground carbon at harvest, averaged
-over harvested seasons. It is reported alongside yield because the two answer
-different questions, and a rung that changes one without the other is telling
-you which mechanism moved: agronomy puts grain harvest index near 0.4-0.5 for
-the major cereals and oilseeds, so a plausible yield reached with an
+over the seasons that COMPLETED. It is reported alongside yield because the two
+answer different questions, and a rung that changes one without the other is
+telling you which mechanism moved: agronomy puts grain harvest index near
+0.4-0.5 for the major cereals and oilseeds, so a plausible yield reached with an
 implausible harvest index is right for the wrong reason.
+
+**Both averages divide by seasons completed, not seasons that yielded grain.**
+That distinction is the whole point of the metric on an extreme-event ladder,
+and getting it wrong makes the table blind to the outcome it exists to measure.
+A destroyed season emits zero to `output.crop.yield`
+(`src/processes/crop/harvesting.jl`), so dividing by the count of positive
+yields removes it from the numerator AND the denominator: two good seasons and
+one good plus one destroyed both report the same `yield_per_season`, and a
+heatwave that annihilates a crop registers as no change at all. `harvest_date`
+is written on the annual emission path whether or not grain was set, so it is
+the honest denominator; `harvesting_year` is the flag that separates "ended with
+grain" from "ended with nothing".
 
 `finite` is not decoration. A rung that silently produces non-finite carbon is
 the failure mode an ablation table would otherwise report as a number.
@@ -240,21 +390,29 @@ function ablation_metrics(simulation::CropSimulation)
     host(field) = Array(getfield(crop, field))
     season_yield = vec(host(:yield))
     season_above = vec(host(:harvest_aboveground_carbon))
-    harvested = filter(>(0), season_yield)
-    filled = [
+    # A season COMPLETED if it reached an emission, destroyed or not. Rows with
+    # no season at all have neither a harvest date nor above-ground carbon.
+    harvest_date = vec(Array(simulation.output.calendar.harvest_date))
+    completed = count(>(0), harvest_date)
+    with_grain = count(>(0), season_yield)
+    # Destroyed seasons belong in the harvest-index mean at zero, for the same
+    # reason they belong in the yield denominator.
+    ended = [
         (grain, above)
         for (grain, above) in zip(season_yield, season_above)
-        if grain > 0 && above > 0
+        if above > 0
     ]
     gpp = host(:gpp)
     scale = GRAMS_PER_M2_TO_TONNES_PER_HECTARE / CARBON_FRACTION_OF_DRY_MATTER
-    total = isempty(harvested) ? 0.0 : sum(harvested) * scale
+    total = sum(filter(>(0), season_yield); init = 0.0) * scale
     return (
-        seasons = length(harvested),
+        seasons = completed,
+        seasons_with_grain = with_grain,
+        seasons_destroyed = completed - with_grain,
         yield_total = total,
-        yield_per_season = isempty(harvested) ? 0.0 : total / length(harvested),
-        harvest_index = isempty(filled) ? 0.0 :
-            sum(grain / above for (grain, above) in filled) / length(filled),
+        yield_per_season = completed == 0 ? 0.0 : total / completed,
+        harvest_index = isempty(ended) ? 0.0 :
+            sum(grain / above for (grain, above) in ended) / length(ended),
         season_gpp = sum(gpp),
         peak_lai = maximum(host(:lai); init = 0.0),
         peak_biomass = maximum(host(:biomass); init = 0.0),

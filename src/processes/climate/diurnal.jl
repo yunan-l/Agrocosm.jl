@@ -255,6 +255,69 @@ day would put a non-differentiable kink in the reverse pass.
 end
 
 """
+    daily_statistic_exposure_hours(mean_temperature, amplitude, daylength,
+                                   critical_temperature)
+
+Daylight hours above `critical_temperature`, in closed form from daily
+aggregates alone - no sub-step loop, no energy balance.
+
+This is the GGCM analogue of the sink's input, and it exists to answer an
+objection rather than to be the best available physics. The claim that a
+daily-mean kernel cannot see a mean-preserving change in diurnal range is true
+of *this model's* daily kernel, but it is not true of the published models the
+paper compares itself to: they read `tasmax` and `tasmin`, so a perturbation
+that raises the range raises their maximum too. A criterion built from those two
+numbers therefore has to be measured, not assumed inert.
+
+The temperature course is the same one `diurnal_temperature` reconstructs,
+
+    T(t) = mean + (amplitude / 2) * sin(pi * (t - 8) / 12)
+
+so `T > critical` holds on `t in (8 + 12 asin(z) / pi, 20 - 12 asin(z) / pi)`
+with `z = (critical - mean) / (amplitude / 2)`, intersected with the daylight
+window `[12 - daylength/2, 12 + daylength/2]`. That is exact, not a quadrature,
+and it costs one `asin`.
+
+The threshold is HARD, deliberately and uniformly. It takes no smoothing width,
+because a partial width would make the function non-monotone in the daily range:
+smoothing the zero-range case while leaving the general case sharp returns more
+exposure at range 0 than at range 1. A hard threshold is also the more faithful
+analogue - published sterility criteria use thresholds and ramps, not logistics
+- and it is what makes this cell the comparison FLOOR rather than a variant of
+the sub-daily paths.
+
+The duration is still smooth in the mean, the range and the threshold through
+the `asin`, so the reverse pass is finite; only the saturation points at
+`z = +-1` and the degenerate flat day are kinks, which is the same structure as
+any clamp in the model.
+
+Because the sub-daily paths smooth their threshold with a 1 C logistic, this
+differs from `diurnal_heat_exposure` by that logistic's effect, and the
+difference is not small: a day whose maximum sits at the threshold with a 2 C
+range accumulates 5.27 h numerically and 0 h here. `test_heat_exposure.jl`
+measures that gap instead of tolerating it.
+"""
+@inline function daily_statistic_exposure_hours(
+    mean_temperature::T, amplitude::T, daylength::T, critical_temperature::T,
+) where {T <: AbstractFloat}
+    daylength <= zero(T) && return zero(T)
+    half_range = amplitude * T(0.5)
+    # A flat day is all of the window or none of it, on the same hard test as
+    # every other day.
+    half_range <= eps(T) && return mean_temperature > critical_temperature ?
+        daylength : zero(T)
+    # Guarded because LLVM speculates `fdiv` out of a branch into a `select`,
+    # which would differentiate the division the guard above exists to skip.
+    z = guarded_quotient(critical_temperature - mean_temperature, half_range)
+    z >= one(T) && return zero(T)
+    z <= -one(T) && return daylength
+    offset = T(12) * asin(clamp(z, -one(T), one(T))) / T(pi)
+    lower = max(T(8) + offset, T(12) - daylength * T(0.5))
+    upper = min(T(20) - offset, T(12) + daylength * T(0.5))
+    return max(zero(T), upper - lower)
+end
+
+"""
     diurnal_heat_exposure(steps, mean_temperature, amplitude, daylength, shape,
                           critical_temperature, width)
 

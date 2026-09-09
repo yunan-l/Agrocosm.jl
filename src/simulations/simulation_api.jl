@@ -129,8 +129,11 @@ function initialize_simulation(
     subdaily_steps::Integer = 24,
     diurnal_shape::Symbol = :sinusoid,
     subdaily_capacity_optimum::Bool = false,
+    subdaily_heat_exposure::Bool = false,
+    daily_statistic_exposure::Bool = false,
     organ_temperature::Bool = false,
     reproductive_sink::Bool = false,
+    terminal_heat::Bool = false,
     freeze_vernalization_requirement::Bool = false,
     sowing_mode::Symbol = :prescribed_sdate,
     model_parameters::Union{Nothing, ModelParameters} = nothing,
@@ -183,8 +186,11 @@ function initialize_simulation(
         subdaily_steps,
         diurnal_shape,
         subdaily_capacity_optimum,
+        subdaily_heat_exposure,
+        daily_statistic_exposure,
         organ_temperature,
         reproductive_sink,
+        terminal_heat,
         freeze_vernalization_requirement,
         sowing_mode,
     )
@@ -313,8 +319,11 @@ function _transition_range!(
         crop_resp_fix = simulation.config.crop_resp_fix,
         nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
         diurnal_config = diurnal_configuration(simulation.config),
+        heat_exposure_config = heat_exposure_configuration(simulation.config),
+        daily_statistic_exposure = daily_statistic_exposure_enabled(simulation.config),
         organ_temperature = simulation.config.organ_temperature,
         reproductive_sink = simulation.config.reproductive_sink,
+        terminal_heat = simulation.config.terminal_heat,
         update_vernalization_requirement = !simulation.config.freeze_vernalization_requirement,
         sowing_mode = simulation.config.sowing_mode,
         water_balance = simulation.water_balance,
@@ -512,7 +521,7 @@ function run_simulation!(
     return simulation
 end
 
-const _CHECKPOINT_FORMAT_VERSION = 8
+const _CHECKPOINT_FORMAT_VERSION = 10
 const _MODEL_STATE_SCHEMA_VERSION = 3
 
 _checkpoint_snapshot(values::AbstractArray) = Array(values)
@@ -583,13 +592,19 @@ function _simulation_checkpoint(simulation::CropSimulation)
             # change what the daily step computes, so a checkpoint written by
             # one configuration is not a valid starting state for another.
             # Without these entries a daily checkpoint restores silently into a
-            # sub-daily run. Adding them is why the format version is 8.
+            # sub-daily run. Adding them is why the format version is 8, and
+            # `subdaily_heat_exposure` is why it is now 9: it changes which
+            # kernel writes `heat_exposure_hours`, so a state carried across it
+            # would have the sink reading a differently-produced field.
             subdaily_photosynthesis = simulation.config.subdaily_photosynthesis,
             subdaily_steps = simulation.config.subdaily_steps,
             diurnal_shape = simulation.config.diurnal_shape,
             subdaily_capacity_optimum = simulation.config.subdaily_capacity_optimum,
+            subdaily_heat_exposure = simulation.config.subdaily_heat_exposure,
+            daily_statistic_exposure = simulation.config.daily_statistic_exposure,
             organ_temperature = simulation.config.organ_temperature,
             reproductive_sink = simulation.config.reproductive_sink,
+            terminal_heat = simulation.config.terminal_heat,
             sowing_mode = simulation.config.sowing_mode,
             parameter_fingerprint = _checkpoint_fingerprint((
                 cft = simulation.cft,
@@ -658,6 +673,10 @@ function _validate_checkpoint_target(simulation::CropSimulation, checkpoint)
         ("sub-daily photosynthesis", metadata.subdaily_photosynthesis,
          simulation.config.subdaily_photosynthesis),
         ("sub-daily steps", metadata.subdaily_steps, simulation.config.subdaily_steps),
+        ("standalone heat exposure", metadata.subdaily_heat_exposure,
+         simulation.config.subdaily_heat_exposure),
+        ("daily-statistic heat exposure", metadata.daily_statistic_exposure,
+         simulation.config.daily_statistic_exposure),
         ("diurnal shape", metadata.diurnal_shape, simulation.config.diurnal_shape),
         ("sub-daily capacity optimum", metadata.subdaily_capacity_optimum,
          simulation.config.subdaily_capacity_optimum),
@@ -665,6 +684,7 @@ function _validate_checkpoint_target(simulation::CropSimulation, checkpoint)
          simulation.config.organ_temperature),
         ("reproductive sink", metadata.reproductive_sink,
          simulation.config.reproductive_sink),
+        ("terminal heat", metadata.terminal_heat, simulation.config.terminal_heat),
         ("sowing mode", metadata.sowing_mode, simulation.config.sowing_mode),
         ("parameter fingerprint", metadata.parameter_fingerprint,
          _checkpoint_fingerprint((

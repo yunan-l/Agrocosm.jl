@@ -27,9 +27,46 @@
 # See docs/05_reproductive_sink_design.md.
 
 # Width of the logistic that replaces the hard "above threshold" indicator, in
-# degrees. Small enough to behave like a threshold, wide enough to keep the
-# reverse pass finite; `smooth_exceedance` degenerates to the hard test at zero.
-const STERILITY_SMOOTHING_WIDTH = 1.0
+# degrees Celsius. `smooth_exceedance` degenerates to the hard test at zero, so
+# this is the one knob trading threshold sharpness against a finite reverse
+# pass, and both sides of that trade are measured rather than asserted.
+#
+# It was 1.0, documented as "small enough to behave like a threshold". That
+# claim was false and the error was not cosmetic. At width 1.0 the per-hour
+# weight is 0.27 at 1 C below the threshold and 0.12 at 2 C below, so a day
+# peaking at 34.5 C against a 35 C threshold accumulates 2.95 exposure hours
+# having never crossed. Split by whether the day's peak leaf temperature
+# actually crossed, that tail supplied 76% of accumulated flowering-window
+# exposure at the rice cell, 63% at maize, 44% at soybean and 100% at the
+# hot-wheat cell - because those cells have few genuine crossings (rice: 5 days
+# against 55) and the tail wins on count. On a uniform sample of days the same
+# width contributes only 4%, so the quantity that matters is the width times the
+# day distribution, and most cells globally are of the rare-crossing kind.
+#
+# That biases calibration in the direction that inverts this project's claim: a
+# `sterility_rate` fitted against exposure dominated by ordinary warm days, whose
+# yields are largely fine, comes out too small, and the mechanism's response to
+# real heat events with it. Growing the canopy correctly makes it worse rather
+# than better - rice is 22% sub-threshold on the thin, overheated sub-daily
+# trajectory and 76% on the calibrated daily one.
+#
+# 0.3 is where the trade-off turns. The reverse-mode derivative of exposure with
+# respect to the daily mean on a hot day, against the weight two degrees below
+# the threshold:
+#
+#   width   weight at -2 C   d(exposure)/d(mean)
+#   1.0     0.119            0.842
+#   0.5     0.018            0.798
+#   0.3     0.0013           0.781     <- here
+#   0.2     0.00005          0.742
+#   0.1     0                0.476
+#   0.05    0                0.092
+#
+# So 0.3 cuts the sub-threshold weight by about two orders of magnitude while
+# keeping 93% of the gradient, and below 0.2 the gradient collapses - which is
+# the real constraint that motivated a wide logistic in the first place.
+# `docs/07_ablation_framework.md` carries the measurements.
+const STERILITY_SMOOTHING_WIDTH = 0.3
 
 """
     flowering_weight(fphu, start, stop)

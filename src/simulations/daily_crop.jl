@@ -20,8 +20,11 @@ function _daily_crop!(
     crop_resp_fix = true,
     nitrogen_limit_vcmax = false,
     diurnal_config = nothing,
+    heat_exposure_config = nothing,
+    daily_statistic_exposure::Bool = false,
     organ_temperature::Bool = false,
     reproductive_sink::Bool = false,
+    terminal_heat::Bool = false,
     sowing_mode::Symbol = :prescribed_sdate,
     update_vernalization_requirement::Bool = true,
     water_balance = nothing,
@@ -62,14 +65,28 @@ function _daily_crop!(
     # Sub-daily integration needs the diurnal temperature range alongside the
     # other forcings. It is read as a row view of the (day, cell) matrix, so no
     # extra buffer and no change to the climate kernels is required.
-    if diurnal_config !== nothing
+    # The standalone exposure pass reconstructs the same sub-daily temperature
+    # course, so it has the same forcing requirement.
+    subdaily_config = diurnal_config === nothing ? heat_exposure_config : diurnal_config
+    # The closed form needs the same daily range, but no sub-step machinery.
+    exposure_source_count = count((diurnal_config !== nothing,
+                                   heat_exposure_config !== nothing,
+                                   daily_statistic_exposure))
+    if subdaily_config !== nothing || daily_statistic_exposure
         hasproperty(climate, :diurnal_range) || throw(ArgumentError(
-            "sub-daily photosynthesis requires a `diurnal_range` climate field (tasmax - tasmin)",
+            "sub-daily integration requires a `diurnal_range` climate field (tasmax - tasmin)",
         ))
         size(climate.diurnal_range) == size(climate.temp) || throw(DimensionMismatch(
             "diurnal_range must have the same shape as the temperature forcing",
         ))
     end
+    # One writer for `heat_exposure_hours`; `SimulationConfiguration` rejects the
+    # pair, and this is the guard for callers that bypass it.
+    exposure_source_count <= 1 || throw(ArgumentError(
+        "sub-daily photosynthesis, the standalone exposure pass and the " *
+        "daily-statistic closed form all write heat_exposure_hours; enable at " *
+        "most one",
+    ))
 
     # Organ temperature is solved per sub-step, so it has nowhere to live
     # without the sub-daily loop; that combination is rejected here rather than
@@ -80,12 +97,20 @@ function _daily_crop!(
     # accumulator integrates duration at sub-daily air temperature instead of
     # leaf temperature, which is the ablation cell that separates the mechanism
     # from the departure that triggers it. See `runtime_contracts.jl`.
-    reproductive_sink && diurnal_config === nothing && throw(ArgumentError(
-        "reproductive sink requires sub-daily photosynthesis to be enabled",
+    terminal_heat && exposure_source_count == 0 && throw(ArgumentError(
+        "terminal heat requires one of sub-daily photosynthesis, the " *
+        "standalone heat-exposure pass or the daily-statistic closed form to " *
+        "fill filling_exposure_hours",
+    ))
+    reproductive_sink && exposure_source_count == 0 && throw(ArgumentError(
+        "reproductive sink requires one of sub-daily photosynthesis, the " *
+        "standalone heat-exposure pass or the daily-statistic closed form to " *
+        "fill heat_exposure_hours",
     ))
     if organ_temperature
-        diurnal_config === nothing && throw(ArgumentError(
-            "organ temperature requires sub-daily photosynthesis to be enabled",
+        subdaily_config === nothing && throw(ArgumentError(
+            "organ temperature requires sub-daily photosynthesis or the standalone " *
+            "heat-exposure pass to be enabled",
         ))
         for field in (:specific_humidity, :surface_pressure)
             hasproperty(climate, field) || throw(ArgumentError(
@@ -118,6 +143,10 @@ function _daily_crop!(
         diurnal = diurnal_config === nothing ? nothing : DiurnalForcing(
             diurnal_config, view(climate.diurnal_range, climate_day, :),
         )
+        heat_exposure_forcing = heat_exposure_config === nothing ? nothing :
+            DiurnalForcing(
+                heat_exposure_config, view(climate.diurnal_range, climate_day, :),
+            )
         # The albedo, LAI and conductance arrays are updated in place later in
         # this same day, and this holds references rather than copies, so the
         # kernel reads whatever the day has produced by the time it runs. Only
@@ -383,10 +412,27 @@ function _daily_crop!(
             )
         end
 
-        # Before allocation: today's exposure has been written by the
-        # assimilation calls above, and the harvest index that allocation is
-        # about to use has to already reflect any grain set lost.
+        # Before allocation: today's exposure must be written, and the harvest
+        # index that allocation is about to use has to already reflect any grain
+        # set lost. With sub-daily assimilation the exposure arrived with the
+        # calls above; with the standalone pass it is taken here, after the
+        # canopy state those calls left behind, so both routes integrate the
+        # same day's LAI and conductance.
+        heat_exposure!(
+            cftparameters, state, pet.daylength, dailyWeather.temp,
+            heat_exposure_forcing; organ,
+        )
+        # The range view is only formed when the closed form is on: a daily run
+        # is given a climate with no `diurnal_range` field at all, so touching
+        # it unconditionally is an error rather than an unused argument.
+        if daily_statistic_exposure
+            daily_statistic_exposure!(
+                cftparameters, state, pet.daylength, dailyWeather.temp,
+                view(climate.diurnal_range, climate_day, :), true,
+            )
+        end
         reproductive_sink && reproductive_sink!(cftparameters, state)
+        terminal_heat && terminal_heat!(cftparameters, state)
         crop_carbon!(
             state, output, cftparameters, dailyWeather.temp,
             soil_thermal_prognostic(state).temperature;

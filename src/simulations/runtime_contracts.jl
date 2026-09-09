@@ -64,8 +64,11 @@ struct SimulationConfiguration{T <: AbstractFloat, D, E}
     subdaily_steps::Int
     diurnal_shape::Symbol
     subdaily_capacity_optimum::Bool
+    subdaily_heat_exposure::Bool
+    daily_statistic_exposure::Bool
     organ_temperature::Bool
     reproductive_sink::Bool
+    terminal_heat::Bool
     freeze_vernalization_requirement::Bool
     sowing_mode::Symbol
     execution::E
@@ -85,8 +88,11 @@ function SimulationConfiguration(
     subdaily_steps::Integer = 24,
     diurnal_shape::Symbol = :sinusoid,
     subdaily_capacity_optimum::Bool = false,
+    subdaily_heat_exposure::Bool = false,
+    daily_statistic_exposure::Bool = false,
     organ_temperature::Bool = false,
     reproductive_sink::Bool = false,
+    terminal_heat::Bool = false,
     freeze_vernalization_requirement::Bool = false,
     sowing_mode::Symbol = :prescribed_sdate,
 ) where {T <: AbstractFloat}
@@ -103,22 +109,67 @@ function SimulationConfiguration(
     !subdaily_capacity_optimum || subdaily_photosynthesis || throw(ArgumentError(
         "subdaily_capacity_optimum requires subdaily_photosynthesis",
     ))
-    # Leaf temperature is solved inside the sub-daily loop, so it cannot be
-    # switched on by itself. Rejecting the combination here keeps the invalid
-    # configuration from reaching the kernel, where it could only be ignored.
-    !organ_temperature || subdaily_photosynthesis || throw(ArgumentError(
-        "organ_temperature requires subdaily_photosynthesis",
+    # `heat_exposure_hours` must have exactly one writer. The sub-daily
+    # assimilation kernels fill it inside the loop they already run; the
+    # standalone pass fills it without one. Allowing both would leave the field
+    # carrying whichever kernel ran last, which would silently invalidate every
+    # ablation cell that reads it - so the combination is rejected rather than
+    # ordered.
+    writers = count((subdaily_photosynthesis, subdaily_heat_exposure,
+                     daily_statistic_exposure))
+    writers <= 1 || throw(ArgumentError(
+        "subdaily_photosynthesis, subdaily_heat_exposure and " *
+        "daily_statistic_exposure all write heat_exposure_hours; enable at " *
+        "most one",
     ))
-    # Sterility is accumulated per sub-step, so the sink needs the sub-daily
-    # loop - but not necessarily organ temperature. With organ temperature on it
+    # The closed form reconstructs the temperature course from the daily mean
+    # and range and takes the duration analytically, so there are no sub-steps
+    # for a canopy energy balance to be solved at. That is not a limitation to
+    # be patched: the cell exists to represent what a model holding only daily
+    # aggregates can compute, and giving it leaf temperature would defeat its
+    # purpose.
+    !(daily_statistic_exposure && organ_temperature) || throw(ArgumentError(
+        "daily_statistic_exposure is an air-temperature closed form and has no " *
+        "sub-steps to solve a canopy energy balance at; organ_temperature " *
+        "requires one of the sub-daily loops",
+    ))
+    # Leaf temperature is solved per sub-step, so it cannot be switched on by
+    # itself - but either sub-daily loop can host it. Inside the assimilation
+    # loop it drives the enzyme kinetics as well as the exposure integral;
+    # inside the standalone pass it drives the exposure integral alone, which is
+    # the configuration that keeps a calibrated daily assimilation kernel while
+    # still feeding the sink leaf temperature. Rejecting the combination here
+    # keeps the invalid configuration from reaching the kernel, where it could
+    # only be ignored.
+    !organ_temperature || subdaily_photosynthesis || subdaily_heat_exposure ||
+        throw(ArgumentError(
+            "organ_temperature requires subdaily_photosynthesis or " *
+            "subdaily_heat_exposure",
+        ))
+
+    # Sterility is accumulated per sub-step, so the sink needs a sub-daily loop
+    # - either the assimilation one or the standalone exposure pass - but not
+    # necessarily organ temperature. With organ temperature on it
     # integrates duration at leaf temperature, which is the default and the
     # physically right choice; with it off the same accumulator integrates
     # duration at sub-daily AIR temperature. That second combination is not a
     # mistake to be rejected, it is the ablation cell that separates the sink
     # mechanism from the leaf-air departure that triggers it, and the one an
     # air-temperature-driven GGCM sterility function corresponds to.
-    !reproductive_sink || subdaily_photosynthesis || throw(ArgumentError(
-        "reproductive_sink requires subdaily_photosynthesis",
+    !reproductive_sink || writers >= 1 || throw(ArgumentError(
+        "reproductive_sink requires one of subdaily_photosynthesis, " *
+        "subdaily_heat_exposure or daily_statistic_exposure to fill " *
+        "heat_exposure_hours",
+    ))
+    # Terminal heat reads `filling_exposure_hours`, which the same three kernels
+    # fill in the same loop against a lower threshold, so it has the same
+    # prerequisite and no additional one. It is independent of the sink: a run
+    # may carry either, both or neither, because grain set and grain filling are
+    # separate damage paths and the ablation has to be able to separate them.
+    !terminal_heat || writers >= 1 || throw(ArgumentError(
+        "terminal_heat requires one of subdaily_photosynthesis, " *
+        "subdaily_heat_exposure or daily_statistic_exposure to fill " *
+        "filling_exposure_hours",
     ))
     execution = ExecutionContext(T, device, active_indices; cell_ids)
     source_indices = indices === nothing ? nothing : Int.(indices)
@@ -128,8 +179,9 @@ function SimulationConfiguration(
         source_indices, device, T, Int(days), irrigation, manure, fertilizer,
         with_tillage, crop_resp_fix, nitrogen_limit_vcmax,
         subdaily_photosynthesis, Int(subdaily_steps), diurnal_shape,
-        subdaily_capacity_optimum, organ_temperature, reproductive_sink,
-        freeze_vernalization_requirement,
+        subdaily_capacity_optimum, subdaily_heat_exposure,
+        daily_statistic_exposure, organ_temperature, reproductive_sink,
+        terminal_heat, freeze_vernalization_requirement,
         sowing_mode, execution,
     )
 end
@@ -146,6 +198,39 @@ diurnal_configuration(config::SimulationConfiguration) =
         DiurnalConfig(; steps = config.subdaily_steps,
                         shape = diurnal_shape_code(config.diurnal_shape),
                         capacity_optimum = config.subdaily_capacity_optimum) :
+        nothing
+
+"""
+    daily_statistic_exposure_enabled(config)
+
+Whether the closed-form daily-statistic exposure path fills
+`heat_exposure_hours`. A plain `Bool` rather than a `DiurnalConfig`, because the
+closed form has no sub-step count and no shape to carry: it is the analytic
+duration for the sinusoid `diurnal_temperature` reconstructs.
+"""
+daily_statistic_exposure_enabled(config::SimulationConfiguration) =
+    config.daily_statistic_exposure
+
+"""
+    heat_exposure_configuration(config)
+
+Zero-size `DiurnalConfig` for the standalone exposure pass, or `nothing` when it
+is switched off. `nothing` makes `heat_exposure!` a no-op, so the driver can
+call it unconditionally.
+
+Shares `subdaily_steps` and `diurnal_shape` with the assimilation loop because
+they are properties of the run's sub-daily resolution, not of either loop. The
+capacity solve is not: it re-solves Rubisco capacity against the light course,
+which this pass does not integrate, so it is off here regardless of the run's
+setting - and `subdaily_capacity_optimum` requires `subdaily_photosynthesis`,
+which is mutually exclusive with this switch, so it is already false in any
+configuration that reaches this line.
+"""
+heat_exposure_configuration(config::SimulationConfiguration) =
+    config.subdaily_heat_exposure ?
+        DiurnalConfig(; steps = config.subdaily_steps,
+                        shape = diurnal_shape_code(config.diurnal_shape),
+                        capacity_optimum = false) :
         nothing
 
 float_type(::ExecutionContext{T}) where {T} = T

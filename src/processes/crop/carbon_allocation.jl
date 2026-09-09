@@ -27,6 +27,7 @@ function carbon_allocation!(CFT::CFTParameters,
                crop_stress_auxiliary(crop).nitrogen_deficit,
                crop_stress_auxiliary(crop).water_deficit,
                crop_prognostic(crop).phenology.grain_set_fraction,
+               crop_prognostic(crop).phenology.grain_fill_fraction,
                crop_phenology_auxiliary(crop).fphu,
                crop_prognostic(crop).phenology.senescence,
                crop_prognostic(crop).carbon.biomass,
@@ -117,6 +118,7 @@ end
                                            crop_ndf::AbstractArray{T},
                                            crop_wdf::AbstractArray{T},
                                            crop_grain_set::AbstractArray{T},
+                                           crop_grain_fill::AbstractArray{T},
                                            crop_fphu::AbstractArray{T},
                                            crop_senescence::AbstractArray{B},
                                            crop_biomass::AbstractArray{T},
@@ -232,12 +234,19 @@ end
             end
 
             # Storage carbon (harvest index branch) is computed after leaf/root partitioning.
-            # Grain that failed to set caps the harvest index. The carbon denied
-            # to storage stays in the pool below, so biomass is conserved while
-            # yield falls -- the signature of flowering heat damage that a
-            # photosynthesis-only path cannot produce.
+            # Grain that failed to set caps the harvest index, and grain that
+            # filled poorly caps it again. The carbon denied to storage stays in
+            # the pool below, so biomass is conserved while yield falls -- the
+            # signature of reproductive heat damage that a photosynthesis-only
+            # path cannot produce.
+            #
+            # The two factors MULTIPLY because they limit different things in
+            # sequence: how many grains were set, and how far each of those
+            # filled. Adding them would let one mechanism repair the other's
+            # damage, and taking the minimum would make the less severe of the
+            # two free.
             hi = compute_harvest_index(crop_fphu[cell], T(hiopt), T(himin), crop_wdf[cell]) *
-                 crop_grain_set[cell]
+                 crop_grain_set[cell] * crop_grain_fill[cell]
             # Never below what is already deposited: the harvest-index formula
             # describes how much grain the crop is filling towards, not a
             # quantity that can be un-filled. Mass still closes, because
