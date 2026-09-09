@@ -358,10 +358,13 @@ end
     melt_top_water = min(max(snowmelt[cell], zero(T)), total_top_water)
     rain_top_water = max(total_top_water - melt_top_water, zero(T))
     top_water_denominator = rain_top_water + melt_top_water
+    # Keep inactive dry-day divisions finite for reverse AD; the wet branch
+    # still uses the original denominator and threshold.
+    safe_top_water_denominator = max(top_water_denominator, eps(T))
     rain_fraction = top_water_denominator > eps(T) ?
-                    rain_top_water / top_water_denominator : zero(T)
+                    rain_top_water / safe_top_water_denominator : zero(T)
     melt_fraction = top_water_denominator > eps(T) ?
-                    melt_top_water / top_water_denominator : zero(T)
+                    melt_top_water / safe_top_water_denominator : zero(T)
     rain_volumetric_enthalpy = volumetric_fusion_heat +
                                water_heat_capacity * air_temperature[cell]
     melt_volumetric_enthalpy = volumetric_fusion_heat

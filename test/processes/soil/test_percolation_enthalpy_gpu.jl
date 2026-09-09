@@ -33,4 +33,15 @@ CUDA.allowscalar(false)
     @test all(isfinite, temperatures)
     @test maximum(abs, residual) < 2.0f0
     @test all(iszero, Array(soil.thermal.percolation_energy))
+
+    soil_infiltration!(
+        state, state, CUDA.zeros(Float32, cells);
+        snowmelt = CUDA.zeros(Float32, cells),
+        air_temperature = CUDA.fill(10.0f0, cells),
+    )
+    synchronize()
+    @test all(iszero, Array(soil.thermal.rain_energy_input))
+    @test all(iszero, Array(soil.thermal.snowmelt_energy_input))
+    @test all(isfinite, Array(soil.thermal.temperature))
+    @test all(isfinite, Array(soil.thermal.enthalpy))
 end

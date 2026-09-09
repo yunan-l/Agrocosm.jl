@@ -16,6 +16,18 @@ function initialized_thermal_soil(; storage = Float32[40, 60, 100, 200, 200],
 end
 
 @testset "LPJmL percolation enthalpy" begin
+    @testset "dry upper boundary has no rain or melt energy" begin
+        soil, crop, state = initialized_thermal_soil()
+        soil_infiltration!(
+            state, state, Float32[0.0];
+            snowmelt = Float32[0.0], air_temperature = Float32[5.0],
+        )
+        @test iszero(soil.thermal.rain_energy_input[1])
+        @test iszero(soil.thermal.snowmelt_energy_input[1])
+        @test all(isfinite, soil.thermal.temperature)
+        @test all(isfinite, soil.thermal.enthalpy)
+    end
+
     @testset "rain at soil temperature preserves temperature" begin
         soil, crop, state = initialized_thermal_soil()
         soil_infiltration!(
