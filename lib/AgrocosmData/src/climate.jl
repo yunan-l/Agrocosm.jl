@@ -1,5 +1,6 @@
 const _CLIMATE_DATASETS = (:temp, :prec, :lwnet, :swdown)
-const _OPTIONAL_DAILY_CLIMATE_DATASETS = (:wind,)
+const _OPTIONAL_DAILY_CLIMATE_DATASETS =
+    (:wind, :tasmax, :tasmin, :specific_humidity, :surface_pressure)
 const _NITROGEN_DEPOSITION_DATASETS = (:no3_deposition, :nh4_deposition)
 const _NOLEAP_MONTH_LENGTHS = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
 const _LPJML_MONTH_CENTRE_INTERVALS = (30, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
@@ -158,14 +159,18 @@ function _validate_climate(name::Symbol, values)
     name === :prec && !all(>=(0), values) && throw(ArgumentError("precipitation must be non-negative"))
     name === :swdown && !all(>=(0), values) && throw(ArgumentError("shortwave radiation must be non-negative"))
     name === :wind && !all(>=(0), values) && throw(ArgumentError("wind speed must be non-negative"))
-    name === :temp && !all(value -> -100 <= value <= 70, values) &&
-        throw(ArgumentError("temperature must be supplied in degrees Celsius"))
+    name in (:temp, :tasmax, :tasmin) && !all(value -> -100 <= value <= 70, values) &&
+        throw(ArgumentError("$name must be supplied in degrees Celsius"))
+    name === :specific_humidity && !all(value -> 0 <= value <= 0.1, values) &&
+        throw(ArgumentError("specific humidity must be a mass fraction in kg/kg"))
+    name === :surface_pressure && !all(value -> 1e4 <= value <= 1.1e5, values) &&
+        throw(ArgumentError("surface pressure must be in Pa"))
     return values
 end
 
 function _normalize_climate_units(name::Symbol, values::Matrix{T}, units::AbstractString) where {T}
     normalized = lowercase(replace(strip(units), " " => ""))
-    if name === :temp
+    if name in (:temp, :tasmax, :tasmin)
         if normalized in ("k", "kelvin")
             return values .- T(273.15), "degC"
         elseif normalized in (
@@ -189,6 +194,18 @@ function _normalize_climate_units(name::Symbol, values::Matrix{T}, units::Abstra
     elseif name === :wind
         if normalized in ("m/s", "ms-1", "ms^-1", "ms**-1")
             return values, "m/s"
+        end
+    elseif name === :specific_humidity
+        # A mass fraction. GSWP3-W5E5 ships it dimensionless with the long name
+        # "near surface specific humidity (kg water/kg air)".
+        if normalized in ("kg/kg", "kgkg-1", "kgkg^-1", "1", "", "kgwater/kgair")
+            return values, "kg/kg"
+        end
+    elseif name === :surface_pressure
+        if normalized in ("pa", "pascal", "n/m2", "nm-2")
+            return values, "Pa"
+        elseif normalized in ("hpa", "mbar", "millibar")
+            return values .* T(100), "Pa"
         end
     elseif name in _NITROGEN_DEPOSITION_DATASETS
         if normalized in (
@@ -273,6 +290,33 @@ function _daily_co2(series::CO2Series{T}, time) where {T}
     return T[series.values[positions[Int32(_calendar_year(value))]] for value in time]
 end
 
+"""Read every optional daily climate dataset the catalog happens to carry.
+
+`wind` had this inline; four more channels need exactly the same treatment, so
+it is factored rather than pasted. Returns a NamedTuple with one entry per name
+in `_OPTIONAL_DAILY_CLIMATE_DATASETS`, `nothing` where the catalog has no such
+dataset - which is the ordinary case for a rung-zero run, and is why these are
+optional rather than required.
+"""
+function _read_optional_climate(reader::ClimateBlockReader{T}, indices, ::Type{T}) where {T}
+    entries = map(_OPTIONAL_DAILY_CLIMATE_DATASETS) do name
+        haskey(reader.catalog.datasets, name) || return nothing
+        source = read_compact_variable(
+            dataset(reader.catalog, name), reader.grid;
+            selection = reader.selection,
+            selectors = (time = indices,),
+            order = (:time, :cell),
+            T,
+        )
+        values, units = _normalize_climate_units(
+            name, Matrix{T}(source.values), source.provenance.units,
+        )
+        _validate_climate(name, values)
+        return (values = values, units = units, provenance = source.provenance)
+    end
+    return NamedTuple{_OPTIONAL_DAILY_CLIMATE_DATASETS}(entries)
+end
+
 """Read one numbered block from a `ClimateBlockReader`."""
 function read_climate_block(reader::ClimateBlockReader{T}, block_index::Integer) where {T}
     indices = _block_indices(reader, block_index)
@@ -298,22 +342,8 @@ function read_climate_block(reader::ClimateBlockReader{T}, block_index::Integer)
     swdown_values, swdown_units = _normalize_climate_units(
         :swdown, Matrix{T}(swdown.values), swdown.provenance.units,
     )
-    wind = if haskey(reader.catalog.datasets, :wind)
-        source = read_compact_variable(
-            dataset(reader.catalog, :wind), reader.grid;
-            selection = reader.selection,
-            selectors = (time = indices,),
-            order = (:time, :cell),
-            T,
-        )
-        values, units = _normalize_climate_units(
-            :wind, Matrix{T}(source.values), source.provenance.units,
-        )
-        _validate_climate(:wind, values)
-        (values = values, units = units, provenance = source.provenance)
-    else
-        nothing
-    end
+    optional = _read_optional_climate(reader, indices, T)
+    wind = optional.wind
     _validate_climate(:temp, temp_values)
     _validate_climate(:prec, prec_values)
     _validate_climate(:lwnet, lwnet_values)
@@ -327,6 +357,12 @@ function read_climate_block(reader::ClimateBlockReader{T}, block_index::Integer)
         lwnet = lwnet.provenance,
         swdown = swdown.provenance,
         wind = isnothing(wind) ? nothing : wind.provenance,
+        tasmax = isnothing(optional.tasmax) ? nothing : optional.tasmax.provenance,
+        tasmin = isnothing(optional.tasmin) ? nothing : optional.tasmin.provenance,
+        specific_humidity = isnothing(optional.specific_humidity) ? nothing :
+            optional.specific_humidity.provenance,
+        surface_pressure = isnothing(optional.surface_pressure) ? nothing :
+            optional.surface_pressure.provenance,
         co2 = reader.co2.provenance,
         no3_deposition = isnothing(no3_deposition) ? nothing : dataset(reader.catalog, :no3_deposition).path,
         nh4_deposition = isnothing(nh4_deposition) ? nothing : dataset(reader.catalog, :nh4_deposition).path,
@@ -336,6 +372,12 @@ function read_climate_block(reader::ClimateBlockReader{T}, block_index::Integer)
             lwnet = lwnet_units,
             swdown = swdown_units,
             wind = isnothing(wind) ? nothing : wind.units,
+            tasmax = isnothing(optional.tasmax) ? nothing : optional.tasmax.units,
+            tasmin = isnothing(optional.tasmin) ? nothing : optional.tasmin.units,
+            specific_humidity = isnothing(optional.specific_humidity) ? nothing :
+                optional.specific_humidity.units,
+            surface_pressure = isnothing(optional.surface_pressure) ? nothing :
+                optional.surface_pressure.units,
             co2 = "ppm",
             no3_deposition = isnothing(no3_deposition) ? nothing : "g/m2/day",
             nh4_deposition = isnothing(nh4_deposition) ? nothing : "g/m2/day",
@@ -349,6 +391,12 @@ function read_climate_block(reader::ClimateBlockReader{T}, block_index::Integer)
         swdown_values,
         lwnet_values,
         isnothing(wind) ? nothing : wind.values,
+        isnothing(optional.tasmax) ? nothing : optional.tasmax.values,
+        isnothing(optional.tasmin) ? nothing : optional.tasmin.values,
+        isnothing(optional.specific_humidity) ? nothing :
+            optional.specific_humidity.values,
+        isnothing(optional.surface_pressure) ? nothing :
+            optional.surface_pressure.values,
         no3_deposition,
         nh4_deposition,
         _daily_co2(reader.co2, block_time),
@@ -374,6 +422,27 @@ function climate_forcing(block::ClimateBlock)
         backend_neutral = true,
     )
     !isnothing(block.wind) && (forcing = merge(forcing, (wind = block.wind,)))
+    # `diurnal_range`, not tasmax and tasmin separately: the range is what every
+    # exposure path reads, and deriving it here means no kernel has to know the
+    # forcing was supplied as two extremes. Clamped at zero because a reanalysis
+    # cell can carry tasmin marginally above tasmax, and `max(0, ...)` inside the
+    # kernels would then silently absorb a data error rather than surface it -
+    # this is the one place where it can be seen.
+    if !isnothing(block.tasmax) && !isnothing(block.tasmin)
+        range = block.tasmax .- block.tasmin
+        minimum(range) >= -1 || throw(ArgumentError(
+            "tasmin exceeds tasmax by more than 1 C somewhere in this block",
+        ))
+        forcing = merge(forcing, (diurnal_range = max.(range, zero(eltype(range))),))
+    elseif !isnothing(block.tasmax) || !isnothing(block.tasmin)
+        throw(ArgumentError(
+            "tasmax and tasmin must be supplied together; one alone cannot give a range",
+        ))
+    end
+    !isnothing(block.specific_humidity) &&
+        (forcing = merge(forcing, (specific_humidity = block.specific_humidity,)))
+    !isnothing(block.surface_pressure) &&
+        (forcing = merge(forcing, (surface_pressure = block.surface_pressure,)))
     !isnothing(block.no3_deposition) && (forcing = merge(forcing, (
         no3_deposition = block.no3_deposition,
     )))

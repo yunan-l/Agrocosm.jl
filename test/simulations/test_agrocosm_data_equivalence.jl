@@ -92,9 +92,14 @@ end
             copy(climate.prec[rows, :]),
             copy(climate.swdown[rows, :]),
             copy(climate.lwnet[rows, :]),
-            nothing,
-            nothing,
-            nothing,
+            nothing,                    # wind
+            # tasmax, tasmin, specific humidity, surface pressure: this fixture
+            # exercises the standard channels only, so every exposure path and
+            # organ temperature stay off, which is what the equivalence being
+            # tested here assumes.
+            nothing, nothing, nothing, nothing,
+            nothing,                    # no3 deposition
+            nothing,                    # nh4 deposition
             fill(Float32(climate.co2[1]), length(rows)),
             selection,
             (fixture = "examples/climate_2000_2009.jld2",),

@@ -170,6 +170,16 @@ struct ClimateBlock{T <: AbstractFloat, TT}
     shortwave::Matrix{T}
     longwave::Matrix{T}
     wind::Union{Nothing, Matrix{T}}
+    # The four channels this project's mechanisms need beyond the standard set.
+    # `tasmax` and `tasmin` become the diurnal range, which every exposure path
+    # reconstructs its sub-daily course from; humidity and pressure enter the
+    # canopy energy balance. Optional in the same sense as `wind`: a
+    # configuration with no exposure path and no organ temperature does not need
+    # them, and rung zero is exactly that configuration.
+    tasmax::Union{Nothing, Matrix{T}}
+    tasmin::Union{Nothing, Matrix{T}}
+    specific_humidity::Union{Nothing, Matrix{T}}
+    surface_pressure::Union{Nothing, Matrix{T}}
     no3_deposition::Union{Nothing, Matrix{T}}
     nh4_deposition::Union{Nothing, Matrix{T}}
     co2::Vector{T}

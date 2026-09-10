@@ -2,6 +2,25 @@ using MPI
 
 include(joinpath(@__DIR__, "run_global_cfts_cpu.jl"))
 
+"""Manifest keys that must agree across MPI ranks and across a resume.
+
+The two older entries are the run switches the script has always compared. The
+rest are this project's process configuration: without them a resumed run can
+reuse shards written under a different configuration, and because recovery is
+all-rank consensus every shard would report complete and the merged product
+would silently blend two experiments.
+
+`configuration` and `rate_scale` are recorded rather than the individual
+switches because that is what a config names, and because the switches are
+derived from it by `process_settings` - comparing the derived form would let a
+registry change pass unnoticed.
+"""
+const _MPI_CONSISTENT_KEYS = (
+    "crop_resp_fix", "nitrogen_limit_vcmax",
+    "configuration", "rate_scale", "subdaily_steps", "diurnal_shape",
+)
+
+
 function mpi_warmup_convergence_reducer(comm, converged_cells, total_cells)
     global_converged = MPI.Allreduce(Int64(converged_cells), +, comm)
     global_total = MPI.Allreduce(Int64(total_cells), +, comm)
@@ -135,7 +154,18 @@ function merge_mpi_rank_products(
     manifests = TOML.parsefile.(rank_manifests)
     reference_manifest = first(manifests)
     for manifest in manifests
-        for key in ("crop_resp_fix", "nitrogen_limit_vcmax")
+        # The process configuration belongs in this check, not just the two
+        # older switches. Recovery is all-rank consensus and a resume reuses
+        # completed shards, so without these keys a resumed run can mix
+        # configurations across ranks and the consensus will not notice - every
+        # shard would look complete and the merged product would be a blend of
+        # two experiments.
+        for key in _MPI_CONSISTENT_KEYS
+            haskey(manifest, key) == haskey(reference_manifest, key) || error(
+                "MPI ranks differ in whether $key is recorded; the shards were " *
+                "written by different versions and must not be merged",
+            )
+            haskey(manifest, key) || continue
             manifest[key] == reference_manifest[key] || error(
                 "MPI ranks differ in $key",
             )
@@ -194,8 +224,8 @@ function merge_mpi_rank_products(
     write_report(manifest_path, Dict(
         "schema_version" => "1",
         "repository_commit" => _repository_commit(),
-        "crop_resp_fix" => reference_manifest["crop_resp_fix"],
-        "nitrogen_limit_vcmax" => reference_manifest["nitrogen_limit_vcmax"],
+        (key => reference_manifest[key]
+         for key in _MPI_CONSISTENT_KEYS if haskey(reference_manifest, key))...,
         "partition_count" => length(rank_manifests),
         "batches" => products,
         "created_at" => string(now()),

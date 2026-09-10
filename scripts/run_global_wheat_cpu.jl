@@ -92,6 +92,22 @@ function catalog_from_config(config)
         ),
         :co2 => DatasetSpec(climate_path("co2_file", "co2_2015_2016.txt"), "co2"),
     )
+    # The four channels this project's mechanisms need. Optional: a rung-zero
+    # run has no exposure path and no organ temperature and does not read them,
+    # which is why they are added conditionally rather than defaulted to a
+    # filename that may not exist.
+    for (key, name, variable) in (
+        ("tasmax_file", :tasmax, "tasmax"),
+        ("tasmin_file", :tasmin, "tasmin"),
+        ("specific_humidity_file", :specific_humidity, "huss"),
+        ("surface_pressure_file", :surface_pressure, "ps"),
+    )
+        haskey(climate, key) || continue
+        climate_specs[name] = DatasetSpec(
+            climate_path(key, ""),
+            String(get(climate, replace(key, "_file" => "_variable"), variable)),
+        )
+    end
     if has_no3_deposition
         climate_specs[:no3_deposition] = DatasetSpec(
             climate_path("no3_deposition_file", ""),
@@ -284,12 +300,70 @@ function model_inputs(
     return model_initial_data(grid, soil, crop, initial_state)
 end
 
+"""Process switches for one run, from `[processes]`, via the ablation registry.
+
+Read through `Agrocosm`'s own constructors rather than switch by switch. That is
+the point: a config can name `reproductive_sink` and get exactly the rung the
+paper reports, and it CANNOT name a rung while describing a configuration off
+the ladder - `ablation_configuration` refuses a keyword that the rung owns. A
+hand-assembled switch list would let a global run drift from the local one
+silently, which is the class of error this whole registry exists to prevent.
+
+An absent `[processes]` section gives rung zero, which is the historical
+behaviour of this script and the paper's control. That default is deliberate,
+but it is also how a misspelled section name turns into a silent rung-zero run,
+so the resolved configuration is logged by the caller.
+"""
+function process_settings(config)
+    processes = get(config, "processes", Dict{String, Any}())
+    shared = (;
+        subdaily_steps = Int(get(processes, "subdaily_steps", 24)),
+        diurnal_shape = Symbol(get(processes, "diurnal_shape", "sinusoid")),
+    )
+    name = Symbol(get(processes, "configuration", "daily"))
+    name in ablation_rungs() && return ablation_configuration(name; shared...)
+    name === :tmax_sink && return ablation_daily_statistic_sink_configuration()
+    name === :daily_sink &&
+        return ablation_daily_assimilation_sink_configuration(; shared...)
+    name === :daily_sink_air && return ablation_daily_assimilation_sink_configuration(;
+        organ_temperature = false, shared...)
+    name === :terminal_only && return ablation_terminal_heat_configuration(; shared...)
+    name === :production && return ablation_terminal_heat_configuration(;
+        reproductive_sink = true, water_sterility = true, water_filling = true,
+        shared...)
+    throw(ArgumentError(
+        "unknown [processes] configuration $name; expected one of " *
+        "$(ablation_rungs()) or :tmax_sink, :daily_sink, :daily_sink_air, " *
+        ":terminal_only, :production",
+    ))
+end
+
+"""Scale all four reproductive rates along the ray the bounds were taken on.
+
+The shipped rates are UPPER BOUNDS, not fits - yield falls monotonically in each,
+so there is no interior optimum - and the bound was taken by scaling all four
+together. `rate_scale = 1.0` is the bound itself; anything reported from a single
+scale is a point estimate of a quantity that only has a bound.
+"""
+function scaled_cft(cft, scale::Real)
+    scale == 1 && return cft
+    rates = (:sterility_rate, :filling_rate,
+             :water_sterility_rate, :water_filling_rate)
+    T = typeof(cft.hiopt)
+    return CFTParameters{T, Int32}(;
+        (field => (field in rates ? T(scale * getfield(cft, field)) :
+                   getfield(cft, field))
+         for field in fieldnames(CFTParameters))...)
+end
+
 function create_simulation(initial_data, selection, config, days, device, cft_id;
     irrigated::Bool, diagnostics)
     management = config["management"]
     sowing_mode = Symbol(get(management, "sowing_mode", "prescribed_sdate"))
+    processes = get(config, "processes", Dict{String, Any}())
+    rate_scale = Float64(get(processes, "rate_scale", 1.0))
     return initialize_simulation(
-        crop_cft(cft_id), initial_data;
+        scaled_cft(crop_cft(cft_id), rate_scale), initial_data;
         days,
         indices = collect(1:length(selection.cell_ids)),
         cell_ids = selection.cell_ids,
@@ -306,6 +380,7 @@ function create_simulation(initial_data, selection, config, days, device, cft_id
         # LPJmL keeps V_req fixed once prescribed crop dates/PHU are fixed.
         freeze_vernalization_requirement = Symbol(management["mode"]) === :fixed &&
             sowing_mode === :prescribed_sdate,
+        process_settings(config)...,
     )
 end
 
