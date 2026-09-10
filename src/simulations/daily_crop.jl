@@ -25,6 +25,7 @@ function _daily_crop!(
     organ_temperature::Bool = false,
     reproductive_sink::Bool = false,
     terminal_heat::Bool = false,
+    water_sterility::Bool = false,
     sowing_mode::Symbol = :prescribed_sdate,
     update_vernalization_requirement::Bool = true,
     water_balance = nothing,
@@ -433,6 +434,9 @@ function _daily_crop!(
         end
         reproductive_sink && reproductive_sink!(cftparameters, state)
         terminal_heat && terminal_heat!(cftparameters, state)
+        # Order-independent against the heat sink: both only subtract from
+        # `grain_set_fraction` and the state is clamped at zero.
+        water_sterility && water_sterility!(cftparameters, state)
         crop_carbon!(
             state, output, cftparameters, dailyWeather.temp,
             soil_thermal_prognostic(state).temperature;

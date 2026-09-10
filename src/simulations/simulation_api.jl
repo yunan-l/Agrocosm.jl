@@ -134,6 +134,7 @@ function initialize_simulation(
     organ_temperature::Bool = false,
     reproductive_sink::Bool = false,
     terminal_heat::Bool = false,
+    water_sterility::Bool = false,
     freeze_vernalization_requirement::Bool = false,
     sowing_mode::Symbol = :prescribed_sdate,
     model_parameters::Union{Nothing, ModelParameters} = nothing,
@@ -191,6 +192,7 @@ function initialize_simulation(
         organ_temperature,
         reproductive_sink,
         terminal_heat,
+        water_sterility,
         freeze_vernalization_requirement,
         sowing_mode,
     )
@@ -324,6 +326,7 @@ function _transition_range!(
         organ_temperature = simulation.config.organ_temperature,
         reproductive_sink = simulation.config.reproductive_sink,
         terminal_heat = simulation.config.terminal_heat,
+        water_sterility = simulation.config.water_sterility,
         update_vernalization_requirement = !simulation.config.freeze_vernalization_requirement,
         sowing_mode = simulation.config.sowing_mode,
         water_balance = simulation.water_balance,
@@ -521,7 +524,7 @@ function run_simulation!(
     return simulation
 end
 
-const _CHECKPOINT_FORMAT_VERSION = 10
+const _CHECKPOINT_FORMAT_VERSION = 11
 const _MODEL_STATE_SCHEMA_VERSION = 3
 
 _checkpoint_snapshot(values::AbstractArray) = Array(values)
@@ -605,6 +608,7 @@ function _simulation_checkpoint(simulation::CropSimulation)
             organ_temperature = simulation.config.organ_temperature,
             reproductive_sink = simulation.config.reproductive_sink,
             terminal_heat = simulation.config.terminal_heat,
+            water_sterility = simulation.config.water_sterility,
             sowing_mode = simulation.config.sowing_mode,
             parameter_fingerprint = _checkpoint_fingerprint((
                 cft = simulation.cft,
@@ -685,6 +689,8 @@ function _validate_checkpoint_target(simulation::CropSimulation, checkpoint)
         ("reproductive sink", metadata.reproductive_sink,
          simulation.config.reproductive_sink),
         ("terminal heat", metadata.terminal_heat, simulation.config.terminal_heat),
+        ("water sterility", metadata.water_sterility,
+         simulation.config.water_sterility),
         ("sowing mode", metadata.sowing_mode, simulation.config.sowing_mode),
         ("parameter fingerprint", metadata.parameter_fingerprint,
          _checkpoint_fingerprint((

@@ -189,20 +189,32 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     # falls monotonically in the rate: rate = 0 gives the highest yield, so
     # there is no interior optimum for a reference to find and none was sought.
     #
-    # The bound comes from `tools/sterility_calibration.jl`, which sweeps the
-    # rate at five cells against the 100 km GDHY neighbourhood spread for each
-    # harvest year - the spread rather than a single grid cell, because it is
-    # 3-12x wider than the choice of trend estimator. The binding cell is rice
-    # (Mekong): 0.01 gives 3.95 t/ha against a reference of 3.99 and a band of
-    # [3.67, 4.91], while 0.03 gives 3.14 and leaves the band. Maize admits up
-    # to 0.03. The value is uniform across crops rather than per-crop because
-    # there is one cell per crop, and differentiating four rates on four cells
-    # would be fitting noise.
+    # The bound comes from `tools/sterility_calibration.jl`, which sweeps against
+    # the 100 km GDHY neighbourhood spread for each harvest year - the spread
+    # rather than a single grid cell, because it is 3-12x wider than the choice
+    # of trend estimator. The value is uniform across crops rather than
+    # per-crop because there is one cell per crop, and differentiating four
+    # rates on four cells would be fitting noise.
+    #
+    # It is a JOINT bound. Sweeping this rate alone, with terminal heat off,
+    # admits 0.01 at the binding rice cell - but the two mechanisms do not
+    # compose: both factors multiply into the harvest index, so switching the
+    # second on moves the first's bound. Rice at the two separate bounds gives
+    # 3.49 t/ha against a floor of 3.67, i.e. OUTSIDE the band that each bound
+    # was chosen to respect. Scaling both together along the ray
+    # `k * (0.01, 0.001)` and requiring every constrained cell to stay inside
+    # its band gives k <= 0.75, again set by rice (3.70 at 0.75, 3.57 at 0.9).
+    # Maize and hot wheat admit k = 1.
+    #
+    # The ray is the same one `tools/gradient_attribution.jl` path-integrates
+    # along, so the bound and the attribution refer to one object rather than
+    # two.
     #
     # What the bound buys is the project's dual criterion with a provenanced
-    # number: at 0.01 the rice cell is inside the observed band AND loses 16.0%
-    # of its yield to a five-day widening of the diurnal range that leaves the
-    # daily mean untouched.
+    # number: at the joint bound the rice cell is inside the observed band AND
+    # still loses double digits to a five-day widening of the diurnal range that
+    # leaves the daily mean untouched. Event responses reported at the separate
+    # per-mechanism bounds are correspondingly about a quarter too large.
     #
     # What it does not buy: at two of the five cells no rate helps, because the
     # mean-yield deficit runs the wrong way - Morocco wheat is above the band's
@@ -213,7 +225,7 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     flowering_start::T = 0.45       # `fphu` at which grain set becomes sensitive.
     flowering_end::T = 0.70         # `fphu` at which sensitivity ends.
     sterility_temperature::T = 35.0 # Organ-temperature threshold for sterility (°C).
-    sterility_rate::T = 0.01        # Grain set lost per exposure-hour; 0 = inert.
+    sterility_rate::T = 0.0075      # Grain set lost per exposure-hour; 0 = inert.
     # Terminal heat, acting on grain FILLING rather than grain set. A separate
     # window, a separate threshold and a separate rate, because it is separate
     # physiology: heat after anthesis shortens filling duration and inhibits
@@ -239,12 +251,17 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     #   Morocco wheat and Michigan soybean: no rate accepted, the deficit runs
     #   the wrong way at both, as it does for the sink.
     #
-    # 0.001 is the binding bound and is uniform across crops for the same reason
-    # the sterility rate is: one cell per crop cannot justify four rates. That is
-    # a real limitation here rather than a formality, because terminal-heat
-    # sensitivity genuinely differs by crop - wheat filling is far more heat
-    # sensitive than rice, which is adapted to warm filling - so a crop-specific
-    # rate is the first thing more validation cells should buy.
+    # Those are the SEPARATE bounds, each with the sink off. The shipped value is
+    # the joint one - see `sterility_rate` above - which is 0.75 of 0.001,
+    # because the two mechanisms multiply into the harvest index and their
+    # separate bounds together leave the rice band.
+    #
+    # Uniform across crops for the same reason the sterility rate is: one cell
+    # per crop cannot justify four rates. That is a real limitation here rather
+    # than a formality, because terminal-heat sensitivity genuinely differs by
+    # crop - wheat filling is far more heat sensitive than rice, which is
+    # adapted to warm filling - so a crop-specific rate is the first thing more
+    # validation cells should buy.
     #
     # What the bound buys: at the hot-wheat cell, where the grain-set sink is
     # inert at every rate up to 0.1 because the sterility threshold is never
@@ -255,7 +272,25 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     filling_start::T = 0.70         # `fphu` at which grain filling becomes sensitive.
     filling_end::T = 0.95           # `fphu` at which sensitivity ends.
     filling_temperature::T = 30.0   # Organ-temperature threshold for filling damage (°C).
-    filling_rate::T = 0.001         # Filling capacity lost per exposure-hour; 0 = inert.
+    filling_rate::T = 0.00075       # Filling capacity lost per exposure-hour; 0 = inert.
+    # Drought-driven loss of grain set, on the same window and the same state as
+    # heat sterility - both abort florets from one pool. See
+    # docs/09_water_sterility_design.md.
+    #
+    # Driven by TODAY's water sufficiency, `water.sufficiency`, which is 1 when
+    # unstressed and 1 for an absent stand. Not by `stress.water_deficit`, which
+    # despite its name is season-cumulative sufficiency on 0-100 and is zero
+    # when no stand is present - a field that would read every bare day as total
+    # drought.
+    #
+    # `water_sterility_rate` ships INERT. Water stress already reaches yield
+    # through assimilation and through the harvest index, so a nonzero rate here
+    # is an addition on top of paths that are already calibrated, and its bound
+    # has to be taken JOINTLY with the two heat rates: all of these factors meet
+    # in one harvest index, and the heat pair already had to be scaled to 0.75
+    # of their separate bounds for exactly that reason.
+    water_sterility_sufficiency::T = 0.5  # Daily water sufficiency below which florets abort (0-1).
+    water_sterility_rate::T = 0.0         # Grain set lost per point-day of shortfall; 0 = inert.
 end
 
 """Return a CFT parameter set whose floating fields consistently use `T`."""

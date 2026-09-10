@@ -69,6 +69,7 @@ struct SimulationConfiguration{T <: AbstractFloat, D, E}
     organ_temperature::Bool
     reproductive_sink::Bool
     terminal_heat::Bool
+    water_sterility::Bool
     freeze_vernalization_requirement::Bool
     sowing_mode::Symbol
     execution::E
@@ -93,6 +94,7 @@ function SimulationConfiguration(
     organ_temperature::Bool = false,
     reproductive_sink::Bool = false,
     terminal_heat::Bool = false,
+    water_sterility::Bool = false,
     freeze_vernalization_requirement::Bool = false,
     sowing_mode::Symbol = :prescribed_sdate,
 ) where {T <: AbstractFloat}
@@ -166,6 +168,11 @@ function SimulationConfiguration(
     # prerequisite and no additional one. It is independent of the sink: a run
     # may carry either, both or neither, because grain set and grain filling are
     # separate damage paths and the ablation has to be able to separate them.
+    # `water_sterility` deliberately has NO prerequisite. It reads
+    # `water.sufficiency`, which `transpiration!` writes on every day of every
+    # configuration, so there is no exposure source to enable first - unlike
+    # every other mechanism this project added. Nothing to validate here is the
+    # correct outcome, not an omission.
     !terminal_heat || writers >= 1 || throw(ArgumentError(
         "terminal_heat requires one of subdaily_photosynthesis, " *
         "subdaily_heat_exposure or daily_statistic_exposure to fill " *
@@ -181,7 +188,7 @@ function SimulationConfiguration(
         subdaily_photosynthesis, Int(subdaily_steps), diurnal_shape,
         subdaily_capacity_optimum, subdaily_heat_exposure,
         daily_statistic_exposure, organ_temperature, reproductive_sink,
-        terminal_heat, freeze_vernalization_requirement,
+        terminal_heat, water_sterility, freeze_vernalization_requirement,
         sowing_mode, execution,
     )
 end
