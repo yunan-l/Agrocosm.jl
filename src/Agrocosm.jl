@@ -133,6 +133,7 @@ export enzyme_management_yield_loss, enzyme_management_yield_split_loss
 export enzyme_joint_adaptation_yield_loss
 export WEATHER_VARIABLES, weather_forcing, weather_harvest_replay
 export enzyme_weather_harvest_gradient, enzyme_weather_forward_directional
+export enzyme_process_parameter_gradient
 
 
 # process-based crop model

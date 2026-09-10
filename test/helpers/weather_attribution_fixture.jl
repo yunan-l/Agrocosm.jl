@@ -4,17 +4,26 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
     surface_pressure = T(101325),
     reproductive_sink = false, sterility_rate = nothing,
     sterility_temperature = nothing,
+    heat_exposure_config = nothing, daily_statistic_exposure = false,
+    terminal_heat = false, filling_rate = nothing, filling_temperature = nothing,
     model_parameters = nothing,
 )
     forcing_days = 365 * cld(sowing_day + 200, 365)
     cft = Agrocosm.convert_precision(T, cft_id == 1 ? Agrocosm.cft1 : Agrocosm.cft3)
     # The synthetic fixture runs at a constant 19/25 C, far below any real
     # sterility threshold, so the sink can only be exercised by lowering it here.
-    if sterility_rate !== nothing || sterility_temperature !== nothing
+    # Terminal heat needs the same treatment and for the same reason: the
+    # fixture is far below any real grain-filling threshold too.
+    overrides = Dict{Symbol, Any}()
+    sterility_rate === nothing || (overrides[:sterility_rate] = T(sterility_rate))
+    sterility_temperature === nothing ||
+        (overrides[:sterility_temperature] = T(sterility_temperature))
+    filling_rate === nothing || (overrides[:filling_rate] = T(filling_rate))
+    filling_temperature === nothing ||
+        (overrides[:filling_temperature] = T(filling_temperature))
+    if !isempty(overrides)
         cft = Agrocosm.CFTParameters{T, Int32}(;
-            (f => (f === :sterility_rate && sterility_rate !== nothing ? T(sterility_rate) :
-                   f === :sterility_temperature && sterility_temperature !== nothing ?
-                       T(sterility_temperature) : getfield(cft, f))
+            (f => get(overrides, f, getfield(cft, f))
              for f in fieldnames(Agrocosm.CFTParameters))...)
     end
     initial_data = (
@@ -55,12 +64,15 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
     )
     # A synthetic, constant diurnal range: this fixture never touches real
     # tasmax/tasmin files, so any nonzero amplitude exercises the sub-daily
-    # kernel without needing server data. `diurnal_config = nothing` (the
-    # default) leaves `climate` exactly as before -- no `diurnal_range` field
-    # at all, so existing (non-sub-daily) callers of this fixture are unaffected.
-    climate = diurnal_config === nothing ? climate_fields : merge(climate_fields, (;
+    # kernel without needing server data. All THREE exposure sources
+    # reconstruct the sub-daily course from it, so the field is added whenever
+    # any of them is on; with none on `climate` is exactly as before -- no
+    # `diurnal_range` field at all, so existing callers are unaffected.
+    needs_range = diurnal_config !== nothing || heat_exposure_config !== nothing ||
+        daily_statistic_exposure
+    climate = needs_range ? merge(climate_fields, (;
         diurnal_range = fill(T(diurnal_amplitude), forcing_days, 1),
-    ))
+    )) : climate_fields
     # Organ temperature additionally needs humidity and pressure. Constant
     # synthetic values, as with the diurnal range: the point is to exercise the
     # energy balance under AD, not to reproduce a real cell.
@@ -80,6 +92,7 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
         fertilizer = :yes, manure = true, with_tillage = true,
         nitrogen_limit_vcmax = true, crop_resp_fix = true, diurnal_config,
         organ_temperature, reproductive_sink,
+        heat_exposure_config, daily_statistic_exposure, terminal_heat,
         update_vernalization_requirement = false, reuse_output = true)
     events = findall(!iszero, vec(ordinary.output.calendar.harvest_event))
     isempty(events) && error("fixture did not harvest")
@@ -90,6 +103,7 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
         fertilizer = :yes, manure = true, with_tillage = true,
         nitrogen_limit_vcmax = true, crop_resp_fix = true, diurnal_config,
         organ_temperature, reproductive_sink,
+        heat_exposure_config, daily_statistic_exposure, terminal_heat,
         update_vernalization_requirement = false, reuse_output = true)
     return (; state, cft, parameters, climate, days = first_day:(harvest_day - 1),
         harvest_day, forcing = cat(climate.temp, climate.prec, climate.sw, climate.lw,

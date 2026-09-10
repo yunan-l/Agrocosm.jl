@@ -794,6 +794,9 @@ function _enzyme_continuous_transition!(
     diurnal_config = nothing,
     organ_temperature::Bool = false,
     reproductive_sink::Bool = false,
+    heat_exposure_config = nothing,
+    daily_statistic_exposure::Bool = false,
+    terminal_heat::Bool = false,
 )
     T = eltype(Agrocosm.crop_prognostic(state).canopy.lai)
     _enzyme_apply_root_distribution!(state, cft.beta_root)
@@ -827,6 +830,12 @@ function _enzyme_continuous_transition!(
     # on them, so d(yield)/d(wind) and d(yield)/d(shortwave) now propagate
     # through the energy balance as well as through the daily kernel, which is
     # a more complete gradient than before, not a leak.
+    # The standalone exposure pass, mirroring `_daily_crop!`. Same Const-ness
+    # story as `diurnal` above.
+    heat_exposure_forcing = heat_exposure_config === nothing ? nothing :
+        Agrocosm.DiurnalForcing(
+            heat_exposure_config, view(climate.diurnal_range, day, :),
+        )
     organ = organ_temperature ? Agrocosm.OrganTemperatureForcing(
         view(climate.specific_humidity, day, :),
         view(climate.surface_pressure, day, :),
@@ -1077,10 +1086,24 @@ function _enzyme_continuous_transition!(
             state, cft, pet, current_co2, global_params,
         )
     end
-    # Same placement as the production driver: today's exposure has been written
-    # by the assimilation calls, and allocation is about to consume the harvest
-    # index that grain set caps.
+    # Same placement as the production driver: today's exposure is written here
+    # if the assimilation calls did not write it, and allocation is about to
+    # consume the harvest index that grain set and grain filling cap.
+    #
+    # Both exposure kernels are ordinary differentiated code, so d(yield)/d(the
+    # sink's parameters) propagates through them - which is the whole point of
+    # wiring them here rather than treating exposure as an input.
+    Agrocosm.heat_exposure!(
+        cft, state, pet.daylength, daily_weather.temp, heat_exposure_forcing; organ,
+    )
+    if daily_statistic_exposure
+        Agrocosm.daily_statistic_exposure!(
+            cft, state, pet.daylength, daily_weather.temp,
+            view(climate.diurnal_range, day, :), true,
+        )
+    end
     reproductive_sink && Agrocosm.reproductive_sink!(cft, state)
+    terminal_heat && Agrocosm.terminal_heat!(cft, state)
     _enzyme_crop_carbon!(
         state,
         cft,

@@ -43,3 +43,11 @@ function enzyme_weather_harvest_gradient end
 
 """Fixed-harvest weather directional derivative; requires `using Enzyme`."""
 function enzyme_weather_forward_directional end
+
+"""Fixed-harvest reverse gradient with respect to named `CFTParameters` fields.
+
+The process-attribution counterpart of `enzyme_weather_harvest_gradient`:
+`d(yield)/d(theta)` for the parameters that define each stress mechanism.
+Requires `using Enzyme`.
+"""
+function enzyme_process_parameter_gradient end
