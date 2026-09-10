@@ -5,6 +5,7 @@
 @inline function _enzyme_weather_lambda(
     ::Val{:C4}, fac::T, vcmax, stress, b, co2, temperature, apar, daylength,
     lpjmlparams, photoparams, upper_bound, iterations, constrain,
+    lambda_primal_mode = Val(:surrogate),
 ) where {T}
     production_lambda = Agrocosm.compute_lambda_c4_solution(
         fac, vcmax, stress, b, temperature, apar, daylength,
@@ -33,7 +34,7 @@
         updated = lambda - (fac * (one(T) - lambda) - assimilation) / slope
         lambda = constrain ? clamp(updated, zero(T), upper_bound) : updated
     end
-    return lambda + _enzyme_primal_correction(production_lambda, lambda)
+    return _enzyme_lambda_primal(lambda_primal_mode, production_lambda, lambda)
 end
 
 function _check_weather_case(forcing, state, cft, climate, days, harvest_day)
@@ -176,7 +177,7 @@ function _weather_yield_block(
         _enzyme_continuous_transition!(
             state, cft, parameters, climate, day, :gpp, layer_depth,
             irrigation, nitrogen_limit_vcmax, crop_resp_fix, nitrogen_limit_vcmax,
-            forcing, pathway,
+            forcing, pathway, Val(:production),
         )
     end
     # Production harvest_state_kernel! transfers storage carbon directly to

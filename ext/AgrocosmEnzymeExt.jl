@@ -207,6 +207,10 @@ function Enzyme.EnzymeRules.inactive(
     return nothing
 end
 
+@inline _enzyme_lambda_primal(::Val{:surrogate}, production, surrogate) = surrogate
+@inline _enzyme_lambda_primal(::Val{:production}, production, surrogate) =
+    surrogate + _enzyme_primal_correction(production, surrogate)
+
 @inline function _enzyme_c3_lambda_residual_slope(
     fac,
     lambda,
@@ -267,6 +271,7 @@ end
     upper_bound = typeof(fac)(0.85),
     max_iterations::Int = 30,
     constrain_to_upper_bound::Bool = false,
+    lambda_primal_mode = Val(:surrogate),
 )
     T = typeof(fac)
     production_lambda = Agrocosm.compute_lambda_c3_solution(
@@ -314,7 +319,7 @@ end
         lambda = constrain_to_upper_bound ?
             clamp(updated_lambda, zero(T), upper_bound) : updated_lambda
     end
-    return lambda + _enzyme_primal_correction(production_lambda, lambda)
+    return _enzyme_lambda_primal(lambda_primal_mode, production_lambda, lambda)
 end
 
 # The production lambda wrapper packs active CFT scalars into a NamedTuple
@@ -330,6 +335,7 @@ function _enzyme_solve_lambda_c3!(
     photoparams,
     constrain_to_upper_bound::Bool = false,
     pathway = Val(:C3),
+    lambda_primal_mode = Val(:surrogate),
 )
     T = eltype(Agrocosm.crop_photosynthesis_auxiliary(state).lambda)
     lambda = Agrocosm.crop_photosynthesis_auxiliary(state).lambda
@@ -360,6 +366,7 @@ function _enzyme_solve_lambda_c3!(
                 T(0.85),
                 30,
                 constrain_to_upper_bound,
+                lambda_primal_mode,
             )
         else
             zero(T)
@@ -377,6 +384,7 @@ function _enzyme_recouple_nitrogen_water_c3!(
     lpjmlparams,
     photoparams,
     pathway = Val(:C3),
+    lambda_primal_mode = Val(:surrogate),
 )
     T = eltype(Agrocosm.crop_photosynthesis_auxiliary(state).lambda)
     photosynthesis = Agrocosm.crop_photosynthesis_auxiliary(state)
@@ -435,6 +443,7 @@ function _enzyme_recouple_nitrogen_water_c3!(
                         previous_lambda,
                         20,
                         true,
+                        lambda_primal_mode,
                     )
                 end
             end
@@ -778,6 +787,7 @@ function _enzyme_continuous_transition!(
     apply_deferred_prescribed_inputs::Bool = nitrogen_limit_vcmax,
     weather_controls = nothing,
     pathway = Val(:C3),
+    lambda_primal_mode = Val(:surrogate),
 )
     T = eltype(Agrocosm.crop_prognostic(state).canopy.lai)
     _enzyme_apply_root_distribution!(state, cft.beta_root)
@@ -964,6 +974,7 @@ function _enzyme_continuous_transition!(
         photo_params,
         nitrogen_limit_vcmax,
         pathway,
+        lambda_primal_mode,
     )
     Agrocosm.photosynthesis!(
         pathway,
@@ -1022,6 +1033,7 @@ function _enzyme_continuous_transition!(
             global_params,
             photo_params,
             pathway,
+            lambda_primal_mode,
         )
         Agrocosm.photosynthesis!(
             pathway,
