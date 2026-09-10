@@ -421,6 +421,24 @@ production_output_variables() = [
     OutputVariable(:soil, :evapotranspiration; reduction = :sum),
     OutputVariable(:crop, :lai; reduction = :mean),
     OutputVariable(:crop, :yield),
+    # The three below are per-season quantities the model already computes and
+    # the global runner did not write, so a global run could not measure the
+    # thing it was run to measure.
+    #
+    # `season_water_deficit` is the SEASON-CUMULATIVE supply/demand ratio that
+    # `compute_harvest_index` reads. That it is cumulative is the finding: a
+    # mid-season drought is not diluted in it, it is monotonically erased as
+    # later normal days add equally to numerator and denominator. Without this
+    # variable the erasure can only be shown on the handful of cells a local
+    # driver visits, and a code-path defect deserves to be shown as a
+    # distribution over every cell and season.
+    #
+    # `season_length` and `harvest_aboveground_carbon` give the realised harvest
+    # index (grain / above-ground) per season, which is what the water penalty
+    # acts on - the response side of the same claim.
+    OutputVariable(:crop, :season_water_deficit),
+    OutputVariable(:crop, :season_length),
+    OutputVariable(:crop, :harvest_aboveground_carbon),
 ]
 
 function write_reconstructed_output(path, grid, selection, chunks, years)
