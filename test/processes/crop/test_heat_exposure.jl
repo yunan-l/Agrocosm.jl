@@ -286,3 +286,68 @@ end
     )
     @test Agrocosm.crop_stress_auxiliary(state).heat_exposure_hours[1] == _T(3.25)
 end
+
+@testset "Both exposure kernels are per-cell independent" begin
+    # Every other test in this file runs one cell, so a kernel indexing `[1]`
+    # where it means `[cell]` would pass all of them and then produce one cell's
+    # answer everywhere on a real domain - and silently, because cell 1 would be
+    # right. This is the test that catches that class of bug, and it is the
+    # property GPU parallelism needs: no cell may read another's inputs.
+    cells = 5
+    cft = _exposure_cft(Agrocosm.cft1; threshold = 26.0)
+    config = DiurnalConfig(; steps = 24,
+                             shape = Agrocosm.diurnal_shape_code(:sinusoid))
+    temperatures = _T[18.0, 24.0, 28.0, 32.0, 38.0]
+    ranges = _T[4.0, 8.0, 12.0, 16.0, 20.0]
+    daylengths = _T[10.0, 12.0, 14.0, 16.0, 13.0]
+    lais = _T[0.0, 1.0, 2.0, 3.0, 4.0]
+
+    organ = Agrocosm.OrganTemperatureForcing(
+        fill(_T(0.006), cells), fill(_T(101325.0), cells), fill(_T(2.0), cells),
+        _T[150, 200, 250, 300, 350], fill(_T(-60.0), cells),
+        fill(_T(0.2), cells), lais, fill(_T(3.0), cells),
+    )
+
+    crop = Agrocosm.init_crop(_T, cells, identity)
+    state = test_model_state(crop)
+    stress = Agrocosm.crop_stress_auxiliary(state)
+    Agrocosm.heat_exposure!(
+        cft, state, daylengths, temperatures,
+        DiurnalForcing(config, ranges); organ,
+    )
+    batch_sterility = copy(stress.heat_exposure_hours)
+    batch_filling = copy(stress.filling_exposure_hours)
+
+    Agrocosm.daily_statistic_exposure!(
+        cft, state, daylengths, temperatures, ranges, true,
+    )
+    batch_closed = copy(stress.heat_exposure_hours)
+
+    # Each cell must equal what a one-cell run with that cell's inputs gives -
+    # bitwise, because it is literally the same arithmetic.
+    for index in 1:cells
+        single_crop = Agrocosm.init_crop(_T, 1, identity)
+        single = test_model_state(single_crop)
+        single_organ = Agrocosm.OrganTemperatureForcing(
+            _T[0.006], _T[101325.0], _T[2.0], _T[organ.shortwave[index]],
+            _T[-60.0], _T[0.2], _T[lais[index]], _T[3.0],
+        )
+        Agrocosm.heat_exposure!(
+            cft, single, _T[daylengths[index]], _T[temperatures[index]],
+            DiurnalForcing(config, _T[ranges[index]]); organ = single_organ,
+        )
+        single_stress = Agrocosm.crop_stress_auxiliary(single)
+        @test single_stress.heat_exposure_hours[1] === batch_sterility[index]
+        @test single_stress.filling_exposure_hours[1] === batch_filling[index]
+
+        Agrocosm.daily_statistic_exposure!(
+            cft, single, _T[daylengths[index]], _T[temperatures[index]],
+            _T[ranges[index]], true,
+        )
+        @test single_stress.heat_exposure_hours[1] === batch_closed[index]
+    end
+
+    # And the cells must actually differ, or the check above is vacuous.
+    @test length(unique(batch_sterility)) == cells
+    @test length(unique(batch_closed)) > 1
+end

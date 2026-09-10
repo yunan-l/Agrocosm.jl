@@ -169,3 +169,42 @@ end
     @test both < fill_only
     @test both ≈ set_only * 0.5 rtol = 1e-5
 end
+
+@testset "Terminal heat is per-cell independent" begin
+    # Same hazard as the exposure kernels: one cell in every other test here.
+    cells = 4
+    cft = _filling_cft(Agrocosm.cft1; rate = 0.02)
+    exposures = _TT[0.0, 5.0, 20.0, 80.0]
+    fphus = _TT[0.60, 0.75, 0.825, 0.90]      # first is outside the window
+    growing = Int32[1, 1, 1, 0]               # last is not growing
+
+    crop = Agrocosm.init_crop(_TT, cells, identity)
+    state = test_model_state(crop)
+    phenology = Agrocosm.crop_prognostic(state).phenology
+    phenology.grain_fill_fraction .= one(_TT)
+    phenology.is_growing .= growing
+    Agrocosm.crop_stress_auxiliary(state).filling_exposure_hours .= exposures
+    Agrocosm.crop_phenology_auxiliary(state).fphu .= fphus
+    Agrocosm.terminal_heat!(cft, state)
+    batch = copy(phenology.grain_fill_fraction)
+
+    for index in 1:cells
+        single_crop = Agrocosm.init_crop(_TT, 1, identity)
+        single = test_model_state(single_crop)
+        single_phenology = Agrocosm.crop_prognostic(single).phenology
+        single_phenology.grain_fill_fraction .= one(_TT)
+        single_phenology.is_growing .= Int32(growing[index])
+        Agrocosm.crop_stress_auxiliary(single).filling_exposure_hours .= exposures[index]
+        Agrocosm.crop_phenology_auxiliary(single).fphu .= fphus[index]
+        Agrocosm.terminal_heat!(cft, single)
+        @test single_phenology.grain_fill_fraction[1] === batch[index]
+    end
+
+    # The forcing was chosen so the four cells take four different branches:
+    # outside the window, inside with light exposure, inside with heavy
+    # exposure, and not growing. If they all came out equal the test proves
+    # nothing.
+    @test batch[1] == 1                 # outside the window
+    @test 1 > batch[2] > batch[3]       # inside, monotone in exposure
+    @test batch[4] == 1                 # not growing
+end
