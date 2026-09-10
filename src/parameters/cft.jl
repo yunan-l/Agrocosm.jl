@@ -291,6 +291,14 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     # of their separate bounds for exactly that reason.
     water_sterility_sufficiency::T = 0.5  # Daily water sufficiency below which florets abort (0-1).
     water_sterility_rate::T = 0.0         # Grain set lost per point-day of shortfall; 0 = inert.
+    # Drought-driven loss of grain FILLING - the fourth cell of the
+    # {heat, water} x {number, weight} square, on the filling window and the
+    # same state as terminal heat. It is the only channel that reaches the
+    # Morocco wheat cell: its drought arrives after anthesis, with pre-anthesis
+    # sufficiency at 1.0 throughout, the flowering window never below 0.539 and
+    # the filling window down to 0.417. Ships inert, bounded jointly.
+    water_filling_sufficiency::T = 0.5    # Daily water sufficiency below which filling is impaired (0-1).
+    water_filling_rate::T = 0.0           # Filling capacity lost per point-day of shortfall; 0 = inert.
 end
 
 """Return a CFT parameter set whose floating fields consistently use `T`."""

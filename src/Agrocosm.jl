@@ -79,7 +79,7 @@ export leaf_temperature_departure, leaf_energy_residual
 export saturation_vapour_pressure, vapour_pressure_from_specific_humidity
 export OrganTemperatureForcing, organ_leaf_temperature, diurnal_shortwave_rate
 export reproductive_sink!, flowering_weight, grain_set_loss
-export terminal_heat!, water_sterility!
+export terminal_heat!, water_sterility!, water_filling!
 export heat_exposure!, heat_exposure_configuration
 export daily_statistic_exposure!, daily_statistic_exposure_enabled
 export phenology_crop!, lai_crop!, cultivate!, dynamic_sowing_date!, update_dynamic_sowing_calendar!, harvest_crop!, fertilizer!
@@ -199,6 +199,7 @@ include("processes/crop/reproductive_sink.jl")
 include("processes/crop/heat_exposure.jl")
 include("processes/crop/terminal_heat.jl")
 include("processes/crop/water_sterility.jl")
+include("processes/crop/water_filling.jl")
 include("processes/crop/lambda_solver.jl")
 include("processes/crop/carbon_allocation.jl")
 include("processes/crop/crop_carbon.jl")

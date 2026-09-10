@@ -135,6 +135,7 @@ function initialize_simulation(
     reproductive_sink::Bool = false,
     terminal_heat::Bool = false,
     water_sterility::Bool = false,
+    water_filling::Bool = false,
     freeze_vernalization_requirement::Bool = false,
     sowing_mode::Symbol = :prescribed_sdate,
     model_parameters::Union{Nothing, ModelParameters} = nothing,
@@ -193,6 +194,7 @@ function initialize_simulation(
         reproductive_sink,
         terminal_heat,
         water_sterility,
+        water_filling,
         freeze_vernalization_requirement,
         sowing_mode,
     )
@@ -327,6 +329,7 @@ function _transition_range!(
         reproductive_sink = simulation.config.reproductive_sink,
         terminal_heat = simulation.config.terminal_heat,
         water_sterility = simulation.config.water_sterility,
+        water_filling = simulation.config.water_filling,
         update_vernalization_requirement = !simulation.config.freeze_vernalization_requirement,
         sowing_mode = simulation.config.sowing_mode,
         water_balance = simulation.water_balance,
@@ -524,7 +527,7 @@ function run_simulation!(
     return simulation
 end
 
-const _CHECKPOINT_FORMAT_VERSION = 11
+const _CHECKPOINT_FORMAT_VERSION = 12
 const _MODEL_STATE_SCHEMA_VERSION = 3
 
 _checkpoint_snapshot(values::AbstractArray) = Array(values)
@@ -609,6 +612,7 @@ function _simulation_checkpoint(simulation::CropSimulation)
             reproductive_sink = simulation.config.reproductive_sink,
             terminal_heat = simulation.config.terminal_heat,
             water_sterility = simulation.config.water_sterility,
+            water_filling = simulation.config.water_filling,
             sowing_mode = simulation.config.sowing_mode,
             parameter_fingerprint = _checkpoint_fingerprint((
                 cft = simulation.cft,
@@ -691,6 +695,8 @@ function _validate_checkpoint_target(simulation::CropSimulation, checkpoint)
         ("terminal heat", metadata.terminal_heat, simulation.config.terminal_heat),
         ("water sterility", metadata.water_sterility,
          simulation.config.water_sterility),
+        ("water filling", metadata.water_filling,
+         simulation.config.water_filling),
         ("sowing mode", metadata.sowing_mode, simulation.config.sowing_mode),
         ("parameter fingerprint", metadata.parameter_fingerprint,
          _checkpoint_fingerprint((
