@@ -96,9 +96,17 @@ function catalog_from_config(config)
     # run has no exposure path and no organ temperature and does not read them,
     # which is why they are added conditionally rather than defaulted to a
     # filename that may not exist.
+    # The variable INSIDE each file, which is not the filename. The server's
+    # climate files keep GSWP3-W5E5 filenames while carrying Agrocosm's internal
+    # variable names - `tas_gswp3-w5e5_obsclim_1901-2019.nc` holds `temp`, which
+    # is why the four standard specs above can hardcode their names. By the same
+    # convention `tasmax_*.nc` holds `tmax` and `tasmin_*.nc` holds `tmin`,
+    # verified on the 2015-2016 subset. Each is overridable with
+    # `<name>_variable` because a file prepared elsewhere may not follow it, and
+    # a wrong name fails at read time rather than at submission.
     for (key, name, variable) in (
-        ("tasmax_file", :tasmax, "tasmax"),
-        ("tasmin_file", :tasmin, "tasmin"),
+        ("tasmax_file", :tasmax, "tmax"),
+        ("tasmin_file", :tasmin, "tmin"),
         ("specific_humidity_file", :specific_humidity, "huss"),
         ("surface_pressure_file", :surface_pressure, "ps"),
     )
