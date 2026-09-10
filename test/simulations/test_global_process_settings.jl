@@ -1,12 +1,7 @@
 using Agrocosm
 using Test
 
-# Idempotent: three test files need these runner scripts, and each `include`
-# into Main redefines the runners' `const`s - which Julia warns may "cause
-# incorrect answers". Guarding on a name each script defines makes the include
-# order irrelevant.
-isdefined(Main, :process_settings) ||
-    include(joinpath(@__DIR__, "..", "..", "scripts", "run_global_wheat_cpu.jl"))
+include(joinpath(@__DIR__, "..", "..", "scripts", "run_global_wheat_cpu.jl"))
 
 # THE test that was missing, and whose absence let a gap survive that would have
 # consumed a server allocation.

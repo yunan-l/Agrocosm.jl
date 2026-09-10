@@ -2,12 +2,7 @@ using TOML
 using Dates
 using SHA
 
-# Guarded: the test suite includes this script and the wheat runner into the
-# same module, and a second `include` redefines the wheat runner's `const`s -
-# which Julia warns may "cause incorrect answers". Running this script directly
-# is unaffected; nothing is defined yet the first time through.
-isdefined(@__MODULE__, :run_global_wheat) ||
-    include(joinpath(@__DIR__, "run_global_wheat_cpu.jl"))
+include(joinpath(@__DIR__, "run_global_wheat_cpu.jl"))
 
 function requested_crop_systems(config)
     cfts = get(config, "cfts", Dict{String, Any}())
