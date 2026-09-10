@@ -194,6 +194,19 @@ function _enzyme_crop_carbon!(
     return nothing
 end
 
+# Preserve the production solver's primal while allowing a smooth surrogate
+# to carry derivatives through its locally inactive correction. This keeps AD
+# trajectories on the ordinary production path without differentiating the
+# discrete bisection decisions used by the production lambda solver.
+@noinline _enzyme_primal_correction(production, surrogate) = production - surrogate
+
+function Enzyme.EnzymeRules.inactive(
+    ::typeof(_enzyme_primal_correction),
+    args...,
+)
+    return nothing
+end
+
 @inline function _enzyme_c3_lambda_residual_slope(
     fac,
     lambda,
@@ -256,7 +269,7 @@ end
     constrain_to_upper_bound::Bool = false,
 )
     T = typeof(fac)
-    lambda = Agrocosm.compute_lambda_c3_solution(
+    production_lambda = Agrocosm.compute_lambda_c3_solution(
         fac,
         vcmax,
         stress,
@@ -270,6 +283,7 @@ end
         upper_bound,
         max_iterations,
     )
+    lambda = production_lambda
     for _ in 1:8
         residual = fac * (one(T) - lambda) - Agrocosm.c3_adtmm_scalar_impl(
             lambda,
@@ -300,7 +314,7 @@ end
         lambda = constrain_to_upper_bound ?
             clamp(updated_lambda, zero(T), upper_bound) : updated_lambda
     end
-    return lambda
+    return lambda + _enzyme_primal_correction(production_lambda, lambda)
 end
 
 # The production lambda wrapper packs active CFT scalars into a NamedTuple
@@ -889,6 +903,10 @@ function _enzyme_continuous_transition!(
         pet.eeq,
         daily_weather.prec;
         lpjmlparams = global_params,
+    )
+    Agrocosm.add_snowmelt_to_precipitation!(
+        daily_weather.prec,
+        Agrocosm.soil_snow_fluxes(state).melt,
     )
     Agrocosm.pedotransfer!(state; lpjmlparams = global_params)
     Agrocosm.soil_infiltration!(

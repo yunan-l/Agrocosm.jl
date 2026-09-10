@@ -6,10 +6,11 @@
     ::Val{:C4}, fac::T, vcmax, stress, b, co2, temperature, apar, daylength,
     lpjmlparams, photoparams, upper_bound, iterations, constrain,
 ) where {T}
-    lambda = Agrocosm.compute_lambda_c4_solution(
+    production_lambda = Agrocosm.compute_lambda_c4_solution(
         fac, vcmax, stress, b, temperature, apar, daylength,
         lpjmlparams, photoparams, upper_bound, iterations,
     )
+    lambda = production_lambda
     for _ in 1:8
         assimilation = Agrocosm.c4_adtmm_scalar_impl(
             lambda, vcmax, stress, b, temperature, apar, daylength,
@@ -32,7 +33,7 @@
         updated = lambda - (fac * (one(T) - lambda) - assimilation) / slope
         lambda = constrain ? clamp(updated, zero(T), upper_bound) : updated
     end
-    return lambda
+    return lambda + _enzyme_primal_correction(production_lambda, lambda)
 end
 
 function _check_weather_case(forcing, state, cft, climate, days, harvest_day)
