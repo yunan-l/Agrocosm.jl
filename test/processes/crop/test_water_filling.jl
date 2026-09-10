@@ -42,7 +42,10 @@ _fill(state) = Agrocosm.crop_prognostic(state).phenology.grain_fill_fraction[1]
 _set(state) = Agrocosm.crop_prognostic(state).phenology.grain_set_fraction[1]
 
 @testset "Water filling ships inert and needs no prerequisite" begin
-    for cft in (Agrocosm.cft1, Agrocosm.cft2, Agrocosm.cft3, Agrocosm.cft4)
+    # cft9 is soybean, which the five-cell gate actually runs; cft4 is a
+    # crop it never runs. The defaults are shared by every CFT, so this
+    # is about sampling the ones the project uses.
+    for cft in (Agrocosm.cft1, Agrocosm.cft2, Agrocosm.cft3, Agrocosm.cft9)
         @test cft.water_filling_rate == 0
         @test 0 < cft.water_filling_sufficiency <= 1
     end

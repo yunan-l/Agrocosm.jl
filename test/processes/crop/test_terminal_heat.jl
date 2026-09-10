@@ -42,7 +42,10 @@ end
     # not a fit, and it is an order of magnitude below `sterility_rate` because
     # the filling window carries far more exposure. If it ever exceeds the
     # sterility rate that ordering has been lost and the bound is stale.
-    for cft in (Agrocosm.cft1, Agrocosm.cft2, Agrocosm.cft3, Agrocosm.cft4)
+    # cft9 is soybean, which the five-cell gate actually runs; cft4 is a
+    # crop it never runs. The defaults are shared by every CFT, so this
+    # is about sampling the ones the project uses.
+    for cft in (Agrocosm.cft1, Agrocosm.cft2, Agrocosm.cft3, Agrocosm.cft9)
         @test cft.filling_rate > 0
         @test cft.filling_rate < cft.sterility_rate
         # And the threshold must still be the lower one, so that the field being

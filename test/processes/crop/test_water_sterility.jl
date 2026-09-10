@@ -34,7 +34,10 @@ function _stand(cft; sufficiency = 0.2, fphu = 0.575, growing = true,
 end
 
 @testset "Water sterility ships inert and needs no prerequisite" begin
-    for cft in (Agrocosm.cft1, Agrocosm.cft2, Agrocosm.cft3, Agrocosm.cft4)
+    # cft9 is soybean, which the five-cell gate actually runs; cft4 is a
+    # crop it never runs. The defaults are shared by every CFT, so this
+    # is about sampling the ones the project uses.
+    for cft in (Agrocosm.cft1, Agrocosm.cft2, Agrocosm.cft3, Agrocosm.cft9)
         @test cft.water_sterility_rate == 0
         @test 0 < cft.water_sterility_sufficiency <= 1
     end
