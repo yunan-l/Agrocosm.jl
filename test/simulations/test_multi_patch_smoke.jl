@@ -1,4 +1,9 @@
-include(joinpath(@__DIR__, "..", "..", "scripts", "run_global_cfts_cpu.jl"))
+# Idempotent: three test files need these runner scripts, and each `include`
+# into Main redefines the runners' `const`s - which Julia warns may "cause
+# incorrect answers". Guarding on a name each script defines makes the include
+# order irrelevant.
+isdefined(Main, :write_batch_config) ||
+    include(joinpath(@__DIR__, "..", "..", "scripts", "run_global_cfts_cpu.jl"))
 
 @testset "multi-CFT patch selection, state isolation, and batch configuration" begin
     high_throughput_closure = percolation_energy_closure(

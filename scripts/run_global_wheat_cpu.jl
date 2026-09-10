@@ -296,6 +296,42 @@ annual_management(schedule, index) = (
     residuefrac = vec(schedule.residuefrac[index, :]),
 )
 
+"""Resolve warm-up years from `[run]`, and refuse the readings of zero years
+that would silently leave the soil pools uncalibrated.
+
+Zero years means *do not warm up here*. That is legal for the production phase,
+which continues from the target-constrained calibration whose pool allocation
+`model_inputs` has already applied to the initial soil state - there is nothing
+left to spin up. It is never legal for the calibration itself, and never legal
+without an allocation to continue from: both readings yield a complete-looking
+run whose pools were never calibrated, which no output would reveal.
+
+Without this, saying nothing in the config does not mean "no warm-up": the year
+count falls back to `get(run, "warmup_years", 10)`, so the production phase runs
+ten free years away from the calibration it was just handed, and the number
+appears nowhere in the config.
+"""
+function resolved_warmup_years(run; target_constrained::Bool, has_pool_allocation::Bool)
+    minimum_years = Int(get(run, "warmup_minimum_years", get(run, "warmup_years", 10)))
+    maximum_years = Int(get(run, "warmup_maximum_years", minimum_years))
+    disabled = maximum_years == 0
+    if disabled
+        minimum_years == 0 || error(
+            "warmup_maximum_years = 0 disables warm-up, so warmup_minimum_years " *
+            "must also be 0; got $minimum_years",
+        )
+        target_constrained && error(
+            "a target-constrained warm-up cannot be disabled: it is what calibrates " *
+            "the soil pools. Set warmup_target_constrained = false, or give it years.",
+        )
+        has_pool_allocation || error(
+            "warm-up is disabled but no [paths] pool_allocation was given; the run " *
+            "would start from uncalibrated soil pools",
+        )
+    end
+    return (; minimum_years, maximum_years, disabled)
+end
+
 function model_inputs(
     grid, selection, hwsd_targets, catalog, management;
     pool_allocation = nothing,
@@ -425,12 +461,26 @@ production_output_variables() = [
     # the global runner did not write, so a global run could not measure the
     # thing it was run to measure.
     #
-    # `season_water_deficit` is the SEASON-CUMULATIVE supply/demand ratio that
-    # `compute_harvest_index` reads. That it is cumulative is the finding: a
-    # mid-season drought is not diluted in it, it is monotonically erased as
-    # later normal days add equally to numerator and denominator. Without this
-    # variable the erasure can only be shown on the handful of cells a local
-    # driver visits, and a code-path defect deserves to be shown as a
+    # `season_water_deficit` is the season sum of the daily water-deficit factor
+    # `wdf`, so divide the annual field by `season_length` for the season mean.
+    #
+    # `wdf` is LPJmL's, verbatim: `100 * sum(min(supply, demand)) / sum(demand)`,
+    # accumulated from sowing (LPJmL `src/crop/wdf_crop.c`; our
+    # `transpiration.jl` clamps the same ratio to [0, 100]). It is a
+    # SEASON-CUMULATIVE ratio, so a day where supply meets demand adds equally
+    # to numerator and denominator and pulls it monotonically back toward 100 -
+    # a mid-season drought is not diluted in it, it is erased.
+    #
+    # That is only half of why the harvest-index water penalty cannot see a
+    # short drought. The other half is the penalty's own logistic,
+    # `wdf/(wdf + exp(6.13 - 0.0883*wdf))`, which is flat above about 60: at
+    # wdf = 80 it deducts 0.49%. Measured on the formula, with roughly constant
+    # daily demand, 4 days at 0.417 sufficiency in a 150-day season give
+    # wdf = 98.4 and a penalty of 0.08%, and it takes 129 of those 150 days to
+    # deduct 10%.
+    #
+    # Without this variable that can only be shown on the handful of cells a
+    # local driver visits, and a property of published code deserves a
     # distribution over every cell and season.
     #
     # `season_length` and `harvest_aboveground_carbon` give the realised harvest
@@ -797,12 +847,20 @@ function run_global_wheat(
         )
     end
 
-    minimum_warmup_years = Int(get(run, "warmup_minimum_years", get(run, "warmup_years", 10)))
-    maximum_warmup_years = Int(get(run, "warmup_maximum_years", minimum_warmup_years))
+    warmup_target_constrained = Bool(get(run, "warmup_target_constrained", true))
+    resolved_warmup = resolved_warmup_years(
+        run;
+        target_constrained = warmup_target_constrained,
+        has_pool_allocation = !isnothing(pool_allocation),
+    )
+    minimum_warmup_years = resolved_warmup.minimum_years
+    maximum_warmup_years = resolved_warmup.maximum_years
+    warmup_disabled = resolved_warmup.disabled
+
     warmup_options = (
         years = minimum_warmup_years,
         maximum_years = maximum_warmup_years,
-        target_constrained = Bool(get(run, "warmup_target_constrained", true)),
+        target_constrained = warmup_target_constrained,
         consecutive_years = Int(get(run, "warmup_consecutive_years", 3)),
         relative_tolerance = Float64(get(run, "warmup_relative_tolerance", 0.01)),
         pool_fraction_tolerance = Float64(get(
@@ -812,85 +870,114 @@ function run_global_wheat(
             run, "warmup_required_converged_fraction", 1.0,
         )),
     )
-    warmup_simulation = create_simulation(
-        initial_data, selection, config, expected_days, backend.device, cft_id;
-        irrigated, diagnostics = false,
-    )
-    warmup = agricultural_warmup!(
-        warmup_simulation, warmup_forcings;
-        warmup_options..., management_blocks = warmup_management_blocks,
-        convergence_reducer = warmup_convergence_reducer,
-    )
-    warmup_drift = agricultural_warmup_drift(warmup)
-    write_report(
-        joinpath(output_directory, "warmup_cn_drift.toml"),
-        warmup_drift,
-    )
-    write_warmup_cell_audit(
-        joinpath(output_directory, "warmup_cell_audit.nc"), grid, selection, warmup,
-    )
-    write_soil_pool_allocation(
-        joinpath(output_directory, "warmup_soil_pool_allocation.nc"),
-        SoilPoolAllocation(
-            selection,
-            warmup.calibrated_pool_allocation.fast_carbon_fraction,
-            warmup.calibrated_pool_allocation.fast_nitrogen_fraction,
-            warmup.calibrated_pool_allocation.c_shift_fast,
-            warmup.calibrated_pool_allocation.c_shift_slow;
-            cft_id,
-            irrigated,
-            provenance = (
-                source = "agricultural_warmup",
-                warmup_years = warmup.years,
-                target_constrained = warmup.target_constrained,
-            ),
-        ),
-    )
-    println(
-        "warm-up completed: years=$(warmup.years), converged=$(warmup.converged), " *
-        "converged_cell_fraction=$(warmup.converged_cell_fraction)",
-    )
-    require_warmup_convergence = Bool(get(run, "require_warmup_convergence", true))
-    require_warmup_convergence && !warmup.converged && error(
-        "warm-up did not reach the configured convergence requirement; " *
-        "review warmup_cn_drift.toml or set require_warmup_convergence=false " *
-        "for an explicitly non-production diagnostic run",
-    )
-    warmup_contract = (
-        years = warmup.years,
-        target_constrained = warmup.target_constrained,
-        consecutive_years = warmup.consecutive_years,
-        relative_tolerance = warmup.relative_tolerance,
-        pool_fraction_tolerance = warmup.pool_fraction_tolerance,
-        required_converged_fraction = warmup.required_converged_fraction,
-        converged = warmup.converged,
-    )
-    if !production_enabled
-        return (
-            cells = length(selection.cell_ids),
-            backend = backend.name,
-            warmup_years = warmup_contract.years,
-            warmup_converged = warmup_contract.converged,
-            output_directory,
+    if warmup_disabled
+        # Nothing to warm up: `initial_data` already carries the pools the
+        # target-constrained calibration produced. Build the production
+        # simulation directly - no warm-up simulation, no checkpoint round-trip,
+        # and no free years walking the state away from that calibration.
+        println("warm-up disabled: continuing from the calibrated pool allocation")
+        production_enabled || error(
+            "a run with warm-up disabled and production disabled would do nothing",
         )
-    end
-    warmup_checkpoint = joinpath(output_directory, "warmup_checkpoint.jld2")
-    save_checkpoint(warmup_checkpoint, warmup_simulation)
-    warmup = nothing
-    warmup_drift = nothing
-    GC.gc(true)
-    backend.name === :cuda && CUDA.reclaim()
+        warmup_contract = (
+            years = 0,
+            target_constrained = false,
+            consecutive_years = 0,
+            relative_tolerance = 0.0,
+            pool_fraction_tolerance = 0.0,
+            required_converged_fraction = 0.0,
+            converged = true,
+        )
+        write_report(
+            joinpath(output_directory, "warmup_cn_drift.toml"),
+            Dict("warmup_disabled" => true,
+                 "pool_allocation" => abspath(paths["pool_allocation"])),
+        )
+        production = create_simulation(
+            initial_data, selection, config, expected_days, backend.device, cft_id;
+            irrigated, diagnostics = false,
+        )
+    else
+        warmup_simulation = create_simulation(
+            initial_data, selection, config, expected_days, backend.device, cft_id;
+            irrigated, diagnostics = false,
+        )
+        warmup = agricultural_warmup!(
+            warmup_simulation, warmup_forcings;
+            warmup_options..., management_blocks = warmup_management_blocks,
+            convergence_reducer = warmup_convergence_reducer,
+        )
+        warmup_drift = agricultural_warmup_drift(warmup)
+        write_report(
+            joinpath(output_directory, "warmup_cn_drift.toml"),
+            warmup_drift,
+        )
+        write_warmup_cell_audit(
+            joinpath(output_directory, "warmup_cell_audit.nc"), grid, selection, warmup,
+        )
+        write_soil_pool_allocation(
+            joinpath(output_directory, "warmup_soil_pool_allocation.nc"),
+            SoilPoolAllocation(
+                selection,
+                warmup.calibrated_pool_allocation.fast_carbon_fraction,
+                warmup.calibrated_pool_allocation.fast_nitrogen_fraction,
+                warmup.calibrated_pool_allocation.c_shift_fast,
+                warmup.calibrated_pool_allocation.c_shift_slow;
+                cft_id,
+                irrigated,
+                provenance = (
+                    source = "agricultural_warmup",
+                    warmup_years = warmup.years,
+                    target_constrained = warmup.target_constrained,
+                ),
+            ),
+        )
+        println(
+            "warm-up completed: years=$(warmup.years), converged=$(warmup.converged), " *
+            "converged_cell_fraction=$(warmup.converged_cell_fraction)",
+        )
+        require_warmup_convergence = Bool(get(run, "require_warmup_convergence", true))
+        require_warmup_convergence && !warmup.converged && error(
+            "warm-up did not reach the configured convergence requirement; " *
+            "review warmup_cn_drift.toml or set require_warmup_convergence=false " *
+            "for an explicitly non-production diagnostic run",
+        )
+        warmup_contract = (
+            years = warmup.years,
+            target_constrained = warmup.target_constrained,
+            consecutive_years = warmup.consecutive_years,
+            relative_tolerance = warmup.relative_tolerance,
+            pool_fraction_tolerance = warmup.pool_fraction_tolerance,
+            required_converged_fraction = warmup.required_converged_fraction,
+            converged = warmup.converged,
+        )
+        if !production_enabled
+            return (
+                cells = length(selection.cell_ids),
+                backend = backend.name,
+                warmup_years = warmup_contract.years,
+                warmup_converged = warmup_contract.converged,
+                output_directory,
+            )
+        end
+        warmup_checkpoint = joinpath(output_directory, "warmup_checkpoint.jld2")
+        save_checkpoint(warmup_checkpoint, warmup_simulation)
+        warmup = nothing
+        warmup_drift = nothing
+        GC.gc(true)
+        backend.name === :cuda && CUDA.reclaim()
 
-    production = create_simulation(
-        initial_data, selection, config, expected_days, backend.device, cft_id;
-        irrigated, diagnostics = false,
-    )
-    restore_checkpoint!(production, warmup_checkpoint)
-    state_equal(production.state.prognostic, warmup_simulation.state.prognostic) ||
-        error("warm-up checkpoint did not restore the prognostic state exactly")
-    warmup_simulation = nothing
-    GC.gc(true)
-    backend.name === :cuda && CUDA.reclaim()
+        production = create_simulation(
+            initial_data, selection, config, expected_days, backend.device, cft_id;
+            irrigated, diagnostics = false,
+        )
+        restore_checkpoint!(production, warmup_checkpoint)
+        state_equal(production.state.prognostic, warmup_simulation.state.prognostic) ||
+            error("warm-up checkpoint did not restore the prognostic state exactly")
+        warmup_simulation = nothing
+        GC.gc(true)
+        backend.name === :cuda && CUDA.reclaim()
+    end
 
     annual_chunks = OutputChunk[]
     compact_writer = NetCDFBlockWriter(joinpath(output_directory, "compact"); prefix = "wheat")
