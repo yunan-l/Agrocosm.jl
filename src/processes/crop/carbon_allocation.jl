@@ -38,6 +38,7 @@ function carbon_allocation!(CFT::CFTParameters,
                crop_fluxes(crop).carbon.npp,
                crop_prognostic(crop).canopy.lai,
                crop_canopy_auxiliary(crop).actual_lai,
+               crop_stress_auxiliary(crop).harvest_index_binding,
                crop_prognostic(crop).carbon.leaf,
                crop_prognostic(crop).carbon.root,
                crop_prognostic(crop).carbon.pool,
@@ -108,6 +109,33 @@ end
     return min(candidate, biomass - leaf_carbon - root_carbon)
 end
 
+"""True when the harvest index, and not the carbon mass cap or the grain already
+deposited, set storage carbon today.
+
+The expressions are duplicated from `compute_storage_carbon` verbatim rather than
+refactored out of it, so that function stays bitwise untouched - it is on the
+differentiated path and every ablation rung's equivalence rests on it. The branch
+selector is `optimal_index`, NOT `harvest_index`: writing `harvest_index > one(T)`
+would flip the formula on every cell where a reproductive mechanism pushed the
+index below one, which is exactly the population this diagnostic exists to count.
+"""
+@inline function harvest_index_binds(
+    biomass::T,
+    leaf_carbon::T,
+    root_carbon::T,
+    root_fraction::T,
+    harvest_index::T,
+    optimal_index::T,
+    deposited::T,
+) where {T <: AbstractFloat}
+    leaf_carbon + root_carbon < biomass || return false
+    candidate = optimal_index > one(T) ?
+                (one(T) - one(T) / harvest_index) * (one(T) - root_fraction) * biomass :
+                harvest_index * (one(T) - root_fraction) * biomass
+    mass_cap = biomass - leaf_carbon - root_carbon
+    return candidate < mass_cap && candidate > deposited
+end
+
 @kernel inbounds = true function carbon_allocation_kernel!(
                                            crop_stoc::AbstractArray{T},
                                            crop_harvest::AbstractArray{S},
@@ -129,6 +157,7 @@ end
                                            crop_npp::AbstractArray{T},
                                            crop_lai::AbstractArray{T},
                                            crop_actual_lai::AbstractArray{T},
+                                           crop_hi_binding::AbstractArray{T},
                                            crop_leafc::AbstractArray{T},
                                            crop_rootc::AbstractArray{T},
                                            crop_poolc::AbstractArray{T},
@@ -142,6 +171,10 @@ end
     @unpack sla, hiopt, himin = CFT
     @unpack FROOTMAX, FROOTMIN, include_biological_fixation_cost = kernel_params
     @unpack senescent_leaf_release = kernel_params
+
+    # Diagnostic only, and daily-owned: zeroed every day so a flag cannot survive
+    # from yesterday on a cell that took no allocation path today.
+    crop_hi_binding[cell] = zero(T)
 
     if crop_isgrowing[cell] == 1
         # LPJmL preserves the potential phenological LAI and applies the NPP
@@ -255,6 +288,14 @@ end
             crop_stoc[cell] = max(deposited, compute_storage_carbon(
                 crop_biomass[cell], crop_leafc[cell], crop_rootc[cell], froot, hi, T(hiopt),
             ))
+            # Counts the days the harvest index actually bound. A mechanism that
+            # multiplies `hi` changes nothing on a day the mass cap or the
+            # already-deposited grain bound instead, so this is what decides
+            # whether such a mechanism can matter at all.
+            crop_hi_binding[cell] = harvest_index_binds(
+                crop_biomass[cell], crop_leafc[cell], crop_rootc[cell], froot, hi,
+                T(hiopt), deposited,
+            ) ? one(T) : zero(T)
 
             # Pool carbon closes biomass balance and is clipped during senescence if negative.
             crop_poolc[cell] = crop_biomass[cell] - crop_leafc[cell] - crop_rootc[cell] - crop_stoc[cell]

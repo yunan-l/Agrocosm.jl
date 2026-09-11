@@ -88,12 +88,12 @@ end
     @test estimate.days == 4
     @test estimate.backend == :cpu
     @test estimate.diagnostics_bytes == 0
-    @test estimate.projected_output_bytes == 356
+    @test estimate.projected_output_bytes == 372
     @test preallocation == estimate
     @test estimate_memory(
         1, 1; T = Float64, diagnostics = false, block_days = 1,
         backend = :cpu, safety_factor = 1,
-    ).persistent_state_bytes == 13430
+    ).persistent_state_bytes == 13438
     @test estimate.forcing_block_bytes == 64
     @test prefetched.host_forcing_bytes == estimate.host_forcing_bytes + 64
     @test prefetched.host_peak_bytes == estimate.host_peak_bytes + 64

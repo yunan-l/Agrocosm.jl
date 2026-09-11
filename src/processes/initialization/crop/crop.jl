@@ -34,6 +34,12 @@ mutable struct CropStressAuxiliary{A}
     # the sterility threshold at all. Filled by the same kernels, in the same
     # loop, from the same leaf temperature.
     filling_exposure_hours::A
+    # 1 on a growing day when the harvest index set storage carbon, 0 when the
+    # carbon mass cap or the grain already deposited did. Written every day by
+    # `carbon_allocation_kernel!` and consumed once per day by the season
+    # accumulator, exactly like `water_deficit`. Diagnostic only: no physics
+    # kernel reads it.
+    harvest_index_binding::A
 end
 
 """Static root geometry plus the current-day root-zone water diagnostic."""
@@ -124,6 +130,7 @@ function init_crop(::Type{T},
             CropStressAuxiliary(
                 float_auxiliary(), float_auxiliary(), float_auxiliary(),
                 float_auxiliary(), float_auxiliary(), float_auxiliary(),
+                float_auxiliary(),
             ),
         ),
         init_crop_events(cell_size, device),

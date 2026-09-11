@@ -295,6 +295,13 @@ const _OUTPUT_VARIABLE_METADATA = Dict{Tuple{Symbol, Symbol}, NamedTuple}(
     (:crop, :season_water_deficit) => (units = "% day", description = "Harvest-season sum of the daily season-cumulative water sufficiency (100 = demand met)"),
     (:crop, :season_evapotranspiration) => (units = "mm", description = "Harvest-season cumulative evapotranspiration"),
     (:crop, :harvest_aboveground_carbon) => (units = "gC m-2", description = "Live above-ground crop carbon immediately before harvest"),
+    # NPP over the flowering window, gated not weighted: grain number responds
+    # to assimilate supply over the critical period. See docs/16.
+    (:crop, :window_npp) => (units = "gC m-2", description = "Net primary production accumulated on growing days inside the flowering window"),
+    # Counts the days a mechanism multiplying the harvest index could have had
+    # any effect at all; on the other days the carbon mass cap or the grain
+    # already deposited set storage, and the index is not the binding constraint.
+    (:crop, :hi_binding_days) => (units = "day", description = "Growing days on which the harvest index, not the carbon mass cap or the already-deposited grain, set storage carbon"),
     (:crop, :fphu) => (units = "1", description = "Fraction of potential heat units"),
     (:crop, :water_deficit) => (units = "%", description = "Season-cumulative crop water sufficiency (100 = demand met)"),
     (:crop, :growing_mask) => (units = "1", description = "Active crop-stand mask"),
@@ -323,7 +330,8 @@ function output_variable_spec(group::Symbol, field::Symbol)
     frequency = field in (
         :yield, :season_gpp, :season_lai_days, :season_length,
         :season_water_deficit, :season_evapotranspiration,
-        :harvest_aboveground_carbon, :harvest_date, :harvesting_year,
+        :harvest_aboveground_carbon, :window_npp, :hi_binding_days,
+        :harvest_date, :harvesting_year,
     ) ? :annual : :daily
     return VariableSpec(
         (:output, group, field), :output, (:time, :cell),

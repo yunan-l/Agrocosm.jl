@@ -439,6 +439,8 @@ production_output_variables() = [
     OutputVariable(:crop, :season_water_deficit),
     OutputVariable(:crop, :season_length),
     OutputVariable(:crop, :harvest_aboveground_carbon),
+    OutputVariable(:crop, :window_npp),
+    OutputVariable(:crop, :hi_binding_days),
 ]
 
 function write_reconstructed_output(path, grid, selection, chunks, years)

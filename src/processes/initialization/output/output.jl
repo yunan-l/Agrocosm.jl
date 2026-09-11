@@ -17,6 +17,16 @@ mutable struct CropOutput{A, I, M}
     season_water_deficit::A # Harvest-season cumulative crop water deficit (% day).
     season_evapotranspiration::A # Harvest-season total ET (mm).
     harvest_aboveground_carbon::A # Live above-ground crop carbon immediately before harvest (gC m⁻²).
+    # NPP accumulated ONLY on growing days inside the flowering window. The
+    # window is a gate, not a weight: a day just inside it contributes its whole
+    # NPP, because grain number responds to assimilate supply over the critical
+    # period, not to a developmental weighting of it.
+    window_npp::A          # Flowering-window NPP (gC m⁻²).
+    # Growing days on which the harvest index, and not the carbon mass cap or the
+    # grain already deposited, set storage carbon. Counted as a float to match
+    # `season_length`. This is what decides whether a mechanism multiplying the
+    # harvest index can have any effect on a given cell-year at all.
+    hi_binding_days::A     # Harvest-index-binding days (day).
     vegetation_carbon::M   # Daily leaf/root/pool/storage carbon stocks (gC m⁻²).
     vegetation_nitrogen::M # Daily leaf/root/pool/storage nitrogen contents (gN m⁻²).
     fphu::A                # Fraction of potential heat units accumulated (0–1+).
@@ -64,11 +74,15 @@ mutable struct AnnualOutputAccumulator{A, I}
     season_water_deficit::A
     season_evapotranspiration::A
     harvest_aboveground_carbon::A
+    window_npp::A
+    hi_binding_days::A
     active_gpp::A
     active_lai_days::A
     active_length::A
     active_water_deficit::A
     active_evapotranspiration::A
+    active_window_npp::A
+    active_hi_binding_days::A
 end
 
 """Process-grouped model output container."""
@@ -100,6 +114,8 @@ const _ANNUAL_CROP_FLOAT_OUTPUT_FIELDS = (
     :season_water_deficit,
     :season_evapotranspiration,
     :harvest_aboveground_carbon,
+    :window_npp,
+    :hi_binding_days,
 )
 const _ANNUAL_CALENDAR_INTEGER_OUTPUT_FIELDS = (:harvest_date, :harvesting_year)
 
@@ -121,7 +137,7 @@ function init_output(::Type{T},
         scalar_output(), scalar_output(), scalar_output(), scalar_output(),
         scalar_output(), scalar_output(), scalar_output(), scalar_output(),
         scalar_output(), scalar_output(), scalar_output(), scalar_output(),
-        scalar_output(),
+        scalar_output(), scalar_output(), scalar_output(),
         device(zeros(T, 0, vegc_pools * cell_size)),
         device(zeros(T, 0, vegc_pools * cell_size)),
         scalar_output(), scalar_output(), integer_output(),
@@ -145,13 +161,17 @@ function init_output(::Type{T},
         integer_output(), integer_output(),
     )
     annual = AnnualOutputAccumulator(
-        device(zeros(T, cell_size)), device(zeros(Int32, cell_size)),
-        device(zeros(T, cell_size)), device(zeros(T, cell_size)),
-        device(zeros(T, cell_size)), device(zeros(T, cell_size)),
-        device(zeros(T, cell_size)), device(zeros(T, cell_size)),
-        device(zeros(T, cell_size)), device(zeros(T, cell_size)),
-        device(zeros(T, cell_size)), device(zeros(T, cell_size)),
-        device(zeros(T, cell_size)),
+        # Positional, and every argument has the same type: the field order in
+        # `AnnualOutputAccumulator` is the only thing keeping these apart.
+        device(zeros(T, cell_size)), device(zeros(Int32, cell_size)),   # yield, harvest_date
+        device(zeros(T, cell_size)), device(zeros(T, cell_size)),       # season_gpp, season_lai_days
+        device(zeros(T, cell_size)), device(zeros(T, cell_size)),       # season_length, season_water_deficit
+        device(zeros(T, cell_size)), device(zeros(T, cell_size)),       # season_evapotranspiration, harvest_aboveground_carbon
+        device(zeros(T, cell_size)), device(zeros(T, cell_size)),       # window_npp, hi_binding_days
+        device(zeros(T, cell_size)), device(zeros(T, cell_size)),       # active_gpp, active_lai_days
+        device(zeros(T, cell_size)), device(zeros(T, cell_size)),       # active_length, active_water_deficit
+        device(zeros(T, cell_size)),                                    # active_evapotranspiration
+        device(zeros(T, cell_size)), device(zeros(T, cell_size)),       # active_window_npp, active_hi_binding_days
     )
     return Output(crop, soil, climate, calendar, annual)
 end
@@ -293,26 +313,35 @@ function record_ecosystem_flux_outputs!(output::Output, crop, soil;
 end
 
 """Accumulate harvest-season diagnostics without feeding back into model state."""
-function accumulate_season_process_diagnostics!(output::Output, crop, soil)
+function accumulate_season_process_diagnostics!(output::Output, crop, soil, CFT::CFTParameters)
     water_flux = crop_fluxes(crop).water
     backend = KernelAbstractions.get_backend(crop_fluxes(crop).carbon.gross_assimilation)
     kernel = accumulate_season_process_diagnostics_kernel!(backend)
+    # A direct kernel call, not `launch_1D!`: every argument is positional and
+    # unprotected, and they are nearly all the same type. Order here must match
+    # the kernel signature exactly.
     kernel(
         output.annual.active_gpp,
         output.annual.active_lai_days,
         output.annual.active_length,
         output.annual.active_water_deficit,
         output.annual.active_evapotranspiration,
+        output.annual.active_window_npp,
+        output.annual.active_hi_binding_days,
         crop_events(crop).sowing,
         crop_prognostic(crop).phenology.is_growing,
         crop_fluxes(crop).carbon.gross_assimilation,
         crop_canopy_auxiliary(crop).actual_lai,
         crop_stress_auxiliary(crop).water_deficit,
+        crop_fluxes(crop).carbon.npp,
+        crop_phenology_auxiliary(crop).fphu,
+        crop_stress_auxiliary(crop).harvest_index_binding,
         water_flux.interception,
         water_flux.transpiration_layer,
         soil_water_fluxes(soil).evaporation,
         soil_surface_litter_fluxes(soil).evaporation,
         size(water_flux.transpiration_layer, 1),
+        CFT,
         ndrange = length(crop_prognostic(crop).phenology.is_growing),
     )
     return nothing
@@ -324,30 +353,46 @@ end
     active_length::AbstractVector{T},
     active_water_deficit::AbstractVector{T},
     active_evapotranspiration::AbstractVector{T},
+    active_window_npp::AbstractVector{T},
+    active_hi_binding_days::AbstractVector{T},
     sowing_event::AbstractVector{S},
     is_growing::AbstractVector{S},
     gross_assimilation::AbstractVector{T},
     actual_lai::AbstractVector{T},
     water_deficit::AbstractVector{T},
+    npp::AbstractVector{T},
+    fphu::AbstractVector{T},
+    hi_binding::AbstractVector{T},
     interception::AbstractVector{T},
     transpiration_layer::AbstractMatrix{T},
     soil_evaporation::AbstractMatrix{T},
     litter_evaporation::AbstractVector{T},
     layers::Integer,
+    CFT::CFTParameters,
 ) where {T <: AbstractFloat, S <: Integer}
     cell = @index(Global)
+    @unpack flowering_start, flowering_end = CFT
     if sowing_event[cell] != 0
         active_gpp[cell] = zero(T)
         active_lai_days[cell] = zero(T)
         active_length[cell] = zero(T)
         active_water_deficit[cell] = zero(T)
         active_evapotranspiration[cell] = zero(T)
+        active_window_npp[cell] = zero(T)
+        active_hi_binding_days[cell] = zero(T)
     end
     if is_growing[cell] != 0
         active_gpp[cell] += gross_assimilation[cell]
         active_lai_days[cell] += actual_lai[cell]
         active_length[cell] += one(T)
         active_water_deficit[cell] += water_deficit[cell]
+        # The flowering window is a GATE here, not a weight: a day just inside it
+        # contributes its whole NPP. Grain number responds to assimilate supply
+        # over the critical period, not to a developmental weighting of it - the
+        # raised cosine belongs to the damage mechanisms, not to this diagnostic.
+        flowering_weight(fphu[cell], T(flowering_start), T(flowering_end)) > zero(T) &&
+            (active_window_npp[cell] += npp[cell])
+        active_hi_binding_days[cell] += hi_binding[cell]
         total_et = interception[cell] + litter_evaporation[cell]
         for layer in 1:layers
             total_et += transpiration_layer[layer, cell] + soil_evaporation[layer, cell]

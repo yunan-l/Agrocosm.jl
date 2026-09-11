@@ -98,6 +98,9 @@ end
         # terminal heat. Two fields because the thresholds are different
         # physiology, not a tolerance.
         :filling_exposure_hours,
+        # 1 when the harvest index, and not the carbon mass cap or the grain
+        # already deposited, set storage carbon that day. Diagnostic only.
+        :harvest_index_binding,
     )
     @test crop.auxiliary.root.distribution isa AbstractVector
     @test :canopy ∈ propertynames(crop.state)
@@ -141,8 +144,13 @@ end
         :season_gpp, :season_lai_days, :season_length,
         :season_water_deficit, :season_evapotranspiration,
         :harvest_aboveground_carbon,
+        # The two diagnostics docs/16 turns on: which side of the flowering
+        # window the assimilate came from, and whether the harvest index was the
+        # binding constraint at all.
+        :window_npp, :hi_binding_days,
         :active_gpp, :active_lai_days, :active_length,
         :active_water_deficit, :active_evapotranspiration,
+        :active_window_npp, :active_hi_binding_days,
     )
     @test isempty(fieldnames(typeof(crop.workspace)))
 end

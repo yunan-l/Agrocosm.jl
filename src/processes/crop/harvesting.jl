@@ -29,11 +29,15 @@ function harvest_crop!(crop,
         output.annual.season_water_deficit,
         output.annual.season_evapotranspiration,
         output.annual.harvest_aboveground_carbon,
+        output.annual.window_npp,
+        output.annual.hi_binding_days,
         output.annual.active_gpp,
         output.annual.active_lai_days,
         output.annual.active_length,
         output.annual.active_water_deficit,
         output.annual.active_evapotranspiration,
+        output.annual.active_window_npp,
+        output.annual.active_hi_binding_days,
         crop_prognostic(crop).carbon.storage,
         crop_prognostic(crop).carbon.leaf,
         crop_prognostic(crop).carbon.pool,
@@ -55,6 +59,8 @@ function harvest_crop!(crop,
         output.crop.season_water_deficit,
         output.crop.season_evapotranspiration,
         output.crop.harvest_aboveground_carbon,
+        output.crop.window_npp,
+        output.crop.hi_binding_days,
         output.calendar.harvest_date,
         output.calendar.harvesting_year,
         annual_row,
@@ -96,7 +102,7 @@ function harvest_crop!(crop,
         for field in (
             :season_gpp, :season_lai_days, :season_length,
             :season_water_deficit, :season_evapotranspiration,
-            :harvest_aboveground_carbon,
+            :harvest_aboveground_carbon, :window_npp, :hi_binding_days,
         )
             output_values = getproperty(output.crop, field)
             accumulator_values = getproperty(output.annual, field)
@@ -115,6 +121,8 @@ function harvest_crop!(crop,
             output.annual.season_water_deficit,
             output.annual.season_evapotranspiration,
             output.annual.harvest_aboveground_carbon,
+            output.annual.window_npp,
+            output.annual.hi_binding_days,
         )
     end
 end
@@ -316,11 +324,15 @@ end
         annual_season_water_deficit::AbstractVector{T},
         annual_season_evapotranspiration::AbstractVector{T},
         annual_harvest_aboveground_carbon::AbstractVector{T},
+        annual_window_npp::AbstractVector{T},
+        annual_hi_binding_days::AbstractVector{T},
         active_gpp::AbstractVector{T},
         active_lai_days::AbstractVector{T},
         active_length::AbstractVector{T},
         active_water_deficit::AbstractVector{T},
         active_evapotranspiration::AbstractVector{T},
+        active_window_npp::AbstractVector{T},
+        active_hi_binding_days::AbstractVector{T},
         storage_carbon::AbstractVector{T},
     leaf_carbon::AbstractVector{T},
     pool_carbon::AbstractVector{T},
@@ -342,6 +354,8 @@ end
         output_season_water_deficit::AbstractMatrix{T},
         output_season_evapotranspiration::AbstractMatrix{T},
         output_harvest_aboveground_carbon::AbstractMatrix{T},
+        output_window_npp::AbstractMatrix{T},
+        output_hi_binding_days::AbstractMatrix{T},
         output_harvest_date::AbstractMatrix{S},
     output_harvesting_year::AbstractMatrix{S},
     annual_output_row::Integer,
@@ -367,11 +381,15 @@ end
         annual_season_evapotranspiration[cell] += active_evapotranspiration[cell]
         annual_harvest_aboveground_carbon[cell] +=
             storage_carbon[cell] + aboveground_carbon
+        annual_window_npp[cell] += active_window_npp[cell]
+        annual_hi_binding_days[cell] += active_hi_binding_days[cell]
         active_gpp[cell] = zero(T)
         active_lai_days[cell] = zero(T)
         active_length[cell] = zero(T)
         active_water_deficit[cell] = zero(T)
         active_evapotranspiration[cell] = zero(T)
+        active_window_npp[cell] = zero(T)
+        active_hi_binding_days[cell] = zero(T)
         carbon_harvest_export[cell] = crop_yield[cell] +
             aboveground_carbon - carbon_residue
         harvest_nitrogen[cell] = storage_nitrogen[cell] +
@@ -407,6 +425,10 @@ end
             (output_season_evapotranspiration[annual_output_row, cell] = annual_season_evapotranspiration[cell])
         size(output_harvest_aboveground_carbon, 1) != 0 &&
             (output_harvest_aboveground_carbon[annual_output_row, cell] = annual_harvest_aboveground_carbon[cell])
+        size(output_window_npp, 1) != 0 &&
+            (output_window_npp[annual_output_row, cell] = annual_window_npp[cell])
+        size(output_hi_binding_days, 1) != 0 &&
+            (output_hi_binding_days[annual_output_row, cell] = annual_hi_binding_days[cell])
         size(output_harvest_date, 1) != 0 &&
             (output_harvest_date[annual_output_row, cell] = harvest_date[cell])
         size(output_harvesting_year, 1) != 0 &&
@@ -419,6 +441,8 @@ end
         annual_season_water_deficit[cell] = zero(T)
         annual_season_evapotranspiration[cell] = zero(T)
         annual_harvest_aboveground_carbon[cell] = zero(T)
+        annual_window_npp[cell] = zero(T)
+        annual_hi_binding_days[cell] = zero(T)
         harvest_date[cell] = zero(S)
     end
 end
@@ -432,6 +456,8 @@ end
     annual_season_water_deficit::AbstractVector{T},
     annual_season_evapotranspiration::AbstractVector{T},
     annual_harvest_aboveground_carbon::AbstractVector{T},
+    annual_window_npp::AbstractVector{T},
+    annual_hi_binding_days::AbstractVector{T},
 ) where {T <: AbstractFloat, S <: Integer}
     cell = @index(Global)
     annual_yield[cell] = zero(T)
@@ -442,4 +468,6 @@ end
     annual_season_water_deficit[cell] = zero(T)
     annual_season_evapotranspiration[cell] = zero(T)
     annual_harvest_aboveground_carbon[cell] = zero(T)
+    annual_window_npp[cell] = zero(T)
+    annual_hi_binding_days[cell] = zero(T)
 end

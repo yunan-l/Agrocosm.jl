@@ -64,9 +64,9 @@ end
     soil.water.evaporation .= 0.2f0
     soil.surface_litter.evaporation .= 0.3f0
 
-    Agrocosm.accumulate_season_process_diagnostics!(output, state, state)
+    Agrocosm.accumulate_season_process_diagnostics!(output, state, state, Agrocosm.cft1)
     crop.events.sowing .= Int32(0)
-    Agrocosm.accumulate_season_process_diagnostics!(output, state, state)
+    Agrocosm.accumulate_season_process_diagnostics!(output, state, state, Agrocosm.cft1)
 
     @test output.annual.active_gpp[1] == 8.0f0
     @test output.annual.active_lai_days[1] == 4.0f0

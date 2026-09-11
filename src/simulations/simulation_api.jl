@@ -527,7 +527,7 @@ function run_simulation!(
     return simulation
 end
 
-const _CHECKPOINT_FORMAT_VERSION = 12
+const _CHECKPOINT_FORMAT_VERSION = 13
 const _MODEL_STATE_SCHEMA_VERSION = 3
 
 _checkpoint_snapshot(values::AbstractArray) = Array(values)
