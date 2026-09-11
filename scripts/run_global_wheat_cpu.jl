@@ -441,6 +441,24 @@ production_output_variables() = [
     OutputVariable(:crop, :harvest_aboveground_carbon),
     OutputVariable(:crop, :window_npp),
     OutputVariable(:crop, :hi_binding_days),
+    # `gpp` and `npp` above are CALENDAR-YEAR sums; `season_gpp` is the same
+    # carbon scoped to the harvested season, which is the temporal object
+    # `yield` and `harvest_aboveground_carbon` already are. Comparing an annual
+    # integral against a per-season snapshot measures the difference in period
+    # as well as the difference in quantity, and cannot separate them.
+    OutputVariable(:crop, :season_gpp),
+    OutputVariable(:crop, :season_evapotranspiration),
+    # Autotrophic respiration, summed over the output year like gpp and npp.
+    OutputVariable(:crop, :respiration; reduction = :sum),
+    # The GGCMI phase-3 protocol reports yield PER GROWING SEASON, not per
+    # calendar year, "to resolve potential double harvests within one year".
+    # `crop_yield` here is a calendar-year accumulator, so a season crossing New
+    # Year lands in one year or the other and a cell can carry two harvests in
+    # one year and none in the next. Measured on US counties: that affects 20.7%
+    # of maize county-years and costs 0.19 of detrended anomaly correlation.
+    # These two make the attribution recoverable in analysis.
+    OutputVariable(:calendar, :harvest_date),
+    OutputVariable(:calendar, :harvesting_year),
 ]
 
 function write_reconstructed_output(path, grid, selection, chunks, years)
