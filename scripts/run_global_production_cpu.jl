@@ -339,8 +339,14 @@ function run_global_production(
         "output_path" => abspath(production_output),
         "backend" => String(Symbol(backend.name)),
     )
-    write_report(joinpath(output_directory, "run_manifest.toml"), manifest)
-    return (; manifest..., output_directory)
+    manifest_path = write_report(
+        joinpath(output_directory, "run_manifest.toml"), manifest,
+    )
+    println("output = ", production_output)
+    # The manifest is a TOML document, so its keys are strings; the reference
+    # returns the two paths rather than the document, and the MPI wrapper
+    # re-reads the manifests from disk instead of trusting a return value.
+    return (output_path = production_output, manifest_path = manifest_path)
 end
 
 """Positional entry, shaped like the reference's `main` so the MPI wrapper can
