@@ -287,11 +287,16 @@ const _OUTPUT_VARIABLE_METADATA = Dict{Tuple{Symbol, Symbol}, NamedTuple}(
     (:crop, :season_gpp) => (units = "gC m-2", description = "Harvest-season cumulative gross primary production"),
     (:crop, :season_lai_days) => (units = "m2 m-2 day", description = "Harvest-season cumulative leaf area index"),
     (:crop, :season_length) => (units = "day", description = "Active crop days in the harvested season"),
-    (:crop, :season_water_deficit) => (units = "% day", description = "Harvest-season cumulative crop water deficit"),
+    # Named for LPJmL's `wdf`, but the quantity is SUFFICIENCY: 100 means
+    # supply met demand. `compute_water_sufficiency` returns
+    # clamp(100 * sum(min(supply, demand)) / sum(demand), 0, 100), so a
+    # larger value is a wetter season, not a drier one. Reading these two
+    # the way their names read inverts every drought figure.
+    (:crop, :season_water_deficit) => (units = "% day", description = "Harvest-season sum of the daily season-cumulative water sufficiency (100 = demand met)"),
     (:crop, :season_evapotranspiration) => (units = "mm", description = "Harvest-season cumulative evapotranspiration"),
     (:crop, :harvest_aboveground_carbon) => (units = "gC m-2", description = "Live above-ground crop carbon immediately before harvest"),
     (:crop, :fphu) => (units = "1", description = "Fraction of potential heat units"),
-    (:crop, :water_deficit) => (units = "%", description = "Crop water deficit"),
+    (:crop, :water_deficit) => (units = "%", description = "Season-cumulative crop water sufficiency (100 = demand met)"),
     (:crop, :growing_mask) => (units = "1", description = "Active crop-stand mask"),
     (:soil, :ecosystem_respiration) => (
         units = "gC m-2 day-1",
