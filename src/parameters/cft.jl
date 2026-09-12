@@ -389,10 +389,16 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     # season and could not reach the required magnitude at any defensible rate.
     heavy_rain_rate::T = 0.002            # Recovery lost per mm of season excess beyond the tolerance; 0 = inert.
     # What a season is allowed to accumulate before any damage, in mm of rainfall
-    # above `heavy_rain_threshold`. MEASURED as the 90th percentile of the
-    # accumulation each crop actually sees over 1981-2016, which is the decile
-    # the damage is supposed to occupy: wet cell-years are 12-14% of every crop's
-    # disasters.
+    # above `heavy_rain_threshold`. MEASURED as the AREA-WEIGHTED 90th percentile
+    # of the accumulation each crop actually sees over 1981-2016, which is the
+    # decile the damage is supposed to occupy: wet cell-years are 12-14% of every
+    # crop's disasters.
+    #
+    # Area-weighted because a percentile over CELLS counts a hectare of Californian
+    # rice the same as a hectare of Mekong rice, and the crop is not distributed
+    # that way. It moves the numbers a long way and in both directions - rice from
+    # 276 to 445 mm, wheat from 320 to 180 - and the unweighted version left rice
+    # losing 21% of yield in an average season while wheat lost 0.7%.
     #
     # Without a tolerance the term prices a wet CLIMATE rather than a wet YEAR -
     # the first version, linear in the season total, took 54% of rice yield in an
@@ -563,7 +569,7 @@ const cft1 = _crop_cft(id=1, path=1, temp_co2=(0, 40), temp_photos=(12, 17),
     # wheat: sweep peak 10 mm (+1.492), 13.9 days a season. Flat between 5 and
     #   15 mm (+1.366 to +1.460), so the peak location is the least determined
     #   of the four.
-    heavy_rain_threshold=10.0, heavy_rain_tolerance=319.7)
+    heavy_rain_threshold=10.0, heavy_rain_tolerance=179.9)
 const cft2 = _crop_cft(id=2, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
     pb=24, ps=0, basetemp=8, sowing_method=SDATE_PRECIPITATION, temp_spring=18,
     fphuc=.10, flaimaxc=.05, fphuk=.50,
@@ -585,7 +591,7 @@ const cft2 = _crop_cft(id=2, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
     # rice: sweep peak 20 mm (+1.344), 10.7 days a season, and a clean interior
     #   peak - it falls on both sides. The only crop whose wet signal is larger
     #   than its heat signal.
-    heavy_rain_threshold=20.0, heavy_rain_tolerance=276.2)
+    heavy_rain_threshold=20.0, heavy_rain_tolerance=445.2)
 const cft3 = _crop_cft(id=3, path=2, temp_co2=(8, 42), temp_photos=(21, 26),
     basetemp=5, sowing_method=SDATE_TEMPERATURE_PRECIPITATION, temp_spring=14,
     fphuc=.10, flaimaxc=.05, fphuk=.50, fphusen=.75,
@@ -602,7 +608,7 @@ const cft3 = _crop_cft(id=3, path=2, temp_co2=(8, 42), temp_photos=(21, 26),
     cold_night_temperature=2.0,
     # maize: sweep peak 10 mm (+1.695, the strongest wet signal of the four),
     #   22.5 days a season. Flat 5-15 mm like wheat's.
-    heavy_rain_threshold=10.0, heavy_rain_tolerance=457.4)
+    heavy_rain_threshold=10.0, heavy_rain_tolerance=432.8)
 const cft4 = _crop_cft(id=4, path=2, temp_co2=(6, 55), temp_photos=(20, 45),
     basetemp=8, sowing_method=SDATE_PRECIPITATION, temp_spring=12,
     fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.85,
@@ -653,7 +659,7 @@ const cft9 = _crop_cft(id=9, path=1, temp_co2=(5, 45), temp_photos=(28, 32),
     cold_night_temperature=0.0,
     # soybean: sweep peak 20 mm (+1.508), 9.0 days a season, a clean interior
     #   peak.
-    heavy_rain_threshold=20.0, heavy_rain_tolerance=219.3)
+    heavy_rain_threshold=20.0, heavy_rain_tolerance=271.9)
 const cft10 = _crop_cft(id=10, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
     basetemp=14, sowing_method=SDATE_PRECIPITATION, temp_spring=15,
     fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.75,
