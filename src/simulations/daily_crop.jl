@@ -24,6 +24,7 @@ function _daily_crop!(
     daily_statistic_exposure::Bool = false,
     organ_temperature::Bool = false,
     reproductive_sink::Bool = false,
+    anthesis_heat::Bool = false,
     terminal_heat::Bool = false,
     water_sterility::Bool = false,
     water_filling::Bool = false,
@@ -108,6 +109,14 @@ function _daily_crop!(
         "reproductive sink requires one of sub-daily photosynthesis, the " *
         "standalone heat-exposure pass or the daily-statistic closed form to " *
         "fill heat_exposure_hours",
+    ))
+    # Unlike the three above, this one needs no exposure field: it reads the
+    # forcing directly. What it does need is the daily RANGE, because a daily
+    # maximum cannot be recovered from a mean, and a plain daily run is handed a
+    # climate with no such field at all.
+    anthesis_heat && !hasproperty(climate, :diurnal_range) && throw(ArgumentError(
+        "anthesis heat requires a `diurnal_range` climate field (tasmax - tasmin); " *
+        "a daily run without it cannot form a daily maximum",
     ))
     if organ_temperature
         subdaily_config === nothing && throw(ArgumentError(
@@ -434,6 +443,13 @@ function _daily_crop!(
             )
         end
         reproductive_sink && reproductive_sink!(cftparameters, state)
+        # Reads the forcing, not an exposure field, so it is independent of which
+        # exposure path is on. Same state and same clamp as the sink above, so
+        # the two are order-independent.
+        anthesis_heat && anthesis_heat!(
+            cftparameters, state, dailyWeather.temp,
+            view(climate.diurnal_range, climate_day, :),
+        )
         terminal_heat && terminal_heat!(cftparameters, state)
         # Order-independent against the heat sink: both only subtract from
         # `grain_set_fraction` and the state is clamped at zero.

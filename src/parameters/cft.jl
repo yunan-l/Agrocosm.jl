@@ -299,6 +299,34 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     # the filling window down to 0.417. Ships inert, bounded jointly.
     water_filling_sufficiency::T = 0.5    # Daily water sufficiency below which filling is impaired (0-1).
     water_filling_rate::T = 0.0           # Filling capacity lost per point-day of shortfall; 0 = inert.
+    # Anthesis-window heat sterility on a crop-specific ABSOLUTE daily-maximum
+    # AIR temperature. Unlike every other threshold in this struct, this one was
+    # MEASURED before it was written: a sweep of exceedance-day counts over the
+    # cell-years GDHY calls disasters, per crop, per developmental window, on the
+    # same `tasmax` the model reads. All four crops peak in the FLOWERING window,
+    # and the maize peak lands on 38 C against the 37.9 C that controlled-
+    # environment pollen work reports - two independent lines of evidence within
+    # 0.1 C. Full record and the per-crop sweep in `docs/18`.
+    #
+    # It reads AIR temperature, not organ temperature, and a daily maximum, not
+    # accumulated hours: measured on the ablation ladder, `tmax_sink` beats both
+    # `subdaily` and `organ_temperature` on this metric, and organ temperature
+    # makes the model LESS responsive in disaster years because a transpiring
+    # leaf is cooler than the air.
+    heat_day_temperature::T = 38.0        # Daily-max air temperature above which anthesis sterility begins (°C).
+    # An UPPER BOUND, on the footing `sterility_rate` already uses: grain set
+    # falls monotonically in it, so there is no interior optimum and a single
+    # value is a point estimate of a quantity that only has a bound. 0.02 loses
+    # roughly a third of grain set in a disaster season (about 6 exceedance days
+    # averaging 3 C of excess) and about 11% in a normal one. Take the bound with
+    # `rate_scale`, which now scales this alongside the other four rates.
+    #
+    # Jian et al. (2026, Sci. Adv.) report 1.1-1.8% rice yield loss per exposure
+    # day above 30 C against 0.1-1.3% in current GGCMs; at 2 C of mean excess a
+    # rate near 0.005-0.01 reproduces their band. That is an OUT-OF-SAMPLE check
+    # and must stay one - calibrating to it would make this a process-flavoured
+    # statistical correction rather than a measured mechanism.
+    heat_day_rate::T = 0.02               # Grain set lost per degree-day above the threshold; 0 = inert.
 end
 
 """Return a CFT parameter set whose floating fields consistently use `T`."""
@@ -335,6 +363,7 @@ function _crop_cft(;
     biological_fixation = false, bnf_temperature_limit = (0, 0),
     bnf_temperature_optimum = (0, 0), bnf_water_limit = (0, 0),
     bnf_potential = 0, bnf_maximum_npp_fraction = 0, bnf_carbon_cost = 0,
+    heat_day_temperature = 38.0,
 )
     T = Float32
     return CFTParameters{T, Int32}(
@@ -395,6 +424,7 @@ function _crop_cft(;
         ),
         hiopt = hiopt,
         himin = himin,
+        heat_day_temperature = T(heat_day_temperature),
     )
 end
 
@@ -406,19 +436,31 @@ const cft1 = _crop_cft(id=1, path=1, temp_co2=(0, 40), temp_photos=(12, 17),
     fphuc=.05, flaimaxc=.05, fphuk=.45, fphusen=.70, flaimaxharvest=0,
     laimax=7, laimin=2, hlimit=360, pvd_max=70, beta_root=.94,
     longevity=.50, emax=8, gmin=1, shapesenescencenorm=2, storage_ratio=.99,
-    hiopt=.50, himin=.20)
+    hiopt=.50, himin=.20,
+    # wheat: sweep peak 36 C (+0.531) but FLAT - whole-season >28 C scores
+    #   +0.515, so the peak is poorly determined, and controlled-environment
+    #   work puts wheat's critical daytime threshold far lower at 27.3 C. The
+    #   least trustworthy of the four; not a convergence.
+    heat_day_temperature=36.0)
 const cft2 = _crop_cft(id=2, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
     pb=24, ps=0, basetemp=8, sowing_method=SDATE_PRECIPITATION, temp_spring=18,
     fphuc=.10, flaimaxc=.05, fphuk=.50,
     fphusen=.80, flaimaxharvest=0, laimax=7, laimin=5, hlimit=288,
     beta_root=.91, longevity=.33, emax=8, gmin=1, shapesenescencenorm=2,
-    storage_ratio=1.30, hiopt=.50, himin=.25)
+    storage_ratio=1.30, hiopt=.50, himin=.25,
+    # rice: sweep peak 40 C (+0.498) with 38 C at +0.464, inside the noise,
+    #   and the literature gives 37.2 C. Rice's heat signal is the weakest of
+    #   the four and its disasters are largely outside what this represents.
+    heat_day_temperature=38.0)
 const cft3 = _crop_cft(id=3, path=2, temp_co2=(8, 42), temp_photos=(21, 26),
     basetemp=5, sowing_method=SDATE_TEMPERATURE_PRECIPITATION, temp_spring=14,
     fphuc=.10, flaimaxc=.05, fphuk=.50, fphusen=.75,
     flaimaxharvest=0, laimax=5, laimin=4, hlimit=334, beta_root=.94,
     longevity=.33, emax=10, gmin=1.2, shapesenescencenorm=2, storage_ratio=.83,
-    hiopt=.50, himin=.30)
+    hiopt=.50, himin=.30,
+    # maize: sweep peak 38 C (+1.076, the strongest signal in this project)
+    #   against 37.9 C from controlled-environment pollen work.
+    heat_day_temperature=38.0)
 const cft4 = _crop_cft(id=4, path=2, temp_co2=(6, 55), temp_photos=(20, 45),
     basetemp=8, sowing_method=SDATE_PRECIPITATION, temp_spring=12,
     fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.85,
@@ -460,7 +502,10 @@ const cft9 = _crop_cft(id=9, path=1, temp_co2=(5, 45), temp_photos=(28, 32),
     biological_fixation=true, bnf_temperature_limit=(5, 44),
     bnf_temperature_optimum=(20, 35), bnf_water_limit=(.2, .8),
     bnf_potential=.5, bnf_maximum_npp_fraction=.25, bnf_carbon_cost=6,
-    storage_ratio=.42, hiopt=.40, himin=.10)
+    storage_ratio=.42, hiopt=.40, himin=.10,
+    # soybean: sweep peak 38 C (+0.629); the literature reports complete
+    #   sterility above 35 C daytime.
+    heat_day_temperature=38.0)
 const cft10 = _crop_cft(id=10, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
     basetemp=14, sowing_method=SDATE_PRECIPITATION, temp_spring=15,
     fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.75,

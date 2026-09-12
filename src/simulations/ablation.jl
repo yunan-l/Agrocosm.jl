@@ -294,6 +294,36 @@ function ablation_daily_statistic_sink_configuration(; kwargs...)
 end
 
 """
+    ablation_anthesis_heat_configuration(; kwargs...)
+
+Anthesis heat sterility on an absolute daily-maximum AIR temperature, alone: no
+sub-daily loop, no canopy energy balance, no exposure accumulator, and none of
+the four mechanisms that read one.
+
+It is OFF the ladder rather than a fourth rung, and deliberately so. The ladder
+is cumulative - each rung is measured against the one below - but this mechanism
+is orthogonal to all three: it reads the forcing directly, so it neither needs
+nor benefits from the sub-daily machinery. Adding it as a rung would report its
+contribution only on top of theirs and destroy exactly the separability the
+ablation argument exists to provide.
+
+Its thresholds were measured before it was written, and against the same
+observations the ladder is scored on; see `anthesis_heat.jl` and `docs/18`.
+"""
+function ablation_anthesis_heat_configuration(; kwargs...)
+    owned = (map(step -> step.field, ABLATION_LADDER)...,
+             :subdaily_heat_exposure, :daily_statistic_exposure, :anthesis_heat)
+    for key in keys(kwargs)
+        key in owned && throw(ArgumentError(
+            "$key is set by this configuration; it is a fixed comparison cell",
+        ))
+    end
+    return (; subdaily_photosynthesis = false, subdaily_heat_exposure = false,
+            daily_statistic_exposure = false, organ_temperature = false,
+            reproductive_sink = false, anthesis_heat = true, kwargs...)
+end
+
+"""
     ablation_terminal_heat_configuration(; organ_temperature = true,
                                          daily_statistic = false, kwargs...)
 
