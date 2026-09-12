@@ -321,6 +321,15 @@ function run_global_production(
         "water_system" => irrigated ? "irrigated" : "rainfed",
         "processes_configuration" => String(get(processes, "configuration", "")),
         "rate_scale" => Float64(get(processes, "rate_scale", 1.0)),
+        # The RESOLVED value, read back off the CFT the simulation is actually
+        # holding, not the config's spec string: "fao56" means a different number
+        # for each crop, and a spec cannot show that the value reached the model.
+        # `anthesis_heat` once failed exactly here - the keyword was never
+        # threaded through the global entry, every unit test passed because they
+        # called the kernel directly, and twenty-four jobs ran a configuration
+        # nobody had asked for. A manifest that records the number makes that
+        # failure visible in the output tree instead of in the yields.
+        "depletion_fraction" => Float64(simulation.cft.depletion_fraction),
         "management_mode" => String(get(management, "mode", "")),
         "management_fixed_year" => Int(get(management, "fixed_year", 0)),
         "crop_resp_fix" => Bool(get(run, "crop_resp_fix", false)),
