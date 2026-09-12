@@ -10,6 +10,10 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
     heat_day_temperature = nothing, heat_day_rate = nothing,
     cold_night_temperature = nothing, cold_night_rate = nothing,
     model_parameters = nothing,
+    # Soil texture, so a caller can ask what the column does on something other
+    # than the loam this fixture was built on. Defaults are the original values,
+    # so every existing caller is unaffected.
+    sand = T(0.4), clay = T(0.2), w_sat = T(0.45),
 )
     forcing_days = 365 * cld(sowing_day + 200, 365)
     cft = Agrocosm.convert_precision(T, cft_id == 1 ? Agrocosm.cft1 : Agrocosm.cft3)
@@ -42,8 +46,8 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
     initial_data = (
         latitude = T[45],
         soilparams = (
-            ph = T[6.5], w_sat = fill(T(0.45), 5, 1),
-            sand = reshape(T[0.4], 1, 1), clay = reshape(T[0.2], 1, 1),
+            ph = T[6.5], w_sat = fill(T(w_sat), 5, 1),
+            sand = reshape(T[sand], 1, 1), clay = reshape(T[clay], 1, 1),
             tdiff_0 = T[0.7], tdiff_15 = T[0.75],
             soildepth = T[200, 300, 500, 1000, 1000],
         ),

@@ -355,8 +355,45 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     # set, where a real anthesis frost takes far more. The bound is set by the
     # case the literature quantifies, not by the worst case it describes.
     cold_night_rate::T = 0.04             # Grain set lost per degree-day below the threshold; 0 = inert.
+    # FAO-56 soil-water depletion fraction `p`: the share of plant-available
+    # water a crop extracts at the POTENTIAL rate before any stress. LPJmL's
+    # transpiration supply is linear in relative soil water with no such plateau,
+    # so it is stressed from the moment the soil starts drying - measured
+    # globally, mean season water sufficiency is 75.7 to 91.1 and never reaches
+    # 100 in any precipitation bin. `docs/22` has the measurement and what it
+    # costs: yield variance 2.9 to 3.5 times the US county statistics, and 38 to
+    # 49% of modelled yield variance explained by season rainfall alone against
+    # 8 to 12% observed.
+    #
+    # Ships at 0.0, which is BITWISE the current model, because turning it on
+    # changes every simulated yield and must be an explicit experiment. The
+    # published per-crop values are `fao56_depletion_fraction`.
+    depletion_fraction::T = 0.0           # FAO-56 `p`; 0 = the unmodified LPJmL supply.
 end
 
+"""
+    fao56_depletion_fraction(cft_id)
+
+The published soil-water depletion fraction `p` for one CFT, FAO-56 Table 22.
+
+A MEASURED constant, not a tuning knob: `p` is the fraction of total available
+water a crop extracts before stress begins, and it is tabulated per crop from
+irrigation-scheduling experiments. Returns 0 for a CFT the table does not cover,
+which leaves that crop's supply unmodified rather than guessing.
+
+FAO-56 also adjusts `p` for evaporative demand,
+`p_adj = p + 0.04 * (5 - ETc)`, which is NOT applied here. That adjustment moves
+`p` by up to 0.1 in extreme conditions and adding it would make the parameter a
+function of the weather being attributed, which this project cannot afford
+without first measuring what it changes.
+"""
+function fao56_depletion_fraction(cft_id::Integer)
+    cft_id == 1 && return 0.55   # wheat (winter and spring, FAO-56 Table 22)
+    cft_id == 2 && return 0.20   # rice (paddy); the lowest in the table
+    cft_id == 3 && return 0.55   # maize, field (grain)
+    cft_id == 9 && return 0.50   # soybeans
+    return 0.0
+end
 
 """Return a CFT parameter set whose floating fields consistently use `T`."""
 function convert_precision(::Type{T}, cft::CFTParameters{<:AbstractFloat, S}) where {T <: AbstractFloat, S <: Integer}

@@ -168,6 +168,7 @@ function recouple_nitrogen_water!(
         pathway = pathway,
         b = T(CFT.b),
         emax = T(CFT.emax),
+        depletion_fraction = T(CFT.depletion_fraction),
         fpc = T(CFT.fpc),
         gmin = T(CFT.gmin),
         soil_layers = 5,
@@ -218,6 +219,7 @@ end
 ) where {T <: AbstractFloat, M <: AbstractFloat, S <: Integer}
     cell = @index(Global)
     @unpack pathway, b, emax, fpc, gmin, soil_layers, lpjmlparams, photoparams = kernel_params
+    @unpack depletion_fraction = kernel_params
     @unpack ALPHAM, GM = lpjmlparams
 
     if is_growing[cell] == one(S) && lambda[cell] > zero(T) &&
@@ -237,7 +239,8 @@ end
         for layer in 1:soil_layers
             root_water += soil_water[layer, cell] * root_distribution[layer]
         end
-        supply = compute_transpiration_supply(emax, root_water, root_carbon[cell]) * fpc
+        supply = compute_transpiration_supply(
+            emax, root_water, root_carbon[cell], depletion_fraction) * fpc
         conductance[cell] = limited_conductance
 
         if nitrogen_water_recoupling_required(
@@ -364,11 +367,46 @@ end
            minimum_conductance * fpar
 end
 
+"""
+    compute_available_fraction(root_water, depletion_fraction)
+
+Root-weighted relative soil water with the readily-available plateau applied.
+
+LPJmL's transpiration supply is LINEAR in `root_water`, the root-weighted relative
+plant-available water content, which equals 1 only at field capacity. Stress
+therefore begins the moment the soil starts drying and never stops: measured
+globally, mean season water sufficiency runs 75.7 to 91.1 across the entire
+precipitation distribution and never reaches 100 even in the wettest bin, so
+every additional millimetre still buys yield. That is the source of the model's
+excess yield variance - 2.9 to 3.5 times the US county statistics - and of its
+over-determination by rainfall. See `docs/22`.
+
+The linear form is the land-surface convention. The crop-model convention is
+FAO-56's readily available water, `RAW = p * TAW`, with no stress until depletion
+exceeds it, so the first `p` of available water is extracted at the potential
+rate. APSIM, DSSAT, CropSyst, EPIC and SWAP all carry a form of that threshold.
+
+`depletion_fraction = 0` reproduces the LPJmL form BITWISE - `min(1, wr / 1)` is
+`wr` for `wr <= 1`, and `relative_water` is clamped to [0, 1] at source
+(`water_ice_pools.jl:36`) - which is the ablation contract every mechanism in
+this project ships with.
+"""
+@inline function compute_available_fraction(
+    root_water::T, depletion_fraction::T,
+) where {T <: AbstractFloat}
+    plateau = one(T) - depletion_fraction
+    # A degenerate `p = 1` would mean "never stressed"; division would give Inf.
+    plateau > zero(T) || return root_water > zero(T) ? one(T) : zero(T)
+    return min(one(T), root_water / plateau)
+end
+
 """Compute root-water-limited transpiration supply for one crop column."""
 @inline compute_transpiration_supply(
     maximum_supply::T, root_water::T, root_carbon::T,
+    depletion_fraction::T = zero(T),
 ) where {T <: AbstractFloat} =
-    maximum_supply * root_water * (one(T) - exp(T(-0.04) * root_carbon))
+    maximum_supply * compute_available_fraction(root_water, depletion_fraction) *
+    (one(T) - exp(T(-0.04) * root_carbon))
 
 """Compute transpiration demand with LPJmL's 0.99 water-stress wetness cap."""
 @inline function compute_transpiration_demand(
@@ -448,7 +486,7 @@ end
 
     @unpack lpjmlparams, soil_layers, use_precomputed_conductance = kernel_params
     @unpack ALPHAM, GM, LAMBDA_OPT = lpjmlparams
-    @unpack fpc, emax, gmin = CFT
+    @unpack fpc, emax, gmin, depletion_fraction = CFT
 
     co2_index = length(co2) == 1 ? 1 : cell
     if !use_precomputed_conductance
@@ -469,7 +507,8 @@ end
     crop_rootzone_available_water[cell] = rootzone_water
 
     if crop_isgrowing[cell] == 1
-        supply = compute_transpiration_supply(T(emax), wr, crop_rootc[cell])
+        supply = compute_transpiration_supply(
+            T(emax), wr, crop_rootc[cell], T(depletion_fraction))
         demand = compute_transpiration_demand(
             crop_canopy_wet[cell], pet_eeq[cell], T(ALPHAM), T(GM), crop_gp[cell],
         )
@@ -486,7 +525,11 @@ end
         )
 
         if pet_eeq[cell] > 0.0 && crop_gp[cell] > 0.0
-            crop_wscal[cell] = (emax * wr) / (pet_eeq[cell] * ALPHAM / (one(T) + (GM * ALPHAM) / crop_gp[cell]))
+            # The same supply/demand ratio, so it takes the same plateau: `wscal`
+            # drives LAI senescence (`lai_crop.jl:52`) and a senescence using a
+            # different water stress from allocation would be incoherent.
+            crop_wscal[cell] = (emax * compute_available_fraction(wr, T(depletion_fraction))) /
+                (pet_eeq[cell] * ALPHAM / (one(T) + (GM * ALPHAM) / crop_gp[cell]))
             if crop_wscal[cell] > 1.0
                 crop_wscal[cell] = one(T)
             end

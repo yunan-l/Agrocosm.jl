@@ -372,6 +372,34 @@ function scaled_cft(cft, scale::Real)
          for field in fieldnames(CFTParameters))...)
 end
 
+"""Set the FAO-56 depletion fraction, which is a CFT change rather than an arm.
+
+`depletion_fraction` is not a damage rate and it is not a process flag: it
+changes the transpiration SUPPLY, so it cannot be expressed as one of the
+`ablation_*` configurations, which only set `initialize_simulation` keywords.
+`[processes] depletion_fraction` takes `"fao56"` for the published per-crop value
+or a number to sweep it, and `[processes] depletion_scale` multiplies it; absent
+or 0 is bitwise the unmodified model.
+"""
+function with_depletion(cft, spec, scale::Real, cft_id::Integer)
+    spec === nothing && return cft
+    value = spec isa AbstractString ?
+        (lowercase(spec) == "fao56" ? fao56_depletion_fraction(cft_id) :
+         error("depletion_fraction must be \"fao56\" or a number, got $spec")) :
+        Float64(spec)
+    # `depletion_scale` brackets the response rather than reporting one point.
+    # The published `p` may overshoot - observed yields DO respond to water - and
+    # a single arm cannot tell an overshoot from a correct flattening. Scaling
+    # the FAO-56 value keeps the per-crop ordering the table encodes.
+    value *= Float64(scale)
+    value == 0 && return cft
+    0 <= value < 1 || error("depletion_fraction must lie in [0, 1), got $value")
+    T = typeof(cft.hiopt)
+    return CFTParameters{T, Int32}(;
+        (field => (field === :depletion_fraction ? T(value) : getfield(cft, field))
+         for field in fieldnames(CFTParameters))...)
+end
+
 function create_simulation(initial_data, selection, config, days, device, cft_id;
     irrigated::Bool, diagnostics)
     management = config["management"]
@@ -379,7 +407,10 @@ function create_simulation(initial_data, selection, config, days, device, cft_id
     processes = get(config, "processes", Dict{String, Any}())
     rate_scale = Float64(get(processes, "rate_scale", 1.0))
     return initialize_simulation(
-        scaled_cft(crop_cft(cft_id), rate_scale), initial_data;
+        with_depletion(scaled_cft(crop_cft(cft_id), rate_scale),
+                       get(processes, "depletion_fraction", nothing),
+                       Float64(get(processes, "depletion_scale", 1.0)), cft_id),
+        initial_data;
         days,
         indices = collect(1:length(selection.cell_ids)),
         cell_ids = selection.cell_ids,
