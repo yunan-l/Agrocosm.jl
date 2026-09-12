@@ -70,10 +70,11 @@ end
 # `phenology.grain_set_fraction` for organ temperature and the reproductive
 # sink, then `stress.filling_exposure_hours` and
 # `phenology.grain_fill_fraction` for terminal heat, and
-# `stress.harvest_index_binding` for the harvest-index-binding diagnostic.
+# `stress.harvest_index_binding` for the harvest-index-binding diagnostic,
+# and `phenology.harvest_recovery_fraction` for excess water.
 # `test_simulation_api.jl`
 # compares the two estimates and is what catches an omission here.
-const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1648
+const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1649
 const _PERSISTENT_NONFLOAT_BYTES_PER_CELL = 46
 const _PERSISTENT_FIXED_FLOAT_VALUES = 26
 

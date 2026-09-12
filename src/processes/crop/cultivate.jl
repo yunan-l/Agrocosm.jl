@@ -38,6 +38,7 @@ function cultivate!(crop,
         crop_prognostic(crop).phenology.growing_days,
         crop_prognostic(crop).phenology.grain_set_fraction,
         crop_prognostic(crop).phenology.grain_fill_fraction,
+        crop_prognostic(crop).phenology.harvest_recovery_fraction,
         current_phu,
         current_winter_type,
         prescribed_phu,
@@ -96,6 +97,7 @@ end
     growing_days::AbstractVector{S},
     grain_set_fraction::AbstractVector{T},
     grain_fill_fraction::AbstractVector{T},
+    harvest_recovery_fraction::AbstractVector{T},
     phu::AbstractVector{T},
     winter_type::AbstractVector{B},
     prescribed_phu::AbstractVector{T},
@@ -148,6 +150,7 @@ end
         # the next.
         grain_set_fraction[cell] = one(T)
         grain_fill_fraction[cell] = one(T)
+        harvest_recovery_fraction[cell] = one(T)
         phu[cell] = prescribed_phu[cell]
         winter_type[cell] = prescribed_winter_type[cell]
         lai[cell] = seed_lai

@@ -21,6 +21,22 @@ mutable struct CropPhenology{A, B, I}
     # express terminal heat at all. Prognostic for the same reason as its
     # sibling - starch not deposited is not deposited later.
     grain_fill_fraction::A
+    # Surviving fraction of the standing crop that is actually RECOVERED at
+    # harvest (0-1), reduced irreversibly by heavy-rain days and reset to one at
+    # sowing. A third pathway, distinct from both siblings: grain set fixes the
+    # number of grains and grain filling their weight, and neither can express a
+    # crop that grew normally and was then lodged, sprouted, diseased or left
+    # unharvestable in a wet field.
+    #
+    # It reads the FORCING rather than a soil state deliberately. The documented
+    # wet-year pathways - lodging, sprouting, grain disease, harvest and field
+    # access loss - act on the canopy and the grain, not through root-zone
+    # anoxia, so they need no saturated soil. That matters here because this
+    # model cannot produce a saturated root zone at all: under 120 mm/day for
+    # five days a 75%-clay soil reaches 23% of its gravitational pore space,
+    # since rejected rainfall leaves instantly as surface runoff rather than
+    # ponding. See `docs/20`.
+    harvest_recovery_fraction::A
 end
 
 """Static and current-day algebraically derived phenology variables."""
@@ -44,6 +60,7 @@ function init_crop_phenology(::Type{T}, cell_size::Int, device) where {T <: Abst
         bool_state(true),
         device(zeros(Int32, cell_size)),
         device(zeros(Int32, cell_size)),
+        device(ones(T, cell_size)),
         device(ones(T, cell_size)),
         device(ones(T, cell_size)),
     )

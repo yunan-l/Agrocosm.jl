@@ -353,6 +353,107 @@ function ablation_cold_sterility_configuration(; kwargs...)
 end
 
 """
+    ablation_excess_water_configuration(; kwargs...)
+
+Excess-water damage on an absolute daily rainfall threshold, alone.
+
+OFF the ladder like the other two absolute-threshold cells: it reads the forcing
+directly and shares nothing with the sub-daily machinery.
+
+It is the only arm in this project that is not a stress scalar. The other nine
+reduce assimilation or grain set; this one reduces the fraction of a grown crop
+that is RECOVERED, which is the pathway lodging, sprouting, grain disease and
+harvest loss share and the one this lineage has no representation of. Measured
+before it was written: in wet disaster cell-years the model predicts a good year
+in all four crops, so the recoverable amplitude here is a sign, not a magnitude.
+"""
+function ablation_excess_water_configuration(; kwargs...)
+    owned = (map(step -> step.field, ABLATION_LADDER)...,
+             :subdaily_heat_exposure, :daily_statistic_exposure, :excess_water)
+    for key in keys(kwargs)
+        key in owned && throw(ArgumentError(
+            "$key is set by this configuration; it is a fixed comparison cell",
+        ))
+    end
+    return (; subdaily_photosynthesis = false, subdaily_heat_exposure = false,
+            daily_statistic_exposure = false, organ_temperature = false,
+            reproductive_sink = false, excess_water = true, kwargs...)
+end
+
+"""
+    ablation_diurnal_stress_configuration(; subdaily_steps = 24,
+                                          diurnal_shape = :sinusoid, kwargs...)
+
+Temperature stress evaluated over the day's radiation-weighted temperature
+course instead of at the daily mean, and nothing else.
+
+OFF the ladder, and it is the one cell that changes no damage term at all: it
+changes the ARGUMENT of a response function the model already has. LPJmL
+evaluates `temp_stress` on the daily mean, so a day whose maximum reaches 38 C
+arrives as a mean near 30 C and the sterility it caused is invisible. Measured on
+the shape alone, at a daily mean of 34 C with a 12 C range: wheat retains 0.3079
+over the course against 0.7014 at the mean, maize 0.6515 against 0.9005, rice
+1.000 either way.
+
+The sub-daily rung computes this as a by-product of integrating assimilation
+sub-daily, and on the corrected analysis path it made soybean substantially worse
+- r from 0.537 to 0.438, with variance rising from 1.93 to 2.38 times the county
+statistics'. This cell separates the part that is defensible from the rest of
+that machinery, which is the whole reason it exists as its own arm.
+"""
+function ablation_diurnal_stress_configuration(; subdaily_steps::Integer = 24,
+                                               diurnal_shape::Symbol = :sinusoid,
+                                               kwargs...)
+    owned = (map(step -> step.field, ABLATION_LADDER)...,
+             :subdaily_heat_exposure, :daily_statistic_exposure,
+             :diurnal_temperature_stress)
+    for key in keys(kwargs)
+        key in owned && throw(ArgumentError(
+            "$key is set by this configuration; it is a fixed comparison cell",
+        ))
+    end
+    return (; subdaily_photosynthesis = false, subdaily_heat_exposure = false,
+            daily_statistic_exposure = false, organ_temperature = false,
+            reproductive_sink = false, diurnal_temperature_stress = true,
+            subdaily_steps, diurnal_shape, kwargs...)
+end
+
+"""
+    ablation_extreme_combined_configuration(; subdaily_steps = 24,
+                                            diurnal_shape = :sinusoid, kwargs...)
+
+The two process-flag mechanisms of the extreme set together: excess water and
+the diurnal temperature stress. The third, the FAO-56 supply plateau, is a CFT
+parameter rather than a flag, so a run that wants all three sets
+`depletion_fraction` in its config alongside this configuration.
+
+Kept as its own cell rather than a rung because the three are orthogonal by
+construction - one reduces the fraction recovered at harvest, one changes the
+argument of the temperature response, one changes the transpiration supply - so
+the combination is a claim to be measured, not a sum to be assumed. What the
+separate arms cannot show is whether they interfere: the wet term removes yield
+the heat term has already removed, and only running them together says by how
+much.
+"""
+function ablation_extreme_combined_configuration(; subdaily_steps::Integer = 24,
+                                                 diurnal_shape::Symbol = :sinusoid,
+                                                 kwargs...)
+    owned = (map(step -> step.field, ABLATION_LADDER)...,
+             :subdaily_heat_exposure, :daily_statistic_exposure,
+             :excess_water, :diurnal_temperature_stress)
+    for key in keys(kwargs)
+        key in owned && throw(ArgumentError(
+            "$key is set by this configuration; it is a fixed comparison cell",
+        ))
+    end
+    return (; subdaily_photosynthesis = false, subdaily_heat_exposure = false,
+            daily_statistic_exposure = false, organ_temperature = false,
+            reproductive_sink = false, excess_water = true,
+            diurnal_temperature_stress = true,
+            subdaily_steps, diurnal_shape, kwargs...)
+end
+
+"""
     ablation_terminal_heat_configuration(; organ_temperature = true,
                                          daily_statistic = false, kwargs...)
 

@@ -39,6 +39,7 @@ function harvest_crop!(crop,
         output.annual.active_window_npp,
         output.annual.active_hi_binding_days,
         crop_prognostic(crop).carbon.storage,
+        crop_prognostic(crop).phenology.harvest_recovery_fraction,
         crop_prognostic(crop).carbon.leaf,
         crop_prognostic(crop).carbon.pool,
         crop_prognostic(crop).carbon.root,
@@ -334,6 +335,7 @@ end
         active_window_npp::AbstractVector{T},
         active_hi_binding_days::AbstractVector{T},
         storage_carbon::AbstractVector{T},
+        harvest_recovery_fraction::AbstractVector{T},
     leaf_carbon::AbstractVector{T},
     pool_carbon::AbstractVector{T},
     root_carbon::AbstractVector{T},
@@ -372,7 +374,16 @@ end
         nitrogen_residue = max(aboveground_nitrogen, zero(T)) * residue_fraction[cell]
         harvest_date[cell] = S(day)
         is_growing[cell] = zero(S)
-        crop_yield[cell] = storage_carbon[cell]
+        # Only the RECOVERED fraction of the storage organ becomes yield. What is
+        # left standing in the field - lodged, sprouted, diseased or simply not
+        # reachable - stays on the surface as residue, so the carbon and nitrogen
+        # balances are unchanged and `check_conservation_gates.py` still closes.
+        # `harvest_recovery_fraction` is one unless `excess_water` is on, which
+        # makes this bitwise the previous behaviour by default.
+        recovery = harvest_recovery_fraction[cell]
+        unrecovered_carbon = storage_carbon[cell] * (one(T) - recovery)
+        unrecovered_nitrogen = storage_nitrogen[cell] * (one(T) - recovery)
+        crop_yield[cell] = storage_carbon[cell] * recovery
         annual_yield[cell] += crop_yield[cell]
         annual_season_gpp[cell] += active_gpp[cell]
         annual_season_lai_days[cell] += active_lai_days[cell]
@@ -392,11 +403,11 @@ end
         active_hi_binding_days[cell] = zero(T)
         carbon_harvest_export[cell] = crop_yield[cell] +
             aboveground_carbon - carbon_residue
-        harvest_nitrogen[cell] = storage_nitrogen[cell] +
+        harvest_nitrogen[cell] = storage_nitrogen[cell] * recovery +
             aboveground_nitrogen - nitrogen_residue
-        carbon_input[SURFACE_LITTER, cell] = carbon_residue
+        carbon_input[SURFACE_LITTER, cell] = carbon_residue + unrecovered_carbon
         carbon_input[ROOT_LITTER, cell] = root_carbon[cell]
-        nitrogen_input[SURFACE_LITTER, cell] = nitrogen_residue
+        nitrogen_input[SURFACE_LITTER, cell] = nitrogen_residue + unrecovered_nitrogen
         nitrogen_input[ROOT_LITTER, cell] = root_nitrogen[cell]
     else
         crop_yield[cell] = zero(T)

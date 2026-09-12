@@ -26,6 +26,12 @@ function _daily_crop!(
     reproductive_sink::Bool = false,
     anthesis_heat::Bool = false,
     cold_sterility::Bool = false,
+    excess_water::Bool = false,
+    diurnal_temperature_stress::Bool = false,
+    # The course only, not the sub-daily assimilation loop: these say how finely
+    # to sample the day for `temp_stress` and nothing else.
+    diurnal_stress_steps::Int = 24,
+    diurnal_stress_shape::Symbol = :sinusoid,
     terminal_heat::Bool = false,
     water_sterility::Bool = false,
     water_filling::Bool = false,
@@ -125,6 +131,11 @@ function _daily_crop!(
         "cold sterility requires a `diurnal_range` climate field (tasmax - tasmin); " *
         "a daily run without it cannot form a daily minimum",
     ))
+    diurnal_temperature_stress && !hasproperty(climate, :diurnal_range) &&
+        throw(ArgumentError(
+            "diurnal temperature stress requires a `diurnal_range` climate field " *
+            "(tasmax - tasmin); the daily mean alone has no temperature course",
+        ))
     if organ_temperature
         subdaily_config === nothing && throw(ArgumentError(
             "organ temperature requires sub-daily photosynthesis or the standalone " *
@@ -293,6 +304,10 @@ function _daily_crop!(
             temp_stress(
                 cftparameters, pet, state, dailyWeather.temp;
                 photoparams = photo_params,
+                diurnal_range = diurnal_temperature_stress ?
+                    view(climate.diurnal_range, climate_day, :) : nothing,
+                diurnal_steps = diurnal_temperature_stress ? diurnal_stress_steps : 0,
+                diurnal_shape = diurnal_shape_code(diurnal_stress_shape),
             )
             photosynthesis!(
                 pathway, cftparameters, state, crop_canopy_auxiliary(state).apar,
@@ -357,6 +372,10 @@ function _daily_crop!(
         temp_stress(
             cftparameters, pet, state, dailyWeather.temp;
             photoparams = photo_params,
+            diurnal_range = diurnal_temperature_stress ?
+                view(climate.diurnal_range, climate_day, :) : nothing,
+            diurnal_steps = diurnal_temperature_stress ? diurnal_stress_steps : 0,
+            diurnal_shape = diurnal_shape_code(diurnal_stress_shape),
         )
         photosynthesis!(
             pathway, cftparameters, state, crop_canopy_auxiliary(state).apar,
@@ -465,6 +484,11 @@ function _daily_crop!(
             cftparameters, state, dailyWeather.temp,
             view(climate.diurnal_range, climate_day, :),
         )
+        # Reads the day's RAINFALL, so it needs no exposure field and no diurnal
+        # range - and it reduces a third state, the fraction recovered at
+        # harvest, so it is order-independent against everything above by
+        # construction rather than by argument.
+        excess_water && excess_water!(cftparameters, state, dailyWeather.prec)
         terminal_heat && terminal_heat!(cftparameters, state)
         # Order-independent against the heat sink: both only subtract from
         # `grain_set_fraction` and the state is clamped at zero.

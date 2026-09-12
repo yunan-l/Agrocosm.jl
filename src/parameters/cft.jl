@@ -369,6 +369,25 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     # changes every simulated yield and must be an explicit experiment. The
     # published per-crop values are `fao56_depletion_fraction`.
     depletion_fraction::T = 0.0           # FAO-56 `p`; 0 = the unmodified LPJmL supply.
+    # Excess-water damage on an absolute daily RAINFALL threshold, acting on the
+    # fraction of the standing crop recovered at harvest. Swept the same way as
+    # the heat thresholds and on the same observations - see `docs/24` - and it
+    # is the only pathway in this model for lodging, sprouting, grain disease and
+    # harvest loss, which together are the wet-year damage an aeration term
+    # cannot represent because the root zone never saturates.
+    heavy_rain_threshold::T = 20.0        # Daily rainfall above which recovery is lost (mm).
+    # An UPPER BOUND on the footing `heat_day_rate` and `cold_night_rate` use,
+    # shipped AT the bound so `rate_scale` can scale it, and kept out of every
+    # production run by the `excess_water` process flag rather than by a zero.
+    #
+    # Sized from the sweep rather than chosen: at its own threshold each crop
+    # sees 9 to 23 heavy days in a normal season, and a wet disaster year runs
+    # +1.3 to +1.7 sd above that, which is of order 100 mm of extra excess. A
+    # rate of 0.002 turns that into a 20-percentage-point yield difference,
+    # against an observed wet-year loss of 22 to 29%. The DAY COUNT is what
+    # separates this from the heat mechanism, which had 2.8 exceedance days a
+    # season and could not reach the required magnitude at any defensible rate.
+    heavy_rain_rate::T = 0.002            # Recovery lost per mm above the threshold; 0 = inert.
 end
 
 """
@@ -430,6 +449,7 @@ function _crop_cft(;
     bnf_temperature_optimum = (0, 0), bnf_water_limit = (0, 0),
     bnf_potential = 0, bnf_maximum_npp_fraction = 0, bnf_carbon_cost = 0,
     heat_day_temperature = 38.0, cold_night_temperature = 17.0,
+    heavy_rain_threshold = 20.0,
 )
     T = Float32
     return CFTParameters{T, Int32}(
@@ -492,6 +512,7 @@ function _crop_cft(;
         himin = himin,
         heat_day_temperature = T(heat_day_temperature),
         cold_night_temperature = T(cold_night_temperature),
+        heavy_rain_threshold = T(heavy_rain_threshold),
     )
 end
 
@@ -517,7 +538,11 @@ const cft1 = _crop_cft(id=1, path=1, temp_co2=(0, 40), temp_photos=(12, 17),
     #   this mechanism and is not represented: it kills the stand, not the
     #   grain, and it is driven by crown temperature under snow, which an air
     #   minimum predicts badly - the vegetative-window sweep sees +0.082.
-    cold_night_temperature=0.0)
+    cold_night_temperature=0.0,
+    # wheat: sweep peak 10 mm (+1.492), 13.9 days a season. Flat between 5 and
+    #   15 mm (+1.366 to +1.460), so the peak location is the least determined
+    #   of the four.
+    heavy_rain_threshold=10.0)
 const cft2 = _crop_cft(id=2, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
     pb=24, ps=0, basetemp=8, sowing_method=SDATE_PRECIPITATION, temp_spring=18,
     fphuc=.10, flaimaxc=.05, fphuk=.50,
@@ -535,7 +560,11 @@ const cft2 = _crop_cft(id=2, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
     #   +0.394 below 8 C, rests on 805 of 15,704 disaster cell-years. This is the
     #   least trustworthy threshold in the struct, recorded as literature rather
     #   than measurement, exactly as wheat's heat threshold is.
-    cold_night_temperature=17.0)
+    cold_night_temperature=17.0,
+    # rice: sweep peak 20 mm (+1.344), 10.7 days a season, and a clean interior
+    #   peak - it falls on both sides. The only crop whose wet signal is larger
+    #   than its heat signal.
+    heavy_rain_threshold=20.0)
 const cft3 = _crop_cft(id=3, path=2, temp_co2=(8, 42), temp_photos=(21, 26),
     basetemp=5, sowing_method=SDATE_TEMPERATURE_PRECIPITATION, temp_spring=14,
     fphuc=.10, flaimaxc=.05, fphuk=.50, fphusen=.75,
@@ -549,7 +578,10 @@ const cft3 = _crop_cft(id=3, path=2, temp_co2=(8, 42), temp_photos=(21, 26),
     #   signal in this project and about a third of maize's heat signal. Frost
     #   rather than chilling: the peak sits at the freezing point and decays
     #   monotonically above it (+0.176 at 8 C, -0.086 at 15 C).
-    cold_night_temperature=2.0)
+    cold_night_temperature=2.0,
+    # maize: sweep peak 10 mm (+1.695, the strongest wet signal of the four),
+    #   22.5 days a season. Flat 5-15 mm like wheat's.
+    heavy_rain_threshold=10.0)
 const cft4 = _crop_cft(id=4, path=2, temp_co2=(6, 55), temp_photos=(20, 45),
     basetemp=8, sowing_method=SDATE_PRECIPITATION, temp_spring=12,
     fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.85,
@@ -597,7 +629,10 @@ const cft9 = _crop_cft(id=9, path=1, temp_co2=(5, 45), temp_photos=(28, 32),
     heat_day_temperature=38.0,
     # soybean: sweep peak 0 C in the booting window (+0.169), the weakest of the
     #   four and on 1,858 of 13,182 disaster cell-years. Frost, like maize.
-    cold_night_temperature=0.0)
+    cold_night_temperature=0.0,
+    # soybean: sweep peak 20 mm (+1.508), 9.0 days a season, a clean interior
+    #   peak.
+    heavy_rain_threshold=20.0)
 const cft10 = _crop_cft(id=10, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
     basetemp=14, sowing_method=SDATE_PRECIPITATION, temp_spring=15,
     fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.75,

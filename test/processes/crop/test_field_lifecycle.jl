@@ -117,6 +117,11 @@ end
         # Separate state because the harvest index multiplies the two, so
         # neither can stand in for the other.
         :grain_fill_fraction,
+        # The third of the same kind, and the only one that is not about the
+        # grain itself: the fraction of a grown crop RECOVERED at harvest, which
+        # heavy-rain days reduce. Separate state because lodging, sprouting and
+        # harvest loss take a crop that already set and filled its grain.
+        :harvest_recovery_fraction,
     )
     @test propertynames(crop.auxiliary.phenology) == (:phu, :winter_type, :fphu)
     @test propertynames(crop.auxiliary.calendar) == (:sowing_date, :prescribed_sowing_date)
