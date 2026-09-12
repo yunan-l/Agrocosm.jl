@@ -6,6 +6,9 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
     sterility_temperature = nothing,
     heat_exposure_config = nothing, daily_statistic_exposure = false,
     terminal_heat = false, filling_rate = nothing, filling_temperature = nothing,
+    anthesis_heat = false, cold_sterility = false,
+    heat_day_temperature = nothing, heat_day_rate = nothing,
+    cold_night_temperature = nothing, cold_night_rate = nothing,
     model_parameters = nothing,
 )
     forcing_days = 365 * cld(sowing_day + 200, 365)
@@ -21,6 +24,16 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
     filling_rate === nothing || (overrides[:filling_rate] = T(filling_rate))
     filling_temperature === nothing ||
         (overrides[:filling_temperature] = T(filling_temperature))
+    # The fixture runs at a constant 19/25 C, so the two absolute-threshold
+    # mechanisms need their thresholds moved into that range for the same
+    # reason the sink and terminal heat do.
+    heat_day_temperature === nothing ||
+        (overrides[:heat_day_temperature] = T(heat_day_temperature))
+    heat_day_rate === nothing || (overrides[:heat_day_rate] = T(heat_day_rate))
+    cold_night_temperature === nothing ||
+        (overrides[:cold_night_temperature] = T(cold_night_temperature))
+    cold_night_rate === nothing ||
+        (overrides[:cold_night_rate] = T(cold_night_rate))
     if !isempty(overrides)
         cft = Agrocosm.CFTParameters{T, Int32}(;
             (f => get(overrides, f, getfield(cft, f))
@@ -69,7 +82,7 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
     # any of them is on; with none on `climate` is exactly as before -- no
     # `diurnal_range` field at all, so existing callers are unaffected.
     needs_range = diurnal_config !== nothing || heat_exposure_config !== nothing ||
-        daily_statistic_exposure
+        daily_statistic_exposure || anthesis_heat || cold_sterility
     climate = needs_range ? merge(climate_fields, (;
         diurnal_range = fill(T(diurnal_amplitude), forcing_days, 1),
     )) : climate_fields
@@ -93,6 +106,7 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
         nitrogen_limit_vcmax = true, crop_resp_fix = true, diurnal_config,
         organ_temperature, reproductive_sink,
         heat_exposure_config, daily_statistic_exposure, terminal_heat,
+        anthesis_heat, cold_sterility,
         update_vernalization_requirement = false, reuse_output = true)
     events = findall(!iszero, vec(ordinary.output.calendar.harvest_event))
     isempty(events) && error("fixture did not harvest")
@@ -104,6 +118,7 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
         nitrogen_limit_vcmax = true, crop_resp_fix = true, diurnal_config,
         organ_temperature, reproductive_sink,
         heat_exposure_config, daily_statistic_exposure, terminal_heat,
+        anthesis_heat, cold_sterility,
         update_vernalization_requirement = false, reuse_output = true)
     return (; state, cft, parameters, climate, days = first_day:(harvest_day - 1),
         harvest_day, forcing = cat(climate.temp, climate.prec, climate.sw, climate.lw,

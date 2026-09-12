@@ -82,6 +82,8 @@ function Agrocosm.weather_harvest_replay(
     heat_exposure_config = nothing,
     daily_statistic_exposure::Bool = false,
     terminal_heat::Bool = false,
+    anthesis_heat::Bool = false,
+    cold_sterility::Bool = false,
 ) where {T <: AbstractFloat}
     _check_weather_case(forcing, initial_state, cft, climate, days, harvest_day)
     # Exactly one writer for the exposure fields, the same rule the production
@@ -106,7 +108,8 @@ function Agrocosm.weather_harvest_replay(
         end
     end
     (diurnal_config === nothing && heat_exposure_config === nothing &&
-     !daily_statistic_exposure) || hasproperty(climate, :diurnal_range) ||
+     !daily_statistic_exposure && !anthesis_heat && !cold_sterility) ||
+        hasproperty(climate, :diurnal_range) ||
         throw(ArgumentError("sub-daily integration requires a `diurnal_range` climate field (tasmax - tasmin)"))
     harvest_day <= replay_end_day <= size(forcing, 1) || error("invalid replay end day")
     state = deepcopy(initial_state)
@@ -132,6 +135,7 @@ function Agrocosm.weather_harvest_replay(
             irrigation, nitrogen_limit_vcmax, crop_resp_fix, diurnal_config,
             organ_temperature, reproductive_sink,
             heat_exposure_config, daily_statistic_exposure, terminal_heat,
+            anthesis_heat, cold_sterility,
             update_vernalization_requirement = false, reuse_output = true)
         crop = Agrocosm.crop_prognostic(state)
         fluxes = Agrocosm.crop_fluxes(state)
@@ -200,6 +204,7 @@ function _weather_yield_block(
     diurnal_config = nothing, organ_temperature::Bool = false,
     reproductive_sink::Bool = false, heat_exposure_config = nothing,
     daily_statistic_exposure::Bool = false, terminal_heat::Bool = false,
+    anthesis_heat::Bool = false, cold_sterility::Bool = false,
 )
     T = eltype(forcing)
     # A saved post-sowing state still carries the one-day event. Production's
@@ -212,6 +217,7 @@ function _weather_yield_block(
             irrigation, nitrogen_limit_vcmax, crop_resp_fix, nitrogen_limit_vcmax,
             forcing, pathway, diurnal_config, organ_temperature, reproductive_sink,
             heat_exposure_config, daily_statistic_exposure, terminal_heat,
+            anthesis_heat, cold_sterility,
         )
     end
     # Production harvest_state_kernel! transfers storage carbon directly to
@@ -220,12 +226,13 @@ function _weather_yield_block(
     return terminal ? Agrocosm.crop_prognostic(state).carbon.storage[1] / T(0.45) * T(0.01) : zero(T)
 end
 
-function _weather_reference(forcing, state, cft, parameters, climate, days, harvest_day, irrigation, nitrogen, respiration, diurnal_config = nothing, organ_temperature::Bool = false, reproductive_sink::Bool = false, heat_exposure_config = nothing, daily_statistic_exposure::Bool = false, terminal_heat::Bool = false)
+function _weather_reference(forcing, state, cft, parameters, climate, days, harvest_day, irrigation, nitrogen, respiration, diurnal_config = nothing, organ_temperature::Bool = false, reproductive_sink::Bool = false, heat_exposure_config = nothing, daily_statistic_exposure::Bool = false, terminal_heat::Bool = false, anthesis_heat::Bool = false, cold_sterility::Bool = false)
     reference = Agrocosm.weather_harvest_replay(
         forcing, state, cft, parameters, climate, days, harvest_day;
         irrigation, nitrogen_limit_vcmax = nitrogen, crop_resp_fix = respiration, diurnal_config,
         organ_temperature, reproductive_sink,
         heat_exposure_config, daily_statistic_exposure, terminal_heat,
+        anthesis_heat, cold_sterility,
     )
     reference.schedule_matches || throw(ArgumentError(
         "fixed-event attribution requires exactly one harvest on day $harvest_day; observed $(reference.harvest_days)",
@@ -253,12 +260,14 @@ function Agrocosm.enzyme_weather_harvest_gradient(
     heat_exposure_config = nothing,
     daily_statistic_exposure::Bool = false,
     terminal_heat::Bool = false,
+    anthesis_heat::Bool = false,
+    cold_sterility::Bool = false,
 ) where {T <: AbstractFloat}
     block_days > 0 || throw(ArgumentError("block_days must be positive"))
     reference = _weather_reference(forcing, initial_state, cft, parameters, climate,
         days, harvest_day, irrigation, nitrogen_limit_vcmax, crop_resp_fix, diurnal_config,
         organ_temperature, reproductive_sink, heat_exposure_config,
-        daily_statistic_exposure, terminal_heat)
+        daily_statistic_exposure, terminal_heat, anthesis_heat, cold_sterility)
     state = deepcopy(initial_state)
     Agrocosm.enzyme_prepare_daily_state!(state)
     layer_depth = Tuple(state.inputs.soil.properties.layer_depth)
@@ -272,7 +281,7 @@ function Agrocosm.enzyme_weather_harvest_gradient(
             ranges[index], layer_depth, index == length(ranges), irrigation,
             nitrogen_limit_vcmax, crop_resp_fix, pathway, diurnal_config,
             organ_temperature, reproductive_sink, heat_exposure_config,
-            daily_statistic_exposure, terminal_heat)
+            daily_statistic_exposure, terminal_heat, anthesis_heat, cold_sterility)
     end
     isapprox(primal, reference.yield; rtol = primal_rtol, atol = primal_atol) ||
         throw(ArgumentError("weather AD primal $primal differs from production harvest $(reference.yield)"))
@@ -291,6 +300,7 @@ function Agrocosm.enzyme_weather_harvest_gradient(
             Enzyme.Const(diurnal_config), Enzyme.Const(organ_temperature),
             Enzyme.Const(reproductive_sink), Enzyme.Const(heat_exposure_config),
             Enzyme.Const(daily_statistic_exposure), Enzyme.Const(terminal_heat),
+            Enzyme.Const(anthesis_heat), Enzyme.Const(cold_sterility),
         )
         reverse_primal += result[2]
     end
@@ -311,14 +321,14 @@ function _parameter_yield_block(
     layer_depth, terminal::Bool, irrigation::Bool, nitrogen_limit_vcmax::Bool,
     crop_resp_fix::Bool, pathway, diurnal_config, organ_temperature::Bool,
     reproductive_sink::Bool, heat_exposure_config, daily_statistic_exposure::Bool,
-    terminal_heat::Bool,
+    terminal_heat::Bool, anthesis_heat::Bool, cold_sterility::Bool,
 )
     cft = _replace_cft_parameters(base_cft, theta, parameter_names)
     return _weather_yield_block(
         forcing, state, cft, parameters, climate, days, layer_depth, terminal,
         irrigation, nitrogen_limit_vcmax, crop_resp_fix, pathway, diurnal_config,
         organ_temperature, reproductive_sink, heat_exposure_config,
-        daily_statistic_exposure, terminal_heat,
+        daily_statistic_exposure, terminal_heat, anthesis_heat, cold_sterility,
     )
 end
 
@@ -358,6 +368,8 @@ function Agrocosm.enzyme_process_parameter_gradient(
     heat_exposure_config = nothing,
     daily_statistic_exposure::Bool = false,
     terminal_heat::Bool = false,
+    anthesis_heat::Bool = false,
+    cold_sterility::Bool = false,
 ) where {T <: AbstractFloat}
     block_days > 0 || throw(ArgumentError("block_days must be positive"))
     length(theta) == length(parameter_names) || throw(DimensionMismatch(
@@ -377,7 +389,7 @@ function Agrocosm.enzyme_process_parameter_gradient(
     reference = _weather_reference(forcing, initial_state, cft, parameters, climate,
         days, harvest_day, irrigation, nitrogen_limit_vcmax, crop_resp_fix,
         diurnal_config, organ_temperature, reproductive_sink, heat_exposure_config,
-        daily_statistic_exposure, terminal_heat)
+        daily_statistic_exposure, terminal_heat, anthesis_heat, cold_sterility)
     state = deepcopy(initial_state)
     Agrocosm.enzyme_prepare_daily_state!(state)
     layer_depth = Tuple(state.inputs.soil.properties.layer_depth)
@@ -392,7 +404,7 @@ function Agrocosm.enzyme_process_parameter_gradient(
             index == length(ranges), irrigation, nitrogen_limit_vcmax,
             crop_resp_fix, pathway, diurnal_config, organ_temperature,
             reproductive_sink, heat_exposure_config, daily_statistic_exposure,
-            terminal_heat)
+            terminal_heat, anthesis_heat, cold_sterility)
     end
     isapprox(primal, reference.yield; rtol = primal_rtol, atol = primal_atol) ||
         throw(ArgumentError("parameter AD primal $primal differs from production harvest $(reference.yield)"))
@@ -413,6 +425,7 @@ function Agrocosm.enzyme_process_parameter_gradient(
             Enzyme.Const(organ_temperature), Enzyme.Const(reproductive_sink),
             Enzyme.Const(heat_exposure_config),
             Enzyme.Const(daily_statistic_exposure), Enzyme.Const(terminal_heat),
+            Enzyme.Const(anthesis_heat), Enzyme.Const(cold_sterility),
         )
         reverse_primal += result[2]
     end
@@ -433,12 +446,14 @@ function Agrocosm.enzyme_weather_forward_directional(
     heat_exposure_config = nothing,
     daily_statistic_exposure::Bool = false,
     terminal_heat::Bool = false,
+    anthesis_heat::Bool = false,
+    cold_sterility::Bool = false,
 ) where {T <: AbstractFloat}
     size(forcing) == size(direction) || throw(DimensionMismatch("direction shape mismatch"))
     _weather_reference(forcing, initial_state, cft, parameters, climate,
         days, harvest_day, irrigation, nitrogen_limit_vcmax, crop_resp_fix, diurnal_config,
         organ_temperature, reproductive_sink, heat_exposure_config,
-        daily_statistic_exposure, terminal_heat)
+        daily_statistic_exposure, terminal_heat, anthesis_heat, cold_sterility)
     state = deepcopy(initial_state)
     Agrocosm.enzyme_prepare_daily_state!(state)
     shadow = Agrocosm.enzyme_zero_tangent(state)
@@ -453,6 +468,7 @@ function Agrocosm.enzyme_weather_forward_directional(
         Enzyme.Const(diurnal_config), Enzyme.Const(organ_temperature),
         Enzyme.Const(reproductive_sink), Enzyme.Const(heat_exposure_config),
         Enzyme.Const(daily_statistic_exposure), Enzyme.Const(terminal_heat),
+        Enzyme.Const(anthesis_heat), Enzyme.Const(cold_sterility),
     )
     return (primal = result[2], directional = result[1])
 end

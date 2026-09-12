@@ -797,6 +797,12 @@ function _enzyme_continuous_transition!(
     heat_exposure_config = nothing,
     daily_statistic_exposure::Bool = false,
     terminal_heat::Bool = false,
+    # AFTER `terminal_heat`, not beside the other mechanism flags, because every
+    # argument here is POSITIONAL with a default and `weather_attribution.jl`
+    # passes the whole list positionally. Inserting in the middle would silently
+    # rebind `terminal_heat` to `anthesis_heat` at that one call site.
+    anthesis_heat::Bool = false,
+    cold_sterility::Bool = false,
 )
     T = eltype(Agrocosm.crop_prognostic(state).canopy.lai)
     _enzyme_apply_root_distribution!(state, cft.beta_root)
@@ -1103,6 +1109,19 @@ function _enzyme_continuous_transition!(
         )
     end
     reproductive_sink && Agrocosm.reproductive_sink!(cft, state)
+    # The two absolute-threshold mechanisms, in the same place and the same order
+    # as `_daily_crop!`. They were missing here, which made
+    # d(yield)/d(heat_day_rate) structurally zero on the differentiated path -
+    # the one path this project's attribution argument runs on. Like the
+    # sub-daily range above, `climate.diurnal_range` is a fixed auxiliary and is
+    # Const when `climate` is; the sensitivity that matters flows through the
+    # CFT parameters, which are not.
+    anthesis_heat && Agrocosm.anthesis_heat!(
+        cft, state, daily_weather.temp, view(climate.diurnal_range, day, :),
+    )
+    cold_sterility && Agrocosm.cold_sterility!(
+        cft, state, daily_weather.temp, view(climate.diurnal_range, day, :),
+    )
     terminal_heat && Agrocosm.terminal_heat!(cft, state)
     _enzyme_crop_carbon!(
         state,
