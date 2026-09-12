@@ -331,6 +331,14 @@ function _daily_crop!(
         harvest_crop!(
             state, state, output, managed_land.residue_fraction, day_of_year;
             output_row, annual_output_row,
+            # Zero unless the arm is on, which keeps this bitwise the
+            # behaviour without excess water.
+            heavy_rain_tolerance = excess_water ?
+                eltype(dailyWeather.temp)(cftparameters.heavy_rain_tolerance) :
+                zero(eltype(dailyWeather.temp)),
+            heavy_rain_rate = excess_water ?
+                eltype(dailyWeather.temp)(cftparameters.heavy_rain_rate) :
+                zero(eltype(dailyWeather.temp)),
         )
         route_harvest_residues!(state, state)
         annual_output_offset += day_of_year == 365

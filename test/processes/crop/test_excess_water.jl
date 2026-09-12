@@ -13,56 +13,80 @@ isdefined(@__MODULE__, :test_model_state) ||
 
 const TW = Float32
 
-function wet_cft(; rate, threshold = 20.0)
+function wet_cft(; rate, threshold = 20.0, tolerance = 0.0)
     Agrocosm.CFTParameters{TW, Int32}(;
         (f => (f === :heavy_rain_rate ? TW(rate) :
                f === :heavy_rain_threshold ? TW(threshold) :
+               f === :heavy_rain_tolerance ? TW(tolerance) :
                getfield(Agrocosm.cft3, f))
          for f in fieldnames(Agrocosm.CFTParameters))...)
 end
 
-@testset "the loss is linear in the excess millimetres" begin
-    loss(mm, thr, growing, rate) =
-        Agrocosm.excess_water_loss(TW(mm), TW(thr), growing, TW(rate))
-    @test loss(30.0, 20.0, true, 0.01) ≈ TW(0.1)
-    @test loss(40.0, 20.0, true, 0.01) ≈ TW(0.2)      # linear, not a count
-    @test loss(20.0, 20.0, true, 0.01) == zero(TW)    # at the threshold, nothing
-    @test loss(5.0, 20.0, true, 0.01) == zero(TW)     # below it, nothing
-    @test loss(60.0, 20.0, false, 0.01) == zero(TW)   # not growing, nothing
+@testset "the daily excess is millimetres above the threshold" begin
+    ex(mm, thr, growing) = Agrocosm.heavy_rain_excess_today(TW(mm), TW(thr), growing)
+    @test ex(30.0, 20.0, true) ≈ TW(10.0)
+    @test ex(40.0, 20.0, true) ≈ TW(20.0)      # linear, not a count
+    @test ex(20.0, 20.0, true) == zero(TW)     # at the threshold, nothing
+    @test ex(5.0, 20.0, true) == zero(TW)      # below it, nothing
+    @test ex(60.0, 20.0, false) == zero(TW)    # not growing, nothing
     # A 60 mm day is not a 20.1 mm day, which is the whole reason it is not a
     # day count - and a count is not differentiable either.
-    @test loss(60.0, 20.0, true, 0.01) > loss(20.1, 20.0, true, 0.01)
+    @test ex(60.0, 20.0, true) > ex(20.1, 20.0, true)
 end
 
-@testset "S1/S2: rate zero is inert, and a rate moves it" begin
+@testset "the tolerance makes this a wet-YEAR term, not a wet-climate tax" begin
+    rec(excess, tol, rate) =
+        Agrocosm.excess_water_recovery(TW(excess), TW(tol), TW(rate))
+    # A season inside the tolerance loses nothing, however wet the climate.
+    @test rec(100.0, 150.0, 0.002) == one(TW)
+    @test rec(150.0, 150.0, 0.002) == one(TW)
+    # Beyond it, linear in the overshoot.
+    @test rec(250.0, 150.0, 0.002) ≈ one(TW) - TW(0.2)
+    @test rec(350.0, 150.0, 0.002) ≈ one(TW) - TW(0.4)
+    # Clamped, so an extreme season cannot produce a negative harvest.
+    @test rec(10_000.0, 150.0, 0.002) == zero(TW)
+    # Rate zero is inert whatever the season did - the ablation contract.
+    for excess in TW[0.0, 150.0, 900.0]
+        @test rec(excess, 150.0, 0.0) == one(TW)
+    end
+    # This is the failure the first version had: at tolerance zero a median
+    # season is charged, which took 54% of rice yield in an AVERAGE year.
+    @test rec(116.3, 0.0, 0.002) < rec(116.3, 139.1, 0.002)
+    @test rec(116.3, 139.1, 0.002) == one(TW)
+end
+
+@testset "the kernel accumulates the season's excess" begin
     crop = test_model_state(init_crop(4, identity))
     state = Agrocosm.crop_prognostic(crop)
-    state.phenology.harvest_recovery_fraction .= one(TW)
+    state.phenology.heavy_rain_excess .= zero(TW)
     state.phenology.is_growing .= Int32(1)
-    Agrocosm.excess_water!(wet_cft(rate = 0.0), crop, fill(TW(80.0), 4))
-    @test all(state.phenology.harvest_recovery_fraction .== one(TW))
-    Agrocosm.excess_water!(wet_cft(rate = 0.01), crop, fill(TW(80.0), 4))
-    @test all(state.phenology.harvest_recovery_fraction .< one(TW))
+    Agrocosm.excess_water!(wet_cft(rate = 0.002), crop, fill(TW(80.0), 4))
+    @test all(state.phenology.heavy_rain_excess .≈ TW(60.0))
+    Agrocosm.excess_water!(wet_cft(rate = 0.002), crop, fill(TW(80.0), 4))
+    @test all(state.phenology.heavy_rain_excess .≈ TW(120.0))
+    # A dry day adds nothing, and a stand that is not growing is untouched.
+    Agrocosm.excess_water!(wet_cft(rate = 0.002), crop, fill(TW(5.0), 4))
+    @test all(state.phenology.heavy_rain_excess .≈ TW(120.0))
+    state.phenology.is_growing .= Int32(0)
+    Agrocosm.excess_water!(wet_cft(rate = 0.002), crop, fill(TW(200.0), 4))
+    @test all(state.phenology.heavy_rain_excess .≈ TW(120.0))
 end
 
-@testset "the damage accumulates and is irreversible" begin
+@testset "the accumulation is irreversible within a season" begin
     crop = test_model_state(init_crop(1, identity))
     state = Agrocosm.crop_prognostic(crop)
-    state.phenology.harvest_recovery_fraction .= one(TW)
+    state.phenology.heavy_rain_excess .= zero(TW)
     state.phenology.is_growing .= Int32(1)
-    cft = wet_cft(rate = 0.01)
-    Agrocosm.excess_water!(cft, crop, fill(TW(40.0), 1))
-    after_one = state.phenology.harvest_recovery_fraction[1]
-    Agrocosm.excess_water!(cft, crop, fill(TW(40.0), 1))
-    @test state.phenology.harvest_recovery_fraction[1] < after_one
-    # A dry day afterwards does not put the crop back on its feet.
-    Agrocosm.excess_water!(cft, crop, fill(TW(0.0), 1))
-    @test state.phenology.harvest_recovery_fraction[1] ≈ TW(1) - TW(0.4)
-    # Clamped at zero however wet it gets.
-    for _ in 1:50
-        Agrocosm.excess_water!(cft, crop, fill(TW(500.0), 1))
+    cft = wet_cft(rate = 0.002)
+    for _ in 1:5
+        Agrocosm.excess_water!(cft, crop, fill(TW(40.0), 1))
     end
-    @test state.phenology.harvest_recovery_fraction[1] == zero(TW)
+    # A dry spell afterwards does not put the crop back on its feet.
+    before = state.phenology.heavy_rain_excess[1]
+    for _ in 1:20
+        Agrocosm.excess_water!(cft, crop, fill(TW(0.0), 1))
+    end
+    @test state.phenology.heavy_rain_excess[1] == before
 end
 
 @testset "sowing restores the recovery fraction" begin
@@ -70,8 +94,8 @@ end
     # reason `grain_set_fraction` is reset in `cultivate!`.
     source = read(joinpath(@__DIR__, "..", "..", "..", "src", "processes", "crop",
                            "cultivate.jl"), String)
-    @test occursin("harvest_recovery_fraction[cell] = one(T)", source)
-    @test :harvest_recovery_fraction in
+    @test occursin("heavy_rain_excess[cell] = zero(T)", source)
+    @test :heavy_rain_excess in
           fieldnames(typeof(Agrocosm.crop_prognostic(
               test_model_state(init_crop(1, identity))).phenology))
 end
@@ -95,8 +119,16 @@ end
     @test Agrocosm.cft2.heavy_rain_threshold == TW(20.0)   # rice, +1.344
     @test Agrocosm.cft3.heavy_rain_threshold == TW(10.0)   # maize, +1.695
     @test Agrocosm.cft9.heavy_rain_threshold == TW(20.0)   # soybean, +1.508
+    # Tolerances are the 75th percentile of the accumulation each crop meets.
+    @test Agrocosm.cft1.heavy_rain_tolerance == TW(157.6)
+    @test Agrocosm.cft2.heavy_rain_tolerance == TW(139.1)
+    @test Agrocosm.cft3.heavy_rain_tolerance == TW(247.7)
+    @test Agrocosm.cft9.heavy_rain_tolerance == TW(97.5)
     for cft in (Agrocosm.cft1, Agrocosm.cft2, Agrocosm.cft3, Agrocosm.cft9)
         @test cft.heavy_rain_rate == TW(0.002)
+        # The tolerance must exceed the MEDIAN season or the term is a tax on a
+        # wet climate rather than a wet year.
+        @test cft.heavy_rain_tolerance > TW(50.0)
     end
 end
 

@@ -9,7 +9,12 @@ function harvest_crop!(crop,
                        residue_frac::AbstractArray{T},
                        day::Int;
                        output_row::Union{Nothing, Integer} = nothing,
-                       annual_output_row::Union{Nothing, Integer} = nothing
+                       annual_output_row::Union{Nothing, Integer} = nothing,
+                       # Excess water, as two scalars rather than the CFT: this
+                       # function does not otherwise take crop parameters, and a
+                       # rate of zero is bitwise the behaviour without it.
+                       heavy_rain_tolerance::T = zero(T),
+                       heavy_rain_rate::T = zero(T),
 ) where {T <: AbstractFloat}
     annual_row = something(annual_output_row, 0)
 
@@ -39,7 +44,7 @@ function harvest_crop!(crop,
         output.annual.active_window_npp,
         output.annual.active_hi_binding_days,
         crop_prognostic(crop).carbon.storage,
-        crop_prognostic(crop).phenology.harvest_recovery_fraction,
+        crop_prognostic(crop).phenology.heavy_rain_excess,
         crop_prognostic(crop).carbon.leaf,
         crop_prognostic(crop).carbon.pool,
         crop_prognostic(crop).carbon.root,
@@ -66,6 +71,8 @@ function harvest_crop!(crop,
         output.calendar.harvesting_year,
         annual_row,
         day,
+        heavy_rain_tolerance,
+        heavy_rain_rate,
     )
 
     daily_sources = (
@@ -335,7 +342,7 @@ end
         active_window_npp::AbstractVector{T},
         active_hi_binding_days::AbstractVector{T},
         storage_carbon::AbstractVector{T},
-        harvest_recovery_fraction::AbstractVector{T},
+        heavy_rain_excess::AbstractVector{T},
     leaf_carbon::AbstractVector{T},
     pool_carbon::AbstractVector{T},
     root_carbon::AbstractVector{T},
@@ -362,6 +369,8 @@ end
     output_harvesting_year::AbstractMatrix{S},
     annual_output_row::Integer,
     day::Integer,
+    heavy_rain_tolerance::T,
+    heavy_rain_rate::T,
 ) where {T <: AbstractFloat, S <: Integer, B <: Bool}
     cell = @index(Global)
     harvested = !harvesting_previous[cell] && harvesting[cell]
@@ -378,9 +387,12 @@ end
         # left standing in the field - lodged, sprouted, diseased or simply not
         # reachable - stays on the surface as residue, so the carbon and nitrogen
         # balances are unchanged and `check_conservation_gates.py` still closes.
-        # `harvest_recovery_fraction` is one unless `excess_water` is on, which
-        # makes this bitwise the previous behaviour by default.
-        recovery = harvest_recovery_fraction[cell]
+        # `heavy_rain_excess` is zero unless `excess_water` is on, and the rate
+        # ships at zero for a crop with no tolerance set, so this is bitwise the
+        # previous behaviour by default.
+        recovery = excess_water_recovery(
+            heavy_rain_excess[cell], heavy_rain_tolerance, heavy_rain_rate,
+        )
         unrecovered_carbon = storage_carbon[cell] * (one(T) - recovery)
         unrecovered_nitrogen = storage_nitrogen[cell] * (one(T) - recovery)
         crop_yield[cell] = storage_carbon[cell] * recovery

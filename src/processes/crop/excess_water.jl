@@ -54,13 +54,14 @@
 """
     excess_water!(cft, crop, precipitation)
 
-Reduce `harvest_recovery_fraction` by today's excess of daily rainfall above this
-crop's absolute threshold, anywhere in the growing season.
+Accumulate today's rainfall excess above this crop's absolute threshold into the
+season's total. The conversion into a recovery loss happens at harvest, once the
+total passes the crop's tolerance.
 """
 function excess_water!(CFT::CFTParameters, crop, precipitation)
     launch_1D!(
         excess_water_kernel!,
-        crop_prognostic(crop).phenology.harvest_recovery_fraction,
+        crop_prognostic(crop).phenology.heavy_rain_excess,
         crop_prognostic(crop).phenology.is_growing,
         precipitation,
         CFT,
@@ -69,37 +70,48 @@ function excess_water!(CFT::CFTParameters, crop, precipitation)
 end
 
 """
-    excess_water_loss(rainfall, threshold, growing, rate)
+    heavy_rain_excess_today(rainfall, threshold, growing)
 
-Recovery lost today: linear in the millimetres by which the day's rainfall
-exceeds the threshold, zero below it and zero outside the season.
+Millimetres by which today's rainfall exceeds the threshold, zero below it and
+zero outside the season.
 
-Linear in the EXCESS rather than counting heavy days, for the reasons
-`anthesis_heat_loss` gives: a count is not differentiable, and a 60 mm day is not
-a 20.1 mm day.
+Millimetres rather than a day count, for the reasons `anthesis_heat_loss` gives:
+a count is not differentiable, and a 60 mm day is not a 20.1 mm day.
 """
-@inline function excess_water_loss(
-    rainfall::T, threshold::T, growing::Bool, rate::T,
+@inline function heavy_rain_excess_today(
+    rainfall::T, threshold::T, growing::Bool,
 ) where {T <: AbstractFloat}
     growing || return zero(T)
-    return max(zero(T), rate * (rainfall - threshold))
+    return max(zero(T), rainfall - threshold)
+end
+
+"""
+    excess_water_recovery(season_excess, tolerance, rate)
+
+The fraction of the standing crop recovered at harvest.
+
+One below the tolerance and falling linearly above it, clamped at zero. The
+tolerance is what makes this a wet-YEAR term rather than a tax on a wet climate:
+without it a rate large enough to matter in a wet year took 54% of rice yield in
+an average one, because rice grows where heavy rain is normal.
+"""
+@inline function excess_water_recovery(
+    season_excess::T, tolerance::T, rate::T,
+) where {T <: AbstractFloat}
+    return clamp(one(T) - rate * max(zero(T), season_excess - tolerance),
+                 zero(T), one(T))
 end
 
 @kernel inbounds = true function excess_water_kernel!(
-    harvest_recovery_fraction::AbstractVector{T},
+    heavy_rain_excess::AbstractVector{T},
     is_growing::AbstractVector{S},
     precipitation::AbstractVector{T},
     CFT::CFTParameters,
 ) where {T <: AbstractFloat, S}
     cell = @index(Global)
-    @unpack heavy_rain_threshold, heavy_rain_rate = CFT
+    @unpack heavy_rain_threshold = CFT
     growing = is_growing[cell] != zero(S)
-    loss = excess_water_loss(
-        precipitation[cell], T(heavy_rain_threshold), growing, T(heavy_rain_rate),
+    heavy_rain_excess[cell] += heavy_rain_excess_today(
+        precipitation[cell], T(heavy_rain_threshold), growing,
     )
-    # Monotone and clamped, so it composes in any order with anything else that
-    # reduces the same state - and irreversible, which is the point: a crop
-    # flattened in July is not standing again in September.
-    harvest_recovery_fraction[cell] =
-        clamp(harvest_recovery_fraction[cell] - loss, zero(T), one(T))
 end

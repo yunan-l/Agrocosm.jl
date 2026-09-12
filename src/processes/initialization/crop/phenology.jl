@@ -21,9 +21,18 @@ mutable struct CropPhenology{A, B, I}
     # express terminal heat at all. Prognostic for the same reason as its
     # sibling - starch not deposited is not deposited later.
     grain_fill_fraction::A
-    # Surviving fraction of the standing crop that is actually RECOVERED at
-    # harvest (0-1), reduced irreversibly by heavy-rain days and reset to one at
-    # sowing. A third pathway, distinct from both siblings: grain set fixes the
+    # Accumulated rainfall EXCESS above this crop's heavy-rain threshold over the
+    # season (mm), reset to zero at sowing, and converted into a recovery loss at
+    # harvest once it passes the crop's tolerance.
+    #
+    # An accumulator with a tolerance rather than a daily fraction, because the
+    # first version charged for every heavy day and so took 54% of rice yield in
+    # an AVERAGE season - the term was pricing a normal climate, not a wet year.
+    # A field tolerates ordinary heavy rain; damage begins when the season's
+    # accumulation exceeds what the drainage, the standing crop and the harvest
+    # window can absorb. That is the same structure as the FAO-56 supply plateau,
+    # which is the one mechanism in this project that lowered variance and raised
+    # correlation at once. A third pathway, distinct from both siblings: grain set fixes the
     # number of grains and grain filling their weight, and neither can express a
     # crop that grew normally and was then lodged, sprouted, diseased or left
     # unharvestable in a wet field.
@@ -36,7 +45,7 @@ mutable struct CropPhenology{A, B, I}
     # five days a 75%-clay soil reaches 23% of its gravitational pore space,
     # since rejected rainfall leaves instantly as surface runoff rather than
     # ponding. See `docs/20`.
-    harvest_recovery_fraction::A
+    heavy_rain_excess::A
 end
 
 """Static and current-day algebraically derived phenology variables."""
@@ -62,7 +71,7 @@ function init_crop_phenology(::Type{T}, cell_size::Int, device) where {T <: Abst
         device(zeros(Int32, cell_size)),
         device(ones(T, cell_size)),
         device(ones(T, cell_size)),
-        device(ones(T, cell_size)),
+        device(zeros(T, cell_size)),
     )
 end
 
