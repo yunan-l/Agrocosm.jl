@@ -332,6 +332,7 @@ function process_settings(config)
     name in ablation_rungs() && return ablation_configuration(name; shared...)
     name === :tmax_sink && return ablation_daily_statistic_sink_configuration()
     name === :anthesis_heat && return ablation_anthesis_heat_configuration()
+    name === :cold_sterility && return ablation_cold_sterility_configuration()
     name === :daily_sink &&
         return ablation_daily_assimilation_sink_configuration(; shared...)
     name === :daily_sink_air && return ablation_daily_assimilation_sink_configuration(;
@@ -342,8 +343,8 @@ function process_settings(config)
         shared...)
     throw(ArgumentError(
         "unknown [processes] configuration $name; expected one of " *
-        "$(ablation_rungs()) or :tmax_sink, :anthesis_heat, :daily_sink, " *
-        ":daily_sink_air, :terminal_only, :production",
+        "$(ablation_rungs()) or :tmax_sink, :anthesis_heat, :cold_sterility, " *
+        ":daily_sink, :daily_sink_air, :terminal_only, :production",
     ))
 end
 
@@ -361,7 +362,9 @@ function scaled_cft(cft, scale::Real)
              # Anthesis heat ships at its bound too, so the same ray carries it.
              # In an `anthesis_heat` arm the other four are off, so scaling this
              # one is scaling that arm alone.
-             :heat_day_rate)
+             :heat_day_rate,
+             # Cold sterility likewise, and likewise alone in its own arm.
+             :cold_night_rate)
     T = typeof(cft.hiopt)
     return CFTParameters{T, Int32}(;
         (field => (field in rates ? T(scale * getfield(cft, field)) :

@@ -67,7 +67,8 @@ export AblationStep, ABLATION_LADDER, ablation_rungs, ablation_step
 export ablation_configuration, ablation_ladder_settings
 export ablation_air_driven_sink_configuration
 export ablation_daily_assimilation_sink_configuration
-export ablation_anthesis_heat_configuration, ablation_daily_statistic_sink_configuration
+export ablation_anthesis_heat_configuration, ablation_cold_sterility_configuration
+export ablation_daily_statistic_sink_configuration
 export ablation_terminal_heat_configuration
 export ablation_metrics, ablation_report
 export DiurnalConfig, DiurnalForcing, diurnal_configuration, diurnal_shape_code
@@ -197,6 +198,7 @@ include("processes/crop/photosynthesis.jl")
 include("processes/crop/photosynthesis_subdaily.jl")
 include("processes/crop/reproductive_sink.jl")
 include("processes/crop/anthesis_heat.jl")
+include("processes/crop/cold_sterility.jl")
 include("processes/crop/heat_exposure.jl")
 include("processes/crop/terminal_heat.jl")
 include("processes/crop/water_sterility.jl")

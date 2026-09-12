@@ -134,6 +134,7 @@ function initialize_simulation(
     organ_temperature::Bool = false,
     reproductive_sink::Bool = false,
     anthesis_heat::Bool = false,
+    cold_sterility::Bool = false,
     terminal_heat::Bool = false,
     water_sterility::Bool = false,
     water_filling::Bool = false,
@@ -194,6 +195,7 @@ function initialize_simulation(
         organ_temperature,
         reproductive_sink,
         anthesis_heat,
+        cold_sterility,
         terminal_heat,
         water_sterility,
         water_filling,
@@ -330,6 +332,7 @@ function _transition_range!(
         organ_temperature = simulation.config.organ_temperature,
         reproductive_sink = simulation.config.reproductive_sink,
         anthesis_heat = simulation.config.anthesis_heat,
+        cold_sterility = simulation.config.cold_sterility,
         terminal_heat = simulation.config.terminal_heat,
         water_sterility = simulation.config.water_sterility,
         water_filling = simulation.config.water_filling,
@@ -530,7 +533,7 @@ function run_simulation!(
     return simulation
 end
 
-const _CHECKPOINT_FORMAT_VERSION = 13
+const _CHECKPOINT_FORMAT_VERSION = 14
 const _MODEL_STATE_SCHEMA_VERSION = 3
 
 _checkpoint_snapshot(values::AbstractArray) = Array(values)
@@ -604,7 +607,10 @@ function _simulation_checkpoint(simulation::CropSimulation)
             # sub-daily run. Adding them is why the format version is 8, and
             # `subdaily_heat_exposure` is why it is now 9: it changes which
             # kernel writes `heat_exposure_hours`, so a state carried across it
-            # would have the sink reading a differently-produced field.
+            # would have the sink reading a differently-produced field. Version
+            # 14 adds `cold_sterility`: a checkpoint written before it exists
+            # carries no such field, and reading one would fail with a missing
+            # NamedTuple field rather than a version mismatch.
             subdaily_photosynthesis = simulation.config.subdaily_photosynthesis,
             subdaily_steps = simulation.config.subdaily_steps,
             diurnal_shape = simulation.config.diurnal_shape,
@@ -614,6 +620,7 @@ function _simulation_checkpoint(simulation::CropSimulation)
             organ_temperature = simulation.config.organ_temperature,
             reproductive_sink = simulation.config.reproductive_sink,
             anthesis_heat = simulation.config.anthesis_heat,
+            cold_sterility = simulation.config.cold_sterility,
             terminal_heat = simulation.config.terminal_heat,
             water_sterility = simulation.config.water_sterility,
             water_filling = simulation.config.water_filling,
@@ -697,6 +704,8 @@ function _validate_checkpoint_target(simulation::CropSimulation, checkpoint)
         ("reproductive sink", metadata.reproductive_sink,
          simulation.config.reproductive_sink),
         ("anthesis heat", metadata.anthesis_heat, simulation.config.anthesis_heat),
+        ("cold sterility", metadata.cold_sterility,
+         simulation.config.cold_sterility),
         ("terminal heat", metadata.terminal_heat, simulation.config.terminal_heat),
         ("water sterility", metadata.water_sterility,
          simulation.config.water_sterility),

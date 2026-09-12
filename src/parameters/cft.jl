@@ -327,7 +327,36 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     # and must stay one - calibrating to it would make this a process-flavoured
     # statistical correction rather than a measured mechanism.
     heat_day_rate::T = 0.02               # Grain set lost per degree-day above the threshold; 0 = inert.
+    # Cold sterility on an absolute daily-MINIMUM air temperature - the mirror of
+    # the three fields above, and the only representation of cold INJURY in the
+    # model. Swept the same way and reported in `docs/19`; unlike the heat sweep,
+    # this one is weak and only two of the four thresholds below are measured.
+    #
+    # ONE window for all four crops rather than four fitted ones. The sweep does
+    # not discriminate booting from flowering - maize scores +0.363 and +0.307,
+    # rice +0.220 and +0.394, on cell counts that differ by a factor of two - so
+    # fitting a window per crop would be fitting noise. 0.30-0.70 spans meiosis
+    # through anthesis, which is SIMRIW's sensitive period (DVI 0.75-1.2) and
+    # contains every crop's measured peak.
+    cold_start::T = 0.30                  # `fphu` at which cold sterility becomes possible.
+    cold_end::T = 0.70                    # `fphu` at which it ends.
+    cold_night_temperature::T = 17.0      # Daily-min air temperature below which cold sterility begins (°C).
+    # An UPPER BOUND on the same footing as `heat_day_rate`, and it ships AT the
+    # bound for the same reason: `rate_scale` multiplies it, and a rate of zero
+    # cannot be scaled up, so shipping it inert would make the arm unrunnable.
+    # Nothing leaks into a production run from this - the `cold_sterility`
+    # process flag is false everywhere except the arm that names it.
+    #
+    # Four nights at 15 C during the young-microspore stage sterilise
+    # cold-TOLERANT rice cultivars (Cruz et al. 2013, Food Energy Secur.);
+    # against a 17 C threshold that is 8 degree-days, and 0.04 puts a third of
+    # grain set on that exposure. It is CONSERVATIVE for the three frost crops:
+    # a -2 C night against a 2 C threshold is 4 degree-days and so 16% of grain
+    # set, where a real anthesis frost takes far more. The bound is set by the
+    # case the literature quantifies, not by the worst case it describes.
+    cold_night_rate::T = 0.04             # Grain set lost per degree-day below the threshold; 0 = inert.
 end
+
 
 """Return a CFT parameter set whose floating fields consistently use `T`."""
 function convert_precision(::Type{T}, cft::CFTParameters{<:AbstractFloat, S}) where {T <: AbstractFloat, S <: Integer}
@@ -363,7 +392,7 @@ function _crop_cft(;
     biological_fixation = false, bnf_temperature_limit = (0, 0),
     bnf_temperature_optimum = (0, 0), bnf_water_limit = (0, 0),
     bnf_potential = 0, bnf_maximum_npp_fraction = 0, bnf_carbon_cost = 0,
-    heat_day_temperature = 38.0,
+    heat_day_temperature = 38.0, cold_night_temperature = 17.0,
 )
     T = Float32
     return CFTParameters{T, Int32}(
@@ -425,6 +454,7 @@ function _crop_cft(;
         hiopt = hiopt,
         himin = himin,
         heat_day_temperature = T(heat_day_temperature),
+        cold_night_temperature = T(cold_night_temperature),
     )
 end
 
@@ -441,7 +471,16 @@ const cft1 = _crop_cft(id=1, path=1, temp_co2=(0, 40), temp_photos=(12, 17),
     #   +0.515, so the peak is poorly determined, and controlled-environment
     #   work puts wheat's critical daytime threshold far lower at 27.3 C. The
     #   least trustworthy of the four; not a convergence.
-    heat_day_temperature=36.0)
+    heat_day_temperature=36.0,
+    # wheat: sweep peak 0 C in the flowering window (+0.223), and the one crop
+    #   whose cold signal rests on most of its disaster cell-years (15,278 of
+    #   24,202) rather than a high-latitude fringe. Frost at anthesis aborting
+    #   formed grains is the damage STICS represents and no other model in
+    #   Barlow et al. (2015) does. Winterkill, the OTHER wheat cold loss, is not
+    #   this mechanism and is not represented: it kills the stand, not the
+    #   grain, and it is driven by crown temperature under snow, which an air
+    #   minimum predicts badly - the vegetative-window sweep sees +0.082.
+    cold_night_temperature=0.0)
 const cft2 = _crop_cft(id=2, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
     pb=24, ps=0, basetemp=8, sowing_method=SDATE_PRECIPITATION, temp_spring=18,
     fphuc=.10, flaimaxc=.05, fphuk=.50,
@@ -451,7 +490,15 @@ const cft2 = _crop_cft(id=2, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
     # rice: sweep peak 40 C (+0.498) with 38 C at +0.464, inside the noise,
     #   and the literature gives 37.2 C. Rice's heat signal is the weakest of
     #   the four and its disasters are largely outside what this represents.
-    heat_day_temperature=38.0)
+    heat_day_temperature=38.0,
+    # rice: 17 C is the LITERATURE value - the critical night temperature for
+    #   susceptible cultivars at the young-microspore stage, 15 C for tolerant
+    #   ones (Cruz et al. 2013). THE SWEEP DOES NOT CONFIRM IT: days below 15 C
+    #   in the flowering window score -0.073, and the only positive rice number,
+    #   +0.394 below 8 C, rests on 805 of 15,704 disaster cell-years. This is the
+    #   least trustworthy threshold in the struct, recorded as literature rather
+    #   than measurement, exactly as wheat's heat threshold is.
+    cold_night_temperature=17.0)
 const cft3 = _crop_cft(id=3, path=2, temp_co2=(8, 42), temp_photos=(21, 26),
     basetemp=5, sowing_method=SDATE_TEMPERATURE_PRECIPITATION, temp_spring=14,
     fphuc=.10, flaimaxc=.05, fphuk=.50, fphusen=.75,
@@ -460,7 +507,12 @@ const cft3 = _crop_cft(id=3, path=2, temp_co2=(8, 42), temp_photos=(21, 26),
     hiopt=.50, himin=.30,
     # maize: sweep peak 38 C (+1.076, the strongest signal in this project)
     #   against 37.9 C from controlled-environment pollen work.
-    heat_day_temperature=38.0)
+    heat_day_temperature=38.0,
+    # maize: sweep peak 2 C in the booting window (+0.363), the strongest cold
+    #   signal in this project and about a third of maize's heat signal. Frost
+    #   rather than chilling: the peak sits at the freezing point and decays
+    #   monotonically above it (+0.176 at 8 C, -0.086 at 15 C).
+    cold_night_temperature=2.0)
 const cft4 = _crop_cft(id=4, path=2, temp_co2=(6, 55), temp_photos=(20, 45),
     basetemp=8, sowing_method=SDATE_PRECIPITATION, temp_spring=12,
     fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.85,
@@ -505,7 +557,10 @@ const cft9 = _crop_cft(id=9, path=1, temp_co2=(5, 45), temp_photos=(28, 32),
     storage_ratio=.42, hiopt=.40, himin=.10,
     # soybean: sweep peak 38 C (+0.629); the literature reports complete
     #   sterility above 35 C daytime.
-    heat_day_temperature=38.0)
+    heat_day_temperature=38.0,
+    # soybean: sweep peak 0 C in the booting window (+0.169), the weakest of the
+    #   four and on 1,858 of 13,182 disaster cell-years. Frost, like maize.
+    cold_night_temperature=0.0)
 const cft10 = _crop_cft(id=10, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
     basetemp=14, sowing_method=SDATE_PRECIPITATION, temp_spring=15,
     fphuc=.15, flaimaxc=.01, fphuk=.50, fphusen=.75,

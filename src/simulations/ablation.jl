@@ -324,6 +324,35 @@ function ablation_anthesis_heat_configuration(; kwargs...)
 end
 
 """
+    ablation_cold_sterility_configuration(; kwargs...)
+
+Cold sterility on an absolute daily-minimum AIR temperature, alone.
+
+OFF the ladder for the same reason `ablation_anthesis_heat_configuration` is: it
+reads the forcing directly and shares nothing with the sub-daily machinery, so a
+cumulative rung would confound its contribution with theirs.
+
+It is also the only arm in this project that represents cold INJURY at all - the
+rest of the model treats low temperature as a development requirement or as a
+limb on assimilation, never as damage. Its threshold sweep is weaker than the
+heat one and only two of its four thresholds are measured rather than taken from
+the literature; `docs/19` records which, and why the arm is expected to be
+regional rather than global.
+"""
+function ablation_cold_sterility_configuration(; kwargs...)
+    owned = (map(step -> step.field, ABLATION_LADDER)...,
+             :subdaily_heat_exposure, :daily_statistic_exposure, :cold_sterility)
+    for key in keys(kwargs)
+        key in owned && throw(ArgumentError(
+            "$key is set by this configuration; it is a fixed comparison cell",
+        ))
+    end
+    return (; subdaily_photosynthesis = false, subdaily_heat_exposure = false,
+            daily_statistic_exposure = false, organ_temperature = false,
+            reproductive_sink = false, cold_sterility = true, kwargs...)
+end
+
+"""
     ablation_terminal_heat_configuration(; organ_temperature = true,
                                          daily_statistic = false, kwargs...)
 

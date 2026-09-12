@@ -25,6 +25,7 @@ function _daily_crop!(
     organ_temperature::Bool = false,
     reproductive_sink::Bool = false,
     anthesis_heat::Bool = false,
+    cold_sterility::Bool = false,
     terminal_heat::Bool = false,
     water_sterility::Bool = false,
     water_filling::Bool = false,
@@ -117,6 +118,12 @@ function _daily_crop!(
     anthesis_heat && !hasproperty(climate, :diurnal_range) && throw(ArgumentError(
         "anthesis heat requires a `diurnal_range` climate field (tasmax - tasmin); " *
         "a daily run without it cannot form a daily maximum",
+    ))
+    # Its mirror, and it needs the range for the mirror reason: a daily MINIMUM
+    # cannot be recovered from a mean either.
+    cold_sterility && !hasproperty(climate, :diurnal_range) && throw(ArgumentError(
+        "cold sterility requires a `diurnal_range` climate field (tasmax - tasmin); " *
+        "a daily run without it cannot form a daily minimum",
     ))
     if organ_temperature
         subdaily_config === nothing && throw(ArgumentError(
@@ -447,6 +454,14 @@ function _daily_crop!(
         # exposure path is on. Same state and same clamp as the sink above, so
         # the two are order-independent.
         anthesis_heat && anthesis_heat!(
+            cftparameters, state, dailyWeather.temp,
+            view(climate.diurnal_range, climate_day, :),
+        )
+        # The cold mirror, reading the same two forcing channels and subtracting
+        # from the same clamped state, so it is order-independent against all of
+        # the above. Placed here rather than beside the vernalization code
+        # because this is grain-set damage, not a development requirement.
+        cold_sterility && cold_sterility!(
             cftparameters, state, dailyWeather.temp,
             view(climate.diurnal_range, climate_day, :),
         )

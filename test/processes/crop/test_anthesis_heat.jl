@@ -133,7 +133,11 @@ end
         end
         state.phenology.grain_set_fraction[1]
     end
-    @test run((:anthesis, :sink)) == run((:sink, :anthesis))
+    # To an ulp, not bitwise, for the reason spelled out in
+    # `test_cold_sterility.jl`: float subtraction is not associative. The `==`
+    # this replaces passed only because these particular values happened to
+    # round the same way.
+    @test run((:anthesis, :sink)) ≈ run((:sink, :anthesis)) atol = eps(T32)
 end
 
 @testset "the flag reaches the model through the public entry" begin
