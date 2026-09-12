@@ -135,3 +135,23 @@ end
     end
     @test run((:anthesis, :sink)) == run((:sink, :anthesis))
 end
+
+@testset "the flag reaches the model through the public entry" begin
+    # The unit tests above call `anthesis_heat!` directly, which is exactly how a
+    # missing keyword on `initialize_simulation` survived them and failed all 24
+    # global jobs instead. Every process flag has to be threaded through the API
+    # layer as well as the daily driver, so assert the whole chain: the keyword
+    # is accepted, it lands in the config, and the ablation configuration that
+    # names it produces it.
+    @test :anthesis_heat in Base.kwarg_decl(
+        first(methods(Agrocosm.initialize_simulation)))
+    configuration = Agrocosm.ablation_anthesis_heat_configuration()
+    @test configuration.anthesis_heat === true
+    @test configuration.reproductive_sink === false
+    # Every key this configuration sets must be a keyword the entry accepts, or
+    # it fails only once a global run reaches a compute node.
+    accepted = Set(Base.kwarg_decl(first(methods(Agrocosm.initialize_simulation))))
+    for key in keys(configuration)
+        @test key in accepted
+    end
+end
