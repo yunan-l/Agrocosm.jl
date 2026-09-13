@@ -103,7 +103,85 @@ end
     candidates = collect(methods(extension._enzyme_continuous_transition!))
     method = argmax(m -> m.nargs, candidates)
     names = Base.method_argnames(method)
-    @test names[end] === :cold_sterility
-    @test names[end - 1] === :anthesis_heat
-    @test names[end - 2] === :terminal_heat
+    # `excess_water` joined the tail on 2026-09-13 and this assertion is how the
+    # convention is enforced: it FAILED on that change, which is the whole point
+    # of writing the order down rather than trusting the comment beside it.
+    @test names[end] === :excess_water
+    @test names[end - 1] === :cold_sterility
+    @test names[end - 2] === :anthesis_heat
+    @test names[end - 3] === :terminal_heat
+end
+
+@testset "Excess water reaches the WEATHER gradient, not only the parameters" begin
+    # The third absolute-threshold mechanism, and the one that differs in kind:
+    # `anthesis_heat` and `cold_sterility` read `climate.diurnal_range`, which is
+    # a fixed auxiliary and Const, so their sensitivity can only flow through the
+    # CFT parameters. `excess_water` reads `daily_weather.prec`, which IS the
+    # forcing array's second slice - a CONTROL - so it must also change
+    # d(yield)/d(precipitation). A wiring that reached the parameters but not the
+    # weather would pass a parameter-gradient test and still report a wrong
+    # attribution figure, which is the whole quantity this project delivers.
+    T = Float64
+    # The fixture rains a constant 2 mm/day, so the threshold goes below that or
+    # the mechanism never fires. Its wheat season is THIRTY-ONE days, not the
+    # 200 a real one runs, so a 1 mm threshold accumulates about 31 mm - the
+    # shipped 50 mm tolerance would never be reached and every assertion below
+    # would pass vacuously on a mechanism that did nothing. Tolerance 5 mm and
+    # rate 0.01 leave roughly a quarter of the yield to charge, which is large
+    # enough to resolve against a finite difference.
+    knobs = (; heavy_rain_threshold = 1.0, heavy_rain_tolerance = 5.0,
+             heavy_rain_rate = 0.01)
+    settings = (; irrigation = false, nitrogen_limit_vcmax = true,
+                crop_resp_fix = true)
+    wet = weather_attribution_fixture(1; T, window_days = :season,
+                                      excess_water = true, knobs...)
+    dry = weather_attribution_fixture(1; T, window_days = :season, knobs...)
+
+    # It must actually bite, or everything below is vacuous.
+    on = Agrocosm.weather_harvest_replay(wet.forcing, wet.state, wet.cft,
+        wet.parameters, wet.climate, wet.days, wet.harvest_day;
+        excess_water = true, settings...)
+    off = Agrocosm.weather_harvest_replay(dry.forcing, dry.state, dry.cft,
+        dry.parameters, dry.climate, dry.days, dry.harvest_day; settings...)
+    @test on.yield < off.yield
+    @test on.yield > 0
+
+    result = enzyme_weather_harvest_gradient(wet.forcing, wet.state, wet.cft,
+        wet.parameters, wet.climate, wet.days, wet.harvest_day;
+        block_days = 30, excess_water = true, settings...)
+    # The primal check is the one that would have caught a terminal seed that
+    # skipped `harvest_crop!`'s recovery multiplication - the AD path never calls
+    # that kernel, so the recovery has to be applied to the block terminal by
+    # hand, and this assertion is what says it was.
+    @test result.primal ≈ result.production_yield rtol = 1e-3 atol = 1e-5
+    @test result.reverse_primal ≈ result.primal rtol = 1e-10 atol = 1e-12
+    @test all(isfinite, result.gradient)
+
+    baseline = enzyme_weather_harvest_gradient(dry.forcing, dry.state, dry.cft,
+        dry.parameters, dry.climate, dry.days, dry.harvest_day;
+        block_days = 30, settings...)
+    # PRECIPITATION is channel 2 of `WEATHER_VARIABLES`. Turning the mechanism on
+    # must move that channel, and it must move it DOWN: more rain now costs
+    # recovery, so the marginal value of a wet day falls.
+    wet_prec = result.gradient[wet.days, 1, 2]
+    dry_prec = baseline.gradient[dry.days, 1, 2]
+    @test !isapprox(wet_prec, dry_prec; rtol = 1e-6)
+    @test sum(wet_prec) < sum(dry_prec)
+
+    # And against a central finite difference on one day's rainfall, which is the
+    # only check that says the NUMBER is right rather than merely nonzero.
+    # Inside the 31-day window, not the 40th day of a season that does not have
+    # one: a probe past `last(days)` reads a structurally zero gradient and the
+    # finite difference agrees with it, so the check passes and means nothing.
+    probe = first(wet.days) + (length(wet.days) ÷ 3)
+    step = T(0.05)
+    function replay_with(delta)
+        forcing = copy(wet.forcing)
+        forcing[probe, 1, 2] += delta
+        return Agrocosm.weather_harvest_replay(forcing, wet.state, wet.cft,
+            wet.parameters, wet.climate, wet.days, wet.harvest_day;
+            excess_water = true, settings...).yield
+    end
+    finite = (replay_with(step) - replay_with(-step)) / (2 * step)
+    @test result.gradient[probe, 1, 2] ≈ finite rtol = 2e-2 atol = 1e-6
 end

@@ -84,6 +84,7 @@ function Agrocosm.weather_harvest_replay(
     terminal_heat::Bool = false,
     anthesis_heat::Bool = false,
     cold_sterility::Bool = false,
+    excess_water::Bool = false,
 ) where {T <: AbstractFloat}
     _check_weather_case(forcing, initial_state, cft, climate, days, harvest_day)
     # Exactly one writer for the exposure fields, the same rule the production
@@ -135,7 +136,7 @@ function Agrocosm.weather_harvest_replay(
             irrigation, nitrogen_limit_vcmax, crop_resp_fix, diurnal_config,
             organ_temperature, reproductive_sink,
             heat_exposure_config, daily_statistic_exposure, terminal_heat,
-            anthesis_heat, cold_sterility,
+            anthesis_heat, cold_sterility, excess_water,
             update_vernalization_requirement = false, reuse_output = true)
         crop = Agrocosm.crop_prognostic(state)
         fluxes = Agrocosm.crop_fluxes(state)
@@ -205,6 +206,7 @@ function _weather_yield_block(
     reproductive_sink::Bool = false, heat_exposure_config = nothing,
     daily_statistic_exposure::Bool = false, terminal_heat::Bool = false,
     anthesis_heat::Bool = false, cold_sterility::Bool = false,
+    excess_water::Bool = false,
 )
     T = eltype(forcing)
     # A saved post-sowing state still carries the one-day event. Production's
@@ -217,22 +219,34 @@ function _weather_yield_block(
             irrigation, nitrogen_limit_vcmax, crop_resp_fix, nitrogen_limit_vcmax,
             forcing, pathway, diurnal_config, organ_temperature, reproductive_sink,
             heat_exposure_config, daily_statistic_exposure, terminal_heat,
-            anthesis_heat, cold_sterility,
+            anthesis_heat, cold_sterility, excess_water,
         )
     end
     # Production harvest_state_kernel! transfers storage carbon directly to
     # harvested yield before any harvest-day allocation. This terminal seed is
     # valid only for the independently verified, fixed calendar harvest.
-    return terminal ? Agrocosm.crop_prognostic(state).carbon.storage[1] / T(0.45) * T(0.01) : zero(T)
+    terminal || return zero(T)
+    storage = Agrocosm.crop_prognostic(state).carbon.storage[1]
+    # `harvest_crop!` multiplies the storage organ by the recovered fraction, and
+    # the AD path never calls it, so the same multiplication has to happen here or
+    # the gradient is taken of a different function than production computes. The
+    # primal check against `weather_harvest_replay` is what would catch its
+    # absence, and did.
+    excess_water || return storage / T(0.45) * T(0.01)
+    recovery = Agrocosm.excess_water_recovery(
+        Agrocosm.crop_prognostic(state).phenology.heavy_rain_excess[1],
+        T(cft.heavy_rain_tolerance), T(cft.heavy_rain_rate),
+    )
+    return storage * recovery / T(0.45) * T(0.01)
 end
 
-function _weather_reference(forcing, state, cft, parameters, climate, days, harvest_day, irrigation, nitrogen, respiration, diurnal_config = nothing, organ_temperature::Bool = false, reproductive_sink::Bool = false, heat_exposure_config = nothing, daily_statistic_exposure::Bool = false, terminal_heat::Bool = false, anthesis_heat::Bool = false, cold_sterility::Bool = false)
+function _weather_reference(forcing, state, cft, parameters, climate, days, harvest_day, irrigation, nitrogen, respiration, diurnal_config = nothing, organ_temperature::Bool = false, reproductive_sink::Bool = false, heat_exposure_config = nothing, daily_statistic_exposure::Bool = false, terminal_heat::Bool = false, anthesis_heat::Bool = false, cold_sterility::Bool = false, excess_water::Bool = false)
     reference = Agrocosm.weather_harvest_replay(
         forcing, state, cft, parameters, climate, days, harvest_day;
         irrigation, nitrogen_limit_vcmax = nitrogen, crop_resp_fix = respiration, diurnal_config,
         organ_temperature, reproductive_sink,
         heat_exposure_config, daily_statistic_exposure, terminal_heat,
-        anthesis_heat, cold_sterility,
+        anthesis_heat, cold_sterility, excess_water,
     )
     reference.schedule_matches || throw(ArgumentError(
         "fixed-event attribution requires exactly one harvest on day $harvest_day; observed $(reference.harvest_days)",
@@ -262,12 +276,13 @@ function Agrocosm.enzyme_weather_harvest_gradient(
     terminal_heat::Bool = false,
     anthesis_heat::Bool = false,
     cold_sterility::Bool = false,
+    excess_water::Bool = false,
 ) where {T <: AbstractFloat}
     block_days > 0 || throw(ArgumentError("block_days must be positive"))
     reference = _weather_reference(forcing, initial_state, cft, parameters, climate,
         days, harvest_day, irrigation, nitrogen_limit_vcmax, crop_resp_fix, diurnal_config,
         organ_temperature, reproductive_sink, heat_exposure_config,
-        daily_statistic_exposure, terminal_heat, anthesis_heat, cold_sterility)
+        daily_statistic_exposure, terminal_heat, anthesis_heat, cold_sterility, excess_water)
     state = deepcopy(initial_state)
     Agrocosm.enzyme_prepare_daily_state!(state)
     layer_depth = Tuple(state.inputs.soil.properties.layer_depth)
@@ -281,7 +296,7 @@ function Agrocosm.enzyme_weather_harvest_gradient(
             ranges[index], layer_depth, index == length(ranges), irrigation,
             nitrogen_limit_vcmax, crop_resp_fix, pathway, diurnal_config,
             organ_temperature, reproductive_sink, heat_exposure_config,
-            daily_statistic_exposure, terminal_heat, anthesis_heat, cold_sterility)
+            daily_statistic_exposure, terminal_heat, anthesis_heat, cold_sterility, excess_water)
     end
     isapprox(primal, reference.yield; rtol = primal_rtol, atol = primal_atol) ||
         throw(ArgumentError("weather AD primal $primal differs from production harvest $(reference.yield)"))
@@ -301,6 +316,7 @@ function Agrocosm.enzyme_weather_harvest_gradient(
             Enzyme.Const(reproductive_sink), Enzyme.Const(heat_exposure_config),
             Enzyme.Const(daily_statistic_exposure), Enzyme.Const(terminal_heat),
             Enzyme.Const(anthesis_heat), Enzyme.Const(cold_sterility),
+            Enzyme.Const(excess_water),
         )
         reverse_primal += result[2]
     end
@@ -322,6 +338,7 @@ function _parameter_yield_block(
     crop_resp_fix::Bool, pathway, diurnal_config, organ_temperature::Bool,
     reproductive_sink::Bool, heat_exposure_config, daily_statistic_exposure::Bool,
     terminal_heat::Bool, anthesis_heat::Bool, cold_sterility::Bool,
+    excess_water::Bool,
 )
     cft = _replace_cft_parameters(base_cft, theta, parameter_names)
     return _weather_yield_block(
@@ -329,6 +346,7 @@ function _parameter_yield_block(
         irrigation, nitrogen_limit_vcmax, crop_resp_fix, pathway, diurnal_config,
         organ_temperature, reproductive_sink, heat_exposure_config,
         daily_statistic_exposure, terminal_heat, anthesis_heat, cold_sterility,
+        excess_water,
     )
 end
 
@@ -370,6 +388,7 @@ function Agrocosm.enzyme_process_parameter_gradient(
     terminal_heat::Bool = false,
     anthesis_heat::Bool = false,
     cold_sterility::Bool = false,
+    excess_water::Bool = false,
 ) where {T <: AbstractFloat}
     block_days > 0 || throw(ArgumentError("block_days must be positive"))
     length(theta) == length(parameter_names) || throw(DimensionMismatch(
@@ -389,7 +408,7 @@ function Agrocosm.enzyme_process_parameter_gradient(
     reference = _weather_reference(forcing, initial_state, cft, parameters, climate,
         days, harvest_day, irrigation, nitrogen_limit_vcmax, crop_resp_fix,
         diurnal_config, organ_temperature, reproductive_sink, heat_exposure_config,
-        daily_statistic_exposure, terminal_heat, anthesis_heat, cold_sterility)
+        daily_statistic_exposure, terminal_heat, anthesis_heat, cold_sterility, excess_water)
     state = deepcopy(initial_state)
     Agrocosm.enzyme_prepare_daily_state!(state)
     layer_depth = Tuple(state.inputs.soil.properties.layer_depth)
@@ -404,7 +423,7 @@ function Agrocosm.enzyme_process_parameter_gradient(
             index == length(ranges), irrigation, nitrogen_limit_vcmax,
             crop_resp_fix, pathway, diurnal_config, organ_temperature,
             reproductive_sink, heat_exposure_config, daily_statistic_exposure,
-            terminal_heat, anthesis_heat, cold_sterility)
+            terminal_heat, anthesis_heat, cold_sterility, excess_water)
     end
     isapprox(primal, reference.yield; rtol = primal_rtol, atol = primal_atol) ||
         throw(ArgumentError("parameter AD primal $primal differs from production harvest $(reference.yield)"))
@@ -426,6 +445,7 @@ function Agrocosm.enzyme_process_parameter_gradient(
             Enzyme.Const(heat_exposure_config),
             Enzyme.Const(daily_statistic_exposure), Enzyme.Const(terminal_heat),
             Enzyme.Const(anthesis_heat), Enzyme.Const(cold_sterility),
+            Enzyme.Const(excess_water),
         )
         reverse_primal += result[2]
     end
@@ -448,12 +468,13 @@ function Agrocosm.enzyme_weather_forward_directional(
     terminal_heat::Bool = false,
     anthesis_heat::Bool = false,
     cold_sterility::Bool = false,
+    excess_water::Bool = false,
 ) where {T <: AbstractFloat}
     size(forcing) == size(direction) || throw(DimensionMismatch("direction shape mismatch"))
     _weather_reference(forcing, initial_state, cft, parameters, climate,
         days, harvest_day, irrigation, nitrogen_limit_vcmax, crop_resp_fix, diurnal_config,
         organ_temperature, reproductive_sink, heat_exposure_config,
-        daily_statistic_exposure, terminal_heat, anthesis_heat, cold_sterility)
+        daily_statistic_exposure, terminal_heat, anthesis_heat, cold_sterility, excess_water)
     state = deepcopy(initial_state)
     Agrocosm.enzyme_prepare_daily_state!(state)
     shadow = Agrocosm.enzyme_zero_tangent(state)
@@ -469,6 +490,7 @@ function Agrocosm.enzyme_weather_forward_directional(
         Enzyme.Const(reproductive_sink), Enzyme.Const(heat_exposure_config),
         Enzyme.Const(daily_statistic_exposure), Enzyme.Const(terminal_heat),
         Enzyme.Const(anthesis_heat), Enzyme.Const(cold_sterility),
+        Enzyme.Const(excess_water),
     )
     return (primal = result[2], directional = result[1])
 end
