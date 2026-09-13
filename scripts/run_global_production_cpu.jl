@@ -334,6 +334,14 @@ function run_global_production(
         # adjustment differ in no other field, so a manifest that omits it makes
         # them indistinguishable six months from now.
         "depletion_demand_slope" => Float64(simulation.cft.depletion_demand_slope),
+        # Same rule for the census refactors: a run with drought-shortened
+        # seasons and one without differ in no other recorded field, and the
+        # nitrogen exponent lives on the parameters rather than the CFT, so it
+        # is read back off the simulation too.
+        "drought_phenology_rate" => Float64(simulation.cft.drought_phenology_rate),
+        "stress_canopy_loss_rate" => Float64(simulation.cft.stress_canopy_loss_rate),
+        "nitrogen_uptake_water_exponent" =>
+            Float64(simulation.model_parameters.lpjml.nitrogen_uptake_water_exponent),
         "management_mode" => String(get(management, "mode", "")),
         "management_fixed_year" => Int(get(management, "fixed_year", 0)),
         "crop_resp_fix" => Bool(get(run, "crop_resp_fix", false)),

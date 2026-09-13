@@ -94,10 +94,11 @@ end
         1, 1; T = Float64, diagnostics = false, block_days = 1,
         backend = :cpu, safety_factor = 1,
     # 13462, up another 8 when `CropPhenology.grain_number` was added; 13454 when
-    # `SoilWater.ponding` was; 13446 before either. Each is one
+    # `SoilWater.ponding` was; 13446 before either; 13470 before
+    # `CropPhenology.lodging_exposure`. Each is one
     # Float64 per cell. This literal is the reason `_PERSISTENT_FLOAT_VALUES_PER_CELL`
     # cannot drift from the real field count without something failing.
-    ).persistent_state_bytes == 13470
+    ).persistent_state_bytes == 13478
     @test estimate.forcing_block_bytes == 64
     @test prefetched.host_forcing_bytes == estimate.host_forcing_bytes + 64
     @test prefetched.host_peak_bytes == estimate.host_peak_bytes + 64

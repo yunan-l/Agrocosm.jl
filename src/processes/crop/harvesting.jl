@@ -15,6 +15,9 @@ function harvest_crop!(crop,
                        # rate of zero is bitwise the behaviour without it.
                        heavy_rain_tolerance::T = zero(T),
                        heavy_rain_rate::T = zero(T),
+                       # Lodging, on the same contract for the same reason.
+                       lodging_tolerance::T = zero(T),
+                       lodging_rate::T = zero(T),
 ) where {T <: AbstractFloat}
     annual_row = something(annual_output_row, 0)
 
@@ -45,6 +48,7 @@ function harvest_crop!(crop,
         output.annual.active_hi_binding_days,
         crop_prognostic(crop).carbon.storage,
         crop_prognostic(crop).phenology.heavy_rain_excess,
+        crop_prognostic(crop).phenology.lodging_exposure,
         crop_prognostic(crop).carbon.leaf,
         crop_prognostic(crop).carbon.pool,
         crop_prognostic(crop).carbon.root,
@@ -73,6 +77,8 @@ function harvest_crop!(crop,
         day,
         heavy_rain_tolerance,
         heavy_rain_rate,
+        lodging_tolerance,
+        lodging_rate,
     )
 
     daily_sources = (
@@ -343,6 +349,7 @@ end
         active_hi_binding_days::AbstractVector{T},
         storage_carbon::AbstractVector{T},
         heavy_rain_excess::AbstractVector{T},
+        lodging_exposure::AbstractVector{T},
     leaf_carbon::AbstractVector{T},
     pool_carbon::AbstractVector{T},
     root_carbon::AbstractVector{T},
@@ -371,6 +378,8 @@ end
     day::Integer,
     heavy_rain_tolerance::T,
     heavy_rain_rate::T,
+    lodging_tolerance::T,
+    lodging_rate::T,
 ) where {T <: AbstractFloat, S <: Integer, B <: Bool}
     cell = @index(Global)
     harvested = !harvesting_previous[cell] && harvesting[cell]
@@ -390,8 +399,17 @@ end
         # `heavy_rain_excess` is zero unless `excess_water` is on, and the rate
         # ships at zero for a crop with no tolerance set, so this is bitwise the
         # previous behaviour by default.
+        # Two independent triggers on the same recovery fraction, multiplied
+        # rather than added: a crop cannot be lost twice. Measured over 886
+        # million cropland cell-days, wind years and rain years are different
+        # years - the per-cell interannual correlation between high-wind and
+        # heavy-rain day counts has a median of +0.033 - so the product is very
+        # nearly one or the other on any given cell-year rather than a
+        # double-count. Both are one when their rate is zero.
         recovery = excess_water_recovery(
             heavy_rain_excess[cell], heavy_rain_tolerance, heavy_rain_rate,
+        ) * lodging_recovery(
+            lodging_exposure[cell], lodging_tolerance, lodging_rate,
         )
         unrecovered_carbon = storage_carbon[cell] * (one(T) - recovery)
         unrecovered_nitrogen = storage_nitrogen[cell] * (one(T) - recovery)

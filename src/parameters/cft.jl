@@ -478,6 +478,25 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     #
     # SHIPS AT ZERO, which is bitwise the inherited canopy.
     stress_canopy_loss_rate::T = 0.0      # Standing LAI lost per day per unit stress; 0 = inert.
+    # Lodging. Daily-mean wind above which gusts reach Berry et al.'s (2003)
+    # 17-20 m/s failure band over a crop canopy; the gust factor over a rough
+    # surface is of order 1.7-2.0, so 8 m/s daily mean is the lower edge. The
+    # forcing reaches it on 2.98% of cropland cell-days, 1981-2016.
+    lodging_wind_threshold::T = 8.0       # Daily-mean wind at which overturning begins (m/s).
+    # Standing above-ground carbon at which the wind has a full crop to act on.
+    # Grain plus leaf, so the term is small before the ear fills. Set to the
+    # order of a filled canopy at the gate cells (200-500 gC/m2) rather than
+    # fitted; the exposure it produces is what a first global run MEASURES, and
+    # `lodging_tolerance` is then set from that distribution the way
+    # `heavy_rain_tolerance` was.
+    lodging_reference_load::T = 300.0     # Above-ground carbon at full susceptibility (gC m-2).
+    # What a season may accumulate before any damage, in (m/s)^2 day. MUST be set
+    # from a measured accumulation, not chosen: without a tolerance the term
+    # prices a windy climate rather than a windy year, which is the error
+    # `heavy_rain_tolerance` exists to prevent.
+    lodging_tolerance::T = 0.0            # Season exposure tolerated before damage ((m/s)^2 day).
+    # SHIPS AT ZERO. Nonzero is the arm.
+    lodging_rate::T = 0.0                 # Recovery lost per unit exposure beyond the tolerance; 0 = inert.
     # What a season is allowed to accumulate before any damage, in mm of rainfall
     # above `heavy_rain_threshold`. MEASURED as the AREA-WEIGHTED 90th percentile
     # of the accumulation each crop actually sees over 1981-2016, which is the

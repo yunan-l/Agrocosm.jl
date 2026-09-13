@@ -46,6 +46,19 @@ mutable struct CropPhenology{A, B, I}
     # since rejected rainfall leaves instantly as surface runoff rather than
     # ponding. See `docs/20`.
     heavy_rain_excess::A
+    # Season-accumulated lodging pressure, in (m/s)^2 day. A SECOND wet-year
+    # trigger, independent of `heavy_rain_excess` rather than a variant of it:
+    # measured over 886 million cropland cell-days, the year-to-year count of
+    # high-wind days and of heavy-rain days correlate at a median of +0.033 to
+    # +0.044 within a cell, and only 0.9-1.3% of cells reach |r| > 0.5. The
+    # rainfall trigger therefore fires on almost none of the wind years, even
+    # though its own header names lodging among the losses it stands for.
+    #
+    # Berry et al. (2003) put wheat's failure wind speed at 17-20 m/s at ear
+    # height; over a crop canopy a daily MEAN near 8-10 m/s carries gusts in
+    # that band. The forcing reaches it: 2.98% of cropland cell-days exceed
+    # 8 m/s and the global maximum daily mean is 32.79 m/s.
+    lodging_exposure::A
     # NPP accumulated inside the critical window, from which the grain number is
     # computed by a saturating response where it is used. Storing the DRIVER
     # rather than the result keeps that response in one place. This is the
@@ -83,8 +96,9 @@ function init_crop_phenology(::Type{T}, cell_size::Int, device) where {T <: Abst
         device(zeros(Int32, cell_size)),
         device(ones(T, cell_size)),
         device(ones(T, cell_size)),
-        device(zeros(T, cell_size)),
-        device(zeros(T, cell_size)),
+        device(zeros(T, cell_size)),   # heavy_rain_excess
+        device(zeros(T, cell_size)),   # lodging_exposure
+        device(zeros(T, cell_size)),   # window_assimilate
     )
 end
 

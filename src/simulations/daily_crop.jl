@@ -367,6 +367,11 @@ function _daily_crop!(
             heavy_rain_rate = excess_water ?
                 eltype(dailyWeather.temp)(cftparameters.heavy_rain_rate) :
                 zero(eltype(dailyWeather.temp)),
+            # No process flag: the rate is the switch, and at zero
+            # `lodging_recovery` returns exactly one.
+            lodging_tolerance =
+                eltype(dailyWeather.temp)(cftparameters.lodging_tolerance),
+            lodging_rate = eltype(dailyWeather.temp)(cftparameters.lodging_rate),
         )
         route_harvest_residues!(state, state)
         annual_output_offset += day_of_year == 365
@@ -525,6 +530,11 @@ function _daily_crop!(
         # harvest, so it is order-independent against everything above by
         # construction rather than by argument.
         excess_water && excess_water!(cftparameters, state, dailyWeather.prec)
+        # Gated by its own rate rather than a process flag, like
+        # `depletion_fraction`: it changes a response the ablation rungs do not
+        # name, and the kernel adds exactly zero when the rate is zero.
+        cftparameters.lodging_rate > 0 &&
+            lodging!(cftparameters, state, dailyWeather.wind, state)
         terminal_heat && terminal_heat!(cftparameters, state)
         # Order-independent against the heat sink: both only subtract from
         # `grain_set_fraction` and the state is clamped at zero.

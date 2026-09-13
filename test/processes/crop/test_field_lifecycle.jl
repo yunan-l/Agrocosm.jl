@@ -142,6 +142,13 @@ end
         # Separate state because lodging, sprouting and harvest loss take a crop
         # that already set and filled its grain.
         :heavy_rain_excess,
+        # The fourth, and a SECOND trigger on the same recovery fraction rather
+        # than a variant of the third: season-accumulated wind lodging pressure.
+        # Separate state because wind years and rain years are, measurably,
+        # different years - the per-cell interannual correlation between
+        # high-wind and heavy-rain day counts has a median of +0.033 over 886
+        # million cropland cell-days - so `heavy_rain_excess` cannot stand in.
+        :lodging_exposure,
         # NPP accumulated inside the critical window, which a saturating response
         # turns into a grain number - the one field here that is written
         # over a window and read for the rest of the season rather than reset or

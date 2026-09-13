@@ -308,6 +308,56 @@ function model_inputs(
     return model_initial_data(grid, soil, crop, initial_state)
 end
 
+"""Turn on the two stress responses the limitation census found missing.
+
+`[processes] drought_phenology_rate` lets water stress shorten the season after
+flowering, and `stress_canopy_loss_rate` lets a stressed crop shed leaf area.
+Both are CFT rates rather than process flags, for the same reason
+`depletion_fraction` is: they change a response the ladder's rungs do not name.
+Absent or zero is bitwise the inherited model.
+
+The census measured why each exists: season length and senescence date do not
+move at all under an 80% precipitation cut, and peak LAI moves +0.1% on wheat
+under a 50% cut. `docs/39`, `docs/40`.
+"""
+function with_stress_response(cft, phenology_spec, canopy_spec)
+    phenology_spec === nothing && canopy_spec === nothing && return cft
+    phenology = phenology_spec === nothing ? 0.0 : Float64(phenology_spec)
+    canopy = canopy_spec === nothing ? 0.0 : Float64(canopy_spec)
+    phenology >= 0 || error("drought_phenology_rate must be non-negative, got $phenology")
+    canopy >= 0 || error("stress_canopy_loss_rate must be non-negative, got $canopy")
+    canopy <= 1 || error("stress_canopy_loss_rate is a daily fraction, got $canopy")
+    phenology == 0 && canopy == 0 && return cft
+    T = typeof(cft.hiopt)
+    return CFTParameters{T, Int32}(;
+        (field => (field === :drought_phenology_rate ? T(phenology) :
+                   field === :stress_canopy_loss_rate ? T(canopy) :
+                   getfield(cft, field))
+         for field in fieldnames(CFTParameters))...)
+end
+
+"""Give soil water a gradient in nitrogen uptake instead of LPJmL's step.
+
+`[processes] nitrogen_uptake_water_exponent` takes 1 for the mass-flow-like
+linear form or 2 for the diffusion-like one; absent or zero leaves `w^0 == 1`
+and reproduces `nuptake_crop.c`'s `wscaler = w > eps ? 1 : 0` bitwise. It is a
+global coefficient rather than a CFT one because the transport it represents is
+a soil property, not a crop trait.
+"""
+function with_nitrogen_water(parameters, spec)
+    spec === nothing && return parameters
+    exponent = Float64(spec)
+    exponent >= 0 || error("nitrogen_uptake_water_exponent must be non-negative, got $exponent")
+    exponent == 0 && return parameters
+    T = typeof(parameters.lpjml.LAMBDA_OPT)
+    lpjml = typeof(parameters.lpjml)(;
+        (f => (f === :nitrogen_uptake_water_exponent ? T(exponent) :
+               getfield(parameters.lpjml, f))
+         for f in fieldnames(typeof(parameters.lpjml)))...)
+    return typeof(parameters)(lpjml, parameters.photosynthesis, parameters.snow,
+                              parameters.soil_thermal, parameters.soil_decomposition)
+end
+
 """Switch `lambda` from the fixed LAMBDA_OPT to the P-model least-cost optimum.
 
 `[processes] pmodel = "c3"` sets the published unit cost ratio, 146.0. It is a
@@ -475,12 +525,15 @@ function create_simulation(initial_data, selection, config, days, device, cft_id
     processes = get(config, "processes", Dict{String, Any}())
     rate_scale = Float64(get(processes, "rate_scale", 1.0))
     return initialize_simulation(
-        with_grain_sink(
-            with_depletion(scaled_cft(crop_cft(cft_id), rate_scale),
-                           get(processes, "depletion_fraction", nothing),
-                           Float64(get(processes, "depletion_scale", 1.0)), cft_id,
-                           get(processes, "depletion_demand_slope", nothing)),
-            get(processes, "grain_number", nothing), cft_id),
+        with_stress_response(
+            with_grain_sink(
+                with_depletion(scaled_cft(crop_cft(cft_id), rate_scale),
+                               get(processes, "depletion_fraction", nothing),
+                               Float64(get(processes, "depletion_scale", 1.0)), cft_id,
+                               get(processes, "depletion_demand_slope", nothing)),
+                get(processes, "grain_number", nothing), cft_id),
+            get(processes, "drought_phenology_rate", nothing),
+            get(processes, "stress_canopy_loss_rate", nothing)),
         initial_data;
         days,
         indices = collect(1:length(selection.cell_ids)),
@@ -490,8 +543,9 @@ function create_simulation(initial_data, selection, config, days, device, cft_id
         # `with_pmodel` returns its argument unchanged when `pmodel` is absent,
         # and `initialize_simulation` resolves `nothing` to exactly
         # `ModelParameters(T)`, so passing it explicitly is the same run.
-        model_parameters = with_pmodel(ModelParameters(Float32),
-                                       get(processes, "pmodel", nothing)),
+        model_parameters = with_nitrogen_water(
+            with_pmodel(ModelParameters(Float32), get(processes, "pmodel", nothing)),
+            get(processes, "nitrogen_uptake_water_exponent", nothing)),
         diagnostics,
         irrigation = irrigated,
         manure = management["manure"],

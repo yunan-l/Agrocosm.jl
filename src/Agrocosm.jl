@@ -98,6 +98,7 @@ export solve_lambda_c3!, solve_lambda_c4!
 # SOIL
 export apply_percolation_enthalpy!, soil_temperature!
 export pedotransfer!, soil_carbon!
+export lodging!
 export evaporation!, soil_infiltration!, soil_evapotranspiration!
 export soil_nitrogen!, nitrogen_transform!, soil_cn_decomposition!, nitrogen_deposition!, post_crop_nitrogen_losses!
 export soil_decomp_response!
@@ -204,6 +205,7 @@ include("processes/crop/reproductive_sink.jl")
 include("processes/crop/anthesis_heat.jl")
 include("processes/crop/cold_sterility.jl")
 include("processes/crop/excess_water.jl")
+include("processes/crop/lodging.jl")
 include("processes/crop/heat_exposure.jl")
 include("processes/crop/terminal_heat.jl")
 include("processes/crop/water_sterility.jl")

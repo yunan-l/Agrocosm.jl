@@ -39,6 +39,7 @@ function cultivate!(crop,
         crop_prognostic(crop).phenology.grain_set_fraction,
         crop_prognostic(crop).phenology.grain_fill_fraction,
         crop_prognostic(crop).phenology.heavy_rain_excess,
+        crop_prognostic(crop).phenology.lodging_exposure,
         crop_prognostic(crop).phenology.window_assimilate,
         current_phu,
         current_winter_type,
@@ -99,6 +100,7 @@ end
     grain_set_fraction::AbstractVector{T},
     grain_fill_fraction::AbstractVector{T},
     heavy_rain_excess::AbstractVector{T},
+    lodging_exposure::AbstractVector{T},
     window_assimilate::AbstractVector{T},
     phu::AbstractVector{T},
     winter_type::AbstractVector{B},
@@ -153,6 +155,7 @@ end
         grain_set_fraction[cell] = one(T)
         grain_fill_fraction[cell] = one(T)
         heavy_rain_excess[cell] = zero(T)
+        lodging_exposure[cell] = zero(T)
         # Grain number is SET during one window and fixed thereafter, so a stale
         # value would give the new season the previous one's grain load.
         window_assimilate[cell] = zero(T)

@@ -39,6 +39,8 @@ function merge_production_partitions(manifest_paths, output_path)
         for key in (
             "cft_id", "water_system", "processes_configuration", "rate_scale",
             "depletion_fraction", "depletion_demand_slope",
+            "drought_phenology_rate", "stress_canopy_loss_rate",
+            "nitrogen_uptake_water_exponent",
             "simulation_start_year", "simulation_end_year",
             "crop_resp_fix", "nitrogen_limit_vcmax",
             "config_fingerprint", "allocation_path", "pool_allocation_cell_policy",
