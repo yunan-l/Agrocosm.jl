@@ -193,8 +193,13 @@ end
     pmodel_lambda!(crop, temperature, specific_humidity, surface_pressure, co2;
                    beta, c4)
 
-Write the least-cost optimal `ci/ca` into the crop's `lambda`, replacing the fixed
-`LAMBDA_OPT` that LPJmL uses everywhere.
+Write the least-cost optimal `ci/ca` into `pmodel_chi`, which bounds the lambda
+solve from above.
+
+NOT into `lambda` directly. A first attempt did that and measured exactly zero
+change on a global arm, because `solve_lambda!` and the nitrogen recoupling both
+rewrite `lambda` later the same day - `LAMBDA_OPT` is only an initial value and
+this model already solves the ratio daily by its own criterion.
 
 This is the minimal faithful way to put the P-model into this lineage. The theory's
 central prediction IS the ci/ca ratio; every other quantity the model needs -
@@ -212,7 +217,7 @@ function pmodel_lambda!(crop, temperature, specific_humidity, surface_pressure, 
     beta > 0 && !c4 || return nothing
     launch_1D!(
         pmodel_lambda_kernel!,
-        crop_photosynthesis_auxiliary(crop).lambda,
+        crop_photosynthesis_auxiliary(crop).pmodel_chi,
         temperature,
         specific_humidity,
         surface_pressure,
@@ -223,7 +228,7 @@ function pmodel_lambda!(crop, temperature, specific_humidity, surface_pressure, 
 end
 
 @kernel inbounds = true function pmodel_lambda_kernel!(
-    lambda::AbstractVector{T},
+    pmodel_chi::AbstractVector{T},
     temperature::AbstractVector{T},
     specific_humidity::AbstractVector{T},
     surface_pressure::AbstractVector{T},
@@ -242,5 +247,5 @@ end
     # Clamped to the interval a ci/ca ratio can occupy. The optimum is inside it
     # for every realistic input; the clamp is against a pathological forcing cell
     # rather than against the theory.
-    lambda[cell] = clamp(optimum.chi, T(0.02), T(0.99))
+    pmodel_chi[cell] = clamp(optimum.chi, T(0.02), T(0.99))
 end

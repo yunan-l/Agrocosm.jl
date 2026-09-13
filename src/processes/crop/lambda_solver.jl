@@ -202,6 +202,7 @@ function solve_lambda_c3!(CFT::CFTParameters,
     launch_1D!(
         solve_lambda_c3_kernel!,
         crop_photosynthesis_auxiliary(crop).lambda,
+        crop_photosynthesis_auxiliary(crop).pmodel_chi,
         crop_photosynthesis_auxiliary(crop).vcmax,
         crop_photosynthesis_auxiliary(crop).temperature_stress,
         crop_canopy_auxiliary(crop).canopy_conductance,
@@ -436,6 +437,7 @@ end
 
 @kernel inbounds = true function solve_lambda_c3_kernel!(
     lambda::AbstractArray{T},
+    pmodel_chi::AbstractArray{T},
     vcmax::AbstractArray{T},
     tstress::AbstractArray{T},
     conductance::AbstractArray{T},
@@ -458,9 +460,15 @@ end
 
     if gpd > T(1e-5) && tstress[cell] >= T(1e-2) &&
        daylength[cell] > zero(T) && co2_cell > zero(T)
+        # The upper bound is the P-model's least-cost optimum when it is active,
+        # and LPJmL's own 0.85 otherwise. Bounding rather than replacing is what
+        # keeps BOTH responses: the solve still drops lambda under soil water
+        # stress, and can no longer exceed what atmospheric demand allows.
+        bound = pmodel_chi[cell] > zero(T) ?
+                min(T(0.85), pmodel_chi[cell]) : T(0.85)
         lambda[cell] = compute_lambda_c3_solution(
             fac, vcmax[cell], tstress[cell], b, co2_cell, temp[cell], apar[cell],
-            daylength[cell], lpjmlparams, photoparams,
+            daylength[cell], lpjmlparams, photoparams, bound, 30,
         )
     else
         # LPJmL bypasses photosynthesis and returns zero GPP here.

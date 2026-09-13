@@ -19,7 +19,16 @@ function daily_owned_arrays(state::ModelState)
             state.auxiliary.crop.canopy.canopy_conductance,
             state.auxiliary.crop.canopy.canopy_wet,
         ],
-        field_arrays(state.auxiliary.crop.photosynthesis),
+        # Every photosynthesis auxiliary EXCEPT `pmodel_chi`, which is written
+        # only when the P-model is switched on. It is not daily-owned in the
+        # sense this test means: with `pmodel_beta = 0` the kernel that writes it
+        # never runs, and the solver reads its zero as "no bound" and falls back
+        # to LPJmL's own 0.85. Poisoning it would therefore assert that an
+        # inactive mechanism still writes every day, which is the opposite of the
+        # ablation contract everything here ships with.
+        [getfield(state.auxiliary.crop.photosynthesis, name)
+         for name in fieldnames(typeof(state.auxiliary.crop.photosynthesis))
+         if name !== :pmodel_chi],
         [
             state.auxiliary.crop.stress.nitrogen_demand_total,
             state.auxiliary.crop.stress.nitrogen_demand_leaf,
@@ -85,6 +94,16 @@ end
 
 @testset "State and auxiliary fields have an explicit cross-day contract" begin
     crop = init_crop(2, identity)
+    @test propertynames(crop.auxiliary.photosynthesis) == (
+        :potential_vcmax, :vcmax, :nitrogen_limitation, :lambda,
+        :temperature_stress,
+        # The P-model's least-cost optimal ci/ca, written only when the P-model
+        # is on and read as the UPPER BOUND of the lambda solve. Not a
+        # replacement for `lambda`: LPJmL's solve encodes soil water limitation
+        # and the optimum encodes atmospheric demand, and measured on real cells
+        # the two correlate 0.03 to 0.05, so neither stands in for the other.
+        :pmodel_chi,
+    )
     @test propertynames(crop.auxiliary.stress) == (
         :nitrogen_demand_total,
         :nitrogen_demand_leaf,
