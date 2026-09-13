@@ -141,6 +141,7 @@ function infil_perc!(soil,
         soil_infil = T(lpjmlparams.soil_infil),
         soil_infil_litter = T(lpjmlparams.soil_infil_litter),
         ponding_capacity = T(lpjmlparams.ponding_capacity),
+        bottom_drainage_limit = T(lpjmlparams.bottom_drainage_limit),
         percthres = T(lpjmlparams.percthres),
         water_heat_capacity = T(thermalparams.water_heat_capacity),
         ice_heat_capacity = T(thermalparams.ice_heat_capacity),
@@ -355,6 +356,7 @@ end
 
     @unpack soil_layers, NPERCO, transfer_heat,
             soil_infil, soil_infil_litter, percthres, ponding_capacity,
+            bottom_drainage_limit,
             water_heat_capacity, ice_heat_capacity, volumetric_fusion_heat = kernel_params
     anion_excl = M(soil_anion_exclusion[cell])
 
@@ -498,6 +500,18 @@ end
                     soil_w[l, cell], soil_whcs[l, cell], percthres, soil_Ks[l, cell],
                     saturation, soil_beta_soil[l, cell], ice_fraction, saturation_factor,
                 )
+
+                # The base of the column is capped on the DAY's total, not on
+                # this slug: percolation is recomputed inside a loop bounded at
+                # 1000 iterations, so a per-call cap would permit a thousand
+                # times the intended drainage. `soil_outflux_f` is zeroed at
+                # kernel entry and accumulates exactly the bottom flux, so the
+                # remaining allowance is the cap minus what has already left.
+                if l == soil_layers
+                    perc = min(perc, max(
+                        bottom_drainage_limit - soil_outflux_f[cell], zero(T),
+                    ))
+                end
 
                 soil_w[l, cell] -= perc / soil_whcs[l, cell]
 
