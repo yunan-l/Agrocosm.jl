@@ -85,6 +85,11 @@ end
     @test occursin("compute_available_fraction(wr, adjusted_depletion)", source)
     @test occursin("crop_rootc[cell], adjusted_depletion)", source)
     @test occursin("adjusted_depletion = demand_adjusted_depletion(", source)
+    # Both call sites must pass the PT potential. A site that passes `demand`
+    # compiles, runs, and produces a mechanism that measurably does nothing.
+    @test occursin("equilibrium_evaporation[cell] * T(ALPHAM),\n                depletion_demand_slope", source)
+    @test occursin("pet_eeq[cell] * T(ALPHAM), T(depletion_demand_slope)", source)
+    @test !occursin("demand_adjusted_depletion(depletion_fraction, demand,", source)
 end
 
 @testset "FAO-56 adjusts its own p for evaporative demand" begin
@@ -92,8 +97,14 @@ end
     # `p + 0.04 * (5 - ET_c)`, bounded to [0.1, 0.8]. This is the same document
     # the tabulated values come from, so the ONLY thing worth asserting is that
     # the published arithmetic is reproduced and that it cannot fire by accident.
-    adjust(p, demand, slope) =
-        Agrocosm.demand_adjusted_depletion(TW(p), TW(demand), TW(slope))
+    # The second argument is the Priestley-Taylor POTENTIAL, not the model's
+    # conductance-limited `demand`. That distinction is the whole mechanism: the
+    # first global arm passed `demand`, which averages half the potential and sits
+    # below FAO-56's 5 mm/day reference nearly always, so the adjustment could only
+    # lengthen the plateau and every regional column came back within 0.003 of the
+    # unadjusted arm. Asserted at the call sites below.
+    adjust(p, potential_et, slope) =
+        Agrocosm.demand_adjusted_depletion(TW(p), TW(potential_et), TW(slope))
 
     # At the tabulated demand it is the identity, which is what makes the
     # published per-crop values still mean what the table says.

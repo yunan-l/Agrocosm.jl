@@ -242,7 +242,11 @@ end
         end
         supply = compute_transpiration_supply(
             emax, root_water, root_carbon[cell],
-            demand_adjusted_depletion(depletion_fraction, demand, depletion_demand_slope),
+            demand_adjusted_depletion(
+                depletion_fraction,
+                equilibrium_evaporation[cell] * T(ALPHAM),
+                depletion_demand_slope,
+            ),
         ) * fpc
         conductance[cell] = limited_conductance
 
@@ -404,7 +408,7 @@ this project ships with.
 end
 
 """
-    demand_adjusted_depletion(depletion_fraction, demand, slope)
+    demand_adjusted_depletion(depletion_fraction, potential_et, slope)
 
 FAO-56's own adjustment of `p` for evaporative demand.
 
@@ -420,16 +424,28 @@ the same failure for temperature from the other side: one absolute threshold
 applied everywhere puts its response where the observed sensitivity is not. Here
 the correction is published rather than inferred.
 
+`potential_et` is the Priestley-Taylor POTENTIAL, `eeq * ALPHAM`, and not the
+model's own `demand`. FAO-56's ET_c is the evapotranspiration of a WELL-WATERED
+crop; the model's demand is computed through canopy conductance, so it collapses
+under exactly the stress an arid cell should be reporting. Measured on five real
+cells: `demand` averages 1.17 to 2.98 mm/day and the potential 2.84 to 6.04, so
+`demand` sits below FAO-56's 5 mm/day reference nearly always and the adjustment
+could only ever LENGTHEN the plateau - a near-uniform shift with no spatial
+contrast, which is what the first global arm measured (every regional column
+within 0.003 of the unadjusted arm). The potential is centred on the reference
+and spans it in both directions, which is the contrast the adjustment exists to
+express.
+
 Skipped entirely when the slope is zero OR the plateau is off, rather than
 evaluated with a zero slope: the [0.1, 0.8] bound would otherwise turn
 `depletion_fraction = 0` into 0.1 and silently break the ablation contract that
 every mechanism in this project ships with.
 """
 @inline function demand_adjusted_depletion(
-    depletion_fraction::T, demand::T, slope::T,
+    depletion_fraction::T, potential_et::T, slope::T,
 ) where {T <: AbstractFloat}
     (slope > zero(T) && depletion_fraction > zero(T)) || return depletion_fraction
-    return clamp(depletion_fraction + slope * (T(5) - demand), T(0.1), T(0.8))
+    return clamp(depletion_fraction + slope * (T(5) - potential_et), T(0.1), T(0.8))
 end
 
 """Compute root-water-limited transpiration supply for one crop column."""
@@ -539,14 +555,15 @@ end
     crop_rootzone_available_water[cell] = rootzone_water
 
     if crop_isgrowing[cell] == 1
-        # Demand FIRST: the FAO-56 plateau is adjusted by it, and this site
-        # computed supply before demand. Nothing in `demand` reads `supply`, so
-        # the reorder is safe, and it is required rather than cosmetic.
+        # The PT potential, not `demand`: see `demand_adjusted_depletion`. Demand
+        # is left computed here rather than below only because the two now read
+        # the same `pet_eeq` and keeping them adjacent makes the difference
+        # between them visible.
         demand = compute_transpiration_demand(
             crop_canopy_wet[cell], pet_eeq[cell], T(ALPHAM), T(GM), crop_gp[cell],
         )
         adjusted_depletion = demand_adjusted_depletion(
-            T(depletion_fraction), demand, T(depletion_demand_slope),
+            T(depletion_fraction), pet_eeq[cell] * T(ALPHAM), T(depletion_demand_slope),
         )
         supply = compute_transpiration_supply(
             T(emax), wr, crop_rootc[cell], adjusted_depletion)
