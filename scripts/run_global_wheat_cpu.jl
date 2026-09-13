@@ -308,6 +308,28 @@ function model_inputs(
     return model_initial_data(grid, soil, crop, initial_state)
 end
 
+"""Switch `lambda` from the fixed LAMBDA_OPT to the P-model least-cost optimum.
+
+`[processes] pmodel = "c3"` sets the published unit cost ratio, 146.0. It is a
+coefficient bundle rather than a process flag, so like `depletion_fraction` it
+rebuilds the parameters instead of naming an `ablation_*` configuration. Zero or
+absent is bitwise the constant.
+"""
+function with_pmodel(parameters, spec)
+    spec === nothing && return parameters
+    beta = spec isa AbstractString ?
+        (lowercase(spec) in ("c3", "on", "derived") ? 146.0 :
+         error("pmodel must be \"c3\" or a number, got $spec")) : Float64(spec)
+    beta == 0 && return parameters
+    beta > 0 || error("pmodel beta must be non-negative, got $beta")
+    T = typeof(parameters.lpjml.LAMBDA_OPT)
+    lpjml = typeof(parameters.lpjml)(;
+        (f => (f === :pmodel_beta ? T(beta) : getfield(parameters.lpjml, f))
+         for f in fieldnames(typeof(parameters.lpjml)))...)
+    return typeof(parameters)(lpjml, parameters.photosynthesis, parameters.snow,
+                              parameters.soil_thermal, parameters.soil_decomposition)
+end
+
 """Process switches for one run, from `[processes]`, via the ablation registry.
 
 Read through `Agrocosm`'s own constructors rather than switch by switch. That is
@@ -465,6 +487,11 @@ function create_simulation(initial_data, selection, config, days, device, cft_id
         cell_ids = selection.cell_ids,
         device,
         T = Float32,
+        # `with_pmodel` returns its argument unchanged when `pmodel` is absent,
+        # and `initialize_simulation` resolves `nothing` to exactly
+        # `ModelParameters(T)`, so passing it explicitly is the same run.
+        model_parameters = with_pmodel(ModelParameters(Float32),
+                                       get(processes, "pmodel", nothing)),
         diagnostics,
         irrigation = irrigated,
         manure = management["manure"],

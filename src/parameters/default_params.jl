@@ -38,6 +38,19 @@ water, nitrogen, and management process coefficients.
     ALPHAM::T = 1.485 # Priestley–Taylor aerodynamic correction used by LPJmL.
     GM::T = 2.2 # Empirical canopy-conductance coefficient.
     LAMBDA_OPT::T = 0.8 # Initial/default internal-to-ambient CO₂ ratio.
+    # The P-model's unit cost ratio, 146.0 for C3 (Stocker et al. 2020). Nonzero
+    # switches `lambda` from the CONSTANT above to the least-cost optimum, which
+    # responds to vapour pressure deficit, temperature and pressure. Measured over
+    # the realistic range that optimum runs 0.49 to 0.88, so 0.8 is not a bad
+    # average - it is simply the same number everywhere and in every season.
+    #
+    # This is the highest-leverage place a response function can be corrected in
+    # this model: measured against a census, yield skill IS assimilation skill -
+    # season GPP 0.518 against yield 0.538 on maize, 0.548 against 0.558 on
+    # soybean - so everything downstream of biomass is worth about 4% of the
+    # correlation (`docs/34`). Ships at zero, which is bitwise `LAMBDA_OPT`.
+    pmodel_beta::T = 0.0 # P-model unit cost ratio; 0 = fixed LAMBDA_OPT.
+    pmodel_kphio::T = 0.049977 # intrinsic quantum yield, Stocker et al. ORG calibration.
     PRIESTLEY_TAYLOR::T = 1.32 # Priestley-Taylor coefficient
     MINERALDENS::T = 2700 # mineral density in kg/m3
     soildepth_evap::T = 500.0 # Effective soil depth available to evaporation (mm).

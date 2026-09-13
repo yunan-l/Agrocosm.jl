@@ -188,3 +188,59 @@ belongs beside the model that needs it rather than in a caller.
     actual = q * pressure / (T(0.622) + T(0.378) * q)
     return max(saturated - actual, zero(T))
 end
+
+"""
+    pmodel_lambda!(crop, temperature, specific_humidity, surface_pressure, co2;
+                   beta, c4)
+
+Write the least-cost optimal `ci/ca` into the crop's `lambda`, replacing the fixed
+`LAMBDA_OPT` that LPJmL uses everywhere.
+
+This is the minimal faithful way to put the P-model into this lineage. The theory's
+central prediction IS the ci/ca ratio; every other quantity the model needs -
+Vcmax, the co-limited rate, leaf respiration, canopy conductance, transpiration -
+is then computed by the existing Farquhar machinery from that ratio, unchanged.
+Replacing the rate calculation outright would bypass Vcmax and with it the
+nitrogen limitation this model couples to, which is a larger claim than the one
+being tested here.
+
+C4 crops concentrate CO2 at Rubisco and do not photorespire appreciably, so the
+least-cost argument does not apply in the same form; they keep the constant.
+"""
+function pmodel_lambda!(crop, temperature, specific_humidity, surface_pressure, co2;
+                        beta, c4::Bool = false)
+    beta > 0 && !c4 || return nothing
+    launch_1D!(
+        pmodel_lambda_kernel!,
+        crop_photosynthesis_auxiliary(crop).lambda,
+        temperature,
+        specific_humidity,
+        surface_pressure,
+        co2,
+        beta,
+    )
+    return nothing
+end
+
+@kernel inbounds = true function pmodel_lambda_kernel!(
+    lambda::AbstractVector{T},
+    temperature::AbstractVector{T},
+    specific_humidity::AbstractVector{T},
+    surface_pressure::AbstractVector{T},
+    co2::AbstractVector{T},
+    beta,
+) where {T <: AbstractFloat}
+    cell = @index(Global)
+    pressure = surface_pressure[cell]
+    # `co2` is a mixing ratio in ppm; the optimum is a function of the PARTIAL
+    # pressure, which is where the pressure dependence of the theory enters.
+    ambient = co2[length(co2) == 1 ? 1 : cell] * T(1e-6) * pressure
+    deficit = pmodel_vapour_pressure_deficit(
+        temperature[cell], pressure, specific_humidity[cell],
+    )
+    optimum = pmodel_optimal_chi(temperature[cell], pressure, deficit, ambient, T(beta))
+    # Clamped to the interval a ci/ca ratio can occupy. The optimum is inside it
+    # for every realistic input; the clamp is against a pathological forcing cell
+    # rather than against the theory.
+    lambda[cell] = clamp(optimum.chi, T(0.02), T(0.99))
+end

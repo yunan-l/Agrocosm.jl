@@ -136,6 +136,19 @@ function _daily_crop!(
             "diurnal temperature stress requires a `diurnal_range` climate field " *
             "(tasmax - tasmin); the daily mean alone has no temperature course",
         ))
+    if global_params.pmodel_beta > 0
+        for field in (:specific_humidity, :surface_pressure)
+            hasproperty(climate, field) || throw(ArgumentError(
+                "the P-model needs a `$field` climate field to form a vapour " *
+                "pressure deficit; run with the full forcing set or leave " *
+                "`pmodel_beta` at zero",
+            ))
+            size(getproperty(climate, field)) == size(climate.temp) ||
+                throw(DimensionMismatch(
+                    "$field must have the same shape as the temperature forcing",
+                ))
+        end
+    end
     if organ_temperature
         subdaily_config === nothing && throw(ArgumentError(
             "organ temperature requires sub-daily photosynthesis or the standalone " *
@@ -309,6 +322,21 @@ function _daily_crop!(
                 diurnal_steps = diurnal_temperature_stress ? diurnal_stress_steps : 0,
                 diurnal_shape = diurnal_shape_code(diurnal_stress_shape),
             )
+            # The least-cost optimum replaces the fixed `LAMBDA_OPT`, and has to
+            # be written BEFORE the pass that would otherwise overwrite it. Inert
+            # unless `pmodel_beta` is nonzero, and skipped for C4, which does not
+            # photorespire appreciably and keeps the constant.
+            # Guarded at the CALL, not inside `pmodel_lambda!`: Julia evaluates
+            # arguments first, so `view(climate.specific_humidity, ...)` throws on
+            # a forcing without humidity however early the function would return.
+            if global_params.pmodel_beta > 0
+                pmodel_lambda!(
+                    state, dailyWeather.temp,
+                    view(climate.specific_humidity, climate_day, :),
+                    view(climate.surface_pressure, climate_day, :), current_co2;
+                    beta = global_params.pmodel_beta, c4 = pathway === Val(:C4),
+                )
+            end
             photosynthesis!(
                 pathway, cftparameters, state, crop_canopy_auxiliary(state).apar,
                 pet.daylength, dailyWeather.temp, current_co2, diurnal;

@@ -106,7 +106,7 @@ end
 ) where {T <: AbstractFloat}
     cell = @index(Global)
     @unpack b = CFT
-    @unpack ko25, kc25, alphac3, theta, LAMBDA_OPT = lpjmlparams
+    @unpack ko25, kc25, alphac3, theta, LAMBDA_OPT, pmodel_beta = lpjmlparams
     @unpack q10ko, q10kc, po2, tau25, q10tau, cmass, cq, p, lambdamc3 = photoparams
 
     stress = temperature_stress[cell]
@@ -120,7 +120,9 @@ end
     gammastar = T(po2) / (T(2) * tau)
 
     if comp_vcmax
-        lambda[cell] = T(LAMBDA_OPT)
+        # `pmodel_lambda!` has already written the least-cost optimum when the
+        # P-model is on, so overwriting it here would silently discard it.
+        pmodel_beta > zero(T) || (lambda[cell] = T(LAMBDA_OPT))
         if inactive || apar[cell] <= zero(T) || daylength[cell] <= zero(T)
             # With no absorbed radiation, potential Rubisco capacity is zero.
             # Gate before the analytical sigma term: in Float32,
