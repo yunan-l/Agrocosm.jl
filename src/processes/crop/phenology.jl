@@ -26,6 +26,7 @@ function phenology_crop!(crop,
         crop_prognostic(crop).phenology.growing_days,
         crop_prognostic(crop).phenology.is_growing,
         crop_phenology_input(crop).winter_type,
+        crop_prognostic(crop).water.sufficiency,
         temp,
         daylength,
         CFT
@@ -110,6 +111,28 @@ end
            (one(T) - harvest_fraction) + harvest_fraction
 end
 
+"""
+    drought_development_acceleration(wscal, fphu, flowering_start, rate)
+
+Thermal-time multiplier for post-flowering water stress, APSIM's `swdef_pheno`.
+
+Returns exactly one before flowering and whenever `rate` is zero, so the shipped
+model accumulates heat units bitwise as LPJmL does. After flowering a stressed
+crop runs its remaining development faster, which advances senescence and
+harvest together because both are thresholds on the same `fphu`.
+
+`wscal` is yesterday's water sufficiency: phenology runs before transpiration in
+the daily loop. That lag is deliberate rather than incidental - development
+responds to the stress a crop has been under, not to this morning's soil water.
+"""
+@inline function drought_development_acceleration(
+    wscal::T, fphu::T, flowering_start::T, rate::T,
+) where {T <: AbstractFloat}
+    rate > zero(T) || return one(T)
+    fphu >= flowering_start || return one(T)
+    return one(T) + rate * clamp(one(T) - wscal, zero(T), one(T))
+end
+
 @kernel inbounds = true function phenology_kernel!(
                                    climbuf_V_req::AbstractArray{T},
                                    crop_phu::AbstractArray{T},
@@ -124,6 +147,7 @@ end
                                    crop_growingdays::AbstractArray{S},
                                    crop_isgrowing::AbstractArray{S},
                                    crop_wtype::AbstractArray{B},
+                                   crop_wscal::AbstractArray{T},
                                    temp::AbstractArray{T},
                                    daylength::AbstractArray{T},
                                    CFT::CFTParameters
@@ -132,6 +156,7 @@ end
     cell = @index(Global)
 
     @unpack basetemp, tv_eff, tv_opt, fphuc, flaimaxc, fphuk, flaimaxk, fphusen, flaimaxharvest, psens, pb, ps, hlimit, sla, shapesenescencenorm = CFT
+    @unpack flowering_start, drought_phenology_rate = CFT
 
     crop_harvesting_previous[cell] = crop_harvesting[cell]
     crop_senescence0[cell] = crop_senescence[cell]
@@ -155,7 +180,11 @@ end
             prf = compute_photoperiod_factor(previous_fphu, fphusen, psens, daylength[cell], pb, ps)
 
             #Calculation of temperature sum (deg Cd)
-            crop_husum[cell] += hu * vrf * prf
+            drought_factor = drought_development_acceleration(
+                crop_wscal[cell], previous_fphu, T(flowering_start),
+                T(drought_phenology_rate),
+            )
+            crop_husum[cell] += hu * vrf * prf * drought_factor
 
             #fraction of growing season
             crop_fphu[cell] = compute_phenology_fraction(crop_husum[cell], crop_phu[cell])

@@ -434,6 +434,28 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     # separates this from the heat mechanism, which had 2.8 exceedance days a
     # season and could not reach the required magnitude at any defensible rate.
     heavy_rain_rate::T = 0.002            # Recovery lost per mm of season excess beyond the tolerance; 0 = inert.
+    # Water stress cannot shorten a season in this model, and could not in LPJmL
+    # before it. Development is pure thermal time with vernalization and
+    # photoperiod, so measured on the gate cells an 80% precipitation cut - which
+    # drives wheat's minimum daily water sufficiency to 0.286 and maize's to
+    # 0.093 - leaves season LENGTH and the senescence DATE unchanged to the day:
+    # wheat 154 days and senescence on growing day 113 at every rainfall level
+    # tested. A 4 C warming shortens the same season to 122 days, so the thermal
+    # pathway works and only the water one is missing.
+    #
+    # Terminal drought is the canonical wheat failure and it acts by forcing
+    # maturity early. Every other major crop model carries the control: APSIM's
+    # `swdef_pheno`, CERES/DSSAT's stress-accelerated senescence, AquaCrop's
+    # water-triggered canopy senescence, STICS. This is that control, in APSIM's
+    # form - a multiplier on thermal-time accumulation, 1 + rate*(1 - wscal).
+    #
+    # POST-FLOWERING ONLY, as APSIM applies it. Accelerating `fphu` before
+    # flowering would also run the phenological LAI curve up faster, so a
+    # drought would BUILD canopy; restricting the window is what keeps this a
+    # shortened season rather than a faster one.
+    #
+    # SHIPS AT ZERO, which is bitwise the inherited thermal-time development.
+    drought_phenology_rate::T = 0.0       # Thermal-time acceleration per unit water deficit; 0 = inert.
     # What a season is allowed to accumulate before any damage, in mm of rainfall
     # above `heavy_rain_threshold`. MEASURED as the AREA-WEIGHTED 90th percentile
     # of the accumulation each crop actually sees over 1981-2016, which is the
