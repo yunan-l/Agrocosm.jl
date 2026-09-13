@@ -76,5 +76,48 @@ end
     # drives senescence and must not use a different water stress from
     # allocation.
     @test count("depletion_fraction", source) >= 6
-    @test occursin("compute_available_fraction(wr, T(depletion_fraction))", source)
+    # The INVARIANT is that senescence and allocation share one water stress, not
+    # that they share a particular spelling. When FAO-56's demand adjustment was
+    # added both moved to `adjusted_depletion`, and this assertion - which named
+    # the old expression - failed, which is what it is for. Assert the shared
+    # value instead, and that it comes from the adjustment rather than anywhere
+    # else.
+    @test occursin("compute_available_fraction(wr, adjusted_depletion)", source)
+    @test occursin("crop_rootc[cell], adjusted_depletion)", source)
+    @test occursin("adjusted_depletion = demand_adjusted_depletion(", source)
+end
+
+@testset "FAO-56 adjusts its own p for evaporative demand" begin
+    # Table 22's values apply at ET_c of about 5 mm/day; the note beneath gives
+    # `p + 0.04 * (5 - ET_c)`, bounded to [0.1, 0.8]. This is the same document
+    # the tabulated values come from, so the ONLY thing worth asserting is that
+    # the published arithmetic is reproduced and that it cannot fire by accident.
+    adjust(p, demand, slope) =
+        Agrocosm.demand_adjusted_depletion(TW(p), TW(demand), TW(slope))
+
+    # At the tabulated demand it is the identity, which is what makes the
+    # published per-crop values still mean what the table says.
+    @test adjust(0.55, 5.0, 0.04) ≈ TW(0.55)
+    # A thirsty atmosphere SHORTENS the plateau, a humid one lengthens it.
+    @test adjust(0.55, 9.0, 0.04) ≈ TW(0.55) - TW(0.04) * TW(4.0)
+    @test adjust(0.55, 2.0, 0.04) ≈ TW(0.55) + TW(0.04) * TW(3.0)
+    @test adjust(0.55, 9.0, 0.04) < adjust(0.55, 5.0, 0.04) < adjust(0.55, 2.0, 0.04)
+    # Bounded to [0.1, 0.8], which binds for rice: its tabulated p is 0.20 and a
+    # demand of 9 mm/day would otherwise drive it to 0.04.
+    @test adjust(0.20, 9.0, 0.04) == TW(0.1)
+    @test adjust(0.75, 0.0, 0.04) == TW(0.8)
+
+    # THE ABLATION CONTRACT, and the reason the guard is a branch rather than a
+    # zero slope: `clamp(0 + 0.04 * (5 - demand), 0.1, 0.8)` is 0.1, not 0, so
+    # evaluating the formula unconditionally would silently give every rung-zero
+    # run a plateau it never asked for.
+    for demand in (0.0, 2.0, 5.0, 9.0, 50.0)
+        @test adjust(0.0, demand, 0.04) == zero(TW)     # no plateau to adjust
+        @test adjust(0.55, demand, 0.0) == TW(0.55)     # no adjustment requested
+    end
+
+    # Ships inert on every crop, like every other mechanism in this project.
+    for cft in (Agrocosm.cft1, Agrocosm.cft2, Agrocosm.cft3, Agrocosm.cft9)
+        @test cft.depletion_demand_slope == zero(TW)
+    end
 end

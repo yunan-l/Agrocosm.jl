@@ -369,6 +369,22 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     # changes every simulated yield and must be an explicit experiment. The
     # published per-crop values are `fao56_depletion_fraction`.
     depletion_fraction::T = 0.0           # FAO-56 `p`; 0 = the unmodified LPJmL supply.
+    # FAO-56's OWN adjustment of `p` for evaporative demand, from the note under
+    # Table 22: the tabulated `p` applies at ET_c of about 5 mm/day, and
+    #
+    #     p_adjusted = p + 0.04 * (5 - ET_c),   bounded to [0.1, 0.8]
+    #
+    # A crop in a high-demand atmosphere empties its readily-available water
+    # sooner, so stress starts earlier; in a humid one, later. This is the same
+    # source the tabulated values come from, so it is literature and not a fit -
+    # and it is the reason a SINGLE global `p` cannot generalise, for exactly the
+    # reason a single global heat threshold could not (`docs/29`).
+    #
+    # Ships at zero, which is inert: the adjustment is skipped entirely rather
+    # than evaluated with a zero slope, because the [0.1, 0.8] bound would
+    # otherwise turn `depletion_fraction = 0` into 0.1 and break the ablation
+    # contract. FAO-56's value is 0.04.
+    depletion_demand_slope::T = 0.0       # per mm/day of ET_c; 0 = no demand adjustment.
     # Excess-water damage on an absolute daily RAINFALL threshold, acting on the
     # fraction of the standing crop recovered at harvest. Swept the same way as
     # the heat thresholds and on the same observations - see `docs/24` - and it

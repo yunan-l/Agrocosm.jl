@@ -38,7 +38,7 @@ function merge_production_partitions(manifest_paths, output_path)
     for manifest in manifests
         for key in (
             "cft_id", "water_system", "processes_configuration", "rate_scale",
-            "depletion_fraction",
+            "depletion_fraction", "depletion_demand_slope",
             "simulation_start_year", "simulation_end_year",
             "crop_resp_fix", "nitrogen_limit_vcmax",
             "config_fingerprint", "allocation_path", "pool_allocation_cell_policy",
@@ -197,6 +197,7 @@ function run_global_production_mpi(args = ARGS)
             "processes_configuration" => first_rank["processes_configuration"],
             "rate_scale" => first_rank["rate_scale"],
             "depletion_fraction" => first_rank["depletion_fraction"],
+            "depletion_demand_slope" => first_rank["depletion_demand_slope"],
             "management_mode" => first_rank["management_mode"],
             "management_fixed_year" => first_rank["management_fixed_year"],
             "crop_resp_fix" => first_rank["crop_resp_fix"],

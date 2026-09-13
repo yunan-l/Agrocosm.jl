@@ -330,6 +330,10 @@ function run_global_production(
         # nobody had asked for. A manifest that records the number makes that
         # failure visible in the output tree instead of in the yields.
         "depletion_fraction" => Float64(simulation.cft.depletion_fraction),
+        # Recorded beside it: two runs with and without FAO-56's demand
+        # adjustment differ in no other field, so a manifest that omits it makes
+        # them indistinguishable six months from now.
+        "depletion_demand_slope" => Float64(simulation.cft.depletion_demand_slope),
         "management_mode" => String(get(management, "mode", "")),
         "management_fixed_year" => Int(get(management, "fixed_year", 0)),
         "crop_resp_fix" => Bool(get(run, "crop_resp_fix", false)),

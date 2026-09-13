@@ -387,9 +387,21 @@ changes the transpiration SUPPLY, so it cannot be expressed as one of the
 `[processes] depletion_fraction` takes `"fao56"` for the published per-crop value
 or a number to sweep it, and `[processes] depletion_scale` multiplies it; absent
 or 0 is bitwise the unmodified model.
+
+`[processes] depletion_demand_slope` takes `"fao56"` for the published 0.04 per
+mm/day, or a number. It is FAO-56's OWN adjustment of `p` for evaporative demand
+- `p + 0.04 * (5 - ET_c)`, bounded to [0.1, 0.8] - and is the reason one global
+`p` does not generalise: the same crop reaches the end of its readily available
+water sooner under a thirsty atmosphere. Inert without a plateau to adjust.
 """
-function with_depletion(cft, spec, scale::Real, cft_id::Integer)
-    spec === nothing && return cft
+function with_depletion(cft, spec, scale::Real, cft_id::Integer, slope_spec = nothing)
+    slope = slope_spec === nothing ? 0.0 :
+        (slope_spec isa AbstractString ?
+         (lowercase(slope_spec) == "fao56" ? 0.04 :
+          error("depletion_demand_slope must be \"fao56\" or a number, got $slope_spec")) :
+         Float64(slope_spec))
+    slope >= 0 || error("depletion_demand_slope must be non-negative, got $slope")
+    spec === nothing && slope == 0 && return cft
     value = spec isa AbstractString ?
         (lowercase(spec) == "fao56" ? fao56_depletion_fraction(cft_id) :
          error("depletion_fraction must be \"fao56\" or a number, got $spec")) :
@@ -399,11 +411,13 @@ function with_depletion(cft, spec, scale::Real, cft_id::Integer)
     # a single arm cannot tell an overshoot from a correct flattening. Scaling
     # the FAO-56 value keeps the per-crop ordering the table encodes.
     value *= Float64(scale)
-    value == 0 && return cft
+    value == 0 && slope == 0 && return cft
     0 <= value < 1 || error("depletion_fraction must lie in [0, 1), got $value")
     T = typeof(cft.hiopt)
     return CFTParameters{T, Int32}(;
-        (field => (field === :depletion_fraction ? T(value) : getfield(cft, field))
+        (field => (field === :depletion_fraction ? T(value) :
+                   field === :depletion_demand_slope ? T(slope) :
+                   getfield(cft, field))
          for field in fieldnames(CFTParameters))...)
 end
 
@@ -416,7 +430,8 @@ function create_simulation(initial_data, selection, config, days, device, cft_id
     return initialize_simulation(
         with_depletion(scaled_cft(crop_cft(cft_id), rate_scale),
                        get(processes, "depletion_fraction", nothing),
-                       Float64(get(processes, "depletion_scale", 1.0)), cft_id),
+                       Float64(get(processes, "depletion_scale", 1.0)), cft_id,
+                       get(processes, "depletion_demand_slope", nothing)),
         initial_data;
         days,
         indices = collect(1:length(selection.cell_ids)),
