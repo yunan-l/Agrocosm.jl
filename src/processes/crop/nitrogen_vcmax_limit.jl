@@ -50,7 +50,7 @@ end
     if is_growing[cell] == one(S) && potential > zero(T) &&
        (!require_active_photosynthesis || lambda[cell] > zero(T))
         @unpack ncleaf = CFT
-        @unpack p, k_temp = lpjmlparams
+        @unpack p, k_temp, nitrogen_vcmax_relaxation = lpjmlparams
         rubisco_nitrogen = max(
             zero(T),
             available_leaf_nitrogen[cell] - T(ncleaf.low) * leaf_carbon[cell],
@@ -59,8 +59,14 @@ end
             exp(-T(k_temp) * (temperature[cell] - T(25))) /
             (T(p) * T(1e-3)) * (T(86400) * T(12) * T(1e-6))
         limited = min(potential, max(eps(T), nitrogen_capacity))
-        vcmax[cell] = limited
-        nitrogen_limitation[cell] = clamp(limited / potential, zero(T), one(T))
+        # Blend toward the unclamped capacity. At zero this is `limited`
+        # exactly - `limited + 0 * (potential - limited)` is not merely equal to
+        # `limited` but produced by adding a hard zero - so the shipped model is
+        # bitwise unchanged.
+        relaxation = clamp(T(nitrogen_vcmax_relaxation), zero(T), one(T))
+        realized = limited + relaxation * (potential - limited)
+        vcmax[cell] = realized
+        nitrogen_limitation[cell] = clamp(realized / potential, zero(T), one(T))
     else
         vcmax[cell] = potential
         nitrogen_limitation[cell] = potential > zero(T) ? one(T) : zero(T)

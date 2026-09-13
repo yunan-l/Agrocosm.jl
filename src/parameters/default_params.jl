@@ -78,6 +78,29 @@ water, nitrogen, and management process coefficients.
     # SHIPS AT ZERO, which is `w^0 = 1` and therefore the LPJmL step bitwise.
     # 1 is mass-flow-like, 2 diffusion-like.
     nitrogen_uptake_water_exponent::T = 0.0 # exponent on relative water in N uptake
+    # How much of LPJmL's leaf-nitrogen clamp on Rubisco capacity to lift.
+    #
+    # The limitation census measured realized vcmax running at 0.30-0.39 of its
+    # potential for wheat on 96-100% of growing days, 0.57-0.92 for rice,
+    # 0.76-0.80 for maize and 0.92-0.98 for soybean - and that ordering is the
+    # same as the ordering of those crops by yield correlation, worst first. A
+    # vcmax pinned by leaf nitrogen is a vcmax that is not responding to light and
+    # temperature, so the clamp is a candidate for compressing the climate signal
+    # before any damage mechanism can act on it.
+    #
+    # It had never been tested in isolation. `nitrogen_limit_vcmax` switches an
+    # entire nitrogen PATHWAY - fertilizer timing, manure placement, conductance
+    # reuse, fixation cost, volatilization - so every comparison across it
+    # confounds five changes with the clamp, and an elasticity measured that way
+    # was withdrawn for exactly that reason.
+    #
+    # This blends the clamped capacity toward the unclamped one and touches
+    # nothing else: 0 is the clamp bitwise, 1 removes it from photosynthesis while
+    # leaving nitrogen demand, uptake, allocation and the LAI scaling untouched.
+    # It is a DIAGNOSTIC first - the question is how much of the missing
+    # interannual variance the clamp is eating, not whether a lifted clamp scores
+    # better.
+    nitrogen_vcmax_relaxation::T = 0.0 # 0 = LPJmL's clamp, 1 = no N limit on vcmax
     k_max::T = 0.10 # maximum fraction of soil->NH4 assumed to be nitrified
     k_2::T = 0.01 # fraction of nitrified N lost as N20 flux
     soil_cn_ratio::T = 15.0 # soil organic matter C:N ratio

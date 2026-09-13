@@ -363,6 +363,31 @@ function with_stress_response(cft, phenology_spec, canopy_spec)
          for field in fieldnames(CFTParameters))...)
 end
 
+"""Lift LPJmL's leaf-nitrogen clamp on Rubisco capacity, and nothing else.
+
+`[processes] nitrogen_vcmax_relaxation` takes 0 for the clamp bitwise and 1 to
+remove it from photosynthesis while leaving nitrogen demand, uptake, allocation
+and the LAI scaling untouched. It is a DIAGNOSTIC: the census measured wheat's
+realized vcmax at 0.30-0.39 of potential on 96-100% of growing days, and lifting
+the clamp a quarter grew the gate cell's drought response from -41.2% to -52.2%,
+so the question is how much interannual variance the clamp is eating - not
+whether a lifted clamp scores better.
+"""
+function with_nitrogen_relaxation(parameters, spec)
+    spec === nothing && return parameters
+    relaxation = Float64(spec)
+    0 <= relaxation <= 1 ||
+        error("nitrogen_vcmax_relaxation must lie in [0, 1], got $relaxation")
+    relaxation == 0 && return parameters
+    T = typeof(parameters.lpjml.LAMBDA_OPT)
+    lpjml = typeof(parameters.lpjml)(;
+        (f => (f === :nitrogen_vcmax_relaxation ? T(relaxation) :
+               getfield(parameters.lpjml, f))
+         for f in fieldnames(typeof(parameters.lpjml)))...)
+    return typeof(parameters)(lpjml, parameters.photosynthesis, parameters.snow,
+                              parameters.soil_thermal, parameters.soil_decomposition)
+end
+
 """Give soil water a gradient in nitrogen uptake instead of LPJmL's step.
 
 `[processes] nitrogen_uptake_water_exponent` takes 1 for the mass-flow-like
@@ -574,9 +599,11 @@ function create_simulation(initial_data, selection, config, days, device, cft_id
         # `with_pmodel` returns its argument unchanged when `pmodel` is absent,
         # and `initialize_simulation` resolves `nothing` to exactly
         # `ModelParameters(T)`, so passing it explicitly is the same run.
-        model_parameters = with_nitrogen_water(
-            with_pmodel(ModelParameters(Float32), get(processes, "pmodel", nothing)),
-            get(processes, "nitrogen_uptake_water_exponent", nothing)),
+        model_parameters = with_nitrogen_relaxation(
+            with_nitrogen_water(
+                with_pmodel(ModelParameters(Float32), get(processes, "pmodel", nothing)),
+                get(processes, "nitrogen_uptake_water_exponent", nothing)),
+            get(processes, "nitrogen_vcmax_relaxation", nothing)),
         diagnostics,
         irrigation = irrigated,
         manure = management["manure"],

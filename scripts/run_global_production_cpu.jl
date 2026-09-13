@@ -345,6 +345,8 @@ function run_global_production(
         "lodging_wind_threshold" => Float64(simulation.cft.lodging_wind_threshold),
         "nitrogen_uptake_water_exponent" =>
             Float64(simulation.model_parameters.lpjml.nitrogen_uptake_water_exponent),
+        "nitrogen_vcmax_relaxation" =>
+            Float64(simulation.model_parameters.lpjml.nitrogen_vcmax_relaxation),
         "management_mode" => String(get(management, "mode", "")),
         "management_fixed_year" => Int(get(management, "fixed_year", 0)),
         "crop_resp_fix" => Bool(get(run, "crop_resp_fix", false)),
