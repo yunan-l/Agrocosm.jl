@@ -66,6 +66,15 @@ water, nitrogen, and management process coefficients.
     # SHIPS AT ZERO, which is bitwise the LPJmL behaviour - the whole point of
     # the parameter is that it can be measured rather than assumed.
     ponding_capacity::T = 0.0 # maximum ponded surface water carried overnight (mm)
+    # A restrictive layer or water table beneath the column. This model drains
+    # FREELY at the base, and measured on five real cells that base is the only
+    # loss pathway there is - it carries 100% of the water leaving four of them
+    # (maize 121.9 mm a season) while lateral runoff is exactly zero, so the
+    # profile never approaches saturation and the aeration band stays out of
+    # reach even with the ponded store on (`docs/32`).
+    # Infinite ships the free-draining LPJmL base bitwise: `min(perc, Inf)` is
+    # `perc`. A finite value is a DAILY cap on what the base can take.
+    bottom_drainage_limit::T = Inf # maximum drainage from the bottom layer (mm day⁻¹)
     percthres::T = 1.0 # Percolation threshold/scaling coefficient.
     NPERCO::T = 0.4 # LPJmL 5.10 surface-layer lateral NO₃ transport multiplier.
     manure_cn::T = 14.5 # CN ration of manure gC/gN
