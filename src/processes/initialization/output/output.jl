@@ -27,6 +27,12 @@ mutable struct CropOutput{A, I, M}
     # `season_length`. This is what decides whether a mechanism multiplying the
     # harvest index can have any effect on a given cell-year at all.
     hi_binding_days::A     # Harvest-index-binding days (day).
+    # Season-accumulated wind lodging pressure, (m/s)^2 day. Reported whether or
+    # not `lodging_rate` is nonzero, because `lodging_tolerance` has to be set
+    # from the distribution this produces rather than chosen - the same way
+    # `heavy_rain_tolerance` was, and for the same reason: a term without a
+    # tolerance prices a windy CLIMATE rather than a windy year.
+    lodging_exposure::A    # Season lodging exposure ((m s⁻¹)² day).
     vegetation_carbon::M   # Daily leaf/root/pool/storage carbon stocks (gC m⁻²).
     vegetation_nitrogen::M # Daily leaf/root/pool/storage nitrogen contents (gN m⁻²).
     fphu::A                # Fraction of potential heat units accumulated (0–1+).
@@ -76,6 +82,7 @@ mutable struct AnnualOutputAccumulator{A, I}
     harvest_aboveground_carbon::A
     window_npp::A
     hi_binding_days::A
+    lodging_exposure::A
     active_gpp::A
     active_lai_days::A
     active_length::A
@@ -116,6 +123,7 @@ const _ANNUAL_CROP_FLOAT_OUTPUT_FIELDS = (
     :harvest_aboveground_carbon,
     :window_npp,
     :hi_binding_days,
+    :lodging_exposure,
 )
 const _ANNUAL_CALENDAR_INTEGER_OUTPUT_FIELDS = (:harvest_date, :harvesting_year)
 
@@ -137,7 +145,7 @@ function init_output(::Type{T},
         scalar_output(), scalar_output(), scalar_output(), scalar_output(),
         scalar_output(), scalar_output(), scalar_output(), scalar_output(),
         scalar_output(), scalar_output(), scalar_output(), scalar_output(),
-        scalar_output(), scalar_output(), scalar_output(),
+        scalar_output(), scalar_output(), scalar_output(), scalar_output(),
         device(zeros(T, 0, vegc_pools * cell_size)),
         device(zeros(T, 0, vegc_pools * cell_size)),
         scalar_output(), scalar_output(), integer_output(),
@@ -168,6 +176,7 @@ function init_output(::Type{T},
         device(zeros(T, cell_size)), device(zeros(T, cell_size)),       # season_length, season_water_deficit
         device(zeros(T, cell_size)), device(zeros(T, cell_size)),       # season_evapotranspiration, harvest_aboveground_carbon
         device(zeros(T, cell_size)), device(zeros(T, cell_size)),       # window_npp, hi_binding_days
+        device(zeros(T, cell_size)),                                    # lodging_exposure
         device(zeros(T, cell_size)), device(zeros(T, cell_size)),       # active_gpp, active_lai_days
         device(zeros(T, cell_size)), device(zeros(T, cell_size)),       # active_length, active_water_deficit
         device(zeros(T, cell_size)),                                    # active_evapotranspiration

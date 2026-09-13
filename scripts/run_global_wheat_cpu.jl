@@ -641,6 +641,12 @@ production_output_variables() = [
     OutputVariable(:crop, :harvest_aboveground_carbon),
     OutputVariable(:crop, :window_npp),
     OutputVariable(:crop, :hi_binding_days),
+    # Written on every arm whether or not `lodging_rate` is nonzero, because
+    # `lodging_tolerance` has to be set from the distribution this produces
+    # rather than chosen. `heavy_rain_tolerance` was set the same way - the
+    # area-weighted 90th percentile of what each crop actually accumulates - and
+    # a tolerance chosen instead prices a windy CLIMATE rather than a windy year.
+    OutputVariable(:crop, :lodging_exposure),
     # `gpp` and `npp` above are CALENDAR-YEAR sums; `season_gpp` is the same
     # carbon scoped to the harvested season, which is the temporal object
     # `yield` and `harvest_aboveground_carbon` already are. Comparing an annual

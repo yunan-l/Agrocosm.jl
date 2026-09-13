@@ -188,6 +188,10 @@ end
         # window the assimilate came from, and whether the harvest index was the
         # binding constraint at all.
         :window_npp, :hi_binding_days,
+        # The season's accumulated lodging pressure. No `active_` twin, because
+        # the prognostic already resets at sowing and only grows, so the harvest
+        # takes its value rather than summing a parallel daily accumulator.
+        :lodging_exposure,
         :active_gpp, :active_lai_days, :active_length,
         :active_water_deficit, :active_evapotranspiration,
         :active_window_npp, :active_hi_binding_days,

@@ -39,6 +39,7 @@ function harvest_crop!(crop,
         output.annual.harvest_aboveground_carbon,
         output.annual.window_npp,
         output.annual.hi_binding_days,
+        output.annual.lodging_exposure,
         output.annual.active_gpp,
         output.annual.active_lai_days,
         output.annual.active_length,
@@ -71,6 +72,7 @@ function harvest_crop!(crop,
         output.crop.harvest_aboveground_carbon,
         output.crop.window_npp,
         output.crop.hi_binding_days,
+        output.crop.lodging_exposure,
         output.calendar.harvest_date,
         output.calendar.harvesting_year,
         annual_row,
@@ -117,6 +119,7 @@ function harvest_crop!(crop,
             :season_gpp, :season_lai_days, :season_length,
             :season_water_deficit, :season_evapotranspiration,
             :harvest_aboveground_carbon, :window_npp, :hi_binding_days,
+            :lodging_exposure,
         )
             output_values = getproperty(output.crop, field)
             accumulator_values = getproperty(output.annual, field)
@@ -137,6 +140,7 @@ function harvest_crop!(crop,
             output.annual.harvest_aboveground_carbon,
             output.annual.window_npp,
             output.annual.hi_binding_days,
+            output.annual.lodging_exposure,
         )
     end
 end
@@ -340,6 +344,7 @@ end
         annual_harvest_aboveground_carbon::AbstractVector{T},
         annual_window_npp::AbstractVector{T},
         annual_hi_binding_days::AbstractVector{T},
+        annual_lodging_exposure::AbstractVector{T},
         active_gpp::AbstractVector{T},
         active_lai_days::AbstractVector{T},
         active_length::AbstractVector{T},
@@ -372,6 +377,7 @@ end
         output_harvest_aboveground_carbon::AbstractMatrix{T},
         output_window_npp::AbstractMatrix{T},
         output_hi_binding_days::AbstractMatrix{T},
+        output_lodging_exposure::AbstractMatrix{T},
         output_harvest_date::AbstractMatrix{S},
     output_harvesting_year::AbstractMatrix{S},
     annual_output_row::Integer,
@@ -424,6 +430,10 @@ end
             storage_carbon[cell] + aboveground_carbon
         annual_window_npp[cell] += active_window_npp[cell]
         annual_hi_binding_days[cell] += active_hi_binding_days[cell]
+        # `lodging_exposure` is already the season's accumulation - it resets
+        # at sowing and only ever grows - so it is taken rather than summed
+        # from a parallel daily accumulator the way the others are.
+        annual_lodging_exposure[cell] += lodging_exposure[cell]
         active_gpp[cell] = zero(T)
         active_lai_days[cell] = zero(T)
         active_length[cell] = zero(T)
@@ -470,6 +480,8 @@ end
             (output_window_npp[annual_output_row, cell] = annual_window_npp[cell])
         size(output_hi_binding_days, 1) != 0 &&
             (output_hi_binding_days[annual_output_row, cell] = annual_hi_binding_days[cell])
+        size(output_lodging_exposure, 1) != 0 &&
+            (output_lodging_exposure[annual_output_row, cell] = annual_lodging_exposure[cell])
         size(output_harvest_date, 1) != 0 &&
             (output_harvest_date[annual_output_row, cell] = harvest_date[cell])
         size(output_harvesting_year, 1) != 0 &&
@@ -484,6 +496,7 @@ end
         annual_harvest_aboveground_carbon[cell] = zero(T)
         annual_window_npp[cell] = zero(T)
         annual_hi_binding_days[cell] = zero(T)
+        annual_lodging_exposure[cell] = zero(T)
         harvest_date[cell] = zero(S)
     end
 end
@@ -499,6 +512,7 @@ end
     annual_harvest_aboveground_carbon::AbstractVector{T},
     annual_window_npp::AbstractVector{T},
     annual_hi_binding_days::AbstractVector{T},
+    annual_lodging_exposure::AbstractVector{T},
 ) where {T <: AbstractFloat, S <: Integer}
     cell = @index(Global)
     annual_yield[cell] = zero(T)
@@ -511,4 +525,5 @@ end
     annual_harvest_aboveground_carbon[cell] = zero(T)
     annual_window_npp[cell] = zero(T)
     annual_hi_binding_days[cell] = zero(T)
+    annual_lodging_exposure[cell] = zero(T)
 end
