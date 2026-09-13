@@ -385,6 +385,20 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     # otherwise turn `depletion_fraction = 0` into 0.1 and break the ablation
     # contract. FAO-56's value is 0.04.
     depletion_demand_slope::T = 0.0       # per mm/day of ET_c; 0 = no demand adjustment.
+    # GRAIN NUMBER AND GRAIN FILLING, the CERES/DSSAT/APSIM structure, replacing
+    # the prescribed harvest index this lineage inherited from LPJmL.
+    #
+    # Why: measured, that index is a CONSTANT. It responds only to season water
+    # sufficiency, through a logistic that is 97.8% saturated at the lowest value
+    # real cells reach, so across the whole realized range (65-100) it moves
+    # through about 2% of its own span - while binding 83% of maize days. Yield
+    # was therefore a fixed fraction of biomass, and a yield loss that is NOT a
+    # biomass loss could not be represented at all. `docs/34`.
+    #
+    # `grains_per_carbon` ships at zero, which keeps the LPJmL index bitwise:
+    # the new sink is not computed and the old branch is taken unchanged.
+    grains_per_carbon::T = 0.0            # grains m-2 set per gC of NPP inside the critical window.
+    maximum_grain_carbon::T = 0.0         # gC a single grain can hold when filling completes.
     # Excess-water damage on an absolute daily RAINFALL threshold, acting on the
     # fraction of the standing crop recovered at harvest. Swept the same way as
     # the heat thresholds and on the same observations - see `docs/24` - and it

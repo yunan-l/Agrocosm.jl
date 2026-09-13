@@ -46,6 +46,17 @@ mutable struct CropPhenology{A, B, I}
     # since rejected rainfall leaves instantly as surface runoff rather than
     # ponding. See `docs/20`.
     heavy_rain_excess::A
+    # Grains set per square metre, accumulated from assimilate supply during the
+    # critical window and then FIXED for the rest of the season. This is the
+    # CERES/DSSAT/APSIM structure and it exists because the LPJmL harvest index
+    # this model inherited is, measured, a constant: it responds only to season
+    # water sufficiency through a logistic that is 97.8% saturated at the lowest
+    # value real cells reach, so across the whole realized range it moves through
+    # 2% of its own span while binding 83% of maize days. Yield was therefore a
+    # fixed fraction of biomass, and a yield loss that is not a biomass loss -
+    # sterility, lodging, sprouting, harvest loss - could not be represented at
+    # all. See `docs/34`.
+    grain_number::A
 end
 
 """Static and current-day algebraically derived phenology variables."""
@@ -71,6 +82,7 @@ function init_crop_phenology(::Type{T}, cell_size::Int, device) where {T <: Abst
         device(zeros(Int32, cell_size)),
         device(ones(T, cell_size)),
         device(ones(T, cell_size)),
+        device(zeros(T, cell_size)),
         device(zeros(T, cell_size)),
     )
 end

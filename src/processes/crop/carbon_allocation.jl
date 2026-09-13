@@ -28,6 +28,7 @@ function carbon_allocation!(CFT::CFTParameters,
                crop_stress_auxiliary(crop).water_deficit,
                crop_prognostic(crop).phenology.grain_set_fraction,
                crop_prognostic(crop).phenology.grain_fill_fraction,
+               crop_prognostic(crop).phenology.grain_number,
                crop_phenology_auxiliary(crop).fphu,
                crop_prognostic(crop).phenology.senescence,
                crop_prognostic(crop).carbon.biomass,
@@ -93,6 +94,38 @@ end
            (water_sufficiency + exp(T(6.13) - T(0.0883) * water_sufficiency)) + minimum
 end
 
+"""
+    grain_sink_carbon(grain_number, maximum_grain_carbon, fphu, window_end, fill_fraction)
+
+The CERES/DSSAT/APSIM sink: grains already set, times what each can still hold.
+
+Replaces a PRESCRIBED harvest index with an emergent one. `docs/34` measured that
+the inherited index is a constant - it reads only season water sufficiency,
+through a logistic 97.8% saturated at the lowest value real cells reach, so it
+moves through 2% of its own span while binding 83% of maize days. Yield was a
+fixed fraction of biomass, which makes every yield loss that is not a biomass
+loss - sterility, lodging, sprouting, harvest loss - structurally unrepresentable.
+
+Filling progress runs on `fphu`, which is thermal time, so a hot season completes
+filling in fewer DAYS and collects less assimilate: the temperature effect on
+grain weight arrives through the source limit rather than through a second
+coefficient.
+
+`fill_fraction` is `grain_fill_fraction`, and it multiplies the WEIGHT here while
+`grain_set_fraction` multiplies the NUMBER at the call site. That is where this
+project's 2x2 was always meant to act; until now both multiplied the constant
+index instead, so both were scaling a quantity that carried no information.
+"""
+@inline function grain_sink_carbon(
+    grain_number::T, maximum_grain_carbon::T, fphu::T, window_end::T,
+    fill_fraction::T,
+) where {T <: AbstractFloat}
+    remaining = one(T) - window_end
+    progress = remaining > zero(T) ?
+               clamp((fphu - window_end) / remaining, zero(T), one(T)) : one(T)
+    return grain_number * maximum_grain_carbon * progress * fill_fraction
+end
+
 """Compute and mass-cap storage carbon after leaf/root allocation."""
 @inline function compute_storage_carbon(
     biomass::T,
@@ -147,6 +180,7 @@ end
                                            crop_wdf::AbstractArray{T},
                                            crop_grain_set::AbstractArray{T},
                                            crop_grain_fill::AbstractArray{T},
+                                           crop_grain_number::AbstractArray{T},
                                            crop_fphu::AbstractArray{T},
                                            crop_senescence::AbstractArray{B},
                                            crop_biomass::AbstractArray{T},
@@ -169,6 +203,8 @@ end
     cell = @index(Global)
 
     @unpack sla, hiopt, himin = CFT
+    @unpack grains_per_carbon, maximum_grain_carbon = CFT
+    @unpack flowering_start, flowering_end = CFT
     @unpack FROOTMAX, FROOTMIN, include_biological_fixation_cost = kernel_params
     @unpack senescent_leaf_release = kernel_params
 
@@ -278,6 +314,14 @@ end
             # filled. Adding them would let one mechanism repair the other's
             # damage, and taking the minimum would make the less severe of the
             # two free.
+            # Grain number accumulates from assimilate supply inside the critical
+            # window and is fixed once the window closes - the defining property
+            # of the CERES structure, and the reason a poor flowering fortnight
+            # caps yield however good the rest of the season is.
+            if T(grains_per_carbon) > zero(T) &&
+               crop_fphu[cell] > T(flowering_start) && crop_fphu[cell] < T(flowering_end)
+                crop_grain_number[cell] += T(grains_per_carbon) * max(zero(T), crop_npp[cell])
+            end
             hi = compute_harvest_index(crop_fphu[cell], T(hiopt), T(himin), crop_wdf[cell]) *
                  crop_grain_set[cell] * crop_grain_fill[cell]
             # Never below what is already deposited: the harvest-index formula
@@ -285,9 +329,19 @@ end
             # quantity that can be un-filled. Mass still closes, because
             # `deposited` was capped at the available above-ground carbon and
             # leaves were allocated from what remained after it.
-            crop_stoc[cell] = max(deposited, compute_storage_carbon(
-                crop_biomass[cell], crop_leafc[cell], crop_rootc[cell], froot, hi, T(hiopt),
-            ))
+            # `grains_per_carbon = 0` takes the branch below and leaves the
+            # inherited index bitwise untouched, which is the ablation contract
+            # every mechanism in this project ships with.
+            sink = T(grains_per_carbon) > zero(T) ?
+                min(grain_sink_carbon(
+                        crop_grain_number[cell] * crop_grain_set[cell],
+                        T(maximum_grain_carbon), crop_fphu[cell], T(flowering_end),
+                        crop_grain_fill[cell]),
+                    crop_biomass[cell] - crop_leafc[cell] - crop_rootc[cell]) :
+                compute_storage_carbon(
+                    crop_biomass[cell], crop_leafc[cell], crop_rootc[cell], froot, hi,
+                    T(hiopt))
+            crop_stoc[cell] = max(deposited, sink)
             # Counts the days the harvest index actually bound. A mechanism that
             # multiplies `hi` changes nothing on a day the mass cap or the
             # already-deposited grain bound instead, so this is what decides

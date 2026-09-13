@@ -74,7 +74,7 @@ end
 # and `phenology.harvest_recovery_fraction` for excess water.
 # `test_simulation_api.jl`
 # compares the two estimates and is what catches an omission here.
-const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1650
+const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1651
 const _PERSISTENT_NONFLOAT_BYTES_PER_CELL = 46
 const _PERSISTENT_FIXED_FLOAT_VALUES = 26
 

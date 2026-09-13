@@ -123,6 +123,14 @@ end
         # Separate state because lodging, sprouting and harvest loss take a crop
         # that already set and filled its grain.
         :heavy_rain_excess,
+        # Grains per square metre, accumulated from assimilate supply inside the
+        # critical window and then FIXED - the one field here that is written
+        # over a window and read for the rest of the season rather than reset or
+        # monotonically damaged. It replaces a prescribed harvest index that
+        # measurement showed to be a constant (`docs/34`), and it is what makes
+        # `grain_set_fraction` and `grain_fill_fraction` act on a NUMBER and a
+        # WEIGHT respectively instead of both scaling the same constant.
+        :grain_number,
     )
     @test propertynames(crop.auxiliary.phenology) == (:phu, :winter_type, :fphu)
     @test propertynames(crop.auxiliary.calendar) == (:sowing_date, :prescribed_sowing_date)
