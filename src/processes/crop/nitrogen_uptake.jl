@@ -109,6 +109,7 @@ end
     layer_depth::T,
     root_factor::T,
     uptake_parameters,
+    water_exponent::T = zero(T),
 ) where {T <: AbstractFloat}
     available > zero(T) || return zero(T)
     water_scaler = relative_water > T(1e-7) ? one(T) : zero(T)
@@ -117,7 +118,18 @@ end
                   saturation_fraction * layer_depth / T(1000))
     potential = T(uptake_parameters.vmax) *
                 (T(uptake_parameters.kmin) + saturation) * root_factor
-    return min(potential, available)
+    # LPJmL's transport is the step above: a layer at 5% of its plant-available
+    # capacity supplies nitrogen at exactly the rate of one at field capacity,
+    # 0.7477 against 0.7477 on wheat's NO3 kinetics. Both routes to the root
+    # disagree - mass flow follows the transpiration stream, diffusion follows
+    # the water-filled cross-section - so the whole layer potential is scaled,
+    # the `kmin` floor with it, rather than only the saturation term.
+    #
+    # `water_exponent == 0` leaves `wetness^0 == 1` and reproduces the step
+    # bitwise; 1 is mass-flow like and 2 diffusion-like. Clamped at 1 because a
+    # layer wetter than field capacity does not transport faster than one at it.
+    wetness = min(one(T), max(zero(T), relative_water))
+    return min(potential * wetness^water_exponent, available)
 end
 
 @kernel inbounds = true function nuptake_crop_kernel!(
@@ -152,7 +164,8 @@ end
     @unpack lpjmlparams, soil_layers, auto_fertilizer, biological_fixation,
             require_active_photosynthesis = kernel_params
 
-    @unpack T_0, T_m, T_r = lpjmlparams
+    @unpack T_0, T_m, T_r, nitrogen_uptake_water_exponent = lpjmlparams
+    water_exponent = T(nitrogen_uptake_water_exponent)
     @unpack ncleaf, knstore, no3_uptake, nh4_uptake = CFT
     bnf = CFT.biological_fixation
 
@@ -196,11 +209,11 @@ end
                 )
                 total_potential_uptake += compute_mineral_nitrogen_uptake_potential(
                     max(zero(T), soil_NO3[l, cell]), soil_w[l, cell], soil_wsat[l, cell],
-                    soil_layer_depth[l], root_factor, no3_uptake,
+                    soil_layer_depth[l], root_factor, no3_uptake, water_exponent,
                 )
                 total_potential_uptake += compute_mineral_nitrogen_uptake_potential(
                     max(zero(T), soil_NH4[l, cell]), soil_w[l, cell], soil_wsat[l, cell],
-                    soil_layer_depth[l], root_factor, nh4_uptake,
+                    soil_layer_depth[l], root_factor, nh4_uptake, water_exponent,
                 )
             end
         end
@@ -226,7 +239,7 @@ end
                 if no3_available > zero(T)
                     no3_potential = compute_mineral_nitrogen_uptake_potential(
                         no3_available, soil_w[l, cell], soil_wsat[l, cell],
-                        soil_layer_depth[l], root_factor, no3_uptake,
+                        soil_layer_depth[l], root_factor, no3_uptake, water_exponent,
                     )
                     soil_NO3[l, cell] = max(
                         zero(T), soil_NO3[l, cell] - no3_potential * uptake_scale,
@@ -236,7 +249,7 @@ end
                 if nh4_available > zero(T)
                     nh4_potential = compute_mineral_nitrogen_uptake_potential(
                         nh4_available, soil_w[l, cell], soil_wsat[l, cell],
-                        soil_layer_depth[l], root_factor, nh4_uptake,
+                        soil_layer_depth[l], root_factor, nh4_uptake, water_exponent,
                     )
                     soil_NH4[l, cell] = max(
                         zero(T), soil_NH4[l, cell] - nh4_potential * uptake_scale,

@@ -148,3 +148,58 @@ end
     @test Agrocosm.compute_bnf_water_response(0.2f0, 0.2f0, 0.8f0) == 0.0f0
     @test Agrocosm.compute_bnf_water_response(0.8f0, 0.2f0, 0.8f0) == 1.0f0
 end
+
+@testset "Soil water gives nitrogen uptake a gradient, and zero keeps LPJmL's step" begin
+    # The exponent multiplies LPJmL's potential by `wetness^exponent`, so the
+    # direct function is the honest place to pin the contract: at zero it must
+    # return the shipped value bit for bit at every wetness, and above zero it
+    # must fall as the layer dries.
+    potential = Agrocosm.compute_mineral_nitrogen_uptake_potential
+    available, saturation, depth, root = 1.0f0, 0.4f0, 200.0f0, 0.5f0
+    kinetics = cft1.no3_uptake
+    at(wetness, exponent...) =
+        potential(available, wetness, saturation, depth, root, kinetics, exponent...)
+
+    step_value = at(1.0f0)
+    for wetness in (0.05f0, 0.25f0, 0.5f0, 0.9f0, 1.0f0)
+        @test at(wetness, 0.0f0) === at(wetness)
+        @test at(wetness, 0.0f0) === step_value
+    end
+
+    # A dry layer supplies less than a wet one once the exponent is on, and more
+    # of it under the gentler exponent.
+    @test at(0.1f0, 2.0f0) < at(0.1f0, 1.0f0) < step_value
+    @test at(1.0f0, 2.0f0) === step_value
+
+    # Saturation beyond field capacity is not faster transport, so the scaler is
+    # clamped rather than allowed to exceed one.
+    @test at(1.4f0, 2.0f0) === step_value
+
+    # LPJmL leaves its `kmin` floor outside the water switch, so a bone-dry
+    # layer still supplies `vmax * kmin * root_factor`. The exponent scales the
+    # whole layer potential, so it closes that floor too.
+    @test at(0.0f0) > 0.0f0
+    @test at(0.0f0, 2.0f0) == 0.0f0
+
+    # End to end: at zero the whole kernel reproduces the shipped uptake, and a
+    # dry profile with the exponent on takes up less.
+    shipped = let (crop, soil, state) = nitrogen_uptake_fixture()
+        soil.water.relative_content .= 0.2f0
+        nuptake_crop!(state, cft1, state)
+        crop.fluxes.nitrogen.uptake[1]
+    end
+    for exponent in (0.0f0, 2.0f0)
+        crop, soil, state = nitrogen_uptake_fixture()
+        soil.water.relative_content .= 0.2f0
+        params = Agrocosm.LPJmLParams{Float32}(;
+            (f => (f === :nitrogen_uptake_water_exponent ? exponent :
+                   getfield(Agrocosm.LPJmLParams{Float32}(), f))
+             for f in fieldnames(Agrocosm.LPJmLParams))...)
+        nuptake_crop!(state, cft1, state; lpjmlparams = params)
+        if exponent == 0.0f0
+            @test crop.fluxes.nitrogen.uptake[1] === shipped
+        else
+            @test crop.fluxes.nitrogen.uptake[1] < shipped
+        end
+    end
+end

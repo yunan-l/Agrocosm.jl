@@ -61,6 +61,23 @@ water, nitrogen, and management process coefficients.
     T_0::T = -25.0 # parameter in N uptake temperature function
     T_m::T = 15.0 # parameter in N uptake temperature function
     T_r::T = 15.0 # parameter in N uptake temperature function
+    # Soil water enters nitrogen uptake in LPJmL as a STEP: `wscaler = w > eps ?
+    # 1 : 0` in `nuptake_crop.c`, ported here bitwise. A layer at 2% of its
+    # plant-available capacity therefore supplies nitrogen exactly as fast as a
+    # layer at field capacity, so drought reduces nitrogen DEMAND without
+    # reducing nitrogen SUPPLY. Measured consequence on real cells: a 50%
+    # precipitation cut RAISES realized vcmax 37.3% on wheat and 16.3% on maize,
+    # because the relieved clamp repays part of the water loss.
+    #
+    # Both transport paths to the root disagree with a step. Mass flow scales
+    # with the transpiration stream; diffusion scales with the water-filled
+    # cross-section and tortuosity, which Barraclough & Tinker (1981) put near
+    # theta-squared. CERES carries `SMDFR`, APSIM limits the diffusive term the
+    # same way.
+    #
+    # SHIPS AT ZERO, which is `w^0 = 1` and therefore the LPJmL step bitwise.
+    # 1 is mass-flow-like, 2 diffusion-like.
+    nitrogen_uptake_water_exponent::T = 0.0 # exponent on relative water in N uptake
     k_max::T = 0.10 # maximum fraction of soil->NH4 assumed to be nitrified
     k_2::T = 0.01 # fraction of nitrified N lost as N20 flux
     soil_cn_ratio::T = 15.0 # soil organic matter C:N ratio
