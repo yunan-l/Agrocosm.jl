@@ -128,11 +128,36 @@ end
     @test Agrocosm.cft3.heavy_rain_tolerance == TW(432.8)
     @test Agrocosm.cft9.heavy_rain_tolerance == TW(271.9)
     for cft in (Agrocosm.cft1, Agrocosm.cft2, Agrocosm.cft3, Agrocosm.cft9)
-        @test cft.heavy_rain_rate == TW(0.002)
         # The tolerance must exceed the MEDIAN season or the term is a tax on a
         # wet climate rather than a wet year.
         @test cft.heavy_rain_tolerance > TW(150.0)
     end
+    # The rate is now PER CROP, and wheat's is zero. Scoring the recovery
+    # fraction against detrended GDHY anomalies per cell, area-weighted, the
+    # shipped tolerance gives rho = +0.069 rice, +0.058 maize, +0.008 soybean
+    # and -0.042 WHEAT: the wrong sign. Asserted here because a future edit that
+    # restores a shared rate would silently re-enable a term measured to be
+    # backwards over 162 Mha.
+    @test Agrocosm.cft1.heavy_rain_rate == TW(0.0)
+    for cft in (Agrocosm.cft2, Agrocosm.cft3, Agrocosm.cft9)
+        @test cft.heavy_rain_rate == TW(0.002)
+    end
+end
+
+@testset "a zero per-crop rate is inert, whatever the season accumulated" begin
+    # The ablation contract applied per CROP rather than per arm: with wheat's
+    # rate at zero, an `excess_water` run must leave wheat's yield exactly where
+    # a run without the mechanism left it, however wet the season was.
+    for excess in (TW(0.0), TW(500.0), TW(5000.0))
+        @test Agrocosm.excess_water_recovery(
+            excess, Agrocosm.cft1.heavy_rain_tolerance,
+            Agrocosm.cft1.heavy_rain_rate) == one(TW)
+    end
+    # And the same season through rice's rate must NOT be inert, or the test
+    # above passes because the helper is broken rather than because wheat is off.
+    @test Agrocosm.excess_water_recovery(
+        TW(5000.0), Agrocosm.cft2.heavy_rain_tolerance,
+        Agrocosm.cft2.heavy_rain_rate) < one(TW)
 end
 
 @testset "the flag reaches the model through the public entry" begin

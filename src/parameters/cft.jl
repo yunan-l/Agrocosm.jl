@@ -476,6 +476,7 @@ function _crop_cft(;
     bnf_potential = 0, bnf_maximum_npp_fraction = 0, bnf_carbon_cost = 0,
     heat_day_temperature = 38.0, cold_night_temperature = 17.0,
     heavy_rain_threshold = 20.0, heavy_rain_tolerance = 300.0,
+    heavy_rain_rate = 0.002,
 )
     T = Float32
     return CFTParameters{T, Int32}(
@@ -540,6 +541,7 @@ function _crop_cft(;
         cold_night_temperature = T(cold_night_temperature),
         heavy_rain_threshold = T(heavy_rain_threshold),
         heavy_rain_tolerance = T(heavy_rain_tolerance),
+        heavy_rain_rate = T(heavy_rain_rate),
     )
 end
 
@@ -569,7 +571,25 @@ const cft1 = _crop_cft(id=1, path=1, temp_co2=(0, 40), temp_photos=(12, 17),
     # wheat: sweep peak 10 mm (+1.492), 13.9 days a season. Flat between 5 and
     #   15 mm (+1.366 to +1.460), so the peak location is the least determined
     #   of the four.
-    heavy_rain_threshold=10.0, heavy_rain_tolerance=179.9)
+    heavy_rain_threshold=10.0, heavy_rain_tolerance=179.9,
+    # wheat is the one crop this mechanism must NOT be applied to, and that is a
+    # measurement rather than a preference. Scoring the recovery fraction itself
+    # against detrended GDHY anomalies, per cell and area-weighted, the shipped
+    # tolerance gives rho = +0.069 for rice, +0.058 for maize, +0.008 for
+    # soybean and -0.042 for WHEAT - the wrong sign, meaning the term removes
+    # yield in the years wheat did well. Every per-cell tolerance tested (p75,
+    # p90, p95 of the cell's own climatology) leaves it negative.
+    #
+    # The reason is in the same table. Wheat's observed response to season
+    # rainfall excess is +21.2% per 100 mm in cells below 100 mm of mean excess,
+    # over 120.8 Mha - most of the world's wheat grows where heavy rain is water
+    # SUPPLY, not damage, and is harvested before the summer rains. Its real
+    # excess-water losses, lodging and sprouting, sit in a short ripening window
+    # that a season integral cannot see.
+    #
+    # Measured consequence: the global arm degraded wheat more than any other
+    # crop, from r = 0.242 to 0.209 against gridded GDHY, and -0.127 in Brazil.
+    heavy_rain_rate=0.0)
 const cft2 = _crop_cft(id=2, path=1, temp_co2=(6, 55), temp_photos=(20, 45),
     pb=24, ps=0, basetemp=8, sowing_method=SDATE_PRECIPITATION, temp_spring=18,
     fphuc=.10, flaimaxc=.05, fphuk=.50,
