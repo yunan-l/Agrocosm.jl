@@ -46,8 +46,9 @@ mutable struct CropPhenology{A, B, I}
     # since rejected rainfall leaves instantly as surface runoff rather than
     # ponding. See `docs/20`.
     heavy_rain_excess::A
-    # Grains set per square metre, accumulated from assimilate supply during the
-    # critical window and then FIXED for the rest of the season. This is the
+    # NPP accumulated inside the critical window, from which the grain number is
+    # computed by a saturating response where it is used. Storing the DRIVER
+    # rather than the result keeps that response in one place. This is the
     # CERES/DSSAT/APSIM structure and it exists because the LPJmL harvest index
     # this model inherited is, measured, a constant: it responds only to season
     # water sufficiency through a logistic that is 97.8% saturated at the lowest
@@ -56,7 +57,7 @@ mutable struct CropPhenology{A, B, I}
     # fixed fraction of biomass, and a yield loss that is not a biomass loss -
     # sterility, lodging, sprouting, harvest loss - could not be represented at
     # all. See `docs/34`.
-    grain_number::A
+    window_assimilate::A
 end
 
 """Static and current-day algebraically derived phenology variables."""

@@ -379,6 +379,31 @@ function scaled_cft(cft, scale::Real)
          for field in fieldnames(CFTParameters))...)
 end
 
+"""Switch the yield sink from the prescribed harvest index to grain number.
+
+`[processes] grain_number = "derived"` takes `published_grain_traits`, which is
+fixed by two published agronomic numbers per crop plus one measured model
+quantity and never by a yield. Absent, or `grain_number_half_carbon = 0`, keeps the
+inherited harvest index bitwise.
+"""
+function with_grain_sink(cft, spec, cft_id::Integer)
+    spec === nothing && return cft
+    half_carbon, per_grain, ceiling = spec isa AbstractString ?
+        (lowercase(spec) == "derived" ? published_grain_traits(cft_id) :
+         error("grain_number must be \"derived\" or a number, got $spec")) :
+        (Float64(spec), published_grain_traits(cft_id)[2], published_grain_traits(cft_id)[3])
+    half_carbon == 0 && return cft
+    half_carbon > 0 && per_grain > 0 && ceiling > 0 ||
+        error("grain sink needs positive traits, got ($half_carbon, $per_grain, $ceiling)")
+    T = typeof(cft.hiopt)
+    return CFTParameters{T, Int32}(;
+        (field => (field === :grain_number_half_carbon ? T(half_carbon) :
+                   field === :maximum_grain_carbon ? T(per_grain) :
+                   field === :maximum_grain_number ? T(ceiling) :
+                   getfield(cft, field))
+         for field in fieldnames(CFTParameters))...)
+end
+
 """Set the FAO-56 depletion fraction, which is a CFT change rather than an arm.
 
 `depletion_fraction` is not a damage rate and it is not a process flag: it
@@ -428,10 +453,12 @@ function create_simulation(initial_data, selection, config, days, device, cft_id
     processes = get(config, "processes", Dict{String, Any}())
     rate_scale = Float64(get(processes, "rate_scale", 1.0))
     return initialize_simulation(
-        with_depletion(scaled_cft(crop_cft(cft_id), rate_scale),
-                       get(processes, "depletion_fraction", nothing),
-                       Float64(get(processes, "depletion_scale", 1.0)), cft_id,
-                       get(processes, "depletion_demand_slope", nothing)),
+        with_grain_sink(
+            with_depletion(scaled_cft(crop_cft(cft_id), rate_scale),
+                           get(processes, "depletion_fraction", nothing),
+                           Float64(get(processes, "depletion_scale", 1.0)), cft_id,
+                           get(processes, "depletion_demand_slope", nothing)),
+            get(processes, "grain_number", nothing), cft_id),
         initial_data;
         days,
         indices = collect(1:length(selection.cell_ids)),

@@ -397,8 +397,24 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     #
     # `grains_per_carbon` ships at zero, which keeps the LPJmL index bitwise:
     # the new sink is not computed and the old branch is taken unchanged.
-    grains_per_carbon::T = 0.0            # grains m-2 set per gC of NPP inside the critical window.
+    grain_number_half_carbon::T = 0.0     # gC of window NPP at which half the ceiling is set; 0 = mechanism off.
     maximum_grain_carbon::T = 0.0         # gC a single grain can hold when filling completes.
+    # The GENETIC CEILING on grain number, approached through a SATURATING
+    # response rather than a linear one with a hard cap. Both failures were
+    # measured on real cells before this form was chosen. Linear and unbounded set
+    # 8098 maize kernels m-2 against a 3000 target and yielded 19.7 t/ha dry
+    # matter, about twice the world record, because `grains_per_carbon` came from
+    # the GLOBAL MEAN window NPP and a productive cell overshoots in proportion.
+    # Linear with a hard cap then pinned rice, maize and irrigated wheat at
+    # EXACTLY `ceiling * maximum_grain_carbon` every season - a constant yield,
+    # which is the very defect this mechanism replaces.
+    #
+    #     grain_number = ceiling * window_npp / (window_npp + half_carbon)
+    #
+    # is bounded by construction, has no kink, and still varies at the top of its
+    # range. `half_carbon` is fixed by requiring the TYPICAL window NPP to give
+    # the TYPICAL published grain number, so it too is derived rather than fitted.
+    maximum_grain_number::T = 0.0         # grains m-2 the crop approaches asymptotically.
     # Excess-water damage on an absolute daily RAINFALL threshold, acting on the
     # fraction of the standing crop recovered at harvest. Swept the same way as
     # the heat thresholds and on the same observations - see `docs/24` - and it
@@ -468,6 +484,52 @@ function fao56_depletion_fraction(cft_id::Integer)
     cft_id == 3 && return 0.55   # maize, field (grain)
     cft_id == 9 && return 0.50   # soybeans
     return 0.0
+end
+
+"""
+    published_grain_traits(cft_id)
+
+`(grains_per_carbon, maximum_grain_carbon)` for the CERES-style grain sink.
+
+DERIVED, not fitted. Each crop contributes two PUBLISHED agronomic numbers - a
+typical grain number per square metre and a typical single-grain dry weight - and
+one MEASURED model quantity, the NPP this model accumulates inside its own
+critical window. Those three fix the pair completely, and no yield was consulted:
+
+| crop | grains m-2 | mg/grain | window NPP gC m-2 | grains per gC |
+| --- | --- | --- | --- | --- |
+| wheat | 15000 | 40 | 126.9 | 118.2 |
+| rice | 30000 | 22 | 88.0 | 340.7 |
+| maize | 3000 | 280 | 172.2 | 17.4 |
+| soybean | 2500 | 170 | 153.4 | 16.3 |
+
+Carbon is 45% of dry matter, the fraction this model already uses, so a 280 mg
+maize kernel holds 0.126 gC.
+
+The grain numbers and weights are mid-range values for well-managed crops, so the
+SINK these imply is a potential rather than an expectation - 8.4 t/ha dry matter
+for maize against a global area-weighted mean nearer 4.7. That is the intended
+CERES behaviour: the sink is a ceiling set in the window, and source limitation
+binds in most cell-years. Whether it binds too often or too rarely is the thing
+to measure, not to assume.
+"""
+function published_grain_traits(cft_id::Integer)
+    # (half-saturation gC of window NPP, gC per grain, ceiling grains m-2)
+    #
+    # `half = typical_npp * (ceiling / typical_grains - 1)`, so the typical window
+    # NPP this model actually produces returns the typical published grain number
+    # and the ceiling is approached but never reached:
+    #
+    # | crop | typical grains | ceiling | typical NPP | half |
+    # | wheat | 15000 | 20000 | 126.9 | 42.3 |
+    # | rice | 30000 | 40000 | 88.0 | 29.3 |
+    # | maize | 3000 | 4500 | 172.2 | 86.1 |
+    # | soybean | 2500 | 3500 | 153.4 | 61.4 |
+    cft_id == 1 && return (42.3, 0.0180, 20000.0)   # wheat
+    cft_id == 2 && return (29.3, 0.0099, 40000.0)   # rice
+    cft_id == 3 && return (86.1, 0.1260, 4500.0)    # maize
+    cft_id == 9 && return (61.4, 0.0765, 3500.0)    # soybean
+    return (0.0, 0.0, 0.0)
 end
 
 """Return a CFT parameter set whose floating fields consistently use `T`."""

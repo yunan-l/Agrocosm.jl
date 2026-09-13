@@ -28,7 +28,7 @@ function carbon_allocation!(CFT::CFTParameters,
                crop_stress_auxiliary(crop).water_deficit,
                crop_prognostic(crop).phenology.grain_set_fraction,
                crop_prognostic(crop).phenology.grain_fill_fraction,
-               crop_prognostic(crop).phenology.grain_number,
+               crop_prognostic(crop).phenology.window_assimilate,
                crop_phenology_auxiliary(crop).fphu,
                crop_prognostic(crop).phenology.senescence,
                crop_prognostic(crop).carbon.biomass,
@@ -92,6 +92,33 @@ end
     water_sufficiency >= zero(T) || return optimal
     return (optimal - minimum) * water_sufficiency /
            (water_sufficiency + exp(T(6.13) - T(0.0883) * water_sufficiency)) + minimum
+end
+
+"""
+    saturating_grain_number(window_assimilate, ceiling, half_carbon)
+
+Grains set per square metre, approaching a genetic ceiling as assimilate during
+the critical window stops limiting.
+
+    ceiling * window_assimilate / (window_assimilate + half_carbon)
+
+Two simpler forms were built and measured first, and each failed on real cells.
+Linear and unbounded set 8098 maize kernels m-2 against a 3000 target and yielded
+19.7 t/ha dry matter - roughly twice the world record - because the coefficient
+was derived from the GLOBAL MEAN window NPP while a productive cell overshoots in
+proportion. Linear with a hard cap then pinned rice, maize and irrigated wheat at
+exactly `ceiling * maximum_grain_carbon` every season, which is a constant yield
+and therefore the very defect this mechanism exists to remove.
+
+This form is bounded by construction, has no kink for the reverse pass, and keeps
+varying at the top of its range.
+"""
+@inline function saturating_grain_number(
+    window_assimilate::T, ceiling::T, half_carbon::T,
+) where {T <: AbstractFloat}
+    half_carbon > zero(T) || return zero(T)
+    supply = max(window_assimilate, zero(T))
+    return ceiling * supply / (supply + half_carbon)
 end
 
 """
@@ -180,7 +207,7 @@ end
                                            crop_wdf::AbstractArray{T},
                                            crop_grain_set::AbstractArray{T},
                                            crop_grain_fill::AbstractArray{T},
-                                           crop_grain_number::AbstractArray{T},
+                                           crop_window_assimilate::AbstractArray{T},
                                            crop_fphu::AbstractArray{T},
                                            crop_senescence::AbstractArray{B},
                                            crop_biomass::AbstractArray{T},
@@ -203,7 +230,7 @@ end
     cell = @index(Global)
 
     @unpack sla, hiopt, himin = CFT
-    @unpack grains_per_carbon, maximum_grain_carbon = CFT
+    @unpack grain_number_half_carbon, maximum_grain_carbon, maximum_grain_number = CFT
     @unpack flowering_start, flowering_end = CFT
     @unpack FROOTMAX, FROOTMIN, include_biological_fixation_cost = kernel_params
     @unpack senescent_leaf_release = kernel_params
@@ -318,9 +345,13 @@ end
             # window and is fixed once the window closes - the defining property
             # of the CERES structure, and the reason a poor flowering fortnight
             # caps yield however good the rest of the season is.
-            if T(grains_per_carbon) > zero(T) &&
+            # The state accumulates window ASSIMILATE; the grain number is the
+            # saturating function of it, evaluated where it is used. Storing the
+            # driver rather than the result keeps the response function in one
+            # place and lets it change without a state migration.
+            if T(grain_number_half_carbon) > zero(T) &&
                crop_fphu[cell] > T(flowering_start) && crop_fphu[cell] < T(flowering_end)
-                crop_grain_number[cell] += T(grains_per_carbon) * max(zero(T), crop_npp[cell])
+                crop_window_assimilate[cell] += max(zero(T), crop_npp[cell])
             end
             hi = compute_harvest_index(crop_fphu[cell], T(hiopt), T(himin), crop_wdf[cell]) *
                  crop_grain_set[cell] * crop_grain_fill[cell]
@@ -329,12 +360,14 @@ end
             # quantity that can be un-filled. Mass still closes, because
             # `deposited` was capped at the available above-ground carbon and
             # leaves were allocated from what remained after it.
-            # `grains_per_carbon = 0` takes the branch below and leaves the
+            # `grain_number_half_carbon = 0` takes the branch below and leaves the
             # inherited index bitwise untouched, which is the ablation contract
             # every mechanism in this project ships with.
-            sink = T(grains_per_carbon) > zero(T) ?
+            sink = T(grain_number_half_carbon) > zero(T) ?
                 min(grain_sink_carbon(
-                        crop_grain_number[cell] * crop_grain_set[cell],
+                        saturating_grain_number(
+                            crop_window_assimilate[cell], T(maximum_grain_number),
+                            T(grain_number_half_carbon)) * crop_grain_set[cell],
                         T(maximum_grain_carbon), crop_fphu[cell], T(flowering_end),
                         crop_grain_fill[cell]),
                     crop_biomass[cell] - crop_leafc[cell] - crop_rootc[cell]) :
