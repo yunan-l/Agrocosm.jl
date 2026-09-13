@@ -93,7 +93,10 @@ end
     @test estimate_memory(
         1, 1; T = Float64, diagnostics = false, block_days = 1,
         backend = :cpu, safety_factor = 1,
-    ).persistent_state_bytes == 13446
+    # 13454, up 8 bytes from 13446 when `SoilWater.ponding` was added: one
+    # Float64 per cell. This literal is the reason `_PERSISTENT_FLOAT_VALUES_PER_CELL`
+    # cannot drift from the real field count without something failing.
+    ).persistent_state_bytes == 13454
     @test estimate.forcing_block_bytes == 64
     @test prefetched.host_forcing_bytes == estimate.host_forcing_bytes + 64
     @test prefetched.host_peak_bytes == estimate.host_peak_bytes + 64

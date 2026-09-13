@@ -24,6 +24,15 @@ mutable struct SoilWater{A, M}
     bottom_drainage::A          # Drainage leaving the bottom soil layer (mm day⁻¹).
     infiltration::A             # Rain/melt water remaining for soil infiltration (mm day⁻¹).
     percolation::M              # Downward layer-to-layer percolation (mm day⁻¹).
+    # Water the surface refused, held instead of deleted. LPJmL removes rejected
+    # rainfall as surface runoff on the day it arrives, which is why this lineage
+    # cannot waterlog at all: measured on five real cells, root-zone water-filled
+    # pore space never reaches 0.90, not even irrigated paddy rice on 54% clay,
+    # so the aeration-stress band the rest of the field uses (0.85-0.95) is
+    # unreachable. See `docs/32`. This store is offered back to infiltration the
+    # next day, so it is a delay rather than a new source, and it is capped by
+    # `ponding_capacity`, which ships at zero and reproduces LPJmL bitwise.
+    ponding::A                  # Water ponded on the surface, carried between days (mm).
 end
 
 init_soil_water(cell_size::Int, device; kwargs...) =
@@ -57,5 +66,6 @@ function init_soil_water(::Type{T}, cell_size::Int, device;
         cell_state(),
         cell_state(),
         layer_state(),
+        cell_state(),
     )
 end
