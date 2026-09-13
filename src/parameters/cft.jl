@@ -456,6 +456,28 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     #
     # SHIPS AT ZERO, which is bitwise the inherited thermal-time development.
     drought_phenology_rate::T = 0.0       # Thermal-time acceleration per unit water deficit; 0 = inert.
+    # Stress slows canopy EXPANSION in the inherited model - the daily LAI
+    # increment is scaled by `min(wscal, vscal)` - but leaf area already built is
+    # never lost. Measured consequence: under a 50% precipitation cut peak LAI
+    # moves +0.1% on wheat, 0.0% on rice, -5.6% on maize, -5.4% on soybean and
+    # +0.1% on hot wheat. Four of five cells build the SAME maximum canopy in a
+    # drought as in a normal year, because at those cells the stress arrives
+    # after the canopy is complete and expansion has nothing left to slow.
+    #
+    # The missing half is senescence: a stressed crop sheds leaf area. AquaCrop
+    # triggers canopy decline on a water-stress threshold, APSIM carries a
+    # water-driven `sen_water` term, CERES/DSSAT accelerate `SLAN`. This is that
+    # term, in the same linear form as `drought_phenology_rate` so the two can be
+    # compared: a fraction `rate * (1 - min(wscal, vscal))` of standing leaf area
+    # lost per day, applied to the retained canopy so it persists rather than
+    # being rebuilt tomorrow.
+    #
+    # Separate from `drought_phenology_rate` on purpose and not a variant of it:
+    # that one shortens the season's DURATION, this one reduces its SIZE, and
+    # APSIM carries both.
+    #
+    # SHIPS AT ZERO, which is bitwise the inherited canopy.
+    stress_canopy_loss_rate::T = 0.0      # Standing LAI lost per day per unit stress; 0 = inert.
     # What a season is allowed to accumulate before any damage, in mm of rainfall
     # above `heavy_rain_threshold`. MEASURED as the AREA-WEIGHTED 90th percentile
     # of the accumulation each crop actually sees over 1981-2016, which is the
