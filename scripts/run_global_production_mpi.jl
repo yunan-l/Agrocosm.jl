@@ -201,6 +201,17 @@ function run_global_production_mpi(args = ARGS)
             "rate_scale" => first_rank["rate_scale"],
             "depletion_fraction" => first_rank["depletion_fraction"],
             "depletion_demand_slope" => first_rank["depletion_demand_slope"],
+            # The final manifest is what anyone reads six months from now, and it
+            # is assembled from an EXPLICIT key list rather than by copying the
+            # rank manifest. A key added to `run_global_production_cpu.jl` and
+            # not here is recorded per rank, checked across partitions, and then
+            # dropped from the only file that survives `cleanup_rank_outputs`.
+            "drought_phenology_rate" => first_rank["drought_phenology_rate"],
+            "stress_canopy_loss_rate" => first_rank["stress_canopy_loss_rate"],
+            "nitrogen_uptake_water_exponent" => first_rank["nitrogen_uptake_water_exponent"],
+            "lodging_rate" => first_rank["lodging_rate"],
+            "lodging_tolerance" => first_rank["lodging_tolerance"],
+            "lodging_wind_threshold" => first_rank["lodging_wind_threshold"],
             "management_mode" => first_rank["management_mode"],
             "management_fixed_year" => first_rank["management_fixed_year"],
             "crop_resp_fix" => first_rank["crop_resp_fix"],
