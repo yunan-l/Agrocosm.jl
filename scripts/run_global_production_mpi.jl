@@ -41,6 +41,7 @@ function merge_production_partitions(manifest_paths, output_path)
             "depletion_fraction", "depletion_demand_slope",
             "drought_phenology_rate", "stress_canopy_loss_rate",
             "nitrogen_uptake_water_exponent",
+            "lodging_rate", "lodging_tolerance", "lodging_wind_threshold",
             "simulation_start_year", "simulation_end_year",
             "crop_resp_fix", "nitrogen_limit_vcmax",
             "config_fingerprint", "allocation_path", "pool_allocation_cell_policy",

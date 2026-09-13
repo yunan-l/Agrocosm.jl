@@ -340,6 +340,9 @@ function run_global_production(
         # is read back off the simulation too.
         "drought_phenology_rate" => Float64(simulation.cft.drought_phenology_rate),
         "stress_canopy_loss_rate" => Float64(simulation.cft.stress_canopy_loss_rate),
+        "lodging_rate" => Float64(simulation.cft.lodging_rate),
+        "lodging_tolerance" => Float64(simulation.cft.lodging_tolerance),
+        "lodging_wind_threshold" => Float64(simulation.cft.lodging_wind_threshold),
         "nitrogen_uptake_water_exponent" =>
             Float64(simulation.model_parameters.lpjml.nitrogen_uptake_water_exponent),
         "management_mode" => String(get(management, "mode", "")),

@@ -308,6 +308,33 @@ function model_inputs(
     return model_initial_data(grid, soil, crop, initial_state)
 end
 
+"""Turn on wind lodging.
+
+`[processes] lodging_rate` is the switch; `lodging_tolerance` is what a season
+may accumulate first, in (m/s)^2 day, and MUST come from a measured
+accumulation rather than a choice - see `heavy_rain_tolerance`. Absent or a zero
+rate harvests bitwise as before.
+"""
+function with_lodging(cft, rate_spec, tolerance_spec, threshold_spec)
+    rate_spec === nothing && return cft
+    rate = Float64(rate_spec)
+    rate >= 0 || error("lodging_rate must be non-negative, got $rate")
+    rate == 0 && return cft
+    tolerance = tolerance_spec === nothing ?
+        Float64(cft.lodging_tolerance) : Float64(tolerance_spec)
+    threshold = threshold_spec === nothing ?
+        Float64(cft.lodging_wind_threshold) : Float64(threshold_spec)
+    tolerance >= 0 || error("lodging_tolerance must be non-negative, got $tolerance")
+    threshold >= 0 || error("lodging_wind_threshold must be non-negative, got $threshold")
+    T = typeof(cft.hiopt)
+    return CFTParameters{T, Int32}(;
+        (field => (field === :lodging_rate ? T(rate) :
+                   field === :lodging_tolerance ? T(tolerance) :
+                   field === :lodging_wind_threshold ? T(threshold) :
+                   getfield(cft, field))
+         for field in fieldnames(CFTParameters))...)
+end
+
 """Turn on the two stress responses the limitation census found missing.
 
 `[processes] drought_phenology_rate` lets water stress shorten the season after
@@ -525,15 +552,19 @@ function create_simulation(initial_data, selection, config, days, device, cft_id
     processes = get(config, "processes", Dict{String, Any}())
     rate_scale = Float64(get(processes, "rate_scale", 1.0))
     return initialize_simulation(
-        with_stress_response(
-            with_grain_sink(
+        with_lodging(
+            with_stress_response(
+                with_grain_sink(
                 with_depletion(scaled_cft(crop_cft(cft_id), rate_scale),
                                get(processes, "depletion_fraction", nothing),
                                Float64(get(processes, "depletion_scale", 1.0)), cft_id,
                                get(processes, "depletion_demand_slope", nothing)),
-                get(processes, "grain_number", nothing), cft_id),
-            get(processes, "drought_phenology_rate", nothing),
-            get(processes, "stress_canopy_loss_rate", nothing)),
+                    get(processes, "grain_number", nothing), cft_id),
+                get(processes, "drought_phenology_rate", nothing),
+                get(processes, "stress_canopy_loss_rate", nothing)),
+            get(processes, "lodging_rate", nothing),
+            get(processes, "lodging_tolerance", nothing),
+            get(processes, "lodging_wind_threshold", nothing)),
         initial_data;
         days,
         indices = collect(1:length(selection.cell_ids)),
