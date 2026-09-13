@@ -530,11 +530,14 @@ function _daily_crop!(
         # harvest, so it is order-independent against everything above by
         # construction rather than by argument.
         excess_water && excess_water!(cftparameters, state, dailyWeather.prec)
-        # Gated by its own rate rather than a process flag, like
-        # `depletion_fraction`: it changes a response the ablation rungs do not
-        # name, and the kernel adds exactly zero when the rate is zero.
-        cftparameters.lodging_rate > 0 &&
-            lodging!(cftparameters, state, dailyWeather.wind, state)
+        # Runs on EVERY arm, not only when the rate is on. The exposure is a
+        # diagnostic before it is a damage term: `lodging_tolerance` has to come
+        # from the distribution of what a season actually accumulates, the way
+        # `heavy_rain_tolerance` did, and a kernel gated by its own rate can
+        # never produce that distribution. Yield is untouched at rate zero
+        # because `lodging_recovery` returns exactly one there, and nothing else
+        # reads `lodging_exposure`.
+        lodging!(cftparameters, state, dailyWeather.wind, state)
         terminal_heat && terminal_heat!(cftparameters, state)
         # Order-independent against the heat sink: both only subtract from
         # `grain_set_fraction` and the state is clamped at zero.
