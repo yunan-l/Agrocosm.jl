@@ -311,6 +311,7 @@ const _OUTPUT_VARIABLE_METADATA = Dict{Tuple{Symbol, Symbol}, NamedTuple}(
     # any effect at all; on the other days the carbon mass cap or the grain
     # already deposited set storage, and the index is not the binding constraint.
     (:crop, :hi_binding_days) => (units = "day", description = "Growing days on which the harvest index, not the carbon mass cap or the already-deposited grain, set storage carbon"),
+    (:crop, :lodging_exposure) => (units = "m2 s-2 day", description = "Season-accumulated wind lodging pressure: wind speed above the threshold squared, weighted by standing above-ground carbon and root-zone wetness, after flowering"),
     (:crop, :fphu) => (units = "1", description = "Fraction of potential heat units"),
     (:crop, :water_deficit) => (units = "%", description = "Season-cumulative crop water sufficiency (100 = demand met)"),
     (:crop, :growing_mask) => (units = "1", description = "Active crop-stand mask"),
@@ -340,6 +341,7 @@ function output_variable_spec(group::Symbol, field::Symbol)
         :yield, :season_gpp, :season_lai_days, :season_length,
         :season_water_deficit, :season_evapotranspiration,
         :harvest_aboveground_carbon, :window_npp, :hi_binding_days,
+        :lodging_exposure,
         :harvest_date, :harvesting_year,
     ) ? :annual : :daily
     return VariableSpec(
