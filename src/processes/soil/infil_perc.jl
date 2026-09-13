@@ -140,6 +140,7 @@ function infil_perc!(soil,
     kernel_params = (;
         soil_infil = T(lpjmlparams.soil_infil),
         soil_infil_litter = T(lpjmlparams.soil_infil_litter),
+        ponding_capacity = T(lpjmlparams.ponding_capacity),
         percthres = T(lpjmlparams.percthres),
         water_heat_capacity = T(thermalparams.water_heat_capacity),
         ice_heat_capacity = T(thermalparams.ice_heat_capacity),
@@ -165,6 +166,7 @@ function infil_perc!(soil,
                soil_water_fluxes(soil).outflux,
                soil_water_auxiliary(soil).saturated_conductivity,
                soil_water_fluxes(soil).surface_runoff,
+               soil_water_prognostic(soil).ponding,
                soil_water_fluxes(soil).lateral_runoff,
                soil_water_fluxes(soil).bottom_drainage,
                soil_water_fluxes(soil).percolation,
@@ -204,6 +206,28 @@ surface runoff in the calling kernel.
     saturation_deficit = one(T) - relative_storage / available_storage
     saturation_deficit >= zero(T) || return zero(T)
     return slug * saturation_deficit^(one(T) / exponent)
+end
+
+"""
+    pond_rejected_water(rejected, ponded, capacity)
+
+Split water the surface refused into the part the surface can HOLD and the part
+that leaves as runoff.
+
+LPJmL sends all of it to runoff on the day it arrives, which is `capacity = 0`
+here and is reproduced bitwise: `min(rejected, 0 - 0)` is zero, so the whole
+amount runs off and no arithmetic differs. Above zero the surface keeps what fits
+and is offered it back at the next day's infiltration, so this is a DELAY and
+never a source - the water balance closes because the pond is carried in the
+residual like any other store.
+
+Returns `(retained, runoff)`.
+"""
+@inline function pond_rejected_water(
+    rejected::T, ponded::T, capacity::T,
+) where {T <: AbstractFloat}
+    retained = min(max(rejected, zero(T)), max(capacity - ponded, zero(T)))
+    return retained, rejected - retained
 end
 
 """
@@ -302,6 +326,7 @@ end
                                     soil_w_outflux::AbstractArray{M},
                                     soil_Ks::AbstractArray{M},
                                     soil_srunoff::AbstractArray{T},
+                                    soil_ponding::AbstractArray{T},
                                     soil_lrunoff::AbstractArray{M},
                                     soil_outflux_f::AbstractArray{T},
                                     soil_perc::AbstractArray{M},
@@ -329,10 +354,16 @@ end
     cell = @index(Global)
 
     @unpack soil_layers, NPERCO, transfer_heat,
-            soil_infil, soil_infil_litter, percthres,
+            soil_infil, soil_infil_litter, percthres, ponding_capacity,
             water_heat_capacity, ice_heat_capacity, volumetric_fusion_heat = kernel_params
     anion_excl = M(soil_anion_exclusion[cell])
 
+    # Yesterday's ponded water is offered to infiltration before anything else,
+    # which is what makes the store a delay rather than a reservoir: it either
+    # gets in today or is re-ponded below, and the daily balance sees it as the
+    # difference between `ponding` before and after.
+    infil[cell] += soil_ponding[cell]
+    soil_ponding[cell] = zero(T)
     freewater = zero(T)
     soil_srunoff[cell] = zero(T)
     soil_outflux_f[cell] = zero(T)
@@ -389,8 +420,12 @@ end
             slug, top_storage, soil_wsats[1, cell] - soil_wpwps[1, cell], soil_infil,
         )
         soil_w_influx[1, cell] += influx
-        srunoff = slug-influx
-        soil_srunoff[cell] += slug - influx # surface runoff used for leaching
+        retained, rejected_runoff = pond_rejected_water(
+            slug - influx, soil_ponding[cell], ponding_capacity,
+        )
+        soil_ponding[cell] += retained
+        srunoff = rejected_runoff
+        soil_srunoff[cell] += rejected_runoff # surface runoff used for leaching
         incoming_volumetric_enthalpy = top_volumetric_enthalpy
 
         if transfer_heat
@@ -523,7 +558,11 @@ end
     # infiltration input because it would be omitted from the day's water
     # balance and silently disappear at the next process update.
     if iter == 1000 && infil[cell] > zero(T)
-        soil_srunoff[cell] += infil[cell]
+        retained, rejected_runoff = pond_rejected_water(
+            infil[cell], soil_ponding[cell], ponding_capacity,
+        )
+        soil_ponding[cell] += retained
+        soil_srunoff[cell] += rejected_runoff
         infil[cell] = zero(T)
     end
 

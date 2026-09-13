@@ -86,6 +86,8 @@ function _soil_lifecycle_views(soil::Soil)
         water = _fields(soil.water, (
             :storage, :ice_storage, :wilting_ice_fraction,
             :available_ice_storage, :free_ice_storage, :saturation_fraction,
+            # Carried between days, so it is prognostic rather than a flux.
+            :ponding,
         )),
         thermal = _fields(soil.thermal, (
             :temperature, :enthalpy, :frozen_fraction, :freeze_depth,

@@ -58,6 +58,14 @@ water, nitrogen, and management process coefficients.
     volatil_length::T = 1.0 # characteristic length scale (m)
     soil_infil::T = 2.0 # default soil infiltration
     soil_infil_litter::T = 0.6 # soil infiltration intensification by litter cover
+    # Surface storage for water the profile refuses. LPJmL deletes that water as
+    # surface runoff the day it arrives, so the root zone can never approach
+    # saturation and the aeration-stress mechanism the rest of the field uses has
+    # nothing to fire on (`docs/32`). Physically this is microtopography, bunding
+    # and depression storage; it is zero on steep ground and large in a paddy.
+    # SHIPS AT ZERO, which is bitwise the LPJmL behaviour - the whole point of
+    # the parameter is that it can be measured rather than assumed.
+    ponding_capacity::T = 0.0 # maximum ponded surface water carried overnight (mm)
     percthres::T = 1.0 # Percolation threshold/scaling coefficient.
     NPERCO::T = 0.4 # LPJmL 5.10 surface-layer lateral NO₃ transport multiplier.
     manure_cn::T = 14.5 # CN ration of manure gC/gN

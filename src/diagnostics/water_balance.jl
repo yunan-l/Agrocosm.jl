@@ -20,6 +20,8 @@ mutable struct WaterBalance{M <: AbstractArray{<:AbstractFloat}}
     snow_storage_after::M       # Snow stock at end of day (mm water equivalent).
     litter_storage_before::M    # Surface-litter water stock at start of day (mm).
     litter_storage_after::M     # Surface-litter water stock at end of day (mm).
+    pond_storage_before::M      # Ponded surface water at start of day (mm).
+    pond_storage_after::M       # Ponded surface water at end of day (mm).
     snowmelt::M                 # Water released by snow melt (mm day⁻¹).
     snow_sublimation::M         # Snow sublimation loss (mm day⁻¹).
     snow_runoff::M              # Snow bypass/runoff loss (mm day⁻¹).
@@ -53,7 +55,8 @@ function init_water_balance(number_of_days::Integer,
         allocate(), allocate(), allocate(), allocate(), allocate(),
         allocate(), allocate(), allocate(), allocate(), allocate(),
         allocate(), allocate(), allocate(), allocate(), allocate(),
-        allocate(), allocate(), allocate(), allocate(),
+        allocate(), allocate(), allocate(), allocate(), allocate(),
+        allocate(),
     )
 end
 
@@ -68,6 +71,10 @@ function record_water_balance_start!(water_balance::WaterBalance,
     @views water_balance.snow_storage_before[day_index, :] .= soil_snow_prognostic(soil).pack
     @views water_balance.litter_storage_before[day_index, :] .=
         soil_surface_litter_prognostic(soil).water_storage
+    # Ponded surface water is a STORE and has to appear on both sides, or the
+    # day a pond fills reads as a leak of exactly that size.
+    @views water_balance.pond_storage_before[day_index, :] .=
+        soil_water_prognostic(soil).ponding
     return nothing
 end
 
@@ -89,6 +96,8 @@ function record_water_balance_end!(water_balance::WaterBalance,
         water_balance.snow_storage_after[day_index, :] .= soil_snow_prognostic(soil).pack
         water_balance.litter_storage_after[day_index, :] .=
             soil_surface_litter_prognostic(soil).water_storage
+        water_balance.pond_storage_after[day_index, :] .=
+            soil_water_prognostic(soil).ponding
         water_balance.snowmelt[day_index, :] .= soil_snow_fluxes(soil).melt
         water_balance.snow_sublimation[day_index, :] .= soil_snow_fluxes(soil).sublimation
         water_balance.snow_runoff[day_index, :] .= soil_snow_fluxes(soil).runoff
@@ -117,11 +126,13 @@ function record_water_balance_end!(water_balance::WaterBalance,
             water_balance.soil_ice_storage_before[day_index, :] .+
             water_balance.snow_storage_before[day_index, :] .+
             water_balance.litter_storage_before[day_index, :] .+
+            water_balance.pond_storage_before[day_index, :] .+
             water_balance.precipitation[day_index, :] .-
             water_balance.soil_storage_after[day_index, :] .-
             water_balance.soil_ice_storage_after[day_index, :] .-
             water_balance.snow_storage_after[day_index, :] .-
             water_balance.litter_storage_after[day_index, :] .-
+            water_balance.pond_storage_after[day_index, :] .-
             water_balance.interception[day_index, :] .-
             water_balance.litter_evaporation[day_index, :] .-
             water_balance.transpiration[day_index, :] .-
