@@ -169,6 +169,7 @@ function recouple_nitrogen_water!(
         b = T(CFT.b),
         emax = T(CFT.emax),
         depletion_fraction = T(CFT.depletion_fraction),
+        depletion_demand_slope = T(CFT.depletion_demand_slope),
         fpc = T(CFT.fpc),
         gmin = T(CFT.gmin),
         soil_layers = 5,
@@ -219,7 +220,7 @@ end
 ) where {T <: AbstractFloat, M <: AbstractFloat, S <: Integer}
     cell = @index(Global)
     @unpack pathway, b, emax, fpc, gmin, soil_layers, lpjmlparams, photoparams = kernel_params
-    @unpack depletion_fraction = kernel_params
+    @unpack depletion_fraction, depletion_demand_slope = kernel_params
     @unpack ALPHAM, GM = lpjmlparams
 
     if is_growing[cell] == one(S) && lambda[cell] > zero(T) &&
@@ -240,7 +241,9 @@ end
             root_water += soil_water[layer, cell] * root_distribution[layer]
         end
         supply = compute_transpiration_supply(
-            emax, root_water, root_carbon[cell], depletion_fraction) * fpc
+            emax, root_water, root_carbon[cell],
+            demand_adjusted_depletion(depletion_fraction, demand, depletion_demand_slope),
+        ) * fpc
         conductance[cell] = limited_conductance
 
         if nitrogen_water_recoupling_required(
@@ -400,6 +403,35 @@ this project ships with.
     return min(one(T), root_water / plateau)
 end
 
+"""
+    demand_adjusted_depletion(depletion_fraction, demand, slope)
+
+FAO-56's own adjustment of `p` for evaporative demand.
+
+Table 22's values apply at a crop evapotranspiration of about 5 mm/day, and the
+note beneath it gives `p_adjusted = p + 0.04 * (5 - ET_c)`, bounded to
+[0.1, 0.8]. A crop under a thirsty atmosphere reaches the end of its readily
+available water sooner, so the plateau is SHORTER there and longer in a humid
+climate. That is the same document the tabulated values come from, so it is
+literature rather than a fit.
+
+It is also the reason a single global `p` cannot generalise. `docs/29` measured
+the same failure for temperature from the other side: one absolute threshold
+applied everywhere puts its response where the observed sensitivity is not. Here
+the correction is published rather than inferred.
+
+Skipped entirely when the slope is zero OR the plateau is off, rather than
+evaluated with a zero slope: the [0.1, 0.8] bound would otherwise turn
+`depletion_fraction = 0` into 0.1 and silently break the ablation contract that
+every mechanism in this project ships with.
+"""
+@inline function demand_adjusted_depletion(
+    depletion_fraction::T, demand::T, slope::T,
+) where {T <: AbstractFloat}
+    (slope > zero(T) && depletion_fraction > zero(T)) || return depletion_fraction
+    return clamp(depletion_fraction + slope * (T(5) - demand), T(0.1), T(0.8))
+end
+
 """Compute root-water-limited transpiration supply for one crop column."""
 @inline compute_transpiration_supply(
     maximum_supply::T, root_water::T, root_carbon::T,
@@ -486,7 +518,7 @@ end
 
     @unpack lpjmlparams, soil_layers, use_precomputed_conductance = kernel_params
     @unpack ALPHAM, GM, LAMBDA_OPT = lpjmlparams
-    @unpack fpc, emax, gmin, depletion_fraction = CFT
+    @unpack fpc, emax, gmin, depletion_fraction, depletion_demand_slope = CFT
 
     co2_index = length(co2) == 1 ? 1 : cell
     if !use_precomputed_conductance
@@ -507,11 +539,17 @@ end
     crop_rootzone_available_water[cell] = rootzone_water
 
     if crop_isgrowing[cell] == 1
-        supply = compute_transpiration_supply(
-            T(emax), wr, crop_rootc[cell], T(depletion_fraction))
+        # Demand FIRST: the FAO-56 plateau is adjusted by it, and this site
+        # computed supply before demand. Nothing in `demand` reads `supply`, so
+        # the reorder is safe, and it is required rather than cosmetic.
         demand = compute_transpiration_demand(
             crop_canopy_wet[cell], pet_eeq[cell], T(ALPHAM), T(GM), crop_gp[cell],
         )
+        adjusted_depletion = demand_adjusted_depletion(
+            T(depletion_fraction), demand, T(depletion_demand_slope),
+        )
+        supply = compute_transpiration_supply(
+            T(emax), wr, crop_rootc[cell], adjusted_depletion)
 
         crop_w_demandsum[cell] += demand
         if supply > demand
@@ -528,7 +566,7 @@ end
             # The same supply/demand ratio, so it takes the same plateau: `wscal`
             # drives LAI senescence (`lai_crop.jl:52`) and a senescence using a
             # different water stress from allocation would be incoherent.
-            crop_wscal[cell] = (emax * compute_available_fraction(wr, T(depletion_fraction))) /
+            crop_wscal[cell] = (emax * compute_available_fraction(wr, adjusted_depletion)) /
                 (pet_eeq[cell] * ALPHAM / (one(T) + (GM * ALPHAM) / crop_gp[cell]))
             if crop_wscal[cell] > 1.0
                 crop_wscal[cell] = one(T)

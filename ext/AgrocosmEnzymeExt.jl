@@ -803,6 +803,7 @@ function _enzyme_continuous_transition!(
     # rebind `terminal_heat` to `anthesis_heat` at that one call site.
     anthesis_heat::Bool = false,
     cold_sterility::Bool = false,
+    excess_water::Bool = false,
 )
     T = eltype(Agrocosm.crop_prognostic(state).canopy.lai)
     _enzyme_apply_root_distribution!(state, cft.beta_root)
@@ -1122,6 +1123,14 @@ function _enzyme_continuous_transition!(
     cold_sterility && Agrocosm.cold_sterility!(
         cft, state, daily_weather.temp, view(climate.diurnal_range, day, :),
     )
+    # The third absolute-threshold mechanism, in the same place and order as
+    # `_daily_crop!`. Unlike the two above it reads a CONTROL variable -
+    # `daily_weather.prec` is the forcing array's second slice - so the
+    # sensitivity flows through the weather gradient itself and not only through
+    # the CFT parameters. It accumulates a season total that is spent at harvest,
+    # which is why `_weather_yield_block` must apply the recovery to its terminal
+    # seed: the AD path never calls `harvest_crop!`.
+    excess_water && Agrocosm.excess_water!(cft, state, daily_weather.prec)
     terminal_heat && Agrocosm.terminal_heat!(cft, state)
     _enzyme_crop_carbon!(
         state,

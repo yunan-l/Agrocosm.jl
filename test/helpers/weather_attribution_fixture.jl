@@ -7,8 +7,11 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
     heat_exposure_config = nothing, daily_statistic_exposure = false,
     terminal_heat = false, filling_rate = nothing, filling_temperature = nothing,
     anthesis_heat = false, cold_sterility = false,
+    excess_water = false,
     heat_day_temperature = nothing, heat_day_rate = nothing,
     cold_night_temperature = nothing, cold_night_rate = nothing,
+    heavy_rain_threshold = nothing, heavy_rain_tolerance = nothing,
+    heavy_rain_rate = nothing,
     model_parameters = nothing,
     # Soil texture, so a caller can ask what the column does on something other
     # than the loam this fixture was built on. Defaults are the original values,
@@ -38,6 +41,16 @@ function weather_attribution_fixture(cft_id; T = Float64, window_days = 8, phu =
         (overrides[:cold_night_temperature] = T(cold_night_temperature))
     cold_night_rate === nothing ||
         (overrides[:cold_night_rate] = T(cold_night_rate))
+    # The third absolute-threshold mechanism. It reads RAINFALL rather than a
+    # temperature statistic, so its threshold has to be moved into whatever the
+    # fixture's precipitation actually is - and wheat ships at rate zero now, so
+    # a caller exercising this mechanism must set the rate explicitly or the
+    # test is vacuous.
+    heavy_rain_threshold === nothing ||
+        (overrides[:heavy_rain_threshold] = T(heavy_rain_threshold))
+    heavy_rain_tolerance === nothing ||
+        (overrides[:heavy_rain_tolerance] = T(heavy_rain_tolerance))
+    heavy_rain_rate === nothing || (overrides[:heavy_rain_rate] = T(heavy_rain_rate))
     if !isempty(overrides)
         cft = Agrocosm.CFTParameters{T, Int32}(;
             (f => get(overrides, f, getfield(cft, f))
