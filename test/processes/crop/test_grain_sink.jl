@@ -40,11 +40,16 @@ end
 end
 
 @testset "the published traits reproduce the published grain numbers" begin
-    # Each crop's `half_carbon` is fixed by requiring the TYPICAL window NPP this
-    # model produces to return the TYPICAL published grain number. No yield was
-    # consulted, so this asserts a derivation rather than a fit.
+    # Each crop's `half_carbon` is fixed by requiring a reference window NPP this
+    # model produces to return the matching grain number, so this asserts a
+    # derivation rather than a fit. For rice, maize and soybean the reference is
+    # the typical-season pair the traits were derived from; for WHEAT it is the
+    # Braunschweig measurement that replaced it, 15455 grains at 71.5 gC, and the
+    # pair must be read from `published_grain_calibration` rather than repeated
+    # here so the two cannot drift apart.
     for (cft_id, typical_npp, typical_grains) in (
-            (1, 126.9, 15000), (2, 88.0, 30000), (3, 172.2, 3000), (9, 153.4, 2500))
+            (1, Agrocosm.published_grain_calibration(1)...) |> x -> (x[1], x[3], x[2]),
+            (2, 88.0, 30000), (3, 172.2, 3000), (9, 153.4, 2500))
         half, per_grain, ceiling = Agrocosm.published_grain_traits(cft_id)
         got = Agrocosm.saturating_grain_number(TG(typical_npp), TG(ceiling), TG(half))
         @test isapprox(got, TG(typical_grains); rtol = 1e-3)
