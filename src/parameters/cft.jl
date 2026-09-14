@@ -678,6 +678,35 @@ function published_grain_traits(cft_id::Integer)
 end
 
 """
+    measured_anthesis_heat_rate(cft_id)
+
+Grain set lost per degree-day above the flowering heat threshold, per CFT.
+
+`heat_day_rate` ships at 0.02, a number no experiment had constrained because
+none of the deposits this project carried ever flowered above the 38 C threshold.
+Hot Serial Cereal does: its April sowings ran 17 to 20 days above 35 C through
+their flowering window, and their measured grain numbers - 7029 and 7658 against
+14000 to 21000 for the rest - are the ones the assimilate calibration alone
+cannot explain.
+
+Measured against grain NUMBER rather than yield, which is what the mechanism
+acts on: at 0.008 the modelled grain-number bias at Maricopa is 1.05, from 1.48
+with the mechanism off. The shipped 0.02 is two and a half times too strong and
+takes four treatments that yielded 2 to 5 t/ha in the field to exactly zero.
+
+THIS IS WHAT UNIFIES THE TWO SITES. The wheat grain-number LEVEL is calibrated at
+Braunschweig (`published_grain_calibration`), and without flowering heat it
+over-predicts Maricopa by 48%. With it the same level gives 0.95 at Braunschweig
+and 1.05 at Maricopa, and Braunschweig is untouched to the last digit because it
+never reaches the threshold. The level did not need re-fitting; a process was
+missing.
+"""
+function measured_anthesis_heat_rate(cft_id::Integer)
+    cft_id == 1 && return 0.008   # wheat, Hot Serial Cereal 2007-2009
+    return 0.0
+end
+
+"""
     measured_establishment_loss_rate(cft_id)
 
 The share of stand a day above the germination ceiling destroys, per CFT.

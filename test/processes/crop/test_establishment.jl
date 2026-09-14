@@ -41,3 +41,16 @@ end
     @test measured_establishment_loss_rate(3) == 0.0
     @test measured_establishment_loss_rate(2) == 0.0
 end
+
+@testset "flowering heat is what reconciles the two sites" begin
+    # `heat_day_rate` ships at 0.02, which no experiment had constrained. Hot
+    # Serial Cereal flowered at 39 C and says 0.008: at that rate the Maricopa
+    # grain-number bias is 1.05 against 1.48 with the mechanism off, while
+    # Braunschweig - which never reaches the 38 C threshold - is untouched.
+    @test Agrocosm.measured_anthesis_heat_rate(1) == 0.008
+    @test Agrocosm.measured_anthesis_heat_rate(3) == 0.0
+    @test Agrocosm.cft1.heat_day_temperature == 38.0
+    # The shipped rate is the one this measurement corrects, so the two must
+    # differ and the measurement must be the smaller.
+    @test Agrocosm.measured_anthesis_heat_rate(1) < Agrocosm.cft1.heat_day_rate
+end
