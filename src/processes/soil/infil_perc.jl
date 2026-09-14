@@ -202,7 +202,7 @@ surface runoff in the calling kernel.
                                             available_storage::T,
                                             exponent::T) where {T <: AbstractFloat}
     saturation_deficit = one(T) - relative_storage / available_storage
-    saturation_deficit >= zero(T) || return zero(T)
+    saturation_deficit > zero(T) || return zero(T)
     return slug * saturation_deficit^(one(T) / exponent)
 end
 

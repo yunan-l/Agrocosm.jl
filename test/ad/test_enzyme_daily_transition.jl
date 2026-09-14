@@ -3,6 +3,24 @@ using Enzyme
 using LinearAlgebra
 using Test
 
+function _saturated_infiltration_slug(relative_storage)
+    return Agrocosm.compute_infiltration_slug(
+        1.0f0, relative_storage, 1.0f0, 2.0f0,
+    )
+end
+
+@testset "Saturated infiltration has a finite Enzyme tangent" begin
+    for tangent in (0.0f0, 1.0f0)
+        derivative = Enzyme.autodiff(
+            Enzyme.Forward,
+            _saturated_infiltration_slug,
+            Enzyme.Duplicated,
+            Enzyme.Duplicated(1.0f0, tangent),
+        )[1]
+        @test derivative == 0.0f0
+    end
+end
+
 function _mature_lai_fraction(theta)
     fphu = min(1.0f0, theta[1])
     return Agrocosm.compute_phenology_lai_fraction(
