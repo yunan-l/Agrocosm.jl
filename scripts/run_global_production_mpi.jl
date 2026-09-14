@@ -40,6 +40,11 @@ function merge_production_partitions(manifest_paths, output_path)
             "cft_id", "water_system", "processes_configuration", "rate_scale",
             "depletion_fraction", "depletion_demand_slope",
             "drought_phenology_rate", "stress_canopy_loss_rate",
+            # The two plot-measured traits. A key that is not in this list is
+            # written by every rank and then dropped by the merge, so the
+            # merged manifest says a run carried the shipped value when it did
+            # not - which is how a campaign becomes unreadable six months on.
+            "shapesenescencenorm", "root_surface_rate", "root_deep_rate",
             "nitrogen_uptake_water_exponent",
             "nitrogen_vcmax_relaxation",
             "lodging_rate", "lodging_tolerance", "lodging_wind_threshold",
@@ -209,6 +214,9 @@ function run_global_production_mpi(args = ARGS)
             # dropped from the only file that survives `cleanup_rank_outputs`.
             "drought_phenology_rate" => first_rank["drought_phenology_rate"],
             "stress_canopy_loss_rate" => first_rank["stress_canopy_loss_rate"],
+            "shapesenescencenorm" => first_rank["shapesenescencenorm"],
+            "root_surface_rate" => first_rank["root_surface_rate"],
+            "root_deep_rate" => first_rank["root_deep_rate"],
             "nitrogen_uptake_water_exponent" => first_rank["nitrogen_uptake_water_exponent"],
             "nitrogen_vcmax_relaxation" => first_rank["nitrogen_vcmax_relaxation"],
             "lodging_rate" => first_rank["lodging_rate"],
