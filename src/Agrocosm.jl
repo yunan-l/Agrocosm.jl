@@ -77,6 +77,9 @@ export measured_grain_number_elasticity
 export measured_establishment_loss_rate
 export measured_anthesis_heat_rate
 export measured_senescence_shape
+export measured_root_profile
+export measured_expansion_stress
+export expansion_stress!, expansion_stress_loss
 export ablation_daily_statistic_sink_configuration
 export ablation_terminal_heat_configuration
 export ablation_metrics, ablation_report
@@ -209,6 +212,7 @@ include("processes/crop/photosynthesis.jl")
 include("processes/crop/photosynthesis_subdaily.jl")
 include("processes/crop/reproductive_sink.jl")
 include("processes/crop/anthesis_heat.jl")
+include("processes/crop/expansion_stress.jl")
 include("processes/crop/cold_sterility.jl")
 include("processes/crop/establishment.jl")
 include("processes/crop/excess_water.jl")

@@ -38,6 +38,7 @@ function transpiration!(photos_adtmm::AbstractArray{T},
                crop_prognostic(crop).water.supply_sum,
                crop_stress_auxiliary(crop).water_deficit,
                crop_prognostic(crop).water.sufficiency,
+               crop_prognostic(crop).water.expansion_ratio,
                crop_prognostic(crop).carbon.root,
                crop_canopy_auxiliary(crop).canopy_wet,
                crop_prognostic(crop).phenology.is_growing,
@@ -664,6 +665,7 @@ end
                                              crop_w_supplysum::AbstractArray{T},
                                              crop_wdf::AbstractArray{T},
                                              crop_wscal::AbstractArray{T},
+                                             crop_expansion_ratio::AbstractArray{T},
                                              crop_rootc::AbstractArray{T},
                                              crop_canopy_wet::AbstractArray{T},
                                              crop_isgrowing::AbstractArray{S},
@@ -747,13 +749,19 @@ end
             # The same supply/demand ratio, so it takes the same plateau: `wscal`
             # drives LAI senescence (`lai_crop.jl:52`) and a senescence using a
             # different water stress from allocation would be incoherent.
+            stomatal_demand = pet_eeq[cell] * alpha_c /
+                (one(T) + (shape_c * alpha_c) / crop_gp[cell])
             crop_wscal[cell] = (emax * compute_available_fraction(wr, adjusted_depletion)) /
-                (pet_eeq[cell] * alpha_c / (one(T) + (shape_c * alpha_c) / crop_gp[cell]))
+                stomatal_demand
             if crop_wscal[cell] > 1.0
                 crop_wscal[cell] = one(T)
             end
+            # The raw ratio, no plateau and no clip. Diagnostic unless a
+            # mechanism reads it: nothing in the shipped model does.
+            crop_expansion_ratio[cell] = (emax * wr) / stomatal_demand
         else
             crop_wscal[cell] = one(T)
+            crop_expansion_ratio[cell] = T(Inf)
         end
 
         # Potential transpiration constrained by demand/supply and canopy fraction.

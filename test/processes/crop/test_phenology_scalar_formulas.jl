@@ -62,3 +62,40 @@ end
     @test measured ≈ 0.6628 atol = 1e-4
     @test measured / shipped > 4
 end
+
+@testset "two-exponential root profile" begin
+    # Zero on either rate is the single exponential, bitwise: the ablation.
+    @test Agrocosm.root_distribution(0.94) == Agrocosm.root_distribution(0.94, 0.0, 0.0)
+    @test Agrocosm.root_distribution(0.94) == Agrocosm.root_distribution(0.94, 0.13, 0.0)
+
+    surface, deep = Agrocosm.measured_root_profile(1)
+    measured = Agrocosm.root_distribution(0.94, surface, deep)
+    shipped = Agrocosm.root_distribution(0.94)
+    @test sum(measured) ≈ 1 atol = 1e-6
+    # Maricopa cored 0.148 of root mass below 45 cm; the single exponential
+    # carries 0.062 there and puts 0.21% below a metre.
+    @test sum(shipped[4:5]) ≈ 0.0021 atol = 1e-4
+    @test sum(measured[4:5]) ≈ 0.0335 atol = 1e-3
+    @test sum(measured[4:5]) / sum(shipped[4:5]) > 15
+    # It does not achieve that by emptying the surface: the cores put 0.598 in
+    # 0-15 cm, so the top layer must stay dominant.
+    @test measured[1] > 0.65
+
+    @test Agrocosm.measured_root_profile(3) == (0.0, 0.0)
+end
+
+@testset "expansion water stress" begin
+    # Recorded, not installed: the rate is zero until Braunschweig 2015 is
+    # resolved, so the mechanism cannot move any shipped result.
+    threshold, rate = Agrocosm.measured_expansion_stress(1)
+    @test rate == 0.0
+    @test threshold > 1
+    @test Agrocosm.expansion_stress_loss(0.8, threshold, true, rate) == 0.0
+
+    # The shape, at the rate the Maricopa fit gives.
+    @test Agrocosm.expansion_stress_loss(0.8, 1.2, true, 0.05) ≈ 0.02 atol = 1e-9
+    @test Agrocosm.expansion_stress_loss(1.5, 1.2, true, 0.05) == 0.0   # above it
+    @test Agrocosm.expansion_stress_loss(0.8, 1.2, false, 0.05) == 0.0  # outside
+    # A crop with no demand has an infinite ratio and must not be damaged by it.
+    @test Agrocosm.expansion_stress_loss(Inf, 1.2, true, 0.05) == 0.0
+end

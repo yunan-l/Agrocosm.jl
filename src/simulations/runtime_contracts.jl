@@ -69,6 +69,7 @@ struct SimulationConfiguration{T <: AbstractFloat, D, E}
     organ_temperature::Bool
     reproductive_sink::Bool
     anthesis_heat::Bool
+    expansion_stress::Bool
     cold_sterility::Bool
     establishment::Bool
     excess_water::Bool
@@ -100,6 +101,7 @@ function SimulationConfiguration(
     organ_temperature::Bool = false,
     reproductive_sink::Bool = false,
     anthesis_heat::Bool = false,
+    expansion_stress::Bool = false,
     cold_sterility::Bool = false,
     establishment::Bool = false,
     excess_water::Bool = false,
@@ -200,7 +202,7 @@ function SimulationConfiguration(
         subdaily_photosynthesis, Int(subdaily_steps), diurnal_shape,
         subdaily_capacity_optimum, subdaily_heat_exposure,
         daily_statistic_exposure, organ_temperature, reproductive_sink,
-        anthesis_heat, cold_sterility, establishment, excess_water,
+        anthesis_heat, expansion_stress, cold_sterility, establishment, excess_water,
         diurnal_temperature_stress,
         terminal_heat, water_sterility, water_filling,
         freeze_vernalization_requirement,

@@ -1,16 +1,51 @@
 """
-root_distribution(beta_root)
+root_distribution(beta_root, surface_rate = 0, deep_rate = 0)
 
-Compute normalized root fractions across the default five soil layers from
-the LPJmL-style exponential root profile parameter `beta_root`.
+Compute normalized root fractions across the default five soil layers.
+
+With `surface_rate` or `deep_rate` at zero this is the LPJmL-style single
+exponential in `beta_root`, returned bitwise, and that is the ablation contract.
+
+WHY A SECOND FORM. A single exponential cannot carry a dense surface mat and a
+deep tail at once, and a wheat root profile is both. Maricopa FACE cored its own
+roots: 0.598 of the mass in 0-15 cm, 0.253 in 15-45 and 0.148 below 45. The best
+single beta for those three is 0.9406 - the shipped 0.94, so the PARAMETER is
+right - and it still returns 0.064 below 45 cm against the measured 0.148,
+because matching the surface and matching the tail need different betas (0.941
+and 0.958). The cost is concentrated where it matters least visibly and most
+physically: 0.21% of roots below 1 m, so a metre of moist subsoil can supply
+0.21% of the crop's demand however dry the topsoil gets.
+
+The two-exponential form is Zeng (2001), the one CLM carries as `roota`/`rootb`:
+cumulative root fraction above depth `d` in cm is
+
+    Y(d) = 1 - (exp(-surface_rate * d) + exp(-deep_rate * d)) / 2
+
+Fitted to those cores it reproduces all three classes to 0.0003 and puts 3.35%
+of roots below 1 m, sixteen times the single exponential.
 """
-function root_distribution(beta_root::AbstractFloat)
+function root_distribution(beta_root::AbstractFloat,
+                           surface_rate::AbstractFloat = zero(beta_root),
+                           deep_rate::AbstractFloat = zero(beta_root))
     T = typeof(beta_root)
     layerbound = T[200.0, 500.0, 1000.0, 2000.0, 3000.0]
 
     BOTTOMLAYER = length(layerbound)
-    totalroots = one(T) - beta_root^(layerbound[BOTTOMLAYER] / T(10))
     rootdist = zeros(T, BOTTOMLAYER)
+    if surface_rate > zero(T) && deep_rate > zero(T)
+        # Depths in cm, as Zeng's rates are per cm.
+        cumulative(d) = one(T) - (exp(-T(surface_rate) * d) +
+                                  exp(-T(deep_rate) * d)) / T(2)
+        totalroots = cumulative(layerbound[BOTTOMLAYER] / T(10))
+        previous = zero(T)
+        for l in 1:BOTTOMLAYER
+            here = cumulative(layerbound[l] / T(10))
+            rootdist[l] = (here - previous) / totalroots
+            previous = here
+        end
+        return rootdist
+    end
+    totalroots = one(T) - beta_root^(layerbound[BOTTOMLAYER] / T(10))
     rootdist[1] = (one(T) - beta_root^(layerbound[1] / T(10))) / totalroots
     for l in 2:BOTTOMLAYER
         rootdist[l] = (
@@ -128,7 +163,7 @@ function init_states!(CFT::CFTParameters,
 )
 
     @unpack residue_frac = lpjmlparams
-    @unpack k_litter10, beta_root = CFT
+    @unpack k_litter10, beta_root, root_surface_rate, root_deep_rate = CFT
 
     @unpack latitude, soilparams, ModelState = InitialData
 
@@ -147,7 +182,8 @@ function init_states!(CFT::CFTParameters,
     crop = init_crop(T, cell_size, device)
     managed_land = init_managed_land(T, cell_size, device)
     crop.auxiliary.phenology.phu = to_float(phu)
-    rootdist = root_distribution(T(beta_root))
+    rootdist = root_distribution(T(beta_root), T(root_surface_rate),
+                                 T(root_deep_rate))
     launch_2D!(
         initialize_crop_phenology_kernel!, crop.auxiliary.root.distribution,
         crop.auxiliary.phenology.phu, crop.auxiliary.phenology.winter_type,

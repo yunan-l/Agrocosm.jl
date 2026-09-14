@@ -163,6 +163,10 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     ncleaf::ncleaf{T}       # Minimum/reference/maximum leaf N:C ratios.
     k_litter10::K_Litter10{T} # Litter turnover rates at 10 °C.
     beta_root::T            # Exponential root-depth distribution parameter.
+    # Zeng (2001) two-exponential root profile, per cm, CLM's `roota`/`rootb`.
+    # Zero on either leaves `beta_root` in charge and the profile bitwise.
+    root_surface_rate::T = 0.0
+    root_deep_rate::T = 0.0
     intc::T                 # Canopy interception storage parameter.
     emax::T                 # Maximum transpiration/conductance scaling parameter.
     gmin::T                 # Minimum canopy conductance (mm s⁻¹).
@@ -224,6 +228,11 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     # grain set cannot reach terminal heat.
     flowering_start::T = 0.45       # `fphu` at which grain set becomes sensitive.
     flowering_end::T = 0.70         # `fphu` at which sensitivity ends.
+    # Raw supply/demand ratio below which EXPANSIVE growth is limited, and the
+    # grain set lost per unit shortfall per day. The rate at zero leaves grain
+    # set untouched and the model bitwise.
+    expansion_water_threshold::T = 0.0
+    expansion_grain_rate::T = 0.0
     sterility_temperature::T = 35.0 # Organ-temperature threshold for sterility (°C).
     sterility_rate::T = 0.0075      # Grain set lost per exposure-hour; 0 = inert.
     # Terminal heat, acting on grain FILLING rather than grain set. A separate
@@ -704,6 +713,98 @@ missing.
 function measured_anthesis_heat_rate(cft_id::Integer)
     cft_id == 1 && return 0.008   # wheat, Hot Serial Cereal 2007-2009
     return 0.0
+end
+
+"""
+    measured_expansion_stress(cft_id)
+
+`(threshold, rate)` for the expansion water stress: the root-weighted
+available-water fraction below which expansive growth is limited, and the grain
+set lost per unit of shortfall per day.
+
+MEASURED AGAINST GRAIN NUMBER, across two seasons and two irrigation arms, which
+is four constraints on two parameters. Maricopa counted ears and grains per ear:
+
+| season | arm | modelled root-zone water in the window | grains m-2 | ratio |
+| 1992-93 | dry | 0.65 | 14401 | 0.808 |
+| 1992-93 | wet | 0.93 | 17829 | 1.000 |
+| 1993-94 | dry | 0.59 | 14495 | 0.762 |
+| 1993-94 | wet | 0.95 | 19031 | 1.000 |
+
+The threshold lands near the demand itself, which is where the physiology puts it
+and where CERES puts `SWDF2` by evaluating `SWDF1` at 1.5 times the demand.
+
+**THE RATE SHIPS AT ZERO, because this mechanism does not pass.** It is recorded
+rather than installed, and the reason is the second wheat site.
+
+At Maricopa it works: sweeping the pair moves the Dry/Wet contrast from 0.993 to
+1.160 against an observed 1.386, and moves Dry/Wet under FACE from 1.008 to 1.149
+against 1.269. Neither reaches the replicate interval.
+
+At Braunschweig it fires on the wrong year. That deposit's 2015 season has a
+modelled window ratio of 0.9 to 2.7, overlapping Maricopa's deficit arms, and its
+MEASURED grain number is 1.058 of 2014's - more grains, not fewer. The mechanism
+takes 12% off 2015 and 2% off 2014 and drops that deposit's yield correlation
+from 0.924 to 0.661. The damage is a YEAR effect and not the canopy bias that
+site also carries: the modelled peak LAI is 2.12 times the measured in BOTH
+years, and the low- and high-nitrogen treatments lose the same 6 to 8%.
+
+So either the model's Braunschweig water balance is wrong in 2015 - its soil
+carbon is estimated rather than measured, and no soil-moisture record has been
+scored against it - or the form is. A mechanism that helps one deposit and hurts
+another is not installed here until that is settled.
+
+WHAT SURVIVES REGARDLESS is the diagnosis the fit rests on. `wscal` is the only
+water stress in this lineage; `emax` is 8 mm/day for wheat against a demand near
+3, and `compute_available_fraction` is flat above 0.45. Maricopa's two arms run
+at root-zone fractions of 0.66 and 0.93 through their critical period, the field
+loses a fifth of its tillers, and `wscal` reports 1.0000 for both.
+"""
+function measured_expansion_stress(cft_id::Integer)
+    # (threshold, rate). The threshold is what Maricopa measures; the rate is
+    # zero until the Braunschweig 2015 disagreement is resolved.
+    cft_id == 1 && return (1.2, 0.0)   # wheat, Maricopa FACE 1992-94
+    return (0.0, 0.0)
+end
+
+"""
+    measured_root_profile(cft_id)
+
+`(surface_rate, deep_rate)` for the Zeng two-exponential root profile, per cm.
+
+MEASURED AGAINST ROOT CORES, which is why this is not a calibration. Maricopa
+FACE cored fifteen high-nitrogen profiles in 1993-94 and reports them in three
+depth classes: 0.598 of root mass in 0-15 cm, 0.253 in 15-45, 0.148 below 45.
+
+The shipped single exponential's best beta for those is 0.9406 against a shipped
+0.94, so the parameter is already right and the form is not: it returns 0.064
+below 45 cm against 0.148, and no beta fits the surface and the tail at once
+(they want 0.941 and 0.958). Fitted here the two-exponential reproduces all three
+classes to 0.0003.
+
+What the form costs the model is depth. Across the five layers:
+
+| layer | cm | beta = 0.94 | measured |
+| 1 | 0-20 | 0.710 | 0.673 |
+| 2 | 20-50 | 0.245 | 0.197 |
+| 3 | 50-100 | 0.043 | 0.097 |
+| 4 | 100-200 | **0.0021** | **0.0314** |
+| 5 | 200-300 | 0.0000 | 0.0021 |
+
+Uptake here is already compensated - `transp = min(supply, demand) / uptake_total`
+normalises the layer shares by `sum(root_fraction * availability)`, which is
+Jarvis (1989) at full compensation - so a drying topsoil DOES shift uptake
+downward. It can only shift it in proportion to root mass, and at 0.0021 there is
+nothing to shift to: with the topsoil at 0.1 and everything below at 0.9, the
+metre between 1 and 2 m supplies 0.57% of uptake. On this profile it supplies
+7.8%. The field's dry arm took 42 mm more than its wet arm from below 90 cm.
+
+Returns zeros for a crop whose roots no deposit here has cored, which leaves that
+crop on the single exponential.
+"""
+function measured_root_profile(cft_id::Integer)
+    cft_id == 1 && return (0.1319, 0.0270)   # wheat, Maricopa FACE 1993-94 cores
+    return (0.0, 0.0)
 end
 
 """

@@ -77,10 +77,11 @@ end
 # and three for water-limited grain filling: `phenology.anthesis_reserve`,
 # `phenology.filling_progress` and `phenology.filling_progress_counted`,
 # and `phenology.stand_fraction` for heat loss of stand,
-# and `weather.canopy_rain` for irrigation applied below the canopy.
+# and `weather.canopy_rain` for irrigation applied below the canopy,
+# and `water.expansion_ratio` for the unplateaued supply/demand ratio.
 # `test_simulation_api.jl`
 # compares the two estimates and is what catches an omission here.
-const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1659
+const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1660
 const _PERSISTENT_NONFLOAT_BYTES_PER_CELL = 46
 const _PERSISTENT_FIXED_FLOAT_VALUES = 26
 

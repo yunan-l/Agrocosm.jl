@@ -25,6 +25,7 @@ function _daily_crop!(
     organ_temperature::Bool = false,
     reproductive_sink::Bool = false,
     anthesis_heat::Bool = false,
+    expansion_stress::Bool = false,
     cold_sterility::Bool = false,
     establishment::Bool = false,
     excess_water::Bool = false,
@@ -518,6 +519,12 @@ function _daily_crop!(
             cftparameters, state, dailyWeather.temp,
             view(climate.diurnal_range, climate_day, :),
         )
+        # The water mirror of the two temperature channels: same window, same
+        # clamped state, so it is order-independent against both. It reads the
+        # soil directly rather than `wscal`, because `wscal` is the STOMATAL
+        # stress and saturates across the whole range in which expansive growth
+        # is already limited. See `expansion_stress.jl`.
+        expansion_stress && expansion_stress!(cftparameters, state)
         # The cold mirror, reading the same two forcing channels and subtracting
         # from the same clamped state, so it is order-independent against all of
         # the above. Placed here rather than beside the vernalization code
