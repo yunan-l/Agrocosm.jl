@@ -37,3 +37,28 @@ using Test
     @test senescent ≈ T(2 / 3) atol = eps(T)
     @test mature == zero(T)
 end
+
+@testset "measured senescence shape" begin
+    # Maricopa FACE logged leaf area through senescence on four irrigation arms.
+    # Solving k in ((1 - fphu) / (1 - fphusen))^k from each measurement gives
+    # 2.10 and 1.67 on the two DRY arms and 0.31 and 0.51 on the two WET ones, so
+    # the shipped 2 is the water-stressed crop's value. Only wheat was measured.
+    @test Agrocosm.measured_senescence_shape(1) == 0.41
+    @test Agrocosm.measured_senescence_shape(3) == 0.0
+    @test Agrocosm.cft1.shapesenescencenorm == 2
+
+    # What the difference is worth: at fphu 0.89, two thirds of the way through
+    # senescence, the shipped curve has taken the canopy to an eighth of its peak
+    # and the measured one holds two thirds. That gap is the model's missing
+    # transpiration in the hottest weeks of the season.
+    shipped = Agrocosm.compute_phenology_lai_fraction(
+        0.89, 0.05, 0.05, 0.45, 0.45, 0.70, 0.0, 2.0,
+    )
+    measured = Agrocosm.compute_phenology_lai_fraction(
+        0.89, 0.05, 0.05, 0.45, 0.45, 0.70, 0.0,
+        Agrocosm.measured_senescence_shape(1),
+    )
+    @test shipped ≈ 0.1344 atol = 1e-4
+    @test measured ≈ 0.6628 atol = 1e-4
+    @test measured / shipped > 4
+end

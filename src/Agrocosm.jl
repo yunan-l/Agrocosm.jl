@@ -76,6 +76,7 @@ export measured_filling_stress_exponent
 export measured_grain_number_elasticity
 export measured_establishment_loss_rate
 export measured_anthesis_heat_rate
+export measured_senescence_shape
 export ablation_daily_statistic_sink_configuration
 export ablation_terminal_heat_configuration
 export ablation_metrics, ablation_report

@@ -707,6 +707,44 @@ function measured_anthesis_heat_rate(cft_id::Integer)
 end
 
 """
+    measured_senescence_shape(cft_id)
+
+The exponent in `((1 - fphu) / (1 - fphusen))^k`, for a crop that is NOT short of
+water, per CFT.
+
+`shapesenescencenorm` ships at 2 for wheat and no experiment in this lineage had
+constrained it, because none of them recorded leaf area through senescence.
+Maricopa FACE did, on 14 dates across four irrigation arms, and solving `k` from
+each measurement separates cleanly by treatment and not by year:
+
+| arm | season | k from each date | mean |
+| dry | 1992-93 | 2.05, 2.15 | 2.10 |
+| dry | 1993-94 | 1.98, 1.29, 1.71, 1.72 | 1.67 |
+| wet | 1992-93 | 0.20, 0.28, 0.28, 0.49 | 0.31 |
+| wet | 1993-94 | 0.45, 0.55, 0.56, 0.46 | 0.51 |
+
+**The shipped 2.0 is the water-stressed crop's value**, applied to every crop in
+every season. A wheat canopy that is not short of water holds 0.76 of its peak
+leaf area at fphu 0.89, where the shipped curve has already taken it to 0.13.
+
+What that costs is transpiration in the hottest weeks of the season. At Maricopa
+the model transpires 264 mm against FAO-56's 350 and evaporates 148 from the
+soil against ~34; at k = 0.41 it transpires 326 and evaporates 96. The water
+moves from the soil surface to the stomata, which is the whole difference
+between a crop that is using the water and a field that is losing it.
+
+ONE SITE. Braunschweig measured green leaf area only to fphu 0.65 and Hot Serial
+Cereal has no observation inside the senescence window at all, so neither can
+confirm or refute this. The stressed value is not installed here: the stress
+response belongs to `stress_canopy_loss_rate`, and calibrating it needs a model
+whose dry arm is actually short of water, which at Maricopa it is not.
+"""
+function measured_senescence_shape(cft_id::Integer)
+    cft_id == 1 && return 0.41   # wheat, Maricopa FACE 1992-94, the two wet arms
+    return 0.0
+end
+
+"""
     measured_establishment_loss_rate(cft_id)
 
 The share of stand a day above the germination ceiling destroys, per CFT.
