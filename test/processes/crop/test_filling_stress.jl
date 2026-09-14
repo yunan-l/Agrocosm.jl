@@ -50,12 +50,14 @@ end
 end
 
 @testset "the measured exponents are per crop and per provenance" begin
-    # Maize is measured against single-grain weight; wheat is fitted to a yield
-    # contrast because no wheat deposit here recorded grain weight. Wheat must
-    # come out markedly the less sensitive of the two - it remobilises 20-40% of
-    # its grain carbon from stem reserves against maize's 10-20%.
+    # Maize is measured against single-grain weight, which its experiment
+    # counted. No wheat deposit here recorded grain weight by treatment, so wheat
+    # has no measured exponent and carries none.
     @test measured_filling_stress_exponent(3) == 5.0
-    @test measured_filling_stress_exponent(1) == 3.0
+    # Wheat has none: the value once fitted to the Maricopa water contrast was
+    # fitted while that contrast was running on ten times the nitrogen and the
+    # wrong soil, and it does not survive either correction.
+    @test measured_filling_stress_exponent(1) == 0.0
     @test measured_filling_stress_exponent(3) > measured_filling_stress_exponent(1)
     # A crop no experiment has measured stays on thermal time.
     @test measured_filling_stress_exponent(2) == 0.0

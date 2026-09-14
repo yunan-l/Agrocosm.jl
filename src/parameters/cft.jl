@@ -690,9 +690,14 @@ PROVENANCE DIFFERS BY CROP and the difference matters when reading a result:
     CONSEQUENCE: the yield water contrast lands at 1.636 against an observed
     1.649 [1.453, 1.797], and the CO2 recovery of grain weight - which was not
     used to set anything - at 1.176 against an observed 1.153.
-  - wheat, 3.0: FITTED to the Maricopa Dry/Wet yield contrast, because neither
-    wheat deposit recorded grain weight by treatment. Weaker evidence, and it
-    should be replaced the moment a wheat experiment with grain weights appears.
+  - wheat, 0: NOTHING measured supports one. A value of 3.0 was fitted to the
+    Maricopa Dry/Wet yield contrast while that contrast was still being run on
+    ten times the experiment's nitrogen and on the 0.5-degree cell's soil. With
+    both corrected the contrast no longer recovers at any exponent (1.053 at 0,
+    1.145 at 3.0, against an observed 1.386), so the quantity it was fitted to
+    has gone. Meanwhile it costs the Braunschweig nitrogen response, 1.738 to
+    1.721 in 2014 and 1.697 to 1.541 in 2015 against observed 1.731 and 1.988.
+    Zero until a wheat experiment records grain weight by treatment.
 
 THE EXPONENT IS LARGE BECAUSE THE STRESS SIGNAL IS SMALL. `wscal` averages 0.988
 over the well-watered arm and 0.911 over the drought that cost 39% of the grain -
@@ -708,7 +713,7 @@ Returns 0 for a CFT no experiment has measured, which leaves that crop's grain
 filling on thermal time alone.
 """
 function measured_filling_stress_exponent(cft_id::Integer)
-    cft_id == 1 && return 3.0    # wheat, fitted to the Maricopa water contrast
+    cft_id == 1 && return 0.0    # wheat: no measurement supports one
     cft_id == 3 && return 5.0    # maize, measured against single-grain weight
     return 0.0
 end
