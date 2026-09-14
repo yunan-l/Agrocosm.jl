@@ -24,9 +24,11 @@ using Agrocosm: published_grain_traits, published_grain_calibration,
             h, _, c = grain_traits_from_elasticity(cft_id, e)
             @test saturating_grain_number(npp, c, h) ≈ grains rtol = 1e-6
         end
-        # The implied elasticities are NOT a shared constant: 0.25 for wheat and
-        # rice, 0.29 for soybean, 0.33 for maize. Nothing chose them.
-        @test 0.24 < implied < 0.34
+        # The implied elasticities are NOT a shared constant, and nothing chose
+        # the original ones: 0.25 for rice, 0.29 for soybean, 0.33 for maize.
+        # Wheat's 0.485 is different in kind - it was set deliberately, by the
+        # ceiling a wheat crop cannot pass, once its LEVEL was measured.
+        @test 0.24 < implied < 0.50
     end
 end
 

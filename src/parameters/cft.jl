@@ -649,7 +649,10 @@ function published_grain_traits(cft_id::Integer)
     # | rice | 30000 | 40000 | 88.0 | 29.3 |
     # | maize | 3000 | 4500 | 172.2 | 86.1 |
     # | soybean | 2500 | 3500 | 153.4 | 61.4 |
-    cft_id == 1 && return (42.3, 0.0180, 20000.0)   # wheat
+    # Wheat's pair is MEASURED, not derived from the typical-season table: it is
+    # `grain_traits_from_elasticity(1, 0.485)` on the Braunschweig level pair,
+    # written out so the two functions cannot drift apart.
+    cft_id == 1 && return (67.3, 0.0180, 30010.0)   # wheat, Braunschweig 2014-2015
     cft_id == 2 && return (29.3, 0.0099, 40000.0)   # rice
     cft_id == 3 && return (86.1, 0.1260, 4500.0)    # maize
     cft_id == 9 && return (61.4, 0.0765, 3500.0)    # soybean
@@ -673,6 +676,38 @@ carrying the water balance's error.
 """
 function measured_grain_number_elasticity(cft_id::Integer)
     cft_id == 3 && return 0.838   # maize, Braunschweig FACE 2008
+    # WHEAT IS NOT MEASURED HERE, it is what the form can deliver. The six
+    # Braunschweig treatments give an elasticity of grain number to window
+    # assimilate of **1.112** - grain number rises slightly FASTER than
+    # proportionally, all the way to 21873 grains m-2, with no sign of the
+    # ceiling. `saturating_grain_number` is bounded below one by construction and
+    # cannot produce that.
+    #
+    # So this number is set by the CEILING instead: wheat's published maximum
+    # grain number is about 30000 m-2, the level pair above then fixes the half
+    # at 67.3, and the elasticity that implies at the reference is 0.485. The
+    # cost is measured, not hidden: the modelled N3/N1 grain-number response
+    # comes out 1.35 against an observed 1.85, and raising the ceiling to relieve
+    # it buys response with a ceiling no wheat crop has ever approached.
+    #
+    # The trade, measured at Braunschweig, since the choice belongs to whoever
+    # reads this and not to the number:
+    #
+    #   elasticity   ceiling   N3 yield   yield N3/N1
+    #   0.485          30010       6.99         1.352
+    #   0.650          44157       7.31         1.494
+    #   0.838          95401       7.72         1.673
+    #   observed      ~30000       8.18         1.731
+    #
+    # 0.838 fits both the level and the response and exceeds a physically
+    # possible 30000 grains m-2 once window assimilate passes 170 gC - the
+    # shipped calibration's own "typical" was 126.9, so productive cells reach
+    # it. This project has already measured what an unbounded grain number does
+    # globally: 8098 maize kernels m-2 against a 3000 target and 19.7 t/ha.
+    # 0.485 is the conservative end of a trade the functional form imposes,
+    # NOT a measurement: the measured elasticity is 1.112 and this form cannot
+    # produce it. Changing the form is the way out, not changing this number.
+    cft_id == 1 && return 0.485   # wheat, set by the 30000 m-2 ceiling
     return 0.0
 end
 
@@ -732,7 +767,22 @@ fortnight costs. Braunschweig maize 2008 measures it: window assimilate fell to
 the 0.33 the shipped pair produces at its own operating point.
 """
 function published_grain_calibration(cft_id::Integer)
-    cft_id == 1 && return (15000.0, 126.9)   # wheat
+    # WHEAT IS MEASURED, the rest are the original global-mean pairs. The shipped
+    # wheat pair put 15000 grains at a typical window assimilate of 126.9 gC -
+    # 118.2 grains per gC. Braunschweig counted grains in six nitrogen treatments
+    # over two years, against this model's own window assimilate in each:
+    #
+    #   window gC   50.9  90.2  93.9  46.0  81.9  82.1
+    #   grains/m2  10248 17827 18977  9342 19236 21873
+    #
+    # 217.6 grains per gC, and a log-log reference of 15455 grains at 71.5 gC.
+    # The level was low by 1.83, which is the whole of the 61% grain number the
+    # model returned at Braunschweig while its biomass was 93% of the measurement
+    # and its grain weight was right.
+    #
+    # It depends on the model's OWN window assimilate, so it must be re-derived
+    # whenever the water or nitrogen balance changes - as the elasticity was.
+    cft_id == 1 && return (15455.0, 71.5)    # wheat, Braunschweig 2014-2015
     cft_id == 2 && return (30000.0, 88.0)    # rice
     cft_id == 3 && return (3000.0, 172.2)    # maize
     cft_id == 9 && return (2500.0, 153.4)    # soybean
