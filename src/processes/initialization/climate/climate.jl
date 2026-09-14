@@ -19,6 +19,18 @@ mutable struct DailyWeather{A}
     # GSWP3-W5E5 carries `huss`, `tasmax` and `tasmin`, so this is a wiring
     # question and not a data one.
     vapour_deficit::A
+    # The part of the day's water that reaches the CANOPY. Equal to `prec` unless
+    # the run says its irrigation is applied below the canopy, which basin and
+    # furrow systems are. Interception reads this; infiltration reads `prec`.
+    #
+    # It matters more than it looks. `canopy_wet` is proportional to the day's
+    # rain and caps at 0.9999, and transpiration demand carries a factor
+    # `1 - canopy_wet`, so a 317 mm basin irrigation entered as rainfall takes
+    # that day's transpiration to nearly zero. Measured at Maricopa: the WET arm's
+    # mean demand comes out BELOW the dry arm's, 2.739 against 2.867 mm/day,
+    # because it is irrigated more often. The treatment that should transpire more
+    # transpires less.
+    canopy_rain::A
 end
 
 """Daily potential-evapotranspiration and radiation buffers."""
@@ -61,6 +73,7 @@ function init_weather(::Type{T}, cell_size::Int, device) where {T <: AbstractFlo
         cell_state(),
         cell_state(),
         device(zeros(T, 1)),
+        cell_state(),
         cell_state(),
     )
 end

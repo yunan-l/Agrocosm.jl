@@ -384,7 +384,7 @@ function _daily_crop!(
         end
 
         interception!(
-            state, cftparameters, pet.eeq, dailyWeather.prec;
+            state, cftparameters, pet.eeq, dailyWeather.canopy_rain;
             lpjmlparams = global_params,
         )
         add_snowmelt_to_precipitation!(

@@ -97,11 +97,12 @@ end
     # `SoilWater.ponding` was; 13446 before either; 13470 before
     # `CropPhenology.lodging_exposure`; 13478 before `DailyWeather.vapour_deficit`;
     # 13486 before the three water-limited grain-filling fields;
-    # 13510 before `CropPhenology.stand_fraction`.
+    # 13510 before `CropPhenology.stand_fraction`;
+    # 13518 before `DailyWeather.canopy_rain`.
     # Each is one
     # Float64 per cell. This literal is the reason `_PERSISTENT_FLOAT_VALUES_PER_CELL`
     # cannot drift from the real field count without something failing.
-    ).persistent_state_bytes == 13518
+    ).persistent_state_bytes == 13526
     @test estimate.forcing_block_bytes == 64
     @test prefetched.host_forcing_bytes == estimate.host_forcing_bytes + 64
     @test prefetched.host_peak_bytes == estimate.host_peak_bytes + 64

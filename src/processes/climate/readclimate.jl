@@ -44,6 +44,10 @@ function readclimate!(climate::NamedTuple,
             co2_daily,
             default_wind,
         )
+        # AFTER the precipitation is filled, not before: called earlier this
+        # carried yesterday's rain into today's interception, which showed up as
+        # a one-bit difference in the checkpoint test and nowhere else.
+        read_canopy_rain!(climate, dailyWeather, day)
         return dailyWeather.annual_co2
     elseif ndims(climate.co2) == 2
         launch_1D!(
@@ -70,10 +74,50 @@ function readclimate!(climate::NamedTuple,
             has_nh4_deposition,
             default_wind,
         )
+        read_canopy_rain!(climate, dailyWeather, day)
         return dailyWeather.daily_co2
     else
         throw(ArgumentError("climate.co2 must be a vector or a (day, cell) matrix"))
     end
+end
+
+"""
+    read_canopy_rain!(climate, dailyWeather, day)
+
+Set the water that reaches the CANOPY: the day's precipitation, less the
+irrigation when the run says its irrigation goes below the canopy.
+
+Basin and furrow irrigation do not wet a canopy. Entering them as rainfall does,
+and `canopy_wet` is proportional to the day's rain while transpiration demand
+carries a factor `1 - canopy_wet`, so a 317 mm basin irrigation takes that day's
+transpiration to nearly zero. Measured at Maricopa: the WET arm's mean demand
+comes out BELOW the dry arm's, 2.739 against 2.867 mm/day, because it is
+irrigated more often.
+"""
+function read_canopy_rain!(climate::NamedTuple,
+                           dailyWeather::DailyWeather,
+                           day::Integer)
+    subcanopy = hasproperty(climate, :subcanopy_irrigation) &&
+                climate.subcanopy_irrigation && hasproperty(climate, :irrigation)
+    if !subcanopy
+        copyto!(dailyWeather.canopy_rain, dailyWeather.prec)
+        return nothing
+    end
+    launch_1D!(
+        read_canopy_rain_kernel!,
+        dailyWeather.canopy_rain, dailyWeather.prec, climate.irrigation, day,
+    )
+    return nothing
+end
+
+@kernel inbounds = true function read_canopy_rain_kernel!(
+    canopy_rain::AbstractVector{T},
+    precipitation::AbstractVector{T},
+    irrigation::AbstractMatrix{T},
+    day::Integer,
+) where {T <: AbstractFloat}
+    cell = @index(Global)
+    canopy_rain[cell] = max(precipitation[cell] - irrigation[day, cell], zero(T))
 end
 
 """

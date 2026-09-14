@@ -243,9 +243,16 @@ function _prepare_climate(simulation::CropSimulation, climate::NamedTuple)
         if hasproperty(climate, :diurnal_range)
             prepared = merge(prepared, (diurnal_range = T.(climate.diurnal_range),))
         end
-        for name in (:specific_humidity, :surface_pressure)
+        for name in (:specific_humidity, :surface_pressure, :irrigation)
             hasproperty(climate, name) || continue
             prepared = merge(prepared, (; name => T.(getproperty(climate, name))))
+        end
+        # This function rebuilds the forcing field by field, so anything it does
+        # not name is dropped silently on its way to `readclimate!`. That is how
+        # `subcanopy_irrigation` first appeared to do nothing.
+        if hasproperty(climate, :subcanopy_irrigation)
+            prepared = merge(prepared,
+                             (subcanopy_irrigation = climate.subcanopy_irrigation,))
         end
         for name in (:no3_deposition, :nh4_deposition)
             hasproperty(climate, name) || continue
