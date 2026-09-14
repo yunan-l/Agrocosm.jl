@@ -75,10 +75,11 @@ end
 # and `phenology.lodging_exposure` for wind lodging,
 # and `weather.vapour_deficit` for the aerodynamically coupled demand,
 # and three for water-limited grain filling: `phenology.anthesis_reserve`,
-# `phenology.filling_progress` and `phenology.filling_progress_counted`.
+# `phenology.filling_progress` and `phenology.filling_progress_counted`,
+# and `phenology.stand_fraction` for heat loss of stand.
 # `test_simulation_api.jl`
 # compares the two estimates and is what catches an omission here.
-const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1657
+const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1658
 const _PERSISTENT_NONFLOAT_BYTES_PER_CELL = 46
 const _PERSISTENT_FIXED_FLOAT_VALUES = 26
 

@@ -456,6 +456,24 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     # SHIPS AT ZERO, where the weight is one and the integral is `progress`
     # bitwise.
     filling_stress_exponent::T = 0.0      # Weight on daily water sufficiency during grain filling.
+    # Establishment. Porter and Gawith (1999, Eur. J. Agron.) review wheat's
+    # cardinal temperatures and give germination a MAXIMUM of 35 C; this is that
+    # number, not a fitted threshold. Above it a share of the stand is lost per
+    # day, and the loss is permanent because the plants are.
+    establishment_heat_ceiling::T = 35.0  # Air temperature above which stand is lost (C).
+    # SHIPS AT ZERO, which is the inherited model: nothing in this lineage acts
+    # between sowing and canopy closure, so a crop cannot fail to establish and
+    # cannot produce a zero-yield season from pre-flowering heat.
+    establishment_loss_rate::T = 0.0      # Share of stand lost per day above the ceiling.
+    # IN DAYS, NOT THERMAL TIME, and the difference decides whether the mechanism
+    # can act at all. A window closed on `fphu` closes FASTEST when it is
+    # hottest: measured here, the three sowings that failed in the field held
+    # their window open for 5 days while the January sowings held theirs for 13,
+    # so the crop escapes the very stress the window exists to represent.
+    # Germination and emergence take a physical amount of time - 7 to 14 days for
+    # wheat, three to four weeks to a established stand - and a seedling under
+    # lethal heat dies on that clock, not on the crop's.
+    establishment_days::S = 30            # Days after sowing over which stand can be lost.
     # Excess-water damage on an absolute daily RAINFALL threshold, acting on the
     # fraction of the standing crop recovered at harvest. Swept the same way as
     # the heat thresholds and on the same observations - see `docs/24` - and it
@@ -657,6 +675,27 @@ function published_grain_traits(cft_id::Integer)
     cft_id == 3 && return (86.1, 0.1260, 4500.0)    # maize
     cft_id == 9 && return (61.4, 0.0765, 3500.0)    # soybean
     return (0.0, 0.0, 0.0)
+end
+
+"""
+    measured_establishment_loss_rate(cft_id)
+
+The share of stand a day above the germination ceiling destroys, per CFT.
+
+MEASURED AGAINST FAILURES, which is a two-sided criterion and a stronger one than
+fitting a number. Hot Serial Cereal sowed wheat on twelve dates at Maricopa;
+three sowings produced no grain at all. At 0.06 the model returns exactly
+0.00 t/ha for those three and leaves the twelve harvested treatments untouched -
+mean 7.07 t/ha against 7.08 with the mechanism off, correlation 0.705 against
+0.704. Below 0.06 the failures survive; above it the harvested treatments start
+to lose yield too (6.73 at 0.10).
+
+Returns 0 for a CFT no experiment has failed, which leaves that crop unable to
+fail, as the whole lineage is.
+"""
+function measured_establishment_loss_rate(cft_id::Integer)
+    cft_id == 1 && return 0.06   # wheat, Hot Serial Cereal 2007-2009
+    return 0.0
 end
 
 """

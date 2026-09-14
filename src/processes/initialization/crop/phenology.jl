@@ -82,6 +82,9 @@ mutable struct CropPhenology{A, B, I}
     # because the weight applies to each day's INCREMENT of filling, and the
     # model carries accumulated heat units rather than the day's own.
     filling_progress_counted::A
+    # Share of the sown stand still alive, one at sowing and only ever falling.
+    # Multiplies POTENTIAL leaf area: half the plants build half the canopy.
+    stand_fraction::A
 end
 
 """Static and current-day algebraically derived phenology variables."""
@@ -113,6 +116,7 @@ function init_crop_phenology(::Type{T}, cell_size::Int, device) where {T <: Abst
         device(zeros(T, cell_size)),   # anthesis_reserve
         device(zeros(T, cell_size)),   # filling_progress
         device(zeros(T, cell_size)),   # filling_progress_counted
+        device(ones(T, cell_size)),    # stand_fraction
     )
 end
 

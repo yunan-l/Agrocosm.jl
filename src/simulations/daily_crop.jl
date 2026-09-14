@@ -26,6 +26,7 @@ function _daily_crop!(
     reproductive_sink::Bool = false,
     anthesis_heat::Bool = false,
     cold_sterility::Bool = false,
+    establishment::Bool = false,
     excess_water::Bool = false,
     diurnal_temperature_stress::Bool = false,
     # The course only, not the sub-daily assimilation loop: these say how finely
@@ -522,6 +523,14 @@ function _daily_crop!(
         # the above. Placed here rather than beside the vernalization code
         # because this is grain-set damage, not a development requirement.
         cold_sterility && cold_sterility!(
+            cftparameters, state, dailyWeather.temp,
+            view(climate.diurnal_range, climate_day, :),
+        )
+        # Stand loss between sowing and canopy closure, the one window in which
+        # this lineage has no temperature effect at all. Reads the same two
+        # forcing channels and reduces a state none of the above touches, so it
+        # is order-independent against all of them.
+        establishment && establishment!(
             cftparameters, state, dailyWeather.temp,
             view(climate.diurnal_range, climate_day, :),
         )

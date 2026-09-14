@@ -166,6 +166,10 @@ end
         :anthesis_reserve,
         :filling_progress,
         :filling_progress_counted,
+        # Stand, the first state in this model that can act between sowing and
+        # canopy closure. Prognostic and monotone, reset to ONE at sowing rather
+        # than zero, because it is a surviving share.
+        :stand_fraction,
     )
     @test propertynames(crop.auxiliary.phenology) == (:phu, :winter_type, :fphu)
     @test propertynames(crop.auxiliary.calendar) == (:sowing_date, :prescribed_sowing_date)

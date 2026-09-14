@@ -44,6 +44,7 @@ function cultivate!(crop,
         crop_prognostic(crop).phenology.anthesis_reserve,
         crop_prognostic(crop).phenology.filling_progress,
         crop_prognostic(crop).phenology.filling_progress_counted,
+        crop_prognostic(crop).phenology.stand_fraction,
         current_phu,
         current_winter_type,
         prescribed_phu,
@@ -108,6 +109,7 @@ end
     anthesis_reserve::AbstractVector{T},
     filling_progress::AbstractVector{T},
     filling_progress_counted::AbstractVector{T},
+    stand_fraction::AbstractVector{T},
     phu::AbstractVector{T},
     winter_type::AbstractVector{B},
     prescribed_phu::AbstractVector{T},
@@ -168,6 +170,7 @@ end
         anthesis_reserve[cell] = zero(T)
         filling_progress[cell] = zero(T)
         filling_progress_counted[cell] = zero(T)
+        stand_fraction[cell] = one(T)
         phu[cell] = prescribed_phu[cell]
         winter_type[cell] = prescribed_winter_type[cell]
         lai[cell] = seed_lai

@@ -17,6 +17,7 @@ function lai_crop!(crop,
         crop_prognostic(crop).nitrogen.sufficiency,
         crop_canopy_auxiliary(crop).flaimax,
         crop_prognostic(crop).canopy.laimax_adjusted,
+        crop_prognostic(crop).phenology.stand_fraction,
         crop_prognostic(crop).phenology.is_growing,
         CFT,
     )
@@ -47,6 +48,7 @@ end
                                   crop_vscal::AbstractArray{T},
                                   crop_flaimax::AbstractArray{T},
                                   crop_laimax_adjusted::AbstractArray{T},
+                                  crop_stand_fraction::AbstractArray{T},
                                   crop_isgrowing::AbstractArray{S},
                                   CFT::CFTParameters
 ) where {T <: AbstractFloat, S <: Integer, B <: Bool}
@@ -60,7 +62,10 @@ end
         stress = min(crop_wscal[cell], crop_vscal[cell])
         retained = one(T) - stress_canopy_loss(stress, T(stress_canopy_loss_rate))
         if !crop_senescence[cell]
-            potential_lai = crop_flaimax[cell] * laimax
+            # Stand: half the plants build half the canopy, and none build none.
+            # At `establishment_loss_rate = 0` the fraction stays at one and this
+            # is the inherited expression bitwise.
+            potential_lai = crop_flaimax[cell] * laimax * crop_stand_fraction[cell]
             # LPJmL's `lai000` stores the previous *potential* LAI, distinct
             # from the actual leaf area retained after water/N limitation.
             # Keeping that state prevents a newly sown winter crop from losing

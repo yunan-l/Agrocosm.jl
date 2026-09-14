@@ -74,6 +74,7 @@ export fao56_depletion_fraction, published_grain_traits
 export published_grain_calibration, grain_traits_from_elasticity
 export measured_filling_stress_exponent
 export measured_grain_number_elasticity
+export measured_establishment_loss_rate
 export ablation_daily_statistic_sink_configuration
 export ablation_terminal_heat_configuration
 export ablation_metrics, ablation_report
@@ -207,6 +208,7 @@ include("processes/crop/photosynthesis_subdaily.jl")
 include("processes/crop/reproductive_sink.jl")
 include("processes/crop/anthesis_heat.jl")
 include("processes/crop/cold_sterility.jl")
+include("processes/crop/establishment.jl")
 include("processes/crop/excess_water.jl")
 include("processes/crop/lodging.jl")
 include("processes/crop/heat_exposure.jl")
