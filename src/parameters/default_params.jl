@@ -101,6 +101,22 @@ water, nitrogen, and management process coefficients.
     # interannual variance the clamp is eating, not whether a lifted clamp scores
     # better.
     nitrogen_vcmax_relaxation::T = 0.0 # 0 = LPJmL's clamp, 1 = no N limit on vcmax
+    # Nitrate and ammonium each start at this fraction of the slow soil-nitrogen
+    # pool. It was a literal inside `init_states!` and is the ONLY thing that sets
+    # the mineral pool a production run begins with: the 600-year warm-up supplies
+    # the fast/slow ALLOCATION and never touches the mineral partition, so
+    # `docs/10`'s note that "the repair is upstream, a server-side rerun, not a
+    # code change" was wrong about where the number lives.
+    #
+    # Measured at Maricopa: the shipped 0.01 puts 270 kg N/ha of mineral nitrogen
+    # in the profile against the experiment's own 14-28 kg N/ha for the 1996-97
+    # treatments, so the low-nitrogen arm of a nitrogen experiment is not low. The
+    # consequence is not a level error but a SENSITIVITY one - 4.14x applied
+    # fertiliser becomes 1.23x taken up, against an observed yield response the
+    # model reproduces at 0.85x.
+    #
+    # SHIPS AT 0.01, which is the literal it replaces.
+    initial_mineral_nitrogen_fraction::T = 0.01 # of slow soil N, for NO3 and NH4 each
     k_max::T = 0.10 # maximum fraction of soil->NH4 assumed to be nitrified
     k_2::T = 0.01 # fraction of nitrified N lost as N20 flux
     soil_cn_ratio::T = 15.0 # soil organic matter C:N ratio

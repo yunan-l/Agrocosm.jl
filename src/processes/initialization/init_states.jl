@@ -67,12 +67,17 @@ end
 initialize_soil_mineral_nitrogen!(soil, u0, strategy)
 
 Initialize soil NO₃ and NH₄ using either restart values or the default rule.
-The default initializes each mineral pool in each layer to one percent of that
-layer's slow organic-N pool.
+The default initializes each mineral pool in each layer to
+`lpjmlparams.initial_mineral_nitrogen_fraction` of that layer's slow organic-N
+pool, one percent as shipped. That fraction is the ONLY thing setting the mineral
+pool a run begins with - the warm-up supplies the fast/slow allocation and never
+the mineral partition - and it is measurably too large: 270 kg N/ha in the
+Maricopa profile against the experiment's own 14-28 (`docs/47`).
 """
 function initialize_soil_mineral_nitrogen!(soil::Soil,
                                            u0::NamedTuple,
-                                           strategy::Symbol)
+                                           strategy::Symbol;
+                                           lpjmlparams::LPJmLParams = lpjmlparams)
     restart = strategy === :restart
     if strategy === :restart
         if !hasproperty(u0, :soil_NO3) || !hasproperty(u0, :soil_NH4)
@@ -88,7 +93,8 @@ function initialize_soil_mineral_nitrogen!(soil::Soil,
             "use :restart or :from_slow_organic_nitrogen",
         ))
     end
-    slow_n_fraction = convert(eltype(soil.nitrogen.slow), 0.01)
+    slow_n_fraction = convert(eltype(soil.nitrogen.slow),
+                              lpjmlparams.initial_mineral_nitrogen_fraction)
     nitrate_restart = restart ? u0.soil_NO3 : soil.nitrogen.nitrate
     ammonium_restart = restart ? u0.soil_NH4 : soil.nitrogen.ammonium
     launch_2D!(
@@ -170,7 +176,8 @@ function init_states!(CFT::CFTParameters,
     initialize_soil_mineral_nitrogen!(
         soil,
         mineral_u0,
-        mineral_nitrogen_initialization,
+        mineral_nitrogen_initialization;
+        lpjmlparams = lpjmlparams,
     )
     soil.water.saturation_fraction = to_float(soilparams.w_sat)
     soil.properties.ph = to_float(soilparams.ph)
