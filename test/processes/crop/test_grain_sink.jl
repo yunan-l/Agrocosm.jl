@@ -55,8 +55,12 @@ end
 end
 
 @testset "the sink is grains times what each can still hold" begin
-    sink(n, w, fphu, stop, fill) =
-        Agrocosm.grain_sink_carbon(TG(n), TG(w), TG(fphu), TG(stop), TG(fill))
+    # `grain_sink_carbon` now takes the filling progress rather than deriving it
+    # from `fphu`, because the progress is accumulated with each day weighted by
+    # that day's water sufficiency. `thermal_filling_progress` is the unweighted
+    # expression it used to compute inline, so these assertions are unchanged.
+    sink(n, w, fphu, stop, fill) = Agrocosm.grain_sink_carbon(
+        TG(n), TG(w), Agrocosm.thermal_filling_progress(TG(fphu), TG(stop)), TG(fill))
     # Nothing before the window closes, everything once filling completes.
     @test sink(3000, 0.126, 0.70, 0.70, 1.0) == zero(TG)
     @test sink(3000, 0.126, 1.00, 0.70, 1.0) ≈ TG(3000 * 0.126)

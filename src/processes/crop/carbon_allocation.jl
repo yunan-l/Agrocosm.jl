@@ -26,9 +26,13 @@ function carbon_allocation!(CFT::CFTParameters,
                crop_prognostic(crop).nitrogen.sufficiency,
                crop_stress_auxiliary(crop).nitrogen_deficit,
                crop_stress_auxiliary(crop).water_deficit,
+               crop_prognostic(crop).water.sufficiency,
                crop_prognostic(crop).phenology.grain_set_fraction,
                crop_prognostic(crop).phenology.grain_fill_fraction,
                crop_prognostic(crop).phenology.window_assimilate,
+               crop_prognostic(crop).phenology.anthesis_reserve,
+               crop_prognostic(crop).phenology.filling_progress,
+               crop_prognostic(crop).phenology.filling_progress_counted,
                crop_phenology_auxiliary(crop).fphu,
                crop_prognostic(crop).phenology.senescence,
                crop_prognostic(crop).carbon.biomass,
@@ -144,13 +148,32 @@ project's 2x2 was always meant to act; until now both multiplied the constant
 index instead, so both were scaling a quantity that carried no information.
 """
 @inline function grain_sink_carbon(
-    grain_number::T, maximum_grain_carbon::T, fphu::T, window_end::T,
-    fill_fraction::T,
+    grain_number::T, maximum_grain_carbon::T, progress::T, fill_fraction::T,
 ) where {T <: AbstractFloat}
-    remaining = one(T) - window_end
-    progress = remaining > zero(T) ?
-               clamp((fphu - window_end) / remaining, zero(T), one(T)) : one(T)
     return grain_number * maximum_grain_carbon * progress * fill_fraction
+end
+
+"""
+    thermal_filling_progress(fphu, window_end)
+
+The unweighted share of grain filling completed, LPJmL's own expression.
+"""
+@inline function thermal_filling_progress(fphu::T, window_end::T) where {T <: AbstractFloat}
+    remaining = one(T) - window_end
+    return remaining > zero(T) ?
+           clamp((fphu - window_end) / remaining, zero(T), one(T)) : one(T)
+end
+
+"""
+    filling_weight(water_sufficiency, exponent)
+
+How much of a day's filling a grain actually deposits, given that day's water
+sufficiency. `exponent = 0` returns one and makes the weighted integral the
+thermal progress bitwise.
+"""
+@inline function filling_weight(water_sufficiency::T, exponent::T) where {T <: AbstractFloat}
+    exponent > zero(T) || return one(T)
+    return clamp(water_sufficiency, zero(T), one(T))^exponent
 end
 
 """Compute and mass-cap storage carbon after leaf/root allocation."""
@@ -205,9 +228,13 @@ end
                                            crop_vscal::AbstractArray{T},
                                            crop_ndf::AbstractArray{T},
                                            crop_wdf::AbstractArray{T},
+                                           crop_wscal::AbstractArray{T},
                                            crop_grain_set::AbstractArray{T},
                                            crop_grain_fill::AbstractArray{T},
                                            crop_window_assimilate::AbstractArray{T},
+                                           crop_anthesis_reserve::AbstractArray{T},
+                                           crop_filling_progress::AbstractArray{T},
+                                           crop_filling_counted::AbstractArray{T},
                                            crop_fphu::AbstractArray{T},
                                            crop_senescence::AbstractArray{B},
                                            crop_biomass::AbstractArray{T},
@@ -231,6 +258,7 @@ end
 
     @unpack sla, hiopt, himin = CFT
     @unpack grain_number_half_carbon, maximum_grain_carbon, maximum_grain_number = CFT
+    @unpack reserve_remobilisation, filling_stress_exponent = CFT
     @unpack flowering_start, flowering_end = CFT
     @unpack FROOTMAX, FROOTMIN, include_biological_fixation_cost = kernel_params
     @unpack senescent_leaf_release = kernel_params
@@ -353,6 +381,27 @@ end
                crop_fphu[cell] > T(flowering_start) && crop_fphu[cell] < T(flowering_end)
                 crop_window_assimilate[cell] += max(zero(T), crop_npp[cell])
             end
+            # Stem carbon standing at anthesis, recorded once. What the grain may
+            # take of it is `reserve_remobilisation`; everything the canopy fixes
+            # afterwards is available in full.
+            above_ground = crop_biomass[cell] - crop_leafc[cell] - crop_rootc[cell]
+            if crop_fphu[cell] >= T(flowering_start) &&
+               crop_anthesis_reserve[cell] <= zero(T)
+                crop_anthesis_reserve[cell] = max(above_ground, zero(T))
+            end
+            # At `reserve_remobilisation = 1` this is `above_ground` exactly,
+            # which is the inherited cap bitwise.
+            fillable = above_ground - (one(T) - T(reserve_remobilisation)) *
+                       min(crop_anthesis_reserve[cell], above_ground)
+            # Each day's filling weighted by that day's water sufficiency. At
+            # exponent 0 the weight is one and this is the thermal progress
+            # bitwise, which is the ablation contract.
+            thermal_progress = thermal_filling_progress(crop_fphu[cell], T(flowering_end))
+            increment = max(thermal_progress - crop_filling_counted[cell], zero(T))
+            crop_filling_progress[cell] += increment *
+                filling_weight(crop_wscal[cell], T(filling_stress_exponent))
+            crop_filling_counted[cell] = thermal_progress
+            effective_progress = crop_filling_progress[cell]
             hi = compute_harvest_index(crop_fphu[cell], T(hiopt), T(himin), crop_wdf[cell]) *
                  crop_grain_set[cell] * crop_grain_fill[cell]
             # Never below what is already deposited: the harvest-index formula
@@ -368,9 +417,9 @@ end
                         saturating_grain_number(
                             crop_window_assimilate[cell], T(maximum_grain_number),
                             T(grain_number_half_carbon)) * crop_grain_set[cell],
-                        T(maximum_grain_carbon), crop_fphu[cell], T(flowering_end),
+                        T(maximum_grain_carbon), effective_progress,
                         crop_grain_fill[cell]),
-                    crop_biomass[cell] - crop_leafc[cell] - crop_rootc[cell]) :
+                    fillable) :
                 compute_storage_carbon(
                     crop_biomass[cell], crop_leafc[cell], crop_rootc[cell], froot, hi,
                     T(hiopt))

@@ -157,6 +157,15 @@ end
         # `grain_set_fraction` and `grain_fill_fraction` act on a NUMBER and a
         # WEIGHT respectively instead of both scaling the same constant.
         :window_assimilate,
+        # Water-limited grain filling. `anthesis_reserve` is the stem carbon
+        # standing when filling begins, so a remobilisation limit has something
+        # to bind against; `filling_progress` is that filling accumulated with
+        # each day weighted by its water sufficiency, and
+        # `filling_progress_counted` the unweighted progress already counted, so
+        # the weight applies to each day's INCREMENT. All three reset at sowing.
+        :anthesis_reserve,
+        :filling_progress,
+        :filling_progress_counted,
     )
     @test propertynames(crop.auxiliary.phenology) == (:phu, :winter_type, :fphu)
     @test propertynames(crop.auxiliary.calendar) == (:sowing_date, :prescribed_sowing_date)

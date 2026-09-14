@@ -71,6 +71,17 @@ mutable struct CropPhenology{A, B, I}
     # sterility, lodging, sprouting, harvest loss - could not be represented at
     # all. See `docs/34`.
     window_assimilate::A
+    # Above-ground non-leaf, non-root carbon standing when the crop reaches
+    # `flowering_start`. What the grain may take from it is a parameter; what it
+    # may take beyond it is whatever the canopy fixes afterwards.
+    anthesis_reserve::A
+    # Filling progress accumulated with each day weighted by that day's water
+    # sufficiency. Equals the unweighted `progress` when the exponent is zero.
+    filling_progress::A
+    # The unweighted progress already counted into `filling_progress`. Needed
+    # because the weight applies to each day's INCREMENT of filling, and the
+    # model carries accumulated heat units rather than the day's own.
+    filling_progress_counted::A
 end
 
 """Static and current-day algebraically derived phenology variables."""
@@ -99,6 +110,9 @@ function init_crop_phenology(::Type{T}, cell_size::Int, device) where {T <: Abst
         device(zeros(T, cell_size)),   # heavy_rain_excess
         device(zeros(T, cell_size)),   # lodging_exposure
         device(zeros(T, cell_size)),   # window_assimilate
+        device(zeros(T, cell_size)),   # anthesis_reserve
+        device(zeros(T, cell_size)),   # filling_progress
+        device(zeros(T, cell_size)),   # filling_progress_counted
     )
 end
 

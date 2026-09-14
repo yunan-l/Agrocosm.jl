@@ -426,6 +426,36 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     # range. `half_carbon` is fixed by requiring the TYPICAL window NPP to give
     # the TYPICAL published grain number, so it too is derived rather than fitted.
     maximum_grain_number::T = 0.0         # grains m-2 the crop approaches asymptotically.
+    # How much of the STEM carbon standing at anthesis the grain may draw on.
+    # The inherited cap is `biomass - leaf - root`, which lets the grain consume
+    # the entire stem, so the sink always reaches its published per-grain
+    # capacity and single-grain weight is a CONSTANT: measured 0.280 g in both
+    # the wet and the dry arm at Braunschweig, against 0.276 and 0.231 observed,
+    # and unmoved by the drought phenology and canopy-loss terms at any rate.
+    # Published remobilisation is 10-20% of grain carbon in maize and up to 40%
+    # in stressed wheat, so a crop short of post-anthesis assimilate CANNOT fill
+    # its grains and that is how drought takes grain weight.
+    #
+    # SHIPS AT ONE, which is the inherited cap bitwise.
+    reserve_remobilisation::T = 1.0       # Share of anthesis stem carbon available to grain.
+    # Filling progress runs on `(fphu - window_end)/(1 - window_end)`, a fraction
+    # of THERMAL TIME, so it reaches one at maturity however the season went and
+    # every grain is filled to its published capacity. Measured at Braunschweig:
+    # single-grain weight 0.280 g in the wet arm and 0.280 in the dry, against
+    # 0.276 and 0.231 observed, and unmoved by drought phenology, canopy loss or
+    # a remobilisation cap - the last because post-anthesis assimilate (338 gC)
+    # exceeds the sink demand (302) even in the drought, so no SOURCE limit can
+    # bind. Nor is it duration: both arms were harvested on the same day.
+    #
+    # What is missing is that a grain filling under water stress deposits less
+    # per unit of thermal time. This exponent weights each day's filling by that
+    # day's water sufficiency, so the realized capacity is the stress-weighted
+    # integral rather than the potential. CERES modifies kernel weight by stress
+    # during filling, APSIM reduces grain size the same way.
+    #
+    # SHIPS AT ZERO, where the weight is one and the integral is `progress`
+    # bitwise.
+    filling_stress_exponent::T = 0.0      # Weight on daily water sufficiency during grain filling.
     # Excess-water damage on an absolute daily RAINFALL threshold, acting on the
     # fraction of the standing crop recovered at harvest. Swept the same way as
     # the heat thresholds and on the same observations - see `docs/24` - and it
@@ -624,6 +654,36 @@ function published_grain_traits(cft_id::Integer)
     cft_id == 3 && return (86.1, 0.1260, 4500.0)    # maize
     cft_id == 9 && return (61.4, 0.0765, 3500.0)    # soybean
     return (0.0, 0.0, 0.0)
+end
+
+"""
+    measured_filling_stress_exponent(cft_id)
+
+The exponent weighting each day's grain filling by that day's water sufficiency,
+per CFT, from plot experiments that imposed a drought and measured what it did.
+
+PROVENANCE DIFFERS BY CROP and the difference matters when reading a result:
+
+  - maize, 1.5: MEASURED against single-grain weight, which the experiment
+    counted. Braunschweig FACE 2008 gives 0.231 g in the dry arm against 0.276 in
+    the wet, a ratio of 0.837; the exponent that reproduces it is 1.5. The yield
+    contrast is then a CONSEQUENCE, not a target, and it lands at 1.671 against
+    an observed 1.649 [1.453, 1.797].
+  - wheat, 0.3: FITTED to the Maricopa Dry/Wet yield contrast, because neither
+    wheat deposit recorded grain weight by treatment. Weaker evidence, and it
+    should be replaced the moment a wheat experiment with grain weights appears.
+
+That wheat needs a fifth of maize's sensitivity is not an accident of fitting:
+wheat remobilises 20-40% of its grain carbon from stem reserves against maize's
+10-20%, so its filling is buffered against a shortfall in current assimilate.
+
+Returns 0 for a CFT no experiment has measured, which leaves that crop's grain
+filling on thermal time alone.
+"""
+function measured_filling_stress_exponent(cft_id::Integer)
+    cft_id == 1 && return 0.3    # wheat, fitted to the Maricopa water contrast
+    cft_id == 3 && return 1.5    # maize, measured against single-grain weight
+    return 0.0
 end
 
 """

@@ -73,10 +73,12 @@ end
 # `stress.harvest_index_binding` for the harvest-index-binding diagnostic,
 # and `phenology.harvest_recovery_fraction` for excess water.
 # and `phenology.lodging_exposure` for wind lodging,
-# and `weather.vapour_deficit` for the aerodynamically coupled demand.
+# and `weather.vapour_deficit` for the aerodynamically coupled demand,
+# and three for water-limited grain filling: `phenology.anthesis_reserve`,
+# `phenology.filling_progress` and `phenology.filling_progress_counted`.
 # `test_simulation_api.jl`
 # compares the two estimates and is what catches an omission here.
-const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1654
+const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1657
 const _PERSISTENT_NONFLOAT_BYTES_PER_CELL = 46
 const _PERSISTENT_FIXED_FLOAT_VALUES = 26
 
