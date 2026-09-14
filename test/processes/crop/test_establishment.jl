@@ -49,7 +49,8 @@ end
     # Braunschweig - which never reaches the 38 C threshold - is untouched.
     @test Agrocosm.measured_anthesis_heat_rate(1) == 0.008
     @test Agrocosm.measured_anthesis_heat_rate(3) == 0.0
-    @test Agrocosm.cft1.heat_day_temperature == 38.0
+    # Wheat overrides the generic 38 C threshold with its own 36.
+    @test Agrocosm.cft1.heat_day_temperature == 36.0
     # The shipped rate is the one this measurement corrects, so the two must
     # differ and the measurement must be the smaller.
     @test Agrocosm.measured_anthesis_heat_rate(1) < Agrocosm.cft1.heat_day_rate
