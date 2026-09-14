@@ -340,6 +340,12 @@ function run_global_production(
         # is read back off the simulation too.
         "drought_phenology_rate" => Float64(simulation.cft.drought_phenology_rate),
         "stress_canopy_loss_rate" => Float64(simulation.cft.stress_canopy_loss_rate),
+        # The two plot-measured traits, read back off the simulation for the same
+        # reason: a run on the measured senescence shape and one on the shipped
+        # value differ in no other recorded field.
+        "shapesenescencenorm" => Float64(simulation.cft.shapesenescencenorm),
+        "root_surface_rate" => Float64(simulation.cft.root_surface_rate),
+        "root_deep_rate" => Float64(simulation.cft.root_deep_rate),
         "lodging_rate" => Float64(simulation.cft.lodging_rate),
         "lodging_tolerance" => Float64(simulation.cft.lodging_tolerance),
         "lodging_wind_threshold" => Float64(simulation.cft.lodging_wind_threshold),

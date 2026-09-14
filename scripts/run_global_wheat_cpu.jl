@@ -570,6 +570,48 @@ function with_depletion(cft, spec, scale::Real, cft_id::Integer, slope_spec = no
          for field in fieldnames(CFTParameters))...)
 end
 
+"""Take the two rates this project measured at plot scale onto the globe.
+
+`[processes] measured_senescence` and `[processes] measured_roots` are separate
+booleans, because separating them is the question: one lengthens the canopy and
+the other deepens the root system, and a single arm carrying both cannot say
+which moved the variance. Each reads its own `measured_*` table per CFT, and both
+return zero for a crop no deposit here has measured, which leaves that crop
+bitwise; wheat is the only one either covers.
+
+WHY THESE TWO AND NOT THE OTHERS. Every rate in `measured_*` was fitted to a plot
+and most of them are damage rates, which this project has measured to be
+ineffective globally nine times over. These two are not damage rates. One is the
+SHAPE of the senescence curve, measured from leaf area on four irrigation arms,
+and the shipped value turns out to be the water-stressed crop's - which costs the
+model 86 mm of transpiration in the hottest weeks of a season. The other is the
+FORM of the root profile, measured from root cores, and the shipped single
+exponential carries 0.21% of wheat roots below a metre against a measured 3.1%.
+
+Neither moved a single plot-scale yield, because the grain sink saturates. They
+are on the globe to answer whether a canopy that lives longer and a root system
+that reaches deeper change the VARIANCE, which is what the extreme-year criterion
+scores and what no plot can test.
+"""
+function with_measured_plot_traits(cft, senescence_spec, roots_spec, cft_id::Integer)
+    want(spec, name) = spec === nothing || spec === false ? false :
+        spec === true ? true :
+        error("$name must be true or absent, got $spec")
+    senescence = want(senescence_spec, "measured_senescence")
+    roots = want(roots_spec, "measured_roots")
+    (senescence || roots) || return cft
+    shape = senescence ? measured_senescence_shape(cft_id) : 0.0
+    surface, deep = roots ? measured_root_profile(cft_id) : (0.0, 0.0)
+    shape == 0 && surface == 0 && return cft
+    T = typeof(cft.hiopt)
+    return CFTParameters{T, Int32}(;
+        (field => (field === :shapesenescencenorm && shape > 0 ? T(shape) :
+                   field === :root_surface_rate && surface > 0 ? T(surface) :
+                   field === :root_deep_rate && surface > 0 ? T(deep) :
+                   getfield(cft, field))
+         for field in fieldnames(CFTParameters))...)
+end
+
 function create_simulation(initial_data, selection, config, days, device, cft_id;
     irrigated::Bool, diagnostics)
     management = config["management"]
@@ -579,12 +621,15 @@ function create_simulation(initial_data, selection, config, days, device, cft_id
     return initialize_simulation(
         with_lodging(
             with_stress_response(
+              with_measured_plot_traits(
                 with_grain_sink(
                 with_depletion(scaled_cft(crop_cft(cft_id), rate_scale),
                                get(processes, "depletion_fraction", nothing),
                                Float64(get(processes, "depletion_scale", 1.0)), cft_id,
                                get(processes, "depletion_demand_slope", nothing)),
                     get(processes, "grain_number", nothing), cft_id),
+                get(processes, "measured_senescence", nothing),
+                get(processes, "measured_roots", nothing), cft_id),
                 get(processes, "drought_phenology_rate", nothing),
                 get(processes, "stress_canopy_loss_rate", nothing)),
             get(processes, "lodging_rate", nothing),
