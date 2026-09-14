@@ -48,6 +48,7 @@ crop_calendar_input(x::ModelState) = x.inputs.crop.calendar
 crop_root_auxiliary(x::ModelState) = x.auxiliary.crop.root
 crop_root_input(x::ModelState) = x.inputs.crop.root
 
+weather_input(x::ModelState) = x.inputs.weather
 soil_properties(x::ModelState) = x.inputs.soil.properties
 for (selector, lifecycle_group) in (
     (:soil_water_prognostic, :(x.prognostic.soil.water)),

@@ -87,8 +87,11 @@ end
     @test occursin("adjusted_depletion = demand_adjusted_depletion(", source)
     # Both call sites must pass the PT potential. A site that passes `demand`
     # compiles, runs, and produces a mechanism that measurably does nothing.
-    @test occursin("equilibrium_evaporation[cell] * T(ALPHAM),\n                depletion_demand_slope", source)
-    @test occursin("pet_eeq[cell] * T(ALPHAM), T(depletion_demand_slope)", source)
+    # `alpha_c` is ALPHAM until the aerodynamic coupling is switched on, and the
+    # Penman-Monteith equivalent after; what must hold either way is that both
+    # sites pass the POTENTIAL rather than the realized demand.
+    @test occursin("equilibrium_evaporation[cell] * alpha_c,\n                depletion_demand_slope", source)
+    @test occursin("pet_eeq[cell] * alpha_c, T(depletion_demand_slope)", source)
     @test !occursin("demand_adjusted_depletion(depletion_fraction, demand,", source)
 end
 

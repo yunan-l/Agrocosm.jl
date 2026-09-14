@@ -37,6 +37,17 @@ water, nitrogen, and management process coefficients.
     atmfrac::T = 0.5 # Decomposed litter carbon emitted directly to atmosphere (fraction).
     ALPHAM::T = 1.485 # Priestley–Taylor aerodynamic correction used by LPJmL.
     GM::T = 2.2 # Empirical canopy-conductance coefficient.
+    # LPJmL's demand, `ALPHAM*eeq*gc/(gc + GM*ALPHAM)`, makes transpiration
+    # respond to stomatal closure with the sensitivity `GM*ALPHAM/(gc+GM*ALPHAM)`
+    # - 0.246 at gc = 10 mm/s, the SAME number at every site and in every crop
+    # because GM is a constant. Penman-Monteith over the same canopies gives
+    # 0.851 for maize at 3.46 m/s and 0.58 for wheat at 1.7 m/s. Raising GM alone
+    # corrects the sensitivity and starves the crop (59 mm of season
+    # transpiration at GM = 38.5), because LPJmL's asymptote stays at the
+    # Priestley-Taylor potential while the real well-coupled canopy also
+    # evaporates faster in dry air. This rate blends in the Penman-Monteith
+    # equivalent, which raises both together; 0 reproduces LPJmL bitwise.
+    aerodynamic_coupling::T = 0.0 # Share of the demand taken from Penman-Monteith.
     LAMBDA_OPT::T = 0.8 # Initial/default internal-to-ambient CO₂ ratio.
     # The P-model's unit cost ratio, 146.0 for C3 (Stocker et al. 2020). Nonzero
     # switches `lambda` from the CONSTANT above to the least-cost optimum, which

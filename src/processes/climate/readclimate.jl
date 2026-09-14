@@ -17,6 +17,7 @@ function readclimate!(climate::NamedTuple,
     no3_deposition = has_no3_deposition ? climate.no3_deposition : climate.temp
     nh4_deposition = has_nh4_deposition ? climate.nh4_deposition : climate.temp
     default_wind = eltype(dailyWeather.temp)(lpjmlparams.volatil_wind)
+    read_vapour_pressure!(climate, dailyWeather, day)
     if ndims(climate.co2) == 1
         launch_1D!(
             read_annual_climate_kernel!,
@@ -73,6 +74,57 @@ function readclimate!(climate::NamedTuple,
     else
         throw(ArgumentError("climate.co2 must be a vector or a (day, cell) matrix"))
     end
+end
+
+"""
+    read_vapour_pressure!(climate, dailyWeather, day)
+
+Fill today's actual vapour pressure (kPa) from specific humidity and surface
+pressure, or leave it at zero when the forcing carries neither.
+
+Zero is the signal that an aerodynamically coupled transpiration demand cannot
+be formed, and the process falls back to LPJmL's uncoupled one rather than
+inventing a humidity. GSWP3-W5E5 ships `huss`, so this is a wiring question and
+not a data one.
+"""
+function read_vapour_pressure!(climate::NamedTuple,
+                               dailyWeather::DailyWeather,
+                               day::Integer)
+    if !(hasproperty(climate, :specific_humidity) &&
+         hasproperty(climate, :surface_pressure) &&
+         hasproperty(climate, :diurnal_range))
+        fill!(dailyWeather.vapour_deficit, zero(eltype(dailyWeather.vapour_deficit)))
+        return nothing
+    end
+    launch_1D!(
+        read_vapour_pressure_kernel!,
+        dailyWeather.vapour_deficit,
+        climate.specific_humidity,
+        climate.surface_pressure,
+        climate.temp,
+        climate.diurnal_range,
+        day,
+    )
+    return nothing
+end
+
+@kernel inbounds = true function read_vapour_pressure_kernel!(
+    vapour_deficit::AbstractVector{T},
+    humidity_forcing::AbstractMatrix{T},
+    pressure_forcing::AbstractMatrix{T},
+    temperature_forcing::AbstractMatrix{T},
+    diurnal_range_forcing::AbstractMatrix{T},
+    day::Integer,
+) where {T <: AbstractFloat}
+    cell = @index(Global)
+    humidity = humidity_forcing[day, cell]
+    pressure = pressure_forcing[day, cell]
+    actual = vapour_pressure_from_specific_humidity(humidity, pressure)
+    mean_temperature = temperature_forcing[day, cell]
+    half_range = max(diurnal_range_forcing[day, cell], zero(T)) / T(2)
+    saturated = (saturation_vapour_pressure(mean_temperature + half_range) +
+                 saturation_vapour_pressure(mean_temperature - half_range)) / T(2)
+    vapour_deficit[cell] = max(saturated - actual, zero(T))
 end
 
 @kernel inbounds = true function read_annual_climate_kernel!(

@@ -23,7 +23,9 @@ function transpiration!(photos_adtmm::AbstractArray{T},
         lpjmlparams = lpjmlparams,
         soil_layers = 5,
         use_precomputed_conductance = use_precomputed_conductance,
+        canopy_height = T(fao56_canopy_height(CFT.name)),
     )
+    weather = weather_input(crop)
 
     launch_1D!(water_demand_supply_kernel!,
                crop_canopy_auxiliary(crop).canopy_conductance,
@@ -40,6 +42,9 @@ function transpiration!(photos_adtmm::AbstractArray{T},
                crop_canopy_auxiliary(crop).canopy_wet,
                crop_prognostic(crop).phenology.is_growing,
                pet.eeq,
+               weather.temp,
+               weather.wind,
+               weather.vapour_deficit,
                crop_root_input(crop).distribution,
                crop_root_auxiliary(crop).zone_available_water,
                soil_water_auxiliary(soil).relative_content,
@@ -173,9 +178,11 @@ function recouple_nitrogen_water!(
         fpc = T(CFT.fpc),
         gmin = T(CFT.gmin),
         soil_layers = 5,
+        canopy_height = T(fao56_canopy_height(CFT.name)),
         lpjmlparams = lpjmlparams,
         photoparams = photoparams,
     )
+    weather = weather_input(crop)
     launch_1D!(
         nitrogen_water_recoupling_kernel!,
         crop_photosynthesis_auxiliary(crop).lambda,
@@ -193,6 +200,8 @@ function recouple_nitrogen_water!(
         pet.daylength,
         pet.eeq,
         temperature,
+        weather.wind,
+        weather.vapour_deficit,
         co2,
         kernel_params,
     )
@@ -215,6 +224,8 @@ end
     daylength::AbstractArray{T},
     equilibrium_evaporation::AbstractArray{T},
     temperature::AbstractArray{T},
+    wind::AbstractArray{T},
+    vapour_deficit::AbstractArray{T},
     co2::AbstractArray{T},
     kernel_params,
 ) where {T <: AbstractFloat, M <: AbstractFloat, S <: Integer}
@@ -222,6 +233,15 @@ end
     @unpack pathway, b, emax, fpc, gmin, soil_layers, lpjmlparams, photoparams = kernel_params
     @unpack depletion_fraction, depletion_demand_slope = kernel_params
     @unpack ALPHAM, GM = lpjmlparams
+    canopy_height = T(kernel_params.canopy_height)
+    # Penman-Monteith's stomatal sensitivity, expressed as LPJmL's own two
+    # constants so that no equation downstream changes. `aerodynamic_coupling`
+    # is 0 by default, which returns those constants untouched.
+    alpha_c, shape_c = coupled_demand_parameters(
+        T(ALPHAM), T(GM), equilibrium_evaporation[cell], temperature[cell],
+        vapour_deficit[cell], wind[cell], canopy_height * fpar[cell],
+        T(lpjmlparams.aerodynamic_coupling),
+    )
 
     if is_growing[cell] == one(S) && lambda[cell] > zero(T) &&
        temperature_stress[cell] >= T(1e-2)
@@ -233,7 +253,7 @@ end
             gmin, previous_lambda,
         )
         demand = compute_transpiration_demand(
-            canopy_wet[cell], equilibrium_evaporation[cell], T(ALPHAM), T(GM),
+            canopy_wet[cell], equilibrium_evaporation[cell], alpha_c, shape_c,
             limited_conductance,
         )
         root_water = zero(T)
@@ -244,7 +264,7 @@ end
             emax, root_water, root_carbon[cell],
             demand_adjusted_depletion(
                 depletion_fraction,
-                equilibrium_evaporation[cell] * T(ALPHAM),
+                equilibrium_evaporation[cell] * alpha_c,
                 depletion_demand_slope,
             ),
         ) * fpc
@@ -255,7 +275,7 @@ end
         )
             constrained_conductance = compute_actual_canopy_conductance(
                 limited_conductance, supply, demand, canopy_wet[cell],
-                equilibrium_evaporation[cell], T(ALPHAM), T(GM),
+                equilibrium_evaporation[cell], alpha_c, shape_c,
             )
             gpd, fac = compute_canopy_water_supply(
                 daylength[cell], constrained_conductance, gmin, fpar[cell], co2_cell,
@@ -289,7 +309,9 @@ function finalize_nitrogen_limited_transpiration!(
     lpjmlparams::LPJmLParams = lpjmlparams,
 ) where {T <: AbstractFloat}
     kernel_params = (gmin = T(CFT.gmin), soil_layers = 5,
+                     canopy_height = T(fao56_canopy_height(CFT.name)),
                      lpjmlparams = lpjmlparams)
+    weather = weather_input(crop)
     launch_1D!(
         finalize_nitrogen_limited_transpiration_kernel!,
         crop_canopy_auxiliary(crop).canopy_conductance,
@@ -305,6 +327,9 @@ function finalize_nitrogen_limited_transpiration!(
         soil_water_auxiliary(soil).holding_capacity_storage,
         pet.daylength,
         pet.eeq,
+        weather.temp,
+        weather.wind,
+        weather.vapour_deficit,
         co2,
         kernel_params,
     )
@@ -325,12 +350,24 @@ end
     holding_storage::AbstractArray{M},
     daylength::AbstractArray{T},
     equilibrium_evaporation::AbstractArray{T},
+    air_temperature::AbstractArray{T},
+    wind::AbstractArray{T},
+    vapour_deficit::AbstractArray{T},
     co2::AbstractArray{T},
     kernel_params,
 ) where {T <: AbstractFloat, M <: AbstractFloat, S <: Integer}
     cell = @index(Global)
     @unpack gmin, soil_layers, lpjmlparams = kernel_params
     @unpack ALPHAM, GM = lpjmlparams
+    canopy_height = T(kernel_params.canopy_height)
+    # Penman-Monteith's stomatal sensitivity, expressed as LPJmL's own two
+    # constants so that no equation downstream changes. `aerodynamic_coupling`
+    # is 0 by default, which returns those constants untouched.
+    alpha_c, shape_c = coupled_demand_parameters(
+        T(ALPHAM), T(GM), equilibrium_evaporation[cell], air_temperature[cell],
+        vapour_deficit[cell], wind[cell], canopy_height * fpar[cell],
+        T(lpjmlparams.aerodynamic_coupling),
+    )
 
     if is_growing[cell] == one(S) && lambda[cell] > zero(T) &&
        temperature_stress[cell] >= T(1e-2)
@@ -340,7 +377,7 @@ end
             gmin, lambda[cell],
         )
         demand = compute_transpiration_demand(
-            canopy_wet[cell], equilibrium_evaporation[cell], T(ALPHAM), T(GM),
+            canopy_wet[cell], equilibrium_evaporation[cell], alpha_c, shape_c,
             final_conductance,
         )
         root_water = zero(T)
@@ -456,6 +493,75 @@ end
     maximum_supply * compute_available_fraction(root_water, depletion_fraction) *
     (one(T) - exp(T(-0.04) * root_carbon))
 
+"""
+    aerodynamic_conductance(wind, canopy_height, reference_height)
+
+Canopy aerodynamic conductance in mm s⁻¹ from the logarithmic wind profile, with
+`d = 0.67h` and `z0 = 0.123h` (Monteith and Unsworth).
+
+The height enters only inside a logarithm, so the development scaling below -
+`fpar` in place of a tracked stem height, which this model does not carry - costs
+about 20% in `ga` for a factor-two error in height, against the factor of 3.5 in
+stomatal sensitivity this whole term exists to correct.
+"""
+@inline function aerodynamic_conductance(wind::T,
+                                         canopy_height::T,
+                                         reference_height::T) where {T <: AbstractFloat}
+    height = max(canopy_height, T(0.05))
+    displacement = T(0.67) * height
+    roughness = T(0.123) * height
+    level = max(reference_height, height + one(T))
+    speed = max(wind, T(0.5))
+    friction = T(0.41) * speed / log((level - displacement) / roughness)
+    return T(1000) * friction * friction / speed
+end
+
+"""
+    coupled_demand_parameters(alpha, conductance_shape, equilibrium_evaporation,
+                              temperature, vapour_deficit, wind, canopy_height,
+                              rate)
+
+Return `(alpha, conductance_shape)` blended toward their Penman-Monteith values.
+
+Penman-Monteith and LPJmL's demand are the SAME function of stomatal conductance.
+Dividing PM through by `Δ/γ + 1` gives
+`E = (N/M) * gc / (gc + ga/M)` with `N = eeq*M + K*D*ga`, `M = Δ/γ + 1`,
+which is `alpha*eeq*gc/(gc + GM*alpha)` for `alpha = N/(M*eeq)` and
+`GM = ga/(M*alpha)`. So the coupled demand needs no new equation anywhere - only
+these two numbers, computed per cell per day, in place of two constants. That is
+why the blend is exact at both ends and why `rate = 0` returns the shipped
+constants unchanged.
+
+`K = 86400*rho_cp/(lambda*gamma)`, the imposed-evaporation coefficient, is 0.6477
+mm day⁻¹ per Pa per m s⁻¹ at sea level. `gamma` is held at its sea-level value:
+the model carries no surface pressure, and `Δ/γ` moves by under 3% over the
+elevation range of the world's cropland.
+"""
+@inline function coupled_demand_parameters(alpha::T,
+                                           conductance_shape::T,
+                                           equilibrium_evaporation::T,
+                                           temperature::T,
+                                           vapour_deficit::T,
+                                           wind::T,
+                                           canopy_height::T,
+                                           rate::T) where {T <: AbstractFloat}
+    blend = clamp(rate, zero(T), one(T))
+    (blend > zero(T) && vapour_deficit > zero(T) && canopy_height > zero(T) &&
+     equilibrium_evaporation > zero(T)) || return (alpha, conductance_shape)
+    deficit = vapour_deficit
+    slope = saturation_vapour_pressure_slope(temperature)
+    # Pascals throughout, the convention `saturation_vapour_pressure` and the
+    # P-model already use: gamma = 66.5 Pa/K and the imposed-evaporation
+    # coefficient 86400*rho_cp/(lambda*gamma) = 0.6477 mm/day per Pa per m/s.
+    ratio = slope / T(66.5) + one(T)
+    ga = aerodynamic_conductance(wind, canopy_height, T(2)) / T(1000)
+    numerator = equilibrium_evaporation * ratio + T(0.6477) * deficit * ga
+    coupled_alpha = numerator / (ratio * equilibrium_evaporation)
+    coupled_shape = T(1000) * ga / (ratio * coupled_alpha)
+    return (alpha + blend * (coupled_alpha - alpha),
+            conductance_shape + blend * (coupled_shape - conductance_shape))
+end
+
 """Compute transpiration demand with LPJmL's 0.99 water-stress wetness cap."""
 @inline function compute_transpiration_demand(
     canopy_wet::T,
@@ -522,6 +628,9 @@ end
                                              crop_canopy_wet::AbstractArray{T},
                                              crop_isgrowing::AbstractArray{S},
                                              pet_eeq::AbstractArray{T},
+                                             air_temperature::AbstractArray{T},
+                                             wind::AbstractArray{T},
+                                             vapour_deficit::AbstractArray{T},
                                              crop_rootdist::AbstractArray{T},
                                              crop_rootzone_available_water::AbstractArray{T},
                                              soil_w::AbstractArray{M},
@@ -534,6 +643,15 @@ end
 
     @unpack lpjmlparams, soil_layers, use_precomputed_conductance = kernel_params
     @unpack ALPHAM, GM, LAMBDA_OPT = lpjmlparams
+    canopy_height = T(kernel_params.canopy_height)
+    # Penman-Monteith's stomatal sensitivity, expressed as LPJmL's own two
+    # constants so that no equation downstream changes. `aerodynamic_coupling`
+    # is 0 by default, which returns those constants untouched.
+    alpha_c, shape_c = coupled_demand_parameters(
+        T(ALPHAM), T(GM), pet_eeq[cell], air_temperature[cell],
+        vapour_deficit[cell], wind[cell], canopy_height * crop_fpar[cell],
+        T(lpjmlparams.aerodynamic_coupling),
+    )
     @unpack fpc, emax, gmin, depletion_fraction, depletion_demand_slope = CFT
 
     co2_index = length(co2) == 1 ? 1 : cell
@@ -560,10 +678,10 @@ end
         # the same `pet_eeq` and keeping them adjacent makes the difference
         # between them visible.
         demand = compute_transpiration_demand(
-            crop_canopy_wet[cell], pet_eeq[cell], T(ALPHAM), T(GM), crop_gp[cell],
+            crop_canopy_wet[cell], pet_eeq[cell], alpha_c, shape_c, crop_gp[cell],
         )
         adjusted_depletion = demand_adjusted_depletion(
-            T(depletion_fraction), pet_eeq[cell] * T(ALPHAM), T(depletion_demand_slope),
+            T(depletion_fraction), pet_eeq[cell] * alpha_c, T(depletion_demand_slope),
         )
         supply = compute_transpiration_supply(
             T(emax), wr, crop_rootc[cell], adjusted_depletion)
@@ -584,7 +702,7 @@ end
             # drives LAI senescence (`lai_crop.jl:52`) and a senescence using a
             # different water stress from allocation would be incoherent.
             crop_wscal[cell] = (emax * compute_available_fraction(wr, adjusted_depletion)) /
-                (pet_eeq[cell] * ALPHAM / (one(T) + (GM * ALPHAM) / crop_gp[cell]))
+                (pet_eeq[cell] * alpha_c / (one(T) + (shape_c * alpha_c) / crop_gp[cell]))
             if crop_wscal[cell] > 1.0
                 crop_wscal[cell] = one(T)
             end
@@ -625,7 +743,7 @@ end
         actual_supply = fpc > zero(T) ? transp_cor / fpc : zero(T)
         crop_gp[cell] = compute_actual_canopy_conductance(
             crop_gp[cell], actual_supply, demand, crop_canopy_wet[cell], pet_eeq[cell],
-            T(ALPHAM), T(GM),
+            alpha_c, shape_c,
         )
 
         # Distribute corrected transpiration back to layers by root distribution.

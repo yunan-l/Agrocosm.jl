@@ -9,6 +9,16 @@ mutable struct DailyWeather{A}
     nh4_deposition::A # Atmospheric ammonium-N deposition (gN m⁻² day⁻¹).
     daily_co2::A  # Atmospheric CO₂ used on the current day (Pa).
     annual_co2::A # Annual atmospheric CO₂ forcing buffer (Pa).
+    # Vapour pressure DEFICIT (kPa), formed the way FAO-56 requires: saturation
+    # from the mean of es(Tmax) and es(Tmin), never from the daily mean alone.
+    # Taking es(Tmean) collapses the deficit toward zero on humid days - it took
+    # Braunschweig's season transpiration from 237 mm to 56 - because the daily
+    # mean vapour pressure sits close to saturation at the daily mean
+    # temperature. Zero means the forcing supplied no humidity, in which case the
+    # coupled demand cannot be formed and the process falls back to LPJmL's.
+    # GSWP3-W5E5 carries `huss`, `tasmax` and `tasmin`, so this is a wiring
+    # question and not a data one.
+    vapour_deficit::A
 end
 
 """Daily potential-evapotranspiration and radiation buffers."""
@@ -51,6 +61,7 @@ function init_weather(::Type{T}, cell_size::Int, device) where {T <: AbstractFlo
         cell_state(),
         cell_state(),
         device(zeros(T, 1)),
+        cell_state(),
     )
 end
 

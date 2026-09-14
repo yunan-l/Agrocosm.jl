@@ -550,6 +550,26 @@ function fao56_depletion_fraction(cft_id::Integer)
 end
 
 """
+    fao56_canopy_height(cft_id)
+
+The published mid-season crop height for one CFT, FAO-56 Table 12, in metres.
+
+A MEASURED constant like `fao56_depletion_fraction`, not a tuning knob. It is
+needed because canopy aerodynamic conductance follows the logarithmic wind
+profile over the canopy, and a 2.5 m maize stand in 3.5 m/s wind is coupled to
+the atmosphere about four times more tightly than a 0.9 m wheat stand in
+1.7 m/s. Returns 0 for a CFT the table does not cover, which leaves that crop on
+the uncoupled LPJmL demand rather than guessing.
+"""
+function fao56_canopy_height(cft_id::Integer)
+    cft_id == 1 && return 1.0    # wheat (winter and spring, FAO-56 Table 12)
+    cft_id == 2 && return 1.0    # rice (paddy)
+    cft_id == 3 && return 2.0    # maize, field (grain)
+    cft_id == 9 && return 0.75   # soybeans
+    return 0.0
+end
+
+"""
     published_grain_traits(cft_id)
 
 `(grains_per_carbon, maximum_grain_carbon)` for the CERES-style grain sink.
