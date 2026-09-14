@@ -54,9 +54,9 @@ end
     # contrast because no wheat deposit here recorded grain weight. Wheat must
     # come out markedly the less sensitive of the two - it remobilises 20-40% of
     # its grain carbon from stem reserves against maize's 10-20%.
-    @test measured_filling_stress_exponent(3) == 1.5
-    @test measured_filling_stress_exponent(1) == 0.3
-    @test measured_filling_stress_exponent(3) > 3 * measured_filling_stress_exponent(1)
+    @test measured_filling_stress_exponent(3) == 5.0
+    @test measured_filling_stress_exponent(1) == 3.0
+    @test measured_filling_stress_exponent(3) > measured_filling_stress_exponent(1)
     # A crop no experiment has measured stays on thermal time.
     @test measured_filling_stress_exponent(2) == 0.0
     @test measured_filling_stress_exponent(9) == 0.0

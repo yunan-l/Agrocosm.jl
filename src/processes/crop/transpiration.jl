@@ -240,7 +240,7 @@ end
     alpha_c, shape_c = coupled_demand_parameters(
         T(ALPHAM), T(GM), equilibrium_evaporation[cell], temperature[cell],
         vapour_deficit[cell], wind[cell], canopy_height * fpar[cell],
-        T(lpjmlparams.aerodynamic_coupling),
+        daylength[cell], T(lpjmlparams.aerodynamic_coupling),
     )
 
     if is_growing[cell] == one(S) && lambda[cell] > zero(T) &&
@@ -368,7 +368,7 @@ end
     alpha_c, shape_c = coupled_demand_parameters(
         T(ALPHAM), T(GM), equilibrium_evaporation[cell], air_temperature[cell],
         vapour_deficit[cell], wind[cell], canopy_height * fpar[cell],
-        T(lpjmlparams.aerodynamic_coupling),
+        daylength[cell], T(lpjmlparams.aerodynamic_coupling),
     )
 
     if is_growing[cell] == one(S) && lambda[cell] > zero(T) &&
@@ -529,7 +529,7 @@ end
 """
     coupled_demand_parameters(alpha, conductance_shape, equilibrium_evaporation,
                               temperature, vapour_deficit, wind, canopy_height,
-                              rate)
+                              daylength, rate)
 
 Return `(alpha, conductance_shape)` blended toward their Penman-Monteith values.
 
@@ -554,6 +554,7 @@ elevation range of the world's cropland.
                                            vapour_deficit::T,
                                            wind::T,
                                            canopy_height::T,
+                                           daylength::T,
                                            rate::T) where {T <: AbstractFloat}
     blend = clamp(rate, zero(T), one(T))
     (blend > zero(T) && vapour_deficit > zero(T) && canopy_height > zero(T) &&
@@ -565,7 +566,16 @@ elevation range of the world's cropland.
     # coefficient 86400*rho_cp/(lambda*gamma) = 0.6477 mm/day per Pa per m/s.
     ratio = slope / T(66.5) + one(T)
     ga = aerodynamic_conductance(wind, canopy_height, T(2)) / T(1000)
-    numerator = equilibrium_evaporation * ratio + T(0.6477) * deficit * ga
+    # DAYLIGHT-WEIGHTED, because `eeq` is. LPJmL's `petpar.c` forms it as
+    # `s/(s+gamma)/lambda * (swnet + lw*daylength/24)`, so the radiation term is
+    # already a daytime quantity, and transpiration happens when the stomata are
+    # open. Adding a 24-hour imposed term to it over-states the demand by about
+    # 24/daylength - 1.6 at this site - which showed up as a well-watered C4 crop
+    # gaining 12.6% from elevated CO2 where the measurement says it gains
+    # nothing.
+    daylight = clamp(daylength, zero(T), T(24)) / T(24)
+    numerator = equilibrium_evaporation * ratio +
+                T(0.6477) * deficit * ga * daylight
     coupled_alpha = numerator / (ratio * equilibrium_evaporation)
     coupled_shape = T(1000) * ga / (ratio * coupled_alpha)
     return (alpha + blend * (coupled_alpha - alpha),
@@ -680,7 +690,7 @@ end
     alpha_c, shape_c = coupled_demand_parameters(
         T(ALPHAM), T(GM), pet_eeq[cell], air_temperature[cell],
         vapour_deficit[cell], wind[cell], canopy_height * crop_fpar[cell],
-        T(lpjmlparams.aerodynamic_coupling),
+        daylength[cell], T(lpjmlparams.aerodynamic_coupling),
     )
     @unpack fpc, emax, gmin, depletion_fraction, depletion_demand_slope = CFT
 

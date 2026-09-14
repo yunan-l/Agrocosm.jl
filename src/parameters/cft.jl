@@ -657,6 +657,26 @@ function published_grain_traits(cft_id::Integer)
 end
 
 """
+    measured_grain_number_elasticity(cft_id)
+
+The elasticity of grain number to window assimilate, measured per CFT.
+
+Braunschweig maize 2008: window assimilate in the dry arm is 0.679 of the wet
+arm and grain number 0.723, giving 0.838. Feed it to
+`grain_traits_from_elasticity`, which keeps the published level constraint and
+sets the curve's shape from this.
+
+The value depends on the water balance the model is running, because that is what
+produces the window assimilate: at the shipped LPJmL supply the same measurement
+gave 0.53. Re-derive it whenever the water balance changes, or the shape will be
+carrying the water balance's error.
+"""
+function measured_grain_number_elasticity(cft_id::Integer)
+    cft_id == 3 && return 0.838   # maize, Braunschweig FACE 2008
+    return 0.0
+end
+
+"""
     measured_filling_stress_exponent(cft_id)
 
 The exponent weighting each day's grain filling by that day's water sufficiency,
@@ -664,14 +684,21 @@ per CFT, from plot experiments that imposed a drought and measured what it did.
 
 PROVENANCE DIFFERS BY CROP and the difference matters when reading a result:
 
-  - maize, 1.5: MEASURED against single-grain weight, which the experiment
+  - maize, 5.0: MEASURED against single-grain weight, which the experiment
     counted. Braunschweig FACE 2008 gives 0.231 g in the dry arm against 0.276 in
-    the wet, a ratio of 0.837; the exponent that reproduces it is 1.5. The yield
-    contrast is then a CONSEQUENCE, not a target, and it lands at 1.671 against
-    an observed 1.649 [1.453, 1.797].
-  - wheat, 0.3: FITTED to the Maricopa Dry/Wet yield contrast, because neither
+    the wet, a ratio of 0.837, and 5.0 returns 0.841. Everything else is then a
+    CONSEQUENCE: the yield water contrast lands at 1.636 against an observed
+    1.649 [1.453, 1.797], and the CO2 recovery of grain weight - which was not
+    used to set anything - at 1.176 against an observed 1.153.
+  - wheat, 3.0: FITTED to the Maricopa Dry/Wet yield contrast, because neither
     wheat deposit recorded grain weight by treatment. Weaker evidence, and it
     should be replaced the moment a wheat experiment with grain weights appears.
+
+THE EXPONENT IS LARGE BECAUSE THE STRESS SIGNAL IS SMALL. `wscal` averages 0.988
+over the well-watered arm and 0.911 over the drought that cost 39% of the grain -
+a span of 8 points. The exponent is therefore doing the work of the filling
+response AND of the dynamic range the water-sufficiency variable does not have,
+and it should fall if that variable is ever widened.
 
 That wheat needs a fifth of maize's sensitivity is not an accident of fitting:
 wheat remobilises 20-40% of its grain carbon from stem reserves against maize's
@@ -681,8 +708,8 @@ Returns 0 for a CFT no experiment has measured, which leaves that crop's grain
 filling on thermal time alone.
 """
 function measured_filling_stress_exponent(cft_id::Integer)
-    cft_id == 1 && return 0.3    # wheat, fitted to the Maricopa water contrast
-    cft_id == 3 && return 1.5    # maize, measured against single-grain weight
+    cft_id == 1 && return 3.0    # wheat, fitted to the Maricopa water contrast
+    cft_id == 3 && return 5.0    # maize, measured against single-grain weight
     return 0.0
 end
 

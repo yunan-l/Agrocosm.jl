@@ -8,16 +8,16 @@ using Agrocosm: aerodynamic_conductance, coupled_demand_parameters,
     # The ablation contract: at rate 0 the two constants come back untouched, so
     # every earlier run reproduces bitwise.
     alpha, shape = coupled_demand_parameters(
-        1.485, 2.2, 3.0, 22.0, 1000.0, 3.46, 2.0, 0.0,
+        1.485, 2.2, 3.0, 22.0, 1000.0, 3.46, 2.0, 15.0, 0.0,
     )
     @test alpha === 1.485
     @test shape === 2.2
     # And with the rate on but no humidity in the forcing, which is how a run
     # without `huss` must behave rather than inventing a deficit.
-    @test coupled_demand_parameters(1.485, 2.2, 3.0, 22.0, 0.0, 3.46, 2.0, 1.0) ===
+    @test coupled_demand_parameters(1.485, 2.2, 3.0, 22.0, 0.0, 3.46, 2.0, 15.0, 1.0) ===
           (1.485, 2.2)
     # A bare-soil day, where the height scaling has driven the canopy to zero.
-    @test coupled_demand_parameters(1.485, 2.2, 3.0, 22.0, 1000.0, 3.46, 0.0, 1.0) ===
+    @test coupled_demand_parameters(1.485, 2.2, 3.0, 22.0, 1000.0, 3.46, 0.0, 15.0, 1.0) ===
           (1.485, 2.2)
 end
 
@@ -25,16 +25,18 @@ end
     # The whole point of the substitution: LPJmL's demand evaluated with these
     # two numbers must equal PM evaluated independently, to round-off. If this
     # fails the substitution is not an identity and the mechanism is a fit.
-    for (eeq, temp, deficit, wind, height, gc) in
-        ((3.0, 22.0, 1000.0, 3.46, 2.0, 10.0), (2.0, 18.0, 500.0, 1.7, 0.9, 6.0),
-         (5.0, 30.0, 2500.0, 1.7, 0.9, 14.0), (1.5, 12.0, 300.0, 5.0, 1.6, 4.0))
+    for (eeq, temp, deficit, wind, height, gc, daylength) in
+        ((3.0, 22.0, 1000.0, 3.46, 2.0, 10.0, 15.0), (2.0, 18.0, 500.0, 1.7, 0.9, 6.0, 11.0),
+         (5.0, 30.0, 2500.0, 1.7, 0.9, 14.0, 13.5), (1.5, 12.0, 300.0, 5.0, 1.6, 4.0, 9.0))
         alpha, shape = coupled_demand_parameters(
-            1.485, 2.2, eeq, temp, deficit, wind, height, 1.0,
+            1.485, 2.2, eeq, temp, deficit, wind, height, daylength, 1.0,
         )
         through_lpjml = compute_transpiration_demand(0.0, eeq, alpha, shape, gc)
         ga = aerodynamic_conductance(wind, height, 2.0) / 1000
         ratio = saturation_vapour_pressure_slope(temp) / 66.5 + 1
-        penman = (eeq * ratio + 0.6477 * deficit * ga) / (ratio + ga / (gc / 1000))
+        # The imposed term is daylight-weighted to match `eeq`'s own convention.
+        penman = (eeq * ratio + 0.6477 * deficit * ga * daylength / 24) /
+                 (ratio + ga / (gc / 1000))
         @test through_lpjml ≈ penman rtol = 1e-10
     end
 end
@@ -44,8 +46,8 @@ end
     # because GM is fixed; the measured one is not. Maize in wind must come out
     # markedly more sensitive than wheat in still air.
     sensitivity(alpha, shape, gc) = shape * alpha / (gc + shape * alpha)
-    maize = coupled_demand_parameters(1.485, 2.2, 3.0, 22.0, 1000.0, 3.46, 2.0, 1.0)
-    wheat = coupled_demand_parameters(1.485, 2.2, 3.0, 22.0, 1000.0, 1.7, 0.9, 1.0)
+    maize = coupled_demand_parameters(1.485, 2.2, 3.0, 22.0, 1000.0, 3.46, 2.0, 15.0, 1.0)
+    wheat = coupled_demand_parameters(1.485, 2.2, 3.0, 22.0, 1000.0, 1.7, 0.9, 15.0, 1.0)
     @test sensitivity(maize..., 10.0) > sensitivity(wheat..., 10.0)
     @test sensitivity(1.485, 2.2, 10.0) < sensitivity(wheat..., 10.0)
     # Taller and windier both tighten the coupling.
