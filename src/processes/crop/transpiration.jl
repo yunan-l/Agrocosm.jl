@@ -310,6 +310,7 @@ function finalize_nitrogen_limited_transpiration!(
 ) where {T <: AbstractFloat}
     kernel_params = (gmin = T(CFT.gmin), soil_layers = 5,
                      canopy_height = T(fao56_canopy_height(CFT.name)),
+                     uptake_availability_exponent = T(CFT.uptake_availability_exponent),
                      lpjmlparams = lpjmlparams)
     weather = weather_input(crop)
     launch_1D!(
@@ -358,6 +359,7 @@ end
 ) where {T <: AbstractFloat, M <: AbstractFloat, S <: Integer}
     cell = @index(Global)
     @unpack gmin, soil_layers, lpjmlparams = kernel_params
+    uptake_exponent = T(kernel_params.uptake_availability_exponent)
     @unpack ALPHAM, GM = lpjmlparams
     canopy_height = T(kernel_params.canopy_height)
     # Penman-Monteith's stomatal sensitivity, expressed as LPJmL's own two
@@ -384,11 +386,19 @@ end
         for layer in 1:soil_layers
             root_water += soil_water[layer, cell] * root_distribution[layer]
         end
-        transpiration = root_water > zero(T) ? demand * fpar[cell] / root_water : zero(T)
+        # The same normaliser as the main kernel, or the two passes disagree
+        # about which layer today's water came from.
+        uptake_total = zero(T)
+        for layer in 1:soil_layers
+            uptake_total += uptake_weight(soil_water[layer, cell], uptake_exponent) *
+                            root_distribution[layer]
+        end
+        transpiration = uptake_total > zero(T) ?
+            demand * fpar[cell] / uptake_total : zero(T)
         for layer in 1:soil_layers
             transpiration_layer[layer, cell], _ = compute_layer_transpiration(
                 transpiration, root_distribution[layer], soil_water[layer, cell],
-                holding_storage[layer, cell],
+                holding_storage[layer, cell], uptake_exponent,
             )
         end
         conductance[cell] = final_conductance
@@ -585,14 +595,34 @@ end
     return clamp(T(100) * supplied / demanded, zero(T), T(100))
 end
 
+"""
+    uptake_weight(relative_water, exponent)
+
+One layer's share of root water uptake, before its root fraction.
+
+`exponent = 1` is LPJmL's `relative_water` and returns it identically, which is
+the ablation contract. Lowering it flattens the profile toward uptake by root
+density alone, which is what Feddes-type schemes and the `kl` conventions of
+DSSAT and APSIM use, and which stops a drying layer from being abandoned.
+"""
+@inline function uptake_weight(relative_water::T, exponent::T) where {T <: AbstractFloat}
+    exponent == one(T) && return relative_water
+    return relative_water <= zero(T) ? zero(T) : relative_water^exponent
+end
+
 """Cap one layer's transpiration extraction by its plant-available water."""
 @inline function compute_layer_transpiration(
     transpiration::T,
     root_fraction::T,
     relative_water::T,
     holding_storage::T,
+    availability_exponent::T = one(T),
 ) where {T <: AbstractFloat}
-    unconstrained = transpiration * root_fraction * relative_water
+    unconstrained = transpiration * root_fraction *
+                    uptake_weight(relative_water, availability_exponent)
+    # The CAP stays the layer's real plant-available water, whatever the
+    # weighting: the exponent decides where uptake is drawn from, never how much
+    # water a layer contains.
     capacity = relative_water * holding_storage
     return min(unconstrained, capacity), unconstrained > capacity
 end
@@ -664,8 +694,14 @@ end
 
     wr = zero(T)
     rootzone_water = zero(T)
+    # `wr` is the STRESS signal and keeps LPJmL's definition; `uptake_total`
+    # normalises the DISTRIBUTION of that water across layers. They are the same
+    # number at exponent 1.
+    uptake_exponent = T(CFT.uptake_availability_exponent)
+    uptake_total = zero(T)
     for l in 1:soil_layers
         wr += soil_w[l, cell] * crop_rootdist[l]
+        uptake_total += uptake_weight(soil_w[l, cell], uptake_exponent) * crop_rootdist[l]
         if l <= 3
             rootzone_water += soil_w[l, cell] * soil_whcs[l, cell] * crop_rootdist[l]
         end
@@ -711,8 +747,8 @@ end
         end
 
         # Potential transpiration constrained by demand/supply and canopy fraction.
-        if wr > 0
-            transp = min(supply, demand) / wr * fpc
+        if uptake_total > 0
+            transp = min(supply, demand) / uptake_total * fpc
         else
             transp = zero(T)
         end
@@ -724,6 +760,7 @@ end
             for l in 1:soil_layers
                 transp_tmp, capped = compute_layer_transpiration(
                     transp, crop_rootdist[l], soil_w[l, cell], soil_whcs[l, cell],
+                    uptake_exponent,
                 )
                 transp_cor += transp_tmp
                 capped && transp_cor < T(1e-5) && (transp_cor = zero(T))
@@ -732,8 +769,8 @@ end
             transp_cor = zero(T)
         end
 
-        if wr > 0
-            transp = transp_cor / wr
+        if uptake_total > 0
+            transp = transp_cor / uptake_total
         else
             transp = zero(T)
         end
@@ -750,6 +787,7 @@ end
         for l in 1:soil_layers
             crop_trans_layer[l, cell], _ = compute_layer_transpiration(
                 transp, crop_rootdist[l], soil_w[l, cell], soil_whcs[l, cell],
+                uptake_exponent,
             )
         end
     else

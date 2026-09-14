@@ -369,6 +369,17 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     # changes every simulated yield and must be an explicit experiment. The
     # published per-crop values are `fao56_depletion_fraction`.
     depletion_fraction::T = 0.0           # FAO-56 `p`; 0 = the unmodified LPJmL supply.
+    # LPJmL takes each layer's share of transpiration as
+    # `root_fraction * relative_water`, so a layer that dries contributes less,
+    # dries no further, and the layer that rain keeps wettest - always the top
+    # one - supplies everything. Measured at Braunschweig: 207.7 of 236 mm came
+    # out of the top 20 cm, which holds 38.5 mm, while the 20-50 cm layer passed
+    # 271 mm through and gave up 11.3. That emptied it to 3-8% of available water
+    # against a measured 27-82%, and a root zone that dry is what puts the crop
+    # on the soil-supply cap for most of the season. The exponent is on the
+    # AVAILABILITY weight only; 1 reproduces LPJmL bitwise and 0 gives uptake by
+    # root density alone, the Feddes/DSSAT convention.
+    uptake_availability_exponent::T = 1.0
     # FAO-56's OWN adjustment of `p` for evaporative demand, from the note under
     # Table 22: the tabulated `p` applies at ET_c of about 5 mm/day, and
     #
