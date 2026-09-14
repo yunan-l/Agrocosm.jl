@@ -626,6 +626,48 @@ function published_grain_traits(cft_id::Integer)
     return (0.0, 0.0, 0.0)
 end
 
+"""
+    published_grain_calibration(cft_id)
+
+`(typical_grains_per_m2, typical_window_npp_gc)`, the two numbers from which
+`published_grain_traits` derives the saturating grain-number curve.
+
+They were implicit in that derivation and are named here because they are only
+ONE constraint on a two-parameter curve. Fixing the level at a typical season
+leaves the SHAPE free, and the shape is what decides how much a poor flowering
+fortnight costs. Braunschweig maize 2008 measures it: window assimilate fell to
+0.543 of the wet arm and grain number to 0.723, an elasticity of 0.53, against
+the 0.33 the shipped pair produces at its own operating point.
+"""
+function published_grain_calibration(cft_id::Integer)
+    cft_id == 1 && return (15000.0, 126.9)   # wheat
+    cft_id == 2 && return (30000.0, 88.0)    # rice
+    cft_id == 3 && return (3000.0, 172.2)    # maize
+    cft_id == 9 && return (2500.0, 153.4)    # soybean
+    return (0.0, 0.0)
+end
+
+"""
+    grain_traits_from_elasticity(cft_id, elasticity)
+
+The same published level constraint, with the curve's SHAPE set by a measured
+elasticity of grain number to window assimilate instead of left to whatever the
+level constraint happened to imply.
+
+For `N = C * A / (A + h)` the elasticity at `A` is `h / (A + h)`, so a measured
+`e` gives `h = A * e / (1 - e)` and the level then gives
+`C = N_typical * (A + h) / A`. At `e = 0.333` this returns `published_grain_traits`
+unchanged, which is the ablation contract.
+"""
+function grain_traits_from_elasticity(cft_id::Integer, elasticity::Real)
+    typical_grains, typical_npp = published_grain_calibration(cft_id)
+    half, per_grain, _ = published_grain_traits(cft_id)
+    (typical_grains > 0 && 0 < elasticity < 1) || return (half, per_grain, 0.0)
+    new_half = typical_npp * elasticity / (1 - elasticity)
+    ceiling = typical_grains * (typical_npp + new_half) / typical_npp
+    return (new_half, per_grain, ceiling)
+end
+
 """Return a CFT parameter set whose floating fields consistently use `T`."""
 function convert_precision(::Type{T}, cft::CFTParameters{<:AbstractFloat, S}) where {T <: AbstractFloat, S <: Integer}
     names = fieldnames(typeof(cft))
