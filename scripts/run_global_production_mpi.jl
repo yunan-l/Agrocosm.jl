@@ -45,6 +45,8 @@ function merge_production_partitions(manifest_paths, output_path)
             # merged manifest says a run carried the shipped value when it did
             # not - which is how a campaign becomes unreadable six months on.
             "shapesenescencenorm", "root_surface_rate", "root_deep_rate",
+            "filling_temperature_optimum", "filling_temperature_rate",
+            "expansion_water_threshold", "expansion_grain_rate",
             "nitrogen_uptake_water_exponent",
             "nitrogen_vcmax_relaxation",
             "lodging_rate", "lodging_tolerance", "lodging_wind_threshold",
@@ -217,6 +219,10 @@ function run_global_production_mpi(args = ARGS)
             "shapesenescencenorm" => first_rank["shapesenescencenorm"],
             "root_surface_rate" => first_rank["root_surface_rate"],
             "root_deep_rate" => first_rank["root_deep_rate"],
+            "filling_temperature_optimum" => first_rank["filling_temperature_optimum"],
+            "filling_temperature_rate" => first_rank["filling_temperature_rate"],
+            "expansion_water_threshold" => first_rank["expansion_water_threshold"],
+            "expansion_grain_rate" => first_rank["expansion_grain_rate"],
             "nitrogen_uptake_water_exponent" => first_rank["nitrogen_uptake_water_exponent"],
             "nitrogen_vcmax_relaxation" => first_rank["nitrogen_vcmax_relaxation"],
             "lodging_rate" => first_rank["lodging_rate"],

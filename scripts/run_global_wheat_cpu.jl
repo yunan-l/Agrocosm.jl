@@ -432,6 +432,38 @@ function with_pmodel(parameters, spec)
                               parameters.soil_thermal, parameters.soil_decomposition)
 end
 
+"""Turn on the two mechanisms that reach grain number, without leaving the ladder.
+
+`[processes] expansion_stress` and `[processes] filling_temperature` are booleans
+merged onto whatever rung `configuration` names, for the same reason
+`depletion_fraction` is a CFT change rather than a rung: neither is a step on the
+ablation ladder and both are off unless a run asks.
+
+They are the two halves of the sink chain. `filling_temperature` makes a hot
+season fill a lighter grain - the model filled every grain of 27 plot-scale
+treatments to exactly 40.0 mg against a measured 14 to 47, because filling
+progress is a fraction of THERMAL time and so completes whatever the weather did.
+`expansion_stress` costs grain SET when the root-zone matric potential passes the
+point at which expansive growth is limited; its threshold is measured on a canopy
+thermometer and its rate on two seasons of ear counts, and together they put
+Maricopa's two water contrasts inside the experiment's replicate interval for the
+first time.
+
+What `expansion_stress` is known to get wrong is stated in
+`measured_expansion_stress` and in `docs/66`: it fires on Braunschweig's 2015
+season, whose own canopy sat 0.81 C BELOW air and whose measured grain number was
+1.058 of the previous year's. Eight candidate causes have been eliminated and
+none of them is this mechanism.
+"""
+function with_reproductive_water(settings, config)
+    processes = get(config, "processes", Dict{String, Any}())
+    want(key) = get(processes, key, false) === true
+    expansion = want("expansion_stress")
+    filling = want("filling_temperature")
+    (expansion || filling) || return settings
+    return merge(settings, (; expansion_stress = expansion))
+end
+
 """Process switches for one run, from `[processes]`, via the ablation registry.
 
 Read through `Agrocosm`'s own constructors rather than switch by switch. That is
@@ -593,21 +625,30 @@ are on the globe to answer whether a canopy that lives longer and a root system
 that reaches deeper change the VARIANCE, which is what the extreme-year criterion
 scores and what no plot can test.
 """
-function with_measured_plot_traits(cft, senescence_spec, roots_spec, cft_id::Integer)
+function with_measured_plot_traits(cft, senescence_spec, roots_spec, filling_spec,
+                                   expansion_spec, cft_id::Integer)
     want(spec, name) = spec === nothing || spec === false ? false :
         spec === true ? true :
         error("$name must be true or absent, got $spec")
     senescence = want(senescence_spec, "measured_senescence")
     roots = want(roots_spec, "measured_roots")
-    (senescence || roots) || return cft
+    filling = want(filling_spec, "filling_temperature")
+    expansion = want(expansion_spec, "expansion_stress")
+    (senescence || roots || filling || expansion) || return cft
     shape = senescence ? measured_senescence_shape(cft_id) : 0.0
     surface, deep = roots ? measured_root_profile(cft_id) : (0.0, 0.0)
-    shape == 0 && surface == 0 && return cft
+    optimum, fill_rate = filling ? measured_filling_temperature(cft_id) : (0.0, 0.0)
+    threshold, set_rate = expansion ? measured_expansion_stress(cft_id) : (0.0, 0.0)
+    shape == 0 && surface == 0 && fill_rate == 0 && set_rate == 0 && return cft
     T = typeof(cft.hiopt)
     return CFTParameters{T, Int32}(;
         (field => (field === :shapesenescencenorm && shape > 0 ? T(shape) :
                    field === :root_surface_rate && surface > 0 ? T(surface) :
                    field === :root_deep_rate && surface > 0 ? T(deep) :
+                   field === :filling_temperature_optimum && fill_rate > 0 ? T(optimum) :
+                   field === :filling_temperature_rate && fill_rate > 0 ? T(fill_rate) :
+                   field === :expansion_water_threshold && set_rate > 0 ? T(threshold) :
+                   field === :expansion_grain_rate && set_rate > 0 ? T(set_rate) :
                    getfield(cft, field))
          for field in fieldnames(CFTParameters))...)
 end
@@ -629,7 +670,9 @@ function create_simulation(initial_data, selection, config, days, device, cft_id
                                get(processes, "depletion_demand_slope", nothing)),
                     get(processes, "grain_number", nothing), cft_id),
                 get(processes, "measured_senescence", nothing),
-                get(processes, "measured_roots", nothing), cft_id),
+                get(processes, "measured_roots", nothing),
+                get(processes, "filling_temperature", nothing),
+                get(processes, "expansion_stress", nothing), cft_id),
                 get(processes, "drought_phenology_rate", nothing),
                 get(processes, "stress_canopy_loss_rate", nothing)),
             get(processes, "lodging_rate", nothing),
@@ -660,7 +703,7 @@ function create_simulation(initial_data, selection, config, days, device, cft_id
         # LPJmL keeps V_req fixed once prescribed crop dates/PHU are fixed.
         freeze_vernalization_requirement = Symbol(management["mode"]) === :fixed &&
             sowing_mode === :prescribed_sdate,
-        process_settings(config)...,
+        with_reproductive_water(process_settings(config), config)...,
     )
 end
 

@@ -346,6 +346,11 @@ function run_global_production(
         "shapesenescencenorm" => Float64(simulation.cft.shapesenescencenorm),
         "root_surface_rate" => Float64(simulation.cft.root_surface_rate),
         "root_deep_rate" => Float64(simulation.cft.root_deep_rate),
+        "filling_temperature_optimum" =>
+            Float64(simulation.cft.filling_temperature_optimum),
+        "filling_temperature_rate" => Float64(simulation.cft.filling_temperature_rate),
+        "expansion_water_threshold" => Float64(simulation.cft.expansion_water_threshold),
+        "expansion_grain_rate" => Float64(simulation.cft.expansion_grain_rate),
         "lodging_rate" => Float64(simulation.cft.lodging_rate),
         "lodging_tolerance" => Float64(simulation.cft.lodging_tolerance),
         "lodging_wind_threshold" => Float64(simulation.cft.lodging_wind_threshold),
