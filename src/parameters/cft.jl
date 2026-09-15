@@ -793,23 +793,30 @@ and the threshold returning 1.00 at -0.40 and 0.80 at -1.22 is **0.652 bar** -
 inside the -0.5 to -1.0 bar at which wheat's stomatal limitation is published to
 begin, and therefore not a free parameter dressed as one.
 
-THE RATE STILL SHIPS AT ZERO. The driver was the problem and the potential fixes
-half of it: relative content ranks Braunschweig 2015 as drier than Maricopa's
-deficit arm and potential ranks it the other way, which is what the thermometers
-say. It does not fix the other half. Braunschweig's 2015 canopy sat 0.81 C below
-air against 2014's 0.11 - the LESS stressed year - and its modelled root-zone
-potential is -1.25 bar against 2014's -0.49, still backwards. That is not this
+THE RATE IS MEASURED ON GRAIN NUMBER, one parameter against two constraints.
+Maricopa counted ears and grains per ear in both seasons and its deficit arm set
+0.808 and 0.762 of its fully irrigated arm's grains. With the threshold already
+fixed by the thermometer, the rate reproducing those is **0.1318** of grain set
+per unit of daily shortfall, which gives 0.831 and 0.747 - and **both wet arms
+keep 1.000**, because the threshold puts them above the line on every day of
+their flowering windows.
+
+WHAT IT IS KNOWN TO GET WRONG. Braunschweig's 2015 canopy sat 0.81 C below air
+against 2014's 0.11 - the LESS stressed year - and its modelled root-zone
+potential is the more negative of the two, still backwards. That is not this
 function: the model's soil water at 0-40 cm matches the field's depletion to
-0.88-1.00 on matched dates, and there is no measurement below 40 cm at that site.
-A field crop keeping its canopy cool on a dry topsoil is drinking from depth, and
-whether this model can is the reach question of `docs/62`, upstream of any stress
-variable.
+0.88-1.00 on matched dates, there is no measurement below 40 cm at that site, and
+`docs/65` eliminated root depth, soil texture, the retention curve's form, the
+evaporation depth, the uptake exponent and FAO-56's demand adjustment as causes.
+A field crop keeping its canopy cool on a dry topsoil is drinking from a depth
+nothing here has measured. The rate is opened on the site where two independent
+measurements agree with it, and what it costs the site where they do not is
+reported rather than avoided.
 """
 function measured_expansion_stress(cft_id::Integer)
     # (threshold in bar, rate). The threshold is what Maricopa's canopy
-    # thermometer measures; the rate is zero until the reach question that
-    # Braunschweig 2015 raises is resolved.
-    cft_id == 1 && return (0.652, 0.0)   # bar, wheat, Maricopa canopy thermometer
+    # thermometer measures and the rate is what its grain counts measure.
+    cft_id == 1 && return (0.652, 0.1318)   # bar, wheat: thermometer and grain counts
     return (0.0, 0.0)
 end
 

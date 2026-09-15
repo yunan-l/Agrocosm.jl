@@ -88,9 +88,19 @@ end
     # Recorded, not installed: the rate is zero until the reach question that
     # Braunschweig 2015 raises is resolved, so it cannot move a shipped result.
     threshold, rate = Agrocosm.measured_expansion_stress(1)
-    @test rate == 0.0
-    # A matric potential in bar, inside wheat's published -0.5 to -1.0 onset.
+    # A matric potential in bar, inside wheat's published -0.5 to -1.0 onset, and
+    # a rate measured on Maricopa's two seasons of grain counts. The mechanism is
+    # still opt-in: `expansion_stress` is off unless a run asks for it.
     @test 0.5 < threshold < 1.0
+    @test 0.1 < rate < 0.2
+    @test Agrocosm.measured_expansion_stress(3) == (0.0, 0.0)
+
+    # Eleven days at Maricopa's deficit weight cost about a fifth of grain set,
+    # which is what its ear counts measured; its wet arms sit above the threshold
+    # and lose nothing at all.
+    deficit = sum(Agrocosm.expansion_stress_loss(0.883, 1.0, true, rate) for _ in 1:11)
+    @test 0.15 < deficit < 0.25
+    @test Agrocosm.expansion_stress_loss(1.0, 1.0, true, rate) == 0.0
 
     # The weight is one when the crop is wetter than the threshold, and falls
     # log-linearly to zero at the permanent wilting point.
