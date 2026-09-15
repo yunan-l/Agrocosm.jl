@@ -796,10 +796,10 @@ begin, and therefore not a free parameter dressed as one.
 THE RATE IS MEASURED ON GRAIN NUMBER, one parameter against two constraints.
 Maricopa counted ears and grains per ear in both seasons and its deficit arm set
 0.808 and 0.762 of its fully irrigated arm's grains. With the threshold already
-fixed by the thermometer, the rate reproducing those is **0.1318** of grain set
-per unit of daily shortfall, which gives 0.831 and 0.747 - and **both wet arms
-keep 1.000**, because the threshold puts them above the line on every day of
-their flowering windows.
+fixed by the thermometer, the rate reproducing those at this build is **0.066**
+of grain set per unit of daily shortfall, which gives 0.786 and 0.803 - and
+**both wet arms keep 1.000**, because the threshold puts them above the line on
+every day of their flowering windows.
 
 WHAT IT IS KNOWN TO GET WRONG. Braunschweig's 2015 canopy sat 0.81 C below air
 against 2014's 0.11 - the LESS stressed year - and its modelled root-zone
@@ -812,11 +812,22 @@ A field crop keeping its canopy cool on a dry topsoil is drinking from a depth
 nothing here has measured. The rate is opened on the site where two independent
 measurements agree with it, and what it costs the site where they do not is
 reported rather than avoided.
+
+THE RATE IS A PROPERTY OF THE BUILD, NOT ONLY OF THE FIELD. The two constraints
+are the field's and do not move; the rate solved from them does, because the
+model's water state is ill-conditioned. Two builds of this same source on the
+same forcing diverge on growing day 16 in the fourth decimal of a 0.056 mm
+transpiration and reach harvest 3% apart in seasonal transpiration, with 18
+against 27 supply-limited days. Solved at `f0565e6` the rate is **0.066**, half
+of the 0.1318 `docs/66` solved on the previous build, and it returns the same
+verdict: Maricopa's two water contrasts inside the replicate interval, 2 of 6 to
+4 of 6, Braunschweig maize bitwise at 7 of 7. `docs/68` carries the sweep.
 """
 function measured_expansion_stress(cft_id::Integer)
     # (threshold in bar, rate). The threshold is what Maricopa's canopy
-    # thermometer measures and the rate is what its grain counts measure.
-    cft_id == 1 && return (0.652, 0.1318)   # bar, wheat: thermometer and grain counts
+    # thermometer measures and the rate is what its grain counts measure,
+    # re-solved at this build - see `docs/68`.
+    cft_id == 1 && return (0.652, 0.066)   # bar, wheat: thermometer and grain counts
     return (0.0, 0.0)
 end
 
