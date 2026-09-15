@@ -38,7 +38,7 @@ function transpiration!(photos_adtmm::AbstractArray{T},
                crop_prognostic(crop).water.supply_sum,
                crop_stress_auxiliary(crop).water_deficit,
                crop_prognostic(crop).water.sufficiency,
-               crop_prognostic(crop).water.expansion_ratio,
+               crop_prognostic(crop).water.root_zone_potential,
                crop_prognostic(crop).carbon.root,
                crop_canopy_auxiliary(crop).canopy_wet,
                crop_prognostic(crop).phenology.is_growing,
@@ -50,6 +50,8 @@ function transpiration!(photos_adtmm::AbstractArray{T},
                crop_root_auxiliary(crop).zone_available_water,
                soil_water_auxiliary(soil).relative_content,
                soil_water_auxiliary(soil).holding_capacity_storage,
+               soil_water_auxiliary(soil).wilting_fraction,
+               soil_water_auxiliary(soil).field_capacity,
                CFT,
                kernel_params)
 
@@ -598,6 +600,69 @@ end
            (one(T) + (conductance_shape * alpha) / conductance)
 end
 
+"""
+    soil_water_potential(relative_water, wilting_fraction, field_capacity)
+
+Matric potential in bar (negative), from the two points the model already carries.
+
+WHY A POTENTIAL AND NOT A CONTENT. `relative_content` is water as a fraction of
+what a layer can hold, and the same fraction means different things in different
+soils. Maricopa's clay loam wilts at 0.197 volumetric and Braunschweig's loamy
+sand at 0.048; at a relative content of 0.6 the first is at -1.2 bar and the
+second at -0.4. The crop's own thermometer says Maricopa's deficit arm was
+transpiring at 0.80 of its wet arm while Braunschweig's 2015 canopy sat further
+BELOW air temperature than its 2014 one - and relative content ranks those two
+the wrong way round while potential ranks them right.
+
+Campbell (1974) through the model's own wilting point and field capacity, which
+are defined at -15 and -1/3 bar:
+
+    b = ln(15 / (1/3)) / ln(field / wilting)
+    psi = -(1/3) * (theta / field)^(-b)
+
+No pedotransfer and no texture lookup: the two anchors are in every cell. The
+model's own `beta` is NOT used - it is `-2.655 / log10(field / saturation)`,
+fitted for the percolation scheme's conductivity, and it puts Maricopa's wilting
+point at -1190 bar. Fitted here instead, b comes out 8.10 for that clay loam and
+3.36 for Braunschweig's loamy sand, against Clapp & Hornberger's tabulated 8.52
+and 4.38.
+"""
+@inline function soil_water_potential(
+    relative_water::T, wilting_fraction::T, field_capacity::T,
+) where {T <: AbstractFloat}
+    (field_capacity > wilting_fraction && wilting_fraction > zero(T)) ||
+        return -T(1) / T(3)
+    b = log(T(45)) / log(field_capacity / wilting_fraction)
+    theta = wilting_fraction +
+            clamp(relative_water, zero(T), one(T)) * (field_capacity - wilting_fraction)
+    return -(one(T) / T(3)) * (theta / field_capacity)^(-b)
+end
+
+"""
+    expansive_growth_weight(potential, threshold)
+
+One where the crop is wetter than `threshold`, falling log-linearly to zero at
+the permanent wilting point. `threshold = 0` returns one and is the ablation.
+
+MEASURED ON THE CROP'S OWN THERMOMETER. Maricopa scanned its deficit and its
+fully irrigated arm on the same day at the same hour for 63 and 58 days in two
+seasons; the deficit arm ran 2.52 and 1.68 C warmer, which through the canopy's
+aerodynamic resistance is 1.09 and 0.73 mm/day of latent heat it did not use, or
+0.80 and 0.87 of the wet arm's transpiration. The root-zone potential on that arm
+is -1.22 bar against the wet arm's -0.40, and the threshold that returns 1.00 at
+-0.40 and 0.80 at -1.22 is **-0.652 bar** - inside the -0.5 to -1.0 bar at which
+wheat's stomatal limitation is published to begin.
+"""
+@inline function expansive_growth_weight(
+    potential::T, threshold::T,
+) where {T <: AbstractFloat}
+    threshold > zero(T) || return one(T)
+    magnitude = max(-potential, T(1e-6))
+    magnitude <= threshold && return one(T)
+    return clamp((log(T(15)) - log(magnitude)) / (log(T(15)) - log(threshold)),
+                 zero(T), one(T))
+end
+
 """Return the LPJmL 0–100 seasonal water-sufficiency diagnostic."""
 @inline function compute_water_sufficiency(
     supplied::T, demanded::T,
@@ -665,7 +730,7 @@ end
                                              crop_w_supplysum::AbstractArray{T},
                                              crop_wdf::AbstractArray{T},
                                              crop_wscal::AbstractArray{T},
-                                             crop_expansion_ratio::AbstractArray{T},
+                                             crop_root_zone_potential::AbstractArray{T},
                                              crop_rootc::AbstractArray{T},
                                              crop_canopy_wet::AbstractArray{T},
                                              crop_isgrowing::AbstractArray{S},
@@ -677,6 +742,8 @@ end
                                              crop_rootzone_available_water::AbstractArray{T},
                                              soil_w::AbstractArray{M},
                                              soil_whcs::AbstractArray{M},
+                                             soil_wilting::AbstractArray{M},
+                                             soil_field::AbstractArray{M},
                                              CFT::CFTParameters,
                                              kernel_params
 ) where {T <: AbstractFloat, M <: AbstractFloat, S <: Integer}
@@ -756,13 +823,19 @@ end
             if crop_wscal[cell] > 1.0
                 crop_wscal[cell] = one(T)
             end
-            # The raw ratio, no plateau and no clip. Diagnostic unless a
-            # mechanism reads it: nothing in the shipped model does.
-            crop_expansion_ratio[cell] = (emax * wr) / stomatal_demand
         else
             crop_wscal[cell] = one(T)
-            crop_expansion_ratio[cell] = T(Inf)
         end
+        # Root-weighted matric potential, written every day whether or not a
+        # mechanism reads it. Weighted by the same root distribution as the
+        # supply, so a stress built on it cannot disagree with the water balance
+        # about which layer the crop is living off.
+        potential = zero(T)
+        for l in 1:soil_layers
+            potential += crop_rootdist[l] * soil_water_potential(
+                soil_w[l, cell], soil_wilting[l, cell], soil_field[l, cell])
+        end
+        crop_root_zone_potential[cell] = potential
 
         # Potential transpiration constrained by demand/supply and canopy fraction.
         if uptake_total > 0

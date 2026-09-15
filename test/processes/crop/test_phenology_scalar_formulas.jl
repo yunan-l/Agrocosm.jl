@@ -85,19 +85,36 @@ end
 end
 
 @testset "expansion water stress" begin
-    # Recorded, not installed: the rate is zero until Braunschweig 2015 is
-    # resolved, so the mechanism cannot move any shipped result.
+    # Recorded, not installed: the rate is zero until the reach question that
+    # Braunschweig 2015 raises is resolved, so it cannot move a shipped result.
     threshold, rate = Agrocosm.measured_expansion_stress(1)
     @test rate == 0.0
-    @test threshold > 1
-    @test Agrocosm.expansion_stress_loss(0.8, threshold, true, rate) == 0.0
+    # A matric potential in bar, inside wheat's published -0.5 to -1.0 onset.
+    @test 0.5 < threshold < 1.0
 
-    # The shape, at the rate the Maricopa fit gives.
-    @test Agrocosm.expansion_stress_loss(0.8, 1.2, true, 0.05) ≈ 0.02 atol = 1e-9
-    @test Agrocosm.expansion_stress_loss(1.5, 1.2, true, 0.05) == 0.0   # above it
-    @test Agrocosm.expansion_stress_loss(0.8, 1.2, false, 0.05) == 0.0  # outside
-    # A crop with no demand has an infinite ratio and must not be damaged by it.
-    @test Agrocosm.expansion_stress_loss(Inf, 1.2, true, 0.05) == 0.0
+    # The weight is one when the crop is wetter than the threshold, and falls
+    # log-linearly to zero at the permanent wilting point.
+    @test Agrocosm.expansive_growth_weight(-0.40, threshold) == 1.0
+    @test Agrocosm.expansive_growth_weight(-15.0, threshold) == 0.0
+    # Maricopa's deficit arm: -1.22 bar, and its canopy thermometer measured
+    # that arm transpiring at 0.80 of its fully irrigated one.
+    @test Agrocosm.expansive_growth_weight(-1.22, threshold) ≈ 0.80 atol = 0.01
+    # Threshold zero returns one, which is the ablation.
+    @test Agrocosm.expansive_growth_weight(-5.0, 0.0) === 1.0
+
+    # Campbell through the model's own two anchors, -15 bar and -1/3 bar.
+    @test Agrocosm.soil_water_potential(1.0, 0.197, 0.316) ≈ -1 / 3 atol = 1e-6
+    @test Agrocosm.soil_water_potential(0.0, 0.197, 0.316) ≈ -15.0 atol = 0.1
+    # The whole point: the SAME relative content is a different potential in a
+    # clay loam and a loamy sand, and the crop's thermometer ranks them the way
+    # the potential does.
+    clay = Agrocosm.soil_water_potential(0.6, 0.197, 0.316)
+    sand = Agrocosm.soil_water_potential(0.6, 0.048, 0.214)
+    @test clay < sand
+
+    @test Agrocosm.expansion_stress_loss(0.8, 1.0, true, 0.05) ≈ 0.01 atol = 1e-9
+    @test Agrocosm.expansion_stress_loss(1.0, 1.0, true, 0.05) == 0.0
+    @test Agrocosm.expansion_stress_loss(0.8, 1.0, false, 0.05) == 0.0
 end
 
 @testset "grain filling temperature weight" begin

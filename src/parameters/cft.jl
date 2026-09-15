@@ -228,9 +228,9 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     # grain set cannot reach terminal heat.
     flowering_start::T = 0.45       # `fphu` at which grain set becomes sensitive.
     flowering_end::T = 0.70         # `fphu` at which sensitivity ends.
-    # Raw supply/demand ratio below which EXPANSIVE growth is limited, and the
-    # grain set lost per unit shortfall per day. The rate at zero leaves grain
-    # set untouched and the model bitwise.
+    # Soil matric potential (bar, magnitude) beyond which EXPANSIVE growth is
+    # limited, and the grain set lost per unit of the resulting shortfall per
+    # day. The rate at zero leaves grain set untouched and the model bitwise.
     expansion_water_threshold::T = 0.0
     expansion_grain_rate::T = 0.0
     sterility_temperature::T = 35.0 # Organ-temperature threshold for sterility (°C).
@@ -783,39 +783,33 @@ is four constraints on two parameters. Maricopa counted ears and grains per ear:
 | 1993-94 | dry | 0.59 | 14495 | 0.762 |
 | 1993-94 | wet | 0.95 | 19031 | 1.000 |
 
-The threshold lands near the demand itself, which is where the physiology puts it
-and where CERES puts `SWDF2` by evaluating `SWDF1` at 1.5 times the demand.
+MEASURED ON THE CROP'S OWN THERMOMETER, which is what replaced a driver that had
+failed. Maricopa scanned its deficit and its fully irrigated arm on the same day
+at the same hour, 63 days in 1993 and 58 in 1994; the deficit arm ran 2.52 and
+1.68 C warmer, which through the canopy's aerodynamic resistance is 1.09 and
+0.73 mm/day of latent heat not used, or **0.80 and 0.87 of the wet arm's
+transpiration**. Its root-zone potential is -1.22 bar against the wet arm's -0.40,
+and the threshold returning 1.00 at -0.40 and 0.80 at -1.22 is **0.652 bar** -
+inside the -0.5 to -1.0 bar at which wheat's stomatal limitation is published to
+begin, and therefore not a free parameter dressed as one.
 
-**THE RATE SHIPS AT ZERO, because this mechanism does not pass.** It is recorded
-rather than installed, and the reason is the second wheat site.
-
-At Maricopa it works: sweeping the pair moves the Dry/Wet contrast from 0.993 to
-1.160 against an observed 1.386, and moves Dry/Wet under FACE from 1.008 to 1.149
-against 1.269. Neither reaches the replicate interval.
-
-At Braunschweig it fires on the wrong year. That deposit's 2015 season has a
-modelled window ratio of 0.9 to 2.7, overlapping Maricopa's deficit arms, and its
-MEASURED grain number is 1.058 of 2014's - more grains, not fewer. The mechanism
-takes 12% off 2015 and 2% off 2014 and drops that deposit's yield correlation
-from 0.924 to 0.661. The damage is a YEAR effect and not the canopy bias that
-site also carries: the modelled peak LAI is 2.12 times the measured in BOTH
-years, and the low- and high-nitrogen treatments lose the same 6 to 8%.
-
-So either the model's Braunschweig water balance is wrong in 2015 - its soil
-carbon is estimated rather than measured, and no soil-moisture record has been
-scored against it - or the form is. A mechanism that helps one deposit and hurts
-another is not installed here until that is settled.
-
-WHAT SURVIVES REGARDLESS is the diagnosis the fit rests on. `wscal` is the only
-water stress in this lineage; `emax` is 8 mm/day for wheat against a demand near
-3, and `compute_available_fraction` is flat above 0.45. Maricopa's two arms run
-at root-zone fractions of 0.66 and 0.93 through their critical period, the field
-loses a fifth of its tillers, and `wscal` reports 1.0000 for both.
+THE RATE STILL SHIPS AT ZERO. The driver was the problem and the potential fixes
+half of it: relative content ranks Braunschweig 2015 as drier than Maricopa's
+deficit arm and potential ranks it the other way, which is what the thermometers
+say. It does not fix the other half. Braunschweig's 2015 canopy sat 0.81 C below
+air against 2014's 0.11 - the LESS stressed year - and its modelled root-zone
+potential is -1.25 bar against 2014's -0.49, still backwards. That is not this
+function: the model's soil water at 0-40 cm matches the field's depletion to
+0.88-1.00 on matched dates, and there is no measurement below 40 cm at that site.
+A field crop keeping its canopy cool on a dry topsoil is drinking from depth, and
+whether this model can is the reach question of `docs/62`, upstream of any stress
+variable.
 """
 function measured_expansion_stress(cft_id::Integer)
-    # (threshold, rate). The threshold is what Maricopa measures; the rate is
-    # zero until the Braunschweig 2015 disagreement is resolved.
-    cft_id == 1 && return (1.2, 0.0)   # wheat, Maricopa FACE 1992-94
+    # (threshold in bar, rate). The threshold is what Maricopa's canopy
+    # thermometer measures; the rate is zero until the reach question that
+    # Braunschweig 2015 raises is resolved.
+    cft_id == 1 && return (0.652, 0.0)   # bar, wheat, Maricopa canopy thermometer
     return (0.0, 0.0)
 end
 

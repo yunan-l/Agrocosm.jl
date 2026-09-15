@@ -41,17 +41,17 @@ function expansion_stress!(CFT::CFTParameters, state)
         crop_prognostic(state).phenology.grain_set_fraction,
         crop_phenology_auxiliary(state).fphu,
         crop_prognostic(state).phenology.is_growing,
-        crop_prognostic(state).water.expansion_ratio,
+        crop_prognostic(state).water.root_zone_potential,
         CFT,
     )
     return nothing
 end
 
 """
-    expansion_stress_loss(supply_over_demand, threshold, inside_window, rate)
+    expansion_stress_loss(weight, threshold, inside_window, rate)
 
-Grain set lost today: linear in the shortfall of the raw supply/demand ratio
-below `threshold`, zero outside the window and zero above it.
+Grain set lost today: linear in the shortfall of the expansive-growth weight
+below one, zero outside the window and zero when the crop is unstressed.
 
 THE RATIO AND NOT THE SOIL WATER, which a first attempt got wrong and Braunschweig
 caught. Calibrated on root-zone water alone the threshold lands at 0.87, and
@@ -66,18 +66,18 @@ reasons as `anthesis_heat_loss`: a count is not differentiable, and a day at hal
 the threshold is not a day just below it.
 """
 @inline function expansion_stress_loss(
-    supply_over_demand::T, threshold::T, inside_window::Bool, rate::T,
+    weight::T, threshold::T, inside_window::Bool, rate::T,
 ) where {T <: AbstractFloat}
     inside_window || return zero(T)
-    isfinite(supply_over_demand) || return zero(T)
-    return max(zero(T), rate * (threshold - supply_over_demand))
+    isfinite(weight) || return zero(T)
+    return max(zero(T), rate * (threshold - weight))
 end
 
 @kernel inbounds = true function expansion_stress_kernel!(
     grain_set_fraction::AbstractVector{T},
     fphu::AbstractVector{T},
     is_growing::AbstractVector{S},
-    expansion_ratio::AbstractVector{T},
+    root_zone_potential::AbstractVector{T},
     CFT::CFTParameters,
 ) where {T <: AbstractFloat, S}
     cell = @index(Global)
@@ -91,10 +91,12 @@ end
              fphu[cell] > T(flowering_start) &&
              fphu[cell] < T(flowering_end) &&
              T(flowering_end) > T(flowering_start)
-    loss = expansion_stress_loss(
-        expansion_ratio[cell], T(expansion_water_threshold), inside,
-        T(expansion_grain_rate),
+    # One where the crop is wetter than the threshold, falling log-linearly to
+    # zero at the permanent wilting point.
+    weight = expansive_growth_weight(
+        root_zone_potential[cell], T(expansion_water_threshold),
     )
+    loss = expansion_stress_loss(weight, one(T), inside, T(expansion_grain_rate))
     # Monotone and clamped, like the heat and cold channels, so all three compose
     # in any order.
     grain_set_fraction[cell] = clamp(grain_set_fraction[cell] - loss, zero(T), one(T))

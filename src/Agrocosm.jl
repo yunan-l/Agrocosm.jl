@@ -80,6 +80,7 @@ export measured_senescence_shape
 export measured_root_profile
 export measured_expansion_stress
 export measured_filling_temperature
+export soil_water_potential, expansive_growth_weight
 export filling_temperature_weight
 export expansion_stress!, expansion_stress_loss
 export ablation_daily_statistic_sink_configuration
