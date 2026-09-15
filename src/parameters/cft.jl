@@ -465,6 +465,12 @@ _convert_precision(::Type{T}, value::SowingDateParameters) where {T <: AbstractF
     # SHIPS AT ZERO, where the weight is one and the integral is `progress`
     # bitwise.
     filling_stress_exponent::T = 0.0      # Weight on daily water sufficiency during grain filling.
+    # The same weight for temperature. `filling_temperature_rate` at zero returns
+    # one and leaves the thermal progress bitwise; above it, each degree of daily
+    # mean air temperature past the optimum costs that fraction of the day's
+    # filling. See `filling_temperature_weight`.
+    filling_temperature_optimum::T = 0.0
+    filling_temperature_rate::T = 0.0
     # Establishment. Porter and Gawith (1999, Eur. J. Agron.) review wheat's
     # cardinal temperatures and give germination a MAXIMUM of 35 C; this is that
     # number, not a fitted threshold. Above it a share of the stand is lost per
@@ -713,6 +719,52 @@ missing.
 function measured_anthesis_heat_rate(cft_id::Integer)
     cft_id == 1 && return 0.008   # wheat, Hot Serial Cereal 2007-2009
     return 0.0
+end
+
+"""
+    measured_filling_temperature(cft_id)
+
+`(optimum, rate)` for the temperature weight on grain filling: the daily mean air
+temperature at which the shipped `maximum_grain_carbon` is the right grain, and
+the fraction of a day's filling lost per degree above it.
+
+MEASURED ON 28 TREATMENTS OF ONE CULTIVAR AT ONE SITE. Hot Serial Cereal sowed
+Yecora Rojo on twelve dates at Maricopa and reports the mean air temperature from
+anthesis to maturity beside the single-grain weight; Maricopa FACE grew the same
+cultivar on the same farm and reports grain weight per treatment, and its filling
+temperature comes from its own forcing between its own measured anthesis and
+maturity dates. Together they span 17.8 to 32.3 C and 14.0 to 47.1 mg:
+
+    mg = 77.3 - 1.76 * T,   r = -0.902, r2 = 0.813
+
+Hot Serial Cereal alone gives -1.45 mg/C and Maricopa's cooler, heavier
+treatments extend the same line, so the two deposits agree rather than being
+fitted together to hide a disagreement.
+
+A UNIT KEY THAT IS WRONG IN ITS OWN DEPOSIT. Hot Serial Cereal's measurement key
+describes `GDM.ma` as "mean of single grain NITROGEN mass at maturity" while
+giving its unit as mg DM/grain. The magnitudes decide it: 14 to 41 is single
+grain DRY MATTER for wheat, and a 40 mg grain holds about 0.8 mg of nitrogen.
+Maricopa's independent `GWGD` column - defined without ambiguity as unit weight
+of grain - returns 40 to 47 mg for the same cultivar on the same farm, which
+confirms the reading.
+
+FITTED AS THE KERNEL APPLIES IT, which is not the same as fitting the line. The
+weight multiplies each DAY's thermal increment and is clamped at one, so a cool
+day cannot repay a hot one; integrating a daily one-sided response over a season
+is strictly harsher than evaluating it at the season's mean. Taking the line's
+own numbers - 21.2 C and 0.044 - the kernel returned 19.2 to 30.3 mg where the
+line says 40.0 to 20.5, every treatment too light, because even a season averaging
+19 C spends days above 21.
+
+So the pair is fitted to the daily integral over these treatments' own filling
+windows and their own forcing: optimum 27.0 C, rate 0.0855 per degree, RMSE
+5.35 mg and r = 0.868 against the measured weights. The model's range becomes
+2.06x against an observed 3.37x, from 1.01x with the mechanism off.
+"""
+function measured_filling_temperature(cft_id::Integer)
+    cft_id == 1 && return (27.0, 0.0855)   # wheat, Yecora Rojo at Maricopa, 18 windows
+    return (0.0, 0.0)
 end
 
 """

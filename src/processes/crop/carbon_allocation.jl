@@ -27,6 +27,7 @@ function carbon_allocation!(CFT::CFTParameters,
                crop_stress_auxiliary(crop).nitrogen_deficit,
                crop_stress_auxiliary(crop).water_deficit,
                crop_prognostic(crop).water.sufficiency,
+               weather_input(crop).temp,
                crop_prognostic(crop).phenology.grain_set_fraction,
                crop_prognostic(crop).phenology.grain_fill_fraction,
                crop_prognostic(crop).phenology.window_assimilate,
@@ -176,6 +177,49 @@ thermal progress bitwise.
     return clamp(water_sufficiency, zero(T), one(T))^exponent
 end
 
+"""
+    filling_temperature_weight(temperature, optimum, rate)
+
+How much of a thermal step's potential filling a grain deposits at today's
+temperature. Returns exactly one when `rate` is zero, which is the ablation.
+
+WHY THIS EXISTS AND WHY IT IS TEMPERATURE. Grain filling here is
+`grain_number * maximum_grain_carbon * progress`, and `progress` is a fraction of
+THERMAL time, so it reaches one whatever the weather did. Across two deposits and
+27 treatments the model fills every grain to **1.000** of that sink: 40.0 mg,
+every treatment, every season. The field's own range at the same site with the
+same cultivar is 14.0 to 47.1 mg.
+
+The reason is structural rather than a missing coefficient. Final grain weight is
+a RATE times a DURATION in calendar days, and heat shortens the duration steeply
+while raising the rate only modestly. Express the duration as a fraction of
+thermal time and the two cancel exactly - the clock IS temperature - so a season
+that filled at 32 C and one that filled at 18 C both complete the same
+`progress = 1`. **Heat cannot shorten grain filling in a model whose filling
+phase is measured in degree-days.**
+
+MEASURED across Hot Serial Cereal's twelve sowing dates and Maricopa FACE's
+sixteen treatments - one cultivar, Yecora Rojo, at one site, 17.8 to 32.3 C:
+
+    single grain (mg) = 77.3 - 1.76 * T     r = -0.902, r2 = 0.813
+
+The shipped `maximum_grain_carbon` of 0.0180 gC is 40.0 mg of dry matter, which
+that line puts at 21.2 C - so the shipped constant is this crop's grain weight at
+21 C, and `rate` is 1.76/40.0 per degree above it.
+
+WHAT IT CANNOT DO. The weight is capped at one, so a season cooler than the
+optimum still returns the shipped potential and not the 47 mg the field grew.
+This closes the hot half of the measured range and leaves the cool half where it
+already was; a mechanism that only ever subtracts is the shape every other one in
+this project has.
+"""
+@inline function filling_temperature_weight(
+    temperature::T, optimum::T, rate::T,
+) where {T <: AbstractFloat}
+    rate > zero(T) || return one(T)
+    return clamp(one(T) - rate * (temperature - optimum), zero(T), one(T))
+end
+
 """Compute and mass-cap storage carbon after leaf/root allocation."""
 @inline function compute_storage_carbon(
     biomass::T,
@@ -229,6 +273,7 @@ end
                                            crop_ndf::AbstractArray{T},
                                            crop_wdf::AbstractArray{T},
                                            crop_wscal::AbstractArray{T},
+                                           crop_temperature::AbstractArray{T},
                                            crop_grain_set::AbstractArray{T},
                                            crop_grain_fill::AbstractArray{T},
                                            crop_window_assimilate::AbstractArray{T},
@@ -259,6 +304,7 @@ end
     @unpack sla, hiopt, himin = CFT
     @unpack grain_number_half_carbon, maximum_grain_carbon, maximum_grain_number = CFT
     @unpack reserve_remobilisation, filling_stress_exponent = CFT
+    @unpack filling_temperature_optimum, filling_temperature_rate = CFT
     @unpack flowering_start, flowering_end = CFT
     @unpack FROOTMAX, FROOTMIN, include_biological_fixation_cost = kernel_params
     @unpack senescent_leaf_release = kernel_params
@@ -399,7 +445,10 @@ end
             thermal_progress = thermal_filling_progress(crop_fphu[cell], T(flowering_end))
             increment = max(thermal_progress - crop_filling_counted[cell], zero(T))
             crop_filling_progress[cell] += increment *
-                filling_weight(crop_wscal[cell], T(filling_stress_exponent))
+                filling_weight(crop_wscal[cell], T(filling_stress_exponent)) *
+                filling_temperature_weight(
+                    crop_temperature[cell], T(filling_temperature_optimum),
+                    T(filling_temperature_rate))
             crop_filling_counted[cell] = thermal_progress
             effective_progress = crop_filling_progress[cell]
             hi = compute_harvest_index(crop_fphu[cell], T(hiopt), T(himin), crop_wdf[cell]) *

@@ -79,6 +79,8 @@ export measured_anthesis_heat_rate
 export measured_senescence_shape
 export measured_root_profile
 export measured_expansion_stress
+export measured_filling_temperature
+export filling_temperature_weight
 export expansion_stress!, expansion_stress_loss
 export ablation_daily_statistic_sink_configuration
 export ablation_terminal_heat_configuration

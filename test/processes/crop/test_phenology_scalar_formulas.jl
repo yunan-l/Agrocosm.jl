@@ -99,3 +99,24 @@ end
     # A crop with no demand has an infinite ratio and must not be damaged by it.
     @test Agrocosm.expansion_stress_loss(Inf, 1.2, true, 0.05) == 0.0
 end
+
+@testset "grain filling temperature weight" begin
+    optimum, rate = Agrocosm.measured_filling_temperature(1)
+    # Rate zero returns exactly one, so the product with the thermal increment is
+    # bitwise the inherited filling. That is the ablation contract.
+    @test Agrocosm.filling_temperature_weight(40.0, optimum, 0.0) === 1.0
+    @test Agrocosm.filling_temperature_weight(-10.0, optimum, 0.0) === 1.0
+    # Below the optimum the grain still cannot exceed its shipped potential: the
+    # weight only ever subtracts, like every other mechanism here.
+    @test Agrocosm.filling_temperature_weight(optimum - 10, optimum, rate) == 1.0
+    @test Agrocosm.filling_temperature_weight(optimum, optimum, rate) == 1.0
+    # And it is bounded below, so an extreme day cannot make the sink negative.
+    @test Agrocosm.filling_temperature_weight(200.0, optimum, rate) == 0.0
+    # The measured slope: 0.0855 of a day's filling per degree above 27 C.
+    @test Agrocosm.filling_temperature_weight(optimum + 5, optimum, rate) ≈
+          1 - 5 * rate atol = 1e-12
+    @test Agrocosm.measured_filling_temperature(3) == (0.0, 0.0)
+
+    # The shipped potential is 40.0 mg of dry matter at 0.45 gC/g.
+    @test Agrocosm.published_grain_traits(1)[2] * 1000 / 0.45 ≈ 40.0 atol = 0.1
+end
