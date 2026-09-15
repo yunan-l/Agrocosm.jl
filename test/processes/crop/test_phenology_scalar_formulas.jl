@@ -137,3 +137,32 @@ end
     # The shipped potential is 40.0 mg of dry matter at 0.45 gC/g.
     @test Agrocosm.published_grain_traits(1)[2] * 1000 / 0.45 ≈ 40.0 atol = 0.1
 end
+
+@testset "per-layer soil texture" begin
+    # `sand_fraction` and `clay_fraction` were always declared and documented as
+    # per-layer matrices, and the pedotransfer kernel read row one, so a
+    # three-metre column took the texture of its topsoil. The arrays now carry a
+    # row per layer and the kernel reads its own.
+    depths = Float32[200, 500, 1000, 2000, 3000]
+    properties = Agrocosm.init_soil_properties(Float32, 3, depths, identity)
+    @test size(properties.sand_fraction) == (length(depths), 3)
+    @test size(properties.clay_fraction) == (length(depths), 3)
+
+    # Saxton-Rawls on Maricopa's own measured texture returns that field's own
+    # measured wilting point; on the half-degree cell's it does not.
+    measured, _, _, _, _, _ = Agrocosm.compute_hydraulic_properties(
+        0.350f0, 0.340f0, 0.38f0, 1.0f0, true,
+    )
+    grid, _, _, _, _, _ = Agrocosm.compute_hydraulic_properties(
+        0.430f0, 0.180f0, 0.38f0, 1.0f0, true,
+    )
+    @test measured ≈ 0.201 atol = 0.01      # the deposit's own analysis: 0.201
+    @test grid < 0.13                        # what the grid cell returns instead
+    @test measured / grid > 1.6
+
+    # A sandier layer holds less, which is the whole point of a per-layer profile.
+    deep, _, _, _, _, _ = Agrocosm.compute_hydraulic_properties(
+        0.650f0, 0.180f0, 0.05f0, 1.0f0, false,
+    )
+    @test deep < measured
+end

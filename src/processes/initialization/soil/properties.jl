@@ -46,9 +46,18 @@ end
 init_soil_properties(cell_size::Int, soildepth, device) =
     init_soil_properties(Float32, cell_size, soildepth, device)
 function init_soil_properties(::Type{T}, cell_size::Int, soildepth, device) where {T <: AbstractFloat}
+    # One row per soil LAYER, not one row. The field was always declared and
+    # documented as a per-layer matrix and the pedotransfer kernel read
+    # `sand_fraction[1, cell]` from a single row, so every layer of a
+    # three-metre column got the texture of its topsoil. Both plot-scale
+    # deposits have profiles that change with depth - Maricopa's clay falls from
+    # 0.34 to 0.18 between the surface and two metres - and a model with one
+    # texture per cell cannot hold that. Filled by broadcast from a per-cell
+    # input, which is bitwise what a single row was.
+    layers = length(soildepth)
     return SoilProperties(
-        device(zeros(T, 1, cell_size)),
-        device(zeros(T, 1, cell_size)),
+        device(zeros(T, layers, cell_size)),
+        device(zeros(T, layers, cell_size)),
         device(zeros(T, cell_size)),
         device(fill(T(0.3), cell_size)),
         device(fill(T(LPJML_NITRIFICATION_FINE.a), cell_size)),

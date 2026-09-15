@@ -102,7 +102,7 @@ end
     # Each is one
     # Float64 per cell. This literal is the reason `_PERSISTENT_FLOAT_VALUES_PER_CELL`
     # cannot drift from the real field count without something failing.
-    ).persistent_state_bytes == 13534
+    ).persistent_state_bytes == 13598
     @test estimate.forcing_block_bytes == 64
     @test prefetched.host_forcing_bytes == estimate.host_forcing_bytes + 64
     @test prefetched.host_peak_bytes == estimate.host_peak_bytes + 64

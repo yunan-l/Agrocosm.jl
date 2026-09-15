@@ -217,8 +217,24 @@ function init_states!(CFT::CFTParameters,
     )
     soil.water.saturation_fraction = to_float(soilparams.w_sat)
     soil.properties.ph = to_float(soilparams.ph)
-    soil.properties.sand_fraction = to_float(soilparams.sand)
-    soil.properties.clay_fraction = to_float(soilparams.clay)
+    # A per-CELL texture is broadcast across every layer, which is bitwise what
+    # the kernel did when it read row one; a per-LAYER texture is taken as given.
+    # The shape is checked rather than assumed: a single-row matrix reaching the
+    # kernel unbroadcast reads out of bounds under `inbounds = true` and returns
+    # zeros for every layer below the first, which is silent and cost one round
+    # of this change.
+    soil_layer_count = size(soil.properties.sand_fraction, 1)
+    function _layered(values)
+        matrix = T.(ndims(values) == 1 ? reshape(values, 1, :) : values)
+        rows = size(matrix, 1)
+        rows == soil_layer_count && return matrix
+        rows == 1 && return repeat(matrix, soil_layer_count, 1)
+        throw(DimensionMismatch(
+            "soil texture has $rows rows; expected 1 or $soil_layer_count",
+        ))
+    end
+    soil.properties.sand_fraction = device(_layered(soilparams.sand))
+    soil.properties.clay_fraction = device(_layered(soilparams.clay))
     if hasproperty(soilparams, :soilcode)
         initialize_soil_class_parameters!(
             soil.properties, to_integer(soilparams.soilcode),

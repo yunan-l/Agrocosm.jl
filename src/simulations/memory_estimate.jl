@@ -78,10 +78,12 @@ end
 # `phenology.filling_progress` and `phenology.filling_progress_counted`,
 # and `phenology.stand_fraction` for heat loss of stand,
 # and `weather.canopy_rain` for irrigation applied below the canopy,
-# and `water.expansion_ratio` for the unplateaued supply/demand ratio.
+# and `water.root_zone_potential` for the matric potential a stress reads,
+# and four more rows each on `properties.sand_fraction` and `.clay_fraction`,
+# which now carry a texture per soil layer rather than one for the column.
 # `test_simulation_api.jl`
 # compares the two estimates and is what catches an omission here.
-const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1660
+const _PERSISTENT_FLOAT_VALUES_PER_CELL = 1668
 const _PERSISTENT_NONFLOAT_BYTES_PER_CELL = 46
 const _PERSISTENT_FIXED_FLOAT_VALUES = 26
 

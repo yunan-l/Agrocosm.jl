@@ -134,8 +134,8 @@ end
 ) where {T <: AbstractFloat}
     layer, cell = @index(Global, NTuple)
 
-    sand = sand_fraction[1, cell]
-    clay = clay_fraction[1, cell]
+    sand = sand_fraction[layer, cell]
+    clay = clay_fraction[layer, cell]
     depth = layer_depth[layer]
     previous_saturation = saturation_fraction[layer, cell]
     organic_matter = compute_soil_organic_matter(
