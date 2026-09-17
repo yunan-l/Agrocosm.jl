@@ -1,7 +1,6 @@
 # Agrocosm.jl implementation roadmap
 
-This document records implementation-level acceptance criteria. The shorter
-public roadmap is in `docs/src/development/roadmap.md`.
+This document records implementation-level acceptance criteria.
 
 ## 1. Completed scientific and numerical baseline
 
