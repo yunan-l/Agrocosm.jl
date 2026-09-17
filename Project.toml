@@ -1,7 +1,7 @@
 name = "Agrocosm"
 uuid = "03150e84-a77a-4da1-94e0-c2afe2ed6c45"
 authors = ["Yunan Lin"]
-version = "1.0.0-DEV"
+version = "0.0.1"
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
