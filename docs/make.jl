@@ -37,10 +37,9 @@ makedocs(
             "CPU, GPU, and precision" => "guide/backends.md",
             "Checkpoints" => "guide/checkpoints.md",
         ],
-        "Science and development" => [
+        "Science" => [
             "Validation and limitations" => "science/validation.md",
             "Citations" => "science/citations.md",
-            "Roadmap" => "development/roadmap.md",
         ],
         "API reference" => "api.md",
     ],
