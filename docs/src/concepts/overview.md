@@ -28,9 +28,10 @@ step. Array leaves use a structure-of-arrays layout: cell fields have shape
 `ProcessModules` owns process choices and parameters. `ModelState` owns all
 evolving and diagnostic arrays. Process wrappers select lifecycle-scoped
 arrays from `ModelState` and pass explicit leaves to backend kernels. This
-separation is the foundation for interchangeable processes and future
-differentiable transitions.
+separation is the foundation for interchangeable processes and explicit
+differentiation boundaries.
 
-The current production interface advances a range of days. A dedicated
-one-day differentiable transition and Enzyme integration are planned but not
-yet part of the public API.
+The public API includes a one-day transition. The optional Enzyme extension
+differentiates fixed-event seasonal trajectories on CPU, supporting parameter
+objectives and C3/C4 weather-to-yield sensitivities. Data loading, warm-up,
+checkpoints, and reporting remain outside the differentiated region.

@@ -76,7 +76,6 @@ validation; CPU/GPU forcing-copy equivalence alone does not establish it.
 
 ## Later work
 
-Later phases cover gradient-based calibration, data assimilation, hybrid
-process–machine-learning components, multi-site/global validation, spatial
-fallback batching, multi-GPU/MPI execution, and coupling to broader land or
-Earth-system frameworks.
+Later phases cover data assimilation, hybrid process–machine-learning
+components, spatial fallback batching, multi-GPU/MPI execution, and coupling
+to broader land or Earth-system frameworks.
