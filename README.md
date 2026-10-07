@@ -7,32 +7,24 @@
 
 <!-- **🧑‍🌾 💧 ☀️ 🌾 🚀 A Julia-based crop model supporting automatic differentiation and GPU acceleration.** -->
 
-Agrocosm.jl is a process-based crop model that simulates coupled carbon, nitrogen, water, and energy processes with a numerical design for CPUs and GPUs. It is easy to use and easy to extend. It is written in Julia to make physically based simulation, differentiable programming, high-performance computing, and machine-learning workflows available within one modelling environment. Agrocosm takes the crop module of [LPJmL](https://github.com/PIK-LPJmL/LPJmL) as an scientific reference. Agrocosm is **not** a line-by-line port of LPJmL. It maintains relevant process logic of LPJmL while inheriting and extending the overall architecture of [NeuralCrop.jl](https://github.com/yunan-l/NeuralCrop.jl) to support automatic differentiation and GPU acceleration. 
+Agrocosm.jl is a process-based crop model that simulates coupled carbon, nitrogen, water, and energy processes with a numerical design for CPUs and GPUs. It takes the crop module of [LPJmL](https://github.com/PIK-LPJmL/LPJmL) as an scientific reference. It maintains relevant process logic of LPJmL while inheriting and extending the overall architecture of [NeuralCrop.jl](https://github.com/yunan-l/NeuralCrop.jl) to support automatic differentiation and GPU acceleration. 
 
-<!-- > [!WARNING]
-> Agrocosm.jl is under active development with assistance from Codex 🤖, but almost done as a crop model. -->
-
-Read the [documentation](https://yunan-l.github.io/Agrocosm.jl/dev/)
-for installation, model concepts, input schemas, CPU/GPU execution,
+Read the [documentation](https://yunan-l.github.io/Agrocosm.jl/dev/) for installation, model concepts, input schemas, CPU/GPU execution,
 checkpoints, validation scope, and API reference.
 
 ## Vision
 
 We want Agrocosm to be:
 
-- **Fully GPU-compatible**, from a single site to large ensembles of grid cells
 - **Differentiable**, enabling gradient-based calibration,
   sensitivity analysis, data assimilation, and hybrid modelling
-- **Process-based and auditable**, with explicit carbon, nitrogen, water, and
-  energy balance diagnostics
 - **Modular and extensible**, comparing alternative process representations
   without rebuilding the full model
-- **Open and community-oriented**, providing a foundation that can incorporate
-  new crop physiology and collaborate with the wider crop-modelling community.
+- **Fully GPU-compatible**, from a single site to large ensembles of grid cells
 
 ## Current scope
 
-Agrocosm currently focuses on daily, gridded simulations of a single crop.
+Agrocosm currently focuses on daily gridded crop simulations.
 
 <table>
   <thead>
