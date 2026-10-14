@@ -167,4 +167,4 @@ no. 101137601).
 
 ## License
 
-Agrocosm.jl is released under the [European Union Public Licence v1.2](https://eupl.eu/1.2/en). You are encouraged to copy, modify, and build upon our code to advance your research. 
+Agrocosm.jl is open-source software licensed under the [GNU Affero General Public License Version 3 or later (AGPLv3+)](LICENSE). Portions of the code are derived from LPJmL and retain the copyright of the Potsdam Institute for Climate Impact Research (PIK).
