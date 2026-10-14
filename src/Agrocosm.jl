@@ -223,6 +223,6 @@ include("simulations/memory_estimate.jl")
 # The Enzyme implementation is an optional package extension. This file only
 # defines the dependency-free season contract and fallback API.
 include("ad/adapter.jl")
-include("ad/weather_attribution.jl")
+include("ad/yield_sensitivity.jl")
 
 end
