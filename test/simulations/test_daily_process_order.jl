@@ -68,7 +68,9 @@ using Test
 end
 
 @testset "Enzyme daily path refreshes litter after decomposition" begin
-    source = read(joinpath(@__DIR__, "..", "..", "ext", "AgrocosmEnzymeExt.jl"), String)
+    source = read(joinpath(
+        @__DIR__, "..", "..", "ext", "AgrocosmEnzymeExt", "continuous_transition.jl",
+    ), String)
     # Unconditional calls preserve the common true/false process contract.
     litter_refreshes = findall(r"(?m)^    Agrocosm\.update_surface_litter_properties!\(", source)
     @test length(litter_refreshes) == 2
