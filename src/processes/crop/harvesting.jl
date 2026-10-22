@@ -230,7 +230,7 @@ end
         aboveground_nitrogen = leaf_nitrogen[cell] + pool_nitrogen[cell]
         nitrogen_residue = max(aboveground_nitrogen, zero(T)) * residue_fraction[cell]
         crop_yield[cell] = storage_carbon[cell]
-        annual_yield[cell] += crop_yield[cell]
+        annual_yield[cell] = crop_yield[cell]
         harvest_date[cell] = S(day)
         # A failed stand can have a negative mobile pool after respiration.
         # Keep that deficit in the net crop-removal term instead of routing a
@@ -287,7 +287,7 @@ end
     if day == 365
         if failed
             size(output_yield, 1) != 0 &&
-                (output_yield[annual_output_row, cell] += crop_yield[cell])
+                (output_yield[annual_output_row, cell] = max(crop_yield[cell], zero(T)))
             size(output_harvest_date, 1) != 0 &&
                 (output_harvest_date[annual_output_row, cell] = S(day))
             size(output_harvesting_year, 1) != 0 &&
@@ -359,7 +359,7 @@ end
         harvest_date[cell] = S(day)
         is_growing[cell] = zero(S)
         crop_yield[cell] = storage_carbon[cell]
-        annual_yield[cell] += crop_yield[cell]
+        annual_yield[cell] = crop_yield[cell]
         annual_season_gpp[cell] += active_gpp[cell]
         annual_season_lai_days[cell] += active_lai_days[cell]
         annual_season_length[cell] += active_length[cell]

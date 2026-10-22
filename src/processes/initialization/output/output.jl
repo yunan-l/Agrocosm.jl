@@ -10,7 +10,7 @@ mutable struct CropOutput{A, I, M}
     biomass::A             # Total live crop carbon stock (gC m⁻²).
     lai::A                 # Actual nonnegative leaf-area index (m² leaf m⁻² ground).
     storage_carbon::A      # Carbon in the harvestable storage organ (gC m⁻²).
-    yield::A               # Annual harvested storage-organ carbon (gC m⁻² yr⁻¹).
+    yield::A               # Last harvest's storage-organ carbon in each calendar year (gC m⁻² yr⁻¹).
     season_gpp::A          # Harvest-season cumulative gross primary production (gC m⁻²).
     season_lai_days::A     # Harvest-season cumulative LAI (m² leaf m⁻² ground day).
     season_length::A       # Active crop days from sowing through the day before harvest (day).
@@ -56,7 +56,7 @@ end
 
 """In-progress annual crop outputs retained until the calendar-year boundary."""
 mutable struct AnnualOutputAccumulator{A, I}
-    yield::A        # Harvested storage carbon accumulated in the current output year (gC m⁻²).
+    yield::A        # Storage carbon from the latest harvest in the current output year (gC m⁻²).
     harvest_date::I # Latest harvest day in the current output year (1–365; 0 if absent).
     season_gpp::A
     season_lai_days::A

@@ -84,7 +84,8 @@ The harvest sequence is now explicit:
 
 1. detect the transition and set `events.harvest`;
 2. record yield, total carbon export, nitrogen export and litter inputs;
-3. add grain yield to the stand-independent annual calendar accumulator;
+3. replace the stand-independent annual yield with the latest harvest's grain
+   yield, so two harvests in one calendar year report only the second yield;
 4. preserve the established harvest-day diagnostic/output values;
 5. let the existing carbon, nitrogen, water, canopy and phenology owner kernels
    write their inactive values; no additional retirement kernel is launched.

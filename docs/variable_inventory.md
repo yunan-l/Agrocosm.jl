@@ -131,7 +131,9 @@ excluded.
 ## Output bookkeeping
 
 `output.annual.yield` and `output.annual.harvest_date` retain a partial
-calendar-year report between a harvest and day 365. They never feed crop,
+calendar-year report between a harvest and day 365. Each harvest replaces the
+reported yield, so a year with multiple harvests reports only its last harvest.
+They never feed crop,
 soil, or management processes, so they are not prognostic crop state. A full
 simulation checkpoint must retain this small accumulator together with output
 arrays whenever a run may resume before the year-end report is emitted.

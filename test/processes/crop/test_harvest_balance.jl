@@ -168,3 +168,81 @@ end
     @test crop.fluxes.nitrogen.harvest_export[1] + sum(soil.nitrogen.litter) ≈
           0.7f0 atol = 2.0f-7
 end
+
+function test_last_harvest_yield(device)
+    @testset "Annual yield reports the last harvest" begin
+        for annual_row in (nothing, 1)
+            crop = init_crop(4, device)
+            soil = init_soil(4, soilparams.soildepth, device)
+            output = init_output(4, device)
+            state = test_model_state(crop, soil; output)
+            Agrocosm.prepare_output_block!(output, 1, isnothing(annual_row) ? 0 : 1)
+            residue_fraction = device(fill(0.6f0, 4))
+
+            copyto!(crop.state.carbon.storage, Float32[11, 7, 0, 0])
+            copyto!(crop.state.phenology.harvesting, Bool[true, true, false, false])
+            crop.state.phenology.harvesting_previous .= false
+            crop.state.phenology.is_growing .= Int32(1)
+            harvest_crop!(state, state, output, residue_fraction, 90; output_row = 1)
+            @test Array(output.annual.yield) == Float32[11, 7, 0, 0]
+
+            copyto!(crop.state.carbon.storage, Float32[5, 0, 9, 0])
+            copyto!(crop.state.phenology.harvesting_previous, Bool[false, true, false, false])
+            copyto!(crop.state.phenology.harvesting, Bool[true, true, true, false])
+            crop.state.phenology.is_growing .= Int32(1)
+            harvest_crop!(state, state, output, residue_fraction, 300; output_row = 1)
+            @test Array(output.annual.yield) == Float32[5, 7, 9, 0]
+            @test Array(output.annual.harvest_date) == Int32[300, 90, 300, 0]
+
+            crop.state.phenology.harvesting_previous .= true
+            harvest_crop!(state, state, output, residue_fraction, 365;
+                          output_row = 1, annual_output_row = annual_row)
+            @test Array(output.crop.yield) == reshape(Float32[5, 7, 9, 0], 1, :)
+            @test Array(output.calendar.harvest_date) == reshape(Int32[300, 90, 300, 0], 1, :)
+            @test all(iszero, Array(output.annual.yield))
+            @test all(iszero, Array(output.annual.harvest_date))
+        end
+    end
+
+    @testset "A later failed harvest replaces the earlier yield" begin
+        for failure_day in (300, 365)
+            crop = init_crop(2, device)
+            soil = init_soil(2, soilparams.soildepth, device)
+            output = init_output(2, device)
+            state = test_model_state(crop, soil; output)
+            Agrocosm.prepare_output_block!(output, 1, 1)
+            residue_fraction = device(fill(0.6f0, 2))
+
+            copyto!(crop.state.carbon.storage, Float32[11, 13])
+            crop.state.phenology.harvesting .= true
+            crop.state.phenology.harvesting_previous .= false
+            crop.state.phenology.is_growing .= Int32(1)
+            harvest_crop!(state, state, output, residue_fraction, 90; output_row = 1)
+
+            copyto!(crop.state.carbon.storage, Float32[3, -2])
+            crop.state.phenology.harvesting .= false
+            crop.state.phenology.is_growing .= Int32(1)
+            if failure_day == 365
+                harvest_crop!(state, state, output, residue_fraction, 365;
+                              output_row = 1, annual_output_row = 1)
+                @test Array(output.crop.yield) == reshape(Float32[11, 13], 1, :)
+            end
+            crop.events.harvest .= Int32(1)
+            Agrocosm.terminate_failed_crop!(
+                state, state, output, residue_fraction, failure_day;
+                output_row = 1, annual_output_row = failure_day == 365 ? 1 : nothing,
+            )
+            if failure_day != 365
+                @test Array(output.annual.yield) == Float32[3, -2]
+                harvest_crop!(state, state, output, residue_fraction, 365;
+                              output_row = 1, annual_output_row = 1)
+            end
+            @test Array(output.crop.yield) == reshape(Float32[3, 0], 1, :)
+            @test Array(output.calendar.harvest_date) == fill(Int32(failure_day), 1, 2)
+            @test all(iszero, Array(output.annual.yield))
+            @test all(iszero, Array(crop.state.carbon.storage))
+        end
+    end
+end
+
+test_last_harvest_yield(identity)
