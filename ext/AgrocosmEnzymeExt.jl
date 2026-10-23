@@ -13,5 +13,6 @@ include("AgrocosmEnzymeExt/seasonal_soil_loss.jl")
 include("AgrocosmEnzymeExt/seasonal_gradients.jl")
 include("AgrocosmEnzymeExt/management_adaptation.jl")
 include("AgrocosmEnzymeExt/yield_sensitivity.jl")
+include("AgrocosmEnzymeExt/weather_cohort.jl")
 
 end
