@@ -73,7 +73,7 @@ end
     lpjmlparams,
     photoparams,
     upper_bound = typeof(fac)(0.85),
-    max_iterations::Int = 30,
+    max_iterations::Int = 60,
     constrain_to_upper_bound::Bool = false,
     lambda_primal_mode = Val(:surrogate),
 )
@@ -168,7 +168,7 @@ function _enzyme_solve_lambda_c3!(
                 lpjmlparams,
                 photoparams,
                 T(0.85),
-                30,
+                60,
                 constrain_to_upper_bound,
                 lambda_primal_mode,
             )

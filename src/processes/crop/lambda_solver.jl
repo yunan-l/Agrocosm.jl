@@ -181,7 +181,7 @@ end
     solve_lambda_c3!(CFT, photos, crop, pet, temp, co2)
 
 Solve the LPJmL water-stress equation independently for every grid cell. The
-fixed 30-step loop and scalar, allocation-free objective are compatible with
+bounded 60-step loop and scalar, allocation-free objective are compatible with
 both CPU and GPU backends. `co2` must be atmospheric partial pressure in Pa and
 `crop_canopy_auxiliary(crop).canopy_conductance` must contain actual canopy conductance after water limitation.
 """
@@ -280,7 +280,9 @@ end
 
 Fixed-iteration, allocation-free LPJmL C3 bisection. Keeping the complete
 scalar solve outside the kernel makes its stopping rule testable while every
-grid cell retains the exact same 30-step numerical algorithm on CPU and GPU.
+grid cell uses the same numerical algorithm on CPU and GPU. The tighter
+residual threshold avoids quantizing small weather perturbations. The separate
+`solve_lambda_c3_lpj` reference retains its LPJmL-compatible defaults.
 """
 @inline function compute_lambda_c3_solution(fac::T,
                                              vcmax::T,
@@ -294,7 +296,7 @@ grid cell retains the exact same 30-step numerical algorithm on CPU and GPU.
                                              photoparams::PhotoParams) where {T <: AbstractFloat}
     return compute_lambda_c3_solution(
         fac, vcmax, stress, b, co2, temperature, apar, daylength,
-        lpjmlparams, photoparams, T(0.85), 30,
+        lpjmlparams, photoparams, T(0.85), 60,
     )
 end
 
@@ -328,7 +330,7 @@ end
             best_residual = abs(residual)
             best = midpoint
         end
-        abs(residual) < T(0.001) && break
+        abs(residual) < max(T(1e-10), eps(T) * max(one(T), abs(fac))) && break
         if lower_residual * residual <= zero(T)
             upper = midpoint
         else
@@ -357,7 +359,7 @@ relation but the same LPJmL bracket and residual-selection rule.
                                              photoparams::PhotoParams) where {T <: AbstractFloat}
     return compute_lambda_c4_solution(
         fac, vcmax, stress, b, temperature, apar, daylength,
-        lpjmlparams, photoparams, T(0.85), 30,
+        lpjmlparams, photoparams, T(0.85), 60,
     )
 end
 
@@ -390,7 +392,7 @@ end
             best_residual = abs(residual)
             best = midpoint
         end
-        abs(residual) < T(0.001) && break
+        abs(residual) < max(T(1e-10), eps(T) * max(one(T), abs(fac))) && break
         if lower_residual * residual <= zero(T)
             upper = midpoint
         else
