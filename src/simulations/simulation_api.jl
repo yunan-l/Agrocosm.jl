@@ -301,16 +301,18 @@ function _transition_range!(
 end
 
 """
-    transition_day!(simulation, climate; climate_day=1)
+    transition_day!(simulation, climate; climate_day=1, reuse_output=false)
 
 Advance exactly one daily transition. This is the narrow numerical lifecycle
 boundary used by the high-level runner and the future differentiable path.
+Set `reuse_output=true` when consuming daily output immediately to keep one row.
 """
 function transition_day!(
     simulation::CropSimulation,
     climate::NamedTuple;
     climate_day::Integer = 1,
     management::Union{Nothing, NamedTuple} = nothing,
+    reuse_output::Bool = false,
 )
     simulation.simulated_days < simulation.config.days || throw(ArgumentError(
         "simulation already contains all $(simulation.config.days) configured days",
@@ -325,6 +327,7 @@ function transition_day!(
     _transition_range!(
         simulation, prepared_climate, climate_day, climate_day;
         simulation_day_offset = simulation.simulated_days + 1 - climate_day,
+        reuse_output,
         prescribed...,
     )
     simulation.simulated_days += 1
