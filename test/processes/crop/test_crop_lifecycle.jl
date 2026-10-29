@@ -209,6 +209,13 @@ end
     @test simulation.state.prognostic.crop.water.sufficiency[1] == 1.0f0
 end
 
+@testset "No-tillage run skips harvest-day litter mixing" begin
+    simulation = run_lifecycle_fixture(identity; days = 137, with_tillage = false)
+    @test event_days(simulation.output.calendar.harvest_event) == [137]
+    @test all(iszero, simulation.state.fluxes.soil.management.tillage_carbon)
+    @test all(iszero, simulation.state.fluxes.soil.management.tillage_nitrogen)
+end
+
 @testset "Cultivation, fertilizer, and tillage are single-trigger events" begin
     crop = init_crop(1, identity)
     soil = init_soil(1, soilparams.soildepth, identity)

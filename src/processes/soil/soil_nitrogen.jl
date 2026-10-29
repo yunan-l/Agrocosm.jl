@@ -68,9 +68,9 @@ function soil_cn_decomposition!(soil;
 end
 
 """Route new harvest-day carbon and nitrogen residues together."""
-function route_harvest_residues!(soil, crop)
-    route_harvest_carbon_input!(soil, crop)
-    route_harvest_nitrogen_input!(soil, crop)
+function route_harvest_residues!(soil, crop; with_tillage::Bool = true)
+    route_harvest_carbon_input!(soil, crop; with_tillage)
+    route_harvest_nitrogen_input!(soil, crop; with_tillage)
     return nothing
 end
 

@@ -47,7 +47,8 @@ function lifecycle_climate(::Type{T}, days::Integer, device = identity) where {T
     )
 end
 
-function run_lifecycle_fixture(device = identity; T = Float32, days = 730)
+function run_lifecycle_fixture(device = identity; T = Float32, days = 730,
+                               with_tillage::Bool = true)
     simulation = initialize_simulation(
         cft1,
         lifecycle_initial_data(T, device);
@@ -56,6 +57,7 @@ function run_lifecycle_fixture(device = identity; T = Float32, days = 730)
         days = days,
         diagnostics = false,
         fertilizer = :yes,
+        with_tillage = with_tillage,
     )
     run_simulation!(simulation, lifecycle_climate(T, days, device); spinup = false)
     return simulation

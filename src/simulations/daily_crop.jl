@@ -211,7 +211,7 @@ function _daily_crop!(
             state, state, output, managed_land.residue_fraction, day_of_year;
             output_row, annual_output_row,
         )
-        route_harvest_residues!(state, state)
+        route_harvest_residues!(state, state; with_tillage)
         annual_output_offset += day_of_year == 365
         if carbon_balance !== nothing
             record_carbon_balance_after_harvest!(
@@ -338,7 +338,7 @@ function _daily_crop!(
             state, state, output, managed_land.residue_fraction, day_of_year;
             output_row, annual_output_row,
         )
-        route_harvest_residues!(state, state)
+        route_harvest_residues!(state, state; with_tillage)
         if carbon_balance !== nothing
             record_carbon_balance_after_harvest!(
                 carbon_balance, diagnostic_day, state, state,

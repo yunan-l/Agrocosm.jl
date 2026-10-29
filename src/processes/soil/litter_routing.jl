@@ -96,7 +96,8 @@ end
 end
 
 """
-Route today's harvested carbon residues through LPJmL's post-harvest tillage.
+Route today's harvested carbon residues, applying LPJmL's post-harvest tillage
+only when enabled.
 
 `harvest_crop.c` first adds shoot residues to `agtop` and roots to `bg`.
 The harvested stand is then marked `KILL`; the same day's `killstand()` calls
@@ -104,7 +105,7 @@ The harvested stand is then marked `KILL`; the same day's `killstand()` calls
 unchanged by the tillage matrix.
 """
 
-function route_harvest_carbon_input!(soil, crop)
+function route_harvest_carbon_input!(soil, crop; with_tillage::Bool = true)
     launch_custom!(
         route_harvest_litter_kernel!,
         soil_carbon_prognostic(soil).litter,
@@ -113,14 +114,15 @@ function route_harvest_carbon_input!(soil, crop)
         soil_management_input(soil).tillage_fraction,
         crop_events(crop).harvest,
         soil_management_fluxes(soil).tillage_carbon,
+        with_tillage,
     )
     return nothing
 end
 
-"""Route today's harvested nitrogen residues through post-harvest tillage."""
+"""Route today's harvested nitrogen residues, with optional post-harvest tillage."""
 
 
-function route_harvest_nitrogen_input!(soil, crop)
+function route_harvest_nitrogen_input!(soil, crop; with_tillage::Bool = true)
     launch_custom!(
         route_harvest_litter_kernel!,
         soil_nitrogen_prognostic(soil).litter,
@@ -129,6 +131,7 @@ function route_harvest_nitrogen_input!(soil, crop)
         soil_management_input(soil).tillage_fraction,
         crop_events(crop).harvest,
         soil_management_fluxes(soil).tillage_nitrogen,
+        with_tillage,
     )
     return nothing
 end
@@ -139,21 +142,31 @@ end
     tillage_fraction::AbstractMatrix{T},
     harvest_event::AbstractVector{S},
     tillage_flux::AbstractVector{T},
+    with_tillage::Bool,
 ) where {T <: AbstractFloat, S <: Integer}
     cell = @index(Global)
+    if !with_tillage
+        tillage_flux[cell] = zero(T)
+    end
     if harvest_event[cell] != 0
         # LPJmL routes the pools verbatim. In a negative-biomass failure the
         # mobile pool can be negative, and clipping it here would create carbon.
         litter_1 = litter[1, cell] + litter_input[1, cell]
         litter_2 = litter[2, cell] + litter_input[2, cell]
         litter_3 = litter[3, cell] + litter_input[3, cell]
-        routed_1 = tillage_fraction[1, 1] * litter_1 +
-            tillage_fraction[1, 2] * litter_2 + tillage_fraction[1, 3] * litter_3
-        tillage_flux[cell] += max(litter_1 - routed_1, zero(T))
-        litter[1, cell] = routed_1
-        litter[2, cell] = tillage_fraction[2, 1] * litter_1 +
-            tillage_fraction[2, 2] * litter_2 + tillage_fraction[2, 3] * litter_3
-        litter[3, cell] = tillage_fraction[3, 1] * litter_1 +
-            tillage_fraction[3, 2] * litter_2 + tillage_fraction[3, 3] * litter_3
+        if with_tillage
+            routed_1 = tillage_fraction[1, 1] * litter_1 +
+                tillage_fraction[1, 2] * litter_2 + tillage_fraction[1, 3] * litter_3
+            tillage_flux[cell] += max(litter_1 - routed_1, zero(T))
+            litter[1, cell] = routed_1
+            litter[2, cell] = tillage_fraction[2, 1] * litter_1 +
+                tillage_fraction[2, 2] * litter_2 + tillage_fraction[2, 3] * litter_3
+            litter[3, cell] = tillage_fraction[3, 1] * litter_1 +
+                tillage_fraction[3, 2] * litter_2 + tillage_fraction[3, 3] * litter_3
+        else
+            litter[1, cell] = litter_1
+            litter[2, cell] = litter_2
+            litter[3, cell] = litter_3
+        end
     end
 end

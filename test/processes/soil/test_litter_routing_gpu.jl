@@ -28,3 +28,26 @@ CUDA.functional() || error("CUDA is required for this independent GPU test")
     @test all(Array(soil.management.bioturbation_carbon) .>= 0.0f0)
     @test Array(soil.carbon.litter[3:3, :]) == Float32[5 6]
 end
+
+@testset "GPU harvest routing leaves residues in place without tillage" begin
+    soil = init_soil(1, CuArray(soilparams.soildepth), CuArray)
+    crop = init_crop(1, CuArray)
+    state = test_model_state(crop, soil)
+    soil.management.tillage_fraction .= CuArray(Float32[
+        0.05 0 0
+        0.95 1 0
+        0 0 1
+    ])
+    soil.carbon.litter .= 0f0
+    soil.nitrogen.litter .= 0f0
+    soil.carbon.input .= CuArray(reshape(Float32[3, 0, 4], 3, 1))
+    soil.nitrogen.input .= CuArray(reshape(Float32[0.3, 0, 0.4], 3, 1))
+    crop.events.harvest .= Int32(1)
+
+    Agrocosm.route_harvest_residues!(state, state; with_tillage = false)
+
+    @test Array(soil.carbon.litter) == reshape(Float32[3, 0, 4], 3, 1)
+    @test Array(soil.nitrogen.litter) == reshape(Float32[0.3, 0, 0.4], 3, 1)
+    @test Array(soil.management.tillage_carbon) == Float32[0]
+    @test Array(soil.management.tillage_nitrogen) == Float32[0]
+end

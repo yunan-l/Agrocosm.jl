@@ -77,4 +77,29 @@ using Test
         @test soil.management.tillage_nitrogen[1] ≈ 0.1425f0
     end
 
+    @testset "post-harvest residues remain in place without tillage" begin
+        soil = init_soil(2, soilparams.soildepth, identity)
+        crop = init_crop(2, identity)
+        state = test_model_state(crop, soil)
+        soil.management.tillage_fraction .= Float32[
+            0.05 0 0
+            0.95 1 0
+            0 0 1
+        ]
+        soil.carbon.litter .= Float32[10 4; 2 3; 5 6]
+        soil.nitrogen.litter .= Float32[1 0.4; 0.2 0.3; 0.5 0.6]
+        soil.carbon.input .= Float32[3 9; 0 9; 4 9]
+        soil.nitrogen.input .= Float32[0.3 0.9; 0 0.9; 0.4 0.9]
+        soil.management.tillage_carbon .= 7f0
+        soil.management.tillage_nitrogen .= 0.7f0
+        crop.events.harvest .= Int32[1, 0]
+
+        Agrocosm.route_harvest_residues!(state, state; with_tillage = false)
+
+        @test soil.carbon.litter == Float32[13 4; 2 3; 9 6]
+        @test soil.nitrogen.litter == Float32[1.3 0.4; 0.2 0.3; 0.9 0.6]
+        @test all(iszero, soil.management.tillage_carbon)
+        @test all(iszero, soil.management.tillage_nitrogen)
+    end
+
 end
