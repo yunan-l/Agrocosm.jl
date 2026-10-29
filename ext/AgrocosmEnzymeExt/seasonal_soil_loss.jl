@@ -22,6 +22,7 @@ function Agrocosm.enzyme_seasonal_soil_loss(
     nitrogen_limit_vcmax::Bool = false,
     crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat}
+    pathway = _enzyme_pathway(base_cft)
     model_parameters = _replace_model_parameters(
         base_parameters, theta_soil, soil_parameter_names,
     )
@@ -39,6 +40,8 @@ function Agrocosm.enzyme_seasonal_soil_loss(
             nitrogen_limit_vcmax,
             crop_resp_fix,
             nitrogen_limit_vcmax,
+            nothing,
+            pathway,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end
@@ -72,6 +75,7 @@ function Agrocosm.enzyme_seasonal_joint_loss(
     nitrogen_limit_vcmax::Bool = false,
     crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat}
+    pathway = _enzyme_pathway(base_cft)
     cft = _replace_cft_parameters(base_cft, theta_cft, cft_parameter_names)
     model_parameters = _replace_model_parameters(
         base_parameters, theta_soil, soil_parameter_names,
@@ -90,6 +94,8 @@ function Agrocosm.enzyme_seasonal_joint_loss(
             nitrogen_limit_vcmax,
             crop_resp_fix,
             nitrogen_limit_vcmax,
+            nothing,
+            pathway,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end
@@ -112,6 +118,7 @@ function _enzyme_seasonal_joint_loss_block(
     irrigation::Bool,
     nitrogen_limit_vcmax::Bool,
     crop_resp_fix::Bool,
+    pathway::Union{Val{:C3}, Val{:C4}},
 ) where {T <: AbstractFloat}
     cft = _replace_cft_parameters(base_cft, theta_cft, cft_parameter_names)
     model_parameters = _replace_model_parameters(
@@ -131,6 +138,8 @@ function _enzyme_seasonal_joint_loss_block(
             nitrogen_limit_vcmax,
             crop_resp_fix,
             nitrogen_limit_vcmax,
+            nothing,
+            pathway,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end
@@ -151,6 +160,7 @@ function _enzyme_seasonal_soil_loss_block(
     irrigation::Bool,
     nitrogen_limit_vcmax::Bool,
     crop_resp_fix::Bool,
+    pathway::Union{Val{:C3}, Val{:C4}},
 ) where {T <: AbstractFloat}
     model_parameters = _replace_model_parameters(
         base_parameters, theta_soil, soil_parameter_names,
@@ -169,6 +179,8 @@ function _enzyme_seasonal_soil_loss_block(
             nitrogen_limit_vcmax,
             crop_resp_fix,
             nitrogen_limit_vcmax,
+            nothing,
+            pathway,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end

@@ -47,6 +47,7 @@ function Agrocosm.enzyme_seasonal_loss(
     nitrogen_limit_vcmax::Bool = false,
     crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat}
+    pathway = _enzyme_pathway(base_cft)
     cft = _replace_cft_parameters(base_cft, theta, parameter_names)
     gpp_loss = zero(T)
     reco_loss = zero(T)
@@ -65,6 +66,8 @@ function Agrocosm.enzyme_seasonal_loss(
             nitrogen_limit_vcmax,
             crop_resp_fix,
             nitrogen_limit_vcmax,
+            nothing,
+            pathway,
         )
         if context.growth_mask[day_index]
             crop_flux = Agrocosm.crop_fluxes(state)
@@ -181,6 +184,7 @@ function _enzyme_seasonal_loss_block(
     irrigation::Bool,
     nitrogen_limit_vcmax::Bool,
     crop_resp_fix::Bool,
+    pathway::Union{Val{:C3}, Val{:C4}},
 ) where {T <: AbstractFloat}
     cft = _replace_cft_parameters(base_cft, theta, parameter_names)
     losses = _ADSeasonalLossAccumulator(zero(T), zero(T), zero(T))
@@ -197,6 +201,8 @@ function _enzyme_seasonal_loss_block(
             nitrogen_limit_vcmax,
             crop_resp_fix,
             nitrogen_limit_vcmax,
+            nothing,
+            pathway,
         )
         _enzyme_add_seasonal_loss!(losses, state, index, context)
     end

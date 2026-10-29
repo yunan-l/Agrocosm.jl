@@ -49,7 +49,9 @@ end
     @test gradient == zeros(Float32, 2)
 end
 
-function _daily_transition_fixture(climate_days::Int = 16, initial_end_day::Int = 10)
+function _daily_transition_fixture(
+    climate_days::Int = 16, initial_end_day::Int = 10; base_cft = cft1,
+)
     T = Float32
     cells = 1
     layers = 5
@@ -85,7 +87,7 @@ function _daily_transition_fixture(climate_days::Int = 16, initial_end_day::Int 
         ),
     )
     climbuf, crop, pet, soil, managed_land, weather, output = init_states!(
-        cft1, initial_data, cells, identity; T,
+        base_cft, initial_data, cells, identity; T,
     )
     climbuf.atemp .= T(10)
     climbuf.temp .= T(10)
@@ -102,9 +104,10 @@ function _daily_transition_fixture(climate_days::Int = 16, initial_end_day::Int 
     )
     state = model_state(climbuf, crop, pet, soil, managed_land, weather, output)
     global_parameters = ModelParameters(T)
-    processes = ProcessModules(cft1, global_parameters)
+    processes = ProcessModules(base_cft, global_parameters)
     if initial_end_day > 0
-        daily_crop_C3!(1, initial_end_day, processes, climate, state;
+        daily_crop! = base_cft.path == 1 ? daily_crop_C3! : daily_crop_C4!
+        daily_crop!(1, initial_end_day, processes, climate, state;
             fertilizer = :yes,
             manure = true,
             with_tillage = true,
@@ -114,7 +117,8 @@ function _daily_transition_fixture(climate_days::Int = 16, initial_end_day::Int 
     end
     enzyme_prepare_daily_state!(state)
     layer_depth = Tuple(state.inputs.soil.properties.layer_depth)
-    return (; state, climate, global_parameters, layer_depth, day = initial_end_day + 1)
+    return (; state, climate, global_parameters, layer_depth,
+        day = initial_end_day + 1, base_cft)
 end
 
 function _daily_transition_value(template, theta, parameter_names, observable)
@@ -123,7 +127,7 @@ function _daily_transition_value(template, theta, parameter_names, observable)
     return enzyme_daily_transition_objective(
         theta,
         state,
-        cft1,
+        template.base_cft,
         template.global_parameters,
         template.climate,
         parameter_names,

@@ -19,6 +19,7 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
     ))
     ranges = _seasonal_block_ranges(days, Int(block_days))
     isempty(ranges) && throw(ArgumentError("days must not be empty"))
+    pathway = _enzyme_pathway(base_cft)
 
     state, _ = _state_and_shadow(state_factory)
     Agrocosm.enzyme_prepare_daily_state!(state)
@@ -40,6 +41,7 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
             irrigation,
             nitrogen_limit_vcmax,
             crop_resp_fix,
+            pathway,
         )
     end
 
@@ -68,6 +70,7 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
             Enzyme.Const(irrigation),
             Enzyme.Const(nitrogen_limit_vcmax),
             Enzyme.Const(crop_resp_fix),
+            Enzyme.Const(pathway),
         )
         reverse_primal += result[2]
         gradient .+= block_gradient
@@ -112,6 +115,7 @@ function Agrocosm.enzyme_seasonal_joint_gradient_blockwise(
     ))
     ranges = _seasonal_block_ranges(days, Int(block_days))
     isempty(ranges) && throw(ArgumentError("days must not be empty"))
+    pathway = _enzyme_pathway(base_cft)
 
     state, _ = _state_and_shadow(state_factory)
     Agrocosm.enzyme_prepare_daily_state!(state)
@@ -135,6 +139,7 @@ function Agrocosm.enzyme_seasonal_joint_gradient_blockwise(
             irrigation,
             nitrogen_limit_vcmax,
             crop_resp_fix,
+            pathway,
         )
     end
 
@@ -167,6 +172,7 @@ function Agrocosm.enzyme_seasonal_joint_gradient_blockwise(
             Enzyme.Const(irrigation),
             Enzyme.Const(nitrogen_limit_vcmax),
             Enzyme.Const(crop_resp_fix),
+            Enzyme.Const(pathway),
         )
         reverse_primal += result[2]
         cft_gradient .+= block_cft_gradient
@@ -228,6 +234,7 @@ function Agrocosm.enzyme_seasonal_gradient_blockwise(
     ))
     ranges = _seasonal_block_ranges(days, Int(block_days))
     isempty(ranges) && throw(ArgumentError("days must not be empty"))
+    pathway = _enzyme_pathway(base_cft)
 
     state, _ = _state_and_shadow(state_factory)
     Agrocosm.enzyme_prepare_daily_state!(state)
@@ -249,6 +256,7 @@ function Agrocosm.enzyme_seasonal_gradient_blockwise(
             irrigation,
             nitrogen_limit_vcmax,
             crop_resp_fix,
+            pathway,
         )
     end
 
@@ -277,6 +285,7 @@ function Agrocosm.enzyme_seasonal_gradient_blockwise(
             Enzyme.Const(irrigation),
             Enzyme.Const(nitrogen_limit_vcmax),
             Enzyme.Const(crop_resp_fix),
+            Enzyme.Const(pathway),
         )
         reverse_primal += result[2]
         gradient .+= block_gradient
@@ -298,7 +307,7 @@ end
         parameter_names, day, observable, layer_depth,
     )
 
-Run the opt-in continuous portion of one existing C3 daily transition and
+Run the opt-in continuous portion of one existing crop daily transition and
 return one scalar daily observable. The caller should prepare the lifecycle
 state with discrete events already fixed; output diagnostics are intentionally
 excluded from this AD path.
@@ -317,10 +326,12 @@ function Agrocosm.enzyme_daily_transition_objective(
     nitrogen_limit_vcmax::Bool = false,
     crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat}
+    pathway = _enzyme_pathway(base_cft)
     cft = _replace_cft_parameters(base_cft, theta, parameter_names)
     _enzyme_continuous_transition!(
         state, cft, global_parameters, climate, day, observable, layer_depth,
         irrigation, nitrogen_limit_vcmax, crop_resp_fix, nitrogen_limit_vcmax,
+        nothing, pathway,
     )
     return _daily_transition_observable(state, observable)
 end

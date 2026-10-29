@@ -1,3 +1,9 @@
+@inline function _enzyme_pathway(cft::Agrocosm.CFTParameters)
+    cft.path == 1 && return Val(:C3)
+    cft.path == 2 && return Val(:C4)
+    throw(ArgumentError("unsupported crop photosynthesis path $(cft.path)"))
+end
+
 """
     _enzyme_continuous_transition!(state, cft, global_parameters, climate, day, observable)
 
