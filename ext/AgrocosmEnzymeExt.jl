@@ -3,6 +3,12 @@ module AgrocosmEnzymeExt
 import Agrocosm
 import Enzyme
 
+function __init__()
+    # Float64 CFT tail fields extend past Enzyme's default 512-byte type offset.
+    Enzyme.API.maxtypeoffset!(1024)
+    return nothing
+end
+
 include("AgrocosmEnzymeExt/core.jl")
 include("AgrocosmEnzymeExt/physiology.jl")
 include("AgrocosmEnzymeExt/soil_water.jl")
