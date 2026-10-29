@@ -6,6 +6,7 @@ run_full_suite = "--full" in ARGS
 
 @testset "Agrocosm Enzyme adapter" begin
     include("ad/test_cft_offset_gradient.jl")
+    include("ad/test_transpiration_zero_root_water.jl")
     include("ad/test_enzyme_daily_transition.jl")
     include("ad/test_enzyme_seasonal_loss.jl")
     include("ad/test_enzyme_365day.jl")

@@ -494,12 +494,9 @@ end
             crop_wscal[cell] = one(T)
         end
 
-        # Potential transpiration constrained by demand/supply and canopy fraction.
-        if wr > 0
-            transp = min(supply, demand) / wr * fpc
-        else
-            transp = zero(T)
-        end
+        # Keep the reverse derivative finite when the root zone has no water.
+        root_water_denominator = ifelse(wr > zero(T), wr, one(T))
+        transp = min(supply, demand) / root_water_denominator * fpc
 
         transp_cor = zero(T)
 
@@ -516,11 +513,7 @@ end
             transp_cor = zero(T)
         end
 
-        if wr > 0
-            transp = transp_cor / wr
-        else
-            transp = zero(T)
-        end
+        transp = transp_cor / root_water_denominator
 
         # LPJmL recomputes actual canopy conductance after layer extraction.
         # Store it in `gp`; downstream lambda solving consumes this actual value.
