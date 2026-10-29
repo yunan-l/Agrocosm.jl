@@ -174,7 +174,7 @@ end
         ModelState = (
             crop = (
                 sdate = Int32[100, 101],
-                phu = Float32[-543, 620],
+                phu = Float32[620, -543],
                 manure = zeros(Float32, cells),
                 fertilizer = fill(20.0f0, cells),
                 residuefrac = fill(0.5f0, cells),
@@ -194,8 +194,8 @@ end
         cft1, initial_data, cells, identity; T = Float64,
     )
     @test eltype(crop64.state.canopy.lai) == Float64
-    @test crop64.auxiliary.phenology.phu == Float64[543, 620]
-    @test crop64.auxiliary.phenology.winter_type == Bool[true, false]
+    @test crop64.auxiliary.phenology.phu == Float64[620, 543]
+    @test crop64.auxiliary.phenology.winter_type == Bool[false, true]
     @test eltype(pet64.eeq) == Float64
     @test eltype(soil64.water.storage) == Float64
     @test soil64.properties.nitrification_a == Float64[0.45, 0.55]

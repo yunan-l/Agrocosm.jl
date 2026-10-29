@@ -38,11 +38,10 @@ end
 end
 
 @kernel inbounds = true function initialize_crop_phenology_kernel!(
-    root_distribution_state, phu, winter_type, root_distribution_values,
+    phu, winter_type,
 )
-    layer, cell = @index(Global, NTuple)
-    root_distribution_state[layer, cell] = root_distribution_values[layer]
-    if layer == 1 && phu[cell] < zero(eltype(phu))
+    cell = @index(Global)
+    if phu[cell] < zero(eltype(phu))
         phu[cell] = -phu[cell]
         winter_type[cell] = true
     end
@@ -142,10 +141,10 @@ function init_states!(CFT::CFTParameters,
     managed_land = init_managed_land(T, cell_size, device)
     crop.auxiliary.phenology.phu = to_float(phu)
     rootdist = root_distribution(T(beta_root))
-    launch_2D!(
-        initialize_crop_phenology_kernel!, crop.auxiliary.root.distribution,
-        crop.auxiliary.phenology.phu, crop.auxiliary.phenology.winter_type,
-        device(rootdist),
+    crop.auxiliary.root.distribution = device(rootdist)
+    launch_1D!(
+        initialize_crop_phenology_kernel!, crop.auxiliary.phenology.phu,
+        crop.auxiliary.phenology.winter_type,
     )
 
     crop.auxiliary.calendar.sowing_date = to_integer(sdate)
