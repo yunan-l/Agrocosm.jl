@@ -119,7 +119,7 @@ function post_crop_nitrogen_losses!(soil;
     else
         wind_speed
     end
-    # The legacy kernel remains untouched for bitwise-compatible disabled runs.
+    # Preserve both call paths, now with the same physical dissociation formula.
     if exact_lpjml_volatilization
         launch_1D!(
             lpjml_volatilization_kernel!,
@@ -228,10 +228,8 @@ end
 """
     compute_ammonia_volatilization(ammonium, ph, temperature, wind, depth, length)
 
-Return the legacy daily NH₃ loss from the upper ammonium pool. This preserves
-the historical Float32 dissociation floor for bitwise-compatible disabled
-runs; new LPJmL-compatible process paths use
-`compute_lpjml_ammonia_volatilization`.
+Return daily NH₃ loss from the upper ammonium pool. Use the physical
+dissociation constant directly, including for Float32.
 """
 @inline function compute_ammonia_volatilization(ammonium::T,
                                                  ph::T,
@@ -242,7 +240,7 @@ runs; new LPJmL-compatible process paths use
     available = max(zero(T), ammonium)
     kelvin = temperature + T(273.15)
     dissociation = T(10)^(T(0.05) - T(2788) / kelvin)
-    aqueous_fraction = one(T) / (one(T) + T(10)^(-ph) / max(dissociation, eps(T)))
+    aqueous_fraction = one(T) / (one(T) + T(10)^(-ph) / dissociation)
     aqueous_nh3 = aqueous_fraction * available / max(depth, eps(T)) * T(1000)
     henry = T(0.2138) / kelvin * T(10)^(T(6.123) - T(1825) / kelvin)
     transfer = T(0.000612) * max(zero(T), wind)^T(0.8) * kelvin^T(0.382) *

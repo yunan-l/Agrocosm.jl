@@ -1,6 +1,15 @@
 using Agrocosm
 using Test
 
+@testset "Float32 ammonia dissociation matches LPJmL path" begin
+    for T in (Float32, Float64)
+        inputs = (T(1), T(6.5), T(20), T(0.01), T(200), T(1))
+        expected = Agrocosm.compute_lpjml_ammonia_volatilization(inputs...)
+        @test zero(T) < expected < one(T)
+        @test Agrocosm.compute_ammonia_volatilization(inputs...) == expected
+    end
+end
+
 @testset "LPJmL-style ammonia volatilization" begin
     soil = init_soil(1, soilparams.soildepth, identity)
     soil.properties.ph .= 7.0f0
