@@ -170,7 +170,7 @@ end
 end
 
 function test_last_harvest_yield(device)
-    @testset "Annual yield reports the last harvest" begin
+    @testset "Annual yield retains both sowing-year cohorts" begin
         for annual_row in (nothing, 1)
             crop = init_crop(4, device)
             soil = init_soil(4, soilparams.soildepth, device)
@@ -180,26 +180,38 @@ function test_last_harvest_yield(device)
             residue_fraction = device(fill(0.6f0, 4))
 
             copyto!(crop.state.carbon.storage, Float32[11, 7, 0, 0])
+            copyto!(crop.state.phenology.growing_days, Int32[120, 90, 0, 0])
             copyto!(crop.state.phenology.harvesting, Bool[true, true, false, false])
             crop.state.phenology.harvesting_previous .= false
             crop.state.phenology.is_growing .= Int32(1)
             harvest_crop!(state, state, output, residue_fraction, 90; output_row = 1)
             @test Array(output.annual.yield) == Float32[11, 7, 0, 0]
+            @test Array(output.annual.yield_from_previous_sowing_year) == Float32[11, 0, 0, 0]
+            @test Array(output.annual.yield_from_current_sowing_year) == Float32[0, 7, 0, 0]
 
             copyto!(crop.state.carbon.storage, Float32[5, 0, 9, 0])
+            copyto!(crop.state.phenology.growing_days, Int32[200, 90, 100, 0])
             copyto!(crop.state.phenology.harvesting_previous, Bool[false, true, false, false])
             copyto!(crop.state.phenology.harvesting, Bool[true, true, true, false])
             crop.state.phenology.is_growing .= Int32(1)
             harvest_crop!(state, state, output, residue_fraction, 300; output_row = 1)
             @test Array(output.annual.yield) == Float32[5, 7, 9, 0]
+            @test Array(output.annual.yield_from_previous_sowing_year) == Float32[11, 0, 0, 0]
+            @test Array(output.annual.yield_from_current_sowing_year) == Float32[5, 7, 9, 0]
             @test Array(output.annual.harvest_date) == Int32[300, 90, 300, 0]
 
             crop.state.phenology.harvesting_previous .= true
             harvest_crop!(state, state, output, residue_fraction, 365;
                           output_row = 1, annual_output_row = annual_row)
             @test Array(output.crop.yield) == reshape(Float32[5, 7, 9, 0], 1, :)
+            @test Array(output.crop.yield_from_previous_sowing_year) ==
+                reshape(Float32[11, 0, 0, 0], 1, :)
+            @test Array(output.crop.yield_from_current_sowing_year) ==
+                reshape(Float32[5, 7, 9, 0], 1, :)
             @test Array(output.calendar.harvest_date) == reshape(Int32[300, 90, 300, 0], 1, :)
             @test all(iszero, Array(output.annual.yield))
+            @test all(iszero, Array(output.annual.yield_from_previous_sowing_year))
+            @test all(iszero, Array(output.annual.yield_from_current_sowing_year))
             @test all(iszero, Array(output.annual.harvest_date))
         end
     end
@@ -238,6 +250,10 @@ function test_last_harvest_yield(device)
                               output_row = 1, annual_output_row = 1)
             end
             @test Array(output.crop.yield) == reshape(Float32[3, 0], 1, :)
+            @test Array(output.crop.yield_from_previous_sowing_year) ==
+                zeros(Float32, 1, 2)
+            @test Array(output.crop.yield_from_current_sowing_year) ==
+                reshape(Float32[14, 13], 1, :)
             @test Array(output.calendar.harvest_date) == fill(Int32(failure_day), 1, 2)
             @test all(iszero, Array(output.annual.yield))
             @test all(iszero, Array(crop.state.carbon.storage))

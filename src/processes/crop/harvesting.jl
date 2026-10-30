@@ -20,9 +20,12 @@ function harvest_crop!(crop,
         crop_prognostic(crop).phenology.harvesting_previous,
         crop_prognostic(crop).phenology.harvesting,
         crop_prognostic(crop).phenology.is_growing,
+        crop_prognostic(crop).phenology.growing_days,
         crop_fluxes(crop).carbon.yield,
         crop_fluxes(crop).carbon.harvest_export,
         output.annual.yield,
+        output.annual.yield_from_previous_sowing_year,
+        output.annual.yield_from_current_sowing_year,
         output.annual.season_gpp,
         output.annual.season_lai_days,
         output.annual.season_length,
@@ -49,6 +52,8 @@ function harvest_crop!(crop,
         soil_properties(soil).layer_depth,
         residue_frac,
         output.crop.yield,
+        output.crop.yield_from_previous_sowing_year,
+        output.crop.yield_from_current_sowing_year,
         output.crop.season_gpp,
         output.crop.season_lai_days,
         output.crop.season_length,
@@ -94,6 +99,7 @@ function harvest_crop!(crop,
         )
         output.crop.yield = _append_output_row(output.crop.yield, annual_yield)
         for field in (
+            :yield_from_previous_sowing_year, :yield_from_current_sowing_year,
             :season_gpp, :season_lai_days, :season_length,
             :season_water_deficit, :season_evapotranspiration,
             :harvest_aboveground_carbon,
@@ -108,6 +114,8 @@ function harvest_crop!(crop,
         launch_1D!(
             reset_annual_harvest_kernel!,
             output.annual.yield,
+            output.annual.yield_from_previous_sowing_year,
+            output.annual.yield_from_current_sowing_year,
             output.annual.harvest_date,
             output.annual.season_gpp,
             output.annual.season_lai_days,
@@ -141,11 +149,14 @@ function terminate_failed_crop!(crop,
         crop_events(crop).harvest,
         output.annual.harvest_date,
         crop_prognostic(crop).phenology.is_growing,
+        crop_prognostic(crop).phenology.growing_days,
         crop_prognostic(crop).phenology.harvesting,
         crop_prognostic(crop).phenology.harvesting_previous,
         crop_fluxes(crop).carbon.yield,
         crop_fluxes(crop).carbon.harvest_export,
         output.annual.yield,
+        output.annual.yield_from_previous_sowing_year,
+        output.annual.yield_from_current_sowing_year,
         crop_prognostic(crop).carbon.biomass,
         crop_prognostic(crop).carbon.storage,
         crop_prognostic(crop).carbon.leaf,
@@ -172,6 +183,8 @@ function terminate_failed_crop!(crop,
         output.calendar.harvesting_mask,
         output.calendar.harvest_event,
         output.crop.yield,
+        output.crop.yield_from_previous_sowing_year,
+        output.crop.yield_from_current_sowing_year,
         output.calendar.harvest_date,
         output.calendar.harvesting_year,
         output_row,
@@ -185,11 +198,14 @@ end
     harvest_event::AbstractVector{S},
     harvest_date::AbstractVector{S},
     is_growing::AbstractVector{S},
+    growing_days::AbstractVector{S},
     harvesting::AbstractVector{B},
     harvesting_previous::AbstractVector{B},
     crop_yield::AbstractVector{T},
     carbon_harvest_export::AbstractVector{T},
     annual_yield::AbstractVector{T},
+    annual_previous_sowing_yield::AbstractVector{T},
+    annual_current_sowing_yield::AbstractVector{T},
     biomass::AbstractVector{T},
     storage_carbon::AbstractVector{T},
     leaf_carbon::AbstractVector{T},
@@ -216,6 +232,8 @@ end
     output_harvesting_mask::AbstractMatrix{S},
     output_harvest_event::AbstractMatrix{S},
     output_yield::AbstractMatrix{T},
+    output_previous_sowing_yield::AbstractMatrix{T},
+    output_current_sowing_yield::AbstractMatrix{T},
     output_harvest_date::AbstractMatrix{S},
     output_harvesting_year::AbstractMatrix{S},
     output_row::Integer,
@@ -231,6 +249,11 @@ end
         nitrogen_residue = max(aboveground_nitrogen, zero(T)) * residue_fraction[cell]
         crop_yield[cell] = storage_carbon[cell]
         annual_yield[cell] = crop_yield[cell]
+        if growing_days[cell] > day
+            annual_previous_sowing_yield[cell] += max(crop_yield[cell], zero(T))
+        else
+            annual_current_sowing_yield[cell] += max(crop_yield[cell], zero(T))
+        end
         harvest_date[cell] = S(day)
         # A failed stand can have a negative mobile pool after respiration.
         # Keep that deficit in the net crop-removal term instead of routing a
@@ -288,12 +311,21 @@ end
         if failed
             size(output_yield, 1) != 0 &&
                 (output_yield[annual_output_row, cell] = max(crop_yield[cell], zero(T)))
+            if growing_days[cell] > day
+                size(output_previous_sowing_yield, 1) != 0 &&
+                    (output_previous_sowing_yield[annual_output_row, cell] += max(crop_yield[cell], zero(T)))
+            else
+                size(output_current_sowing_yield, 1) != 0 &&
+                    (output_current_sowing_yield[annual_output_row, cell] += max(crop_yield[cell], zero(T)))
+            end
             size(output_harvest_date, 1) != 0 &&
                 (output_harvest_date[annual_output_row, cell] = S(day))
             size(output_harvesting_year, 1) != 0 &&
                 (output_harvesting_year[annual_output_row, cell] = one(S))
         end
         annual_yield[cell] = zero(T)
+        annual_previous_sowing_yield[cell] = zero(T)
+        annual_current_sowing_yield[cell] = zero(T)
         harvest_date[cell] = zero(S)
     end
     # Keep only failure events in the live state so the second residue-routing
@@ -307,9 +339,12 @@ end
     harvesting_previous::AbstractVector{B},
     harvesting::AbstractVector{B},
     is_growing::AbstractVector{S},
+    growing_days::AbstractVector{S},
         crop_yield::AbstractVector{T},
         carbon_harvest_export::AbstractVector{T},
         annual_yield::AbstractVector{T},
+        annual_previous_sowing_yield::AbstractVector{T},
+        annual_current_sowing_yield::AbstractVector{T},
         annual_season_gpp::AbstractVector{T},
         annual_season_lai_days::AbstractVector{T},
         annual_season_length::AbstractVector{T},
@@ -336,6 +371,8 @@ end
     soil_layer_depth::AbstractVector{T},
         residue_fraction::AbstractVector{T},
         output_yield::AbstractMatrix{T},
+        output_previous_sowing_yield::AbstractMatrix{T},
+        output_current_sowing_yield::AbstractMatrix{T},
         output_season_gpp::AbstractMatrix{T},
         output_season_lai_days::AbstractMatrix{T},
         output_season_length::AbstractMatrix{T},
@@ -360,6 +397,11 @@ end
         is_growing[cell] = zero(S)
         crop_yield[cell] = storage_carbon[cell]
         annual_yield[cell] = crop_yield[cell]
+        if growing_days[cell] > day
+            annual_previous_sowing_yield[cell] += max(crop_yield[cell], zero(T))
+        else
+            annual_current_sowing_yield[cell] += max(crop_yield[cell], zero(T))
+        end
         annual_season_gpp[cell] += active_gpp[cell]
         annual_season_lai_days[cell] += active_lai_days[cell]
         annual_season_length[cell] += active_length[cell]
@@ -395,6 +437,10 @@ end
         emitted_yield = max(annual_yield[cell], zero(T))
         size(output_yield, 1) != 0 &&
             (output_yield[annual_output_row, cell] = emitted_yield)
+        size(output_previous_sowing_yield, 1) != 0 &&
+            (output_previous_sowing_yield[annual_output_row, cell] = annual_previous_sowing_yield[cell])
+        size(output_current_sowing_yield, 1) != 0 &&
+            (output_current_sowing_yield[annual_output_row, cell] = annual_current_sowing_yield[cell])
         size(output_season_gpp, 1) != 0 &&
             (output_season_gpp[annual_output_row, cell] = annual_season_gpp[cell])
         size(output_season_lai_days, 1) != 0 &&
@@ -413,6 +459,8 @@ end
             (output_harvesting_year[annual_output_row, cell] =
                 emitted_yield != zero(T) ? one(S) : zero(S))
         annual_yield[cell] = zero(T)
+        annual_previous_sowing_yield[cell] = zero(T)
+        annual_current_sowing_yield[cell] = zero(T)
         annual_season_gpp[cell] = zero(T)
         annual_season_lai_days[cell] = zero(T)
         annual_season_length[cell] = zero(T)
@@ -425,6 +473,8 @@ end
 
 @kernel inbounds = true function reset_annual_harvest_kernel!(
     annual_yield::AbstractVector{T},
+    annual_previous_sowing_yield::AbstractVector{T},
+    annual_current_sowing_yield::AbstractVector{T},
     harvest_date::AbstractVector{S},
     annual_season_gpp::AbstractVector{T},
     annual_season_lai_days::AbstractVector{T},
@@ -435,6 +485,8 @@ end
 ) where {T <: AbstractFloat, S <: Integer}
     cell = @index(Global)
     annual_yield[cell] = zero(T)
+    annual_previous_sowing_yield[cell] = zero(T)
+    annual_current_sowing_yield[cell] = zero(T)
     harvest_date[cell] = zero(S)
     annual_season_gpp[cell] = zero(T)
     annual_season_lai_days[cell] = zero(T)

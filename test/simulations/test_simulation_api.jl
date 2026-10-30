@@ -88,7 +88,7 @@ end
     @test estimate.days == 4
     @test estimate.backend == :cpu
     @test estimate.diagnostics_bytes == 0
-    @test estimate.projected_output_bytes == 372
+    @test estimate.projected_output_bytes == 380
     @test preallocation == estimate
     @test estimate_memory(
         1, 1; T = Float64, diagnostics = false, block_days = 1,
@@ -606,6 +606,8 @@ end
         @test_throws ArgumentError restore_checkpoint!(wrong_domain, path)
 
         checkpoint = JLD2.load(path, "checkpoint")
+        JLD2.jldsave(path; checkpoint = merge(checkpoint, (format_version = 7,)))
+        @test_throws ArgumentError restore_checkpoint!(create(), path)
         incompatible_metadata = merge(
             checkpoint.metadata,
             (parameter_fingerprint = "incompatible-parameters",),

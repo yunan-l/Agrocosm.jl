@@ -139,6 +139,8 @@ const _OUTPUT_VARIABLE_METADATA = Dict{Tuple{Symbol, Symbol}, NamedTuple}(
     (:crop, :lai) => (units = "m2 m-2", description = "Leaf area index"),
     (:crop, :storage_carbon) => (units = "gC m-2", description = "Storage-organ carbon"),
     (:crop, :yield) => (units = "gC m-2 year-1", description = "Harvested storage-organ carbon"),
+    (:crop, :yield_from_previous_sowing_year) => (units = "gC m-2 year-1", description = "Harvests of crops sown in the preceding year"),
+    (:crop, :yield_from_current_sowing_year) => (units = "gC m-2 year-1", description = "Harvests of crops sown in the current year"),
     (:crop, :season_gpp) => (units = "gC m-2", description = "Harvest-season cumulative gross primary production"),
     (:crop, :season_lai_days) => (units = "m2 m-2 day", description = "Harvest-season cumulative leaf area index"),
     (:crop, :season_length) => (units = "day", description = "Active crop days in the harvested season"),
@@ -175,7 +177,8 @@ function output_variable_spec(group::Symbol, field::Symbol)
     metadata = get(_OUTPUT_VARIABLE_METADATA, (group, field), nothing)
     isnothing(metadata) && throw(ArgumentError("missing metadata for output variable $group.$field"))
     frequency = field in (
-        :yield, :season_gpp, :season_lai_days, :season_length,
+        :yield, :yield_from_previous_sowing_year, :yield_from_current_sowing_year,
+        :season_gpp, :season_lai_days, :season_length,
         :season_water_deficit, :season_evapotranspiration,
         :harvest_aboveground_carbon, :harvest_date, :harvesting_year,
     ) ? :annual : :daily

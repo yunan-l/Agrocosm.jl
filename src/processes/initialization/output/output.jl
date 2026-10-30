@@ -11,6 +11,8 @@ mutable struct CropOutput{A, I, M}
     lai::A                 # Actual nonnegative leaf-area index (m² leaf m⁻² ground).
     storage_carbon::A      # Carbon in the harvestable storage organ (gC m⁻²).
     yield::A               # Last harvest's storage-organ carbon in each calendar year (gC m⁻² yr⁻¹).
+    yield_from_previous_sowing_year::A # Harvested this year from the prior year's sowing (gC m⁻²).
+    yield_from_current_sowing_year::A  # Harvested this year from this year's sowing (gC m⁻²).
     season_gpp::A          # Harvest-season cumulative gross primary production (gC m⁻²).
     season_lai_days::A     # Harvest-season cumulative LAI (m² leaf m⁻² ground day).
     season_length::A       # Active crop days from sowing through the day before harvest (day).
@@ -58,6 +60,8 @@ end
 """In-progress annual crop outputs retained until the calendar-year boundary."""
 mutable struct AnnualOutputAccumulator{A, I}
     yield::A        # Storage carbon from the latest harvest in the current output year (gC m⁻²).
+    yield_from_previous_sowing_year::A # All current-year harvests sown in the preceding year.
+    yield_from_current_sowing_year::A  # All current-year harvests sown in this year.
     harvest_date::I # Latest harvest day in the current output year (1–365; 0 if absent).
     season_gpp::A
     season_lai_days::A
@@ -96,6 +100,8 @@ const _DAILY_CALENDAR_INTEGER_OUTPUT_FIELDS = (
 )
 const _ANNUAL_CROP_FLOAT_OUTPUT_FIELDS = (
     :yield,
+    :yield_from_previous_sowing_year,
+    :yield_from_current_sowing_year,
     :season_gpp,
     :season_lai_days,
     :season_length,
@@ -123,7 +129,7 @@ function init_output(::Type{T},
         scalar_output(), scalar_output(), scalar_output(), scalar_output(),
         scalar_output(), scalar_output(), scalar_output(), scalar_output(),
         scalar_output(), scalar_output(), scalar_output(), scalar_output(),
-        scalar_output(),
+        scalar_output(), scalar_output(), scalar_output(),
         device(zeros(T, 0, vegc_pools * cell_size)),
         device(zeros(T, 0, vegc_pools * cell_size)),
         scalar_output(), scalar_output(), integer_output(),
@@ -147,6 +153,7 @@ function init_output(::Type{T},
         integer_output(), integer_output(),
     )
     annual = AnnualOutputAccumulator(
+        device(zeros(T, cell_size)), device(zeros(T, cell_size)),
         device(zeros(T, cell_size)), device(zeros(Int32, cell_size)),
         device(zeros(T, cell_size)), device(zeros(T, cell_size)),
         device(zeros(T, cell_size)), device(zeros(T, cell_size)),

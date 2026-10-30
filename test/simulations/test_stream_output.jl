@@ -43,6 +43,8 @@ end
             OutputVariable(:soil, :heterotrophic_respiration),
             OutputVariable(:soil, :evapotranspiration),
             OutputVariable(:crop, :yield),
+            OutputVariable(:crop, :yield_from_previous_sowing_year),
+            OutputVariable(:crop, :yield_from_current_sowing_year),
         ];
         frequency = :daily,
         writer = chunk -> push!(chunks, chunk),
@@ -71,6 +73,12 @@ end
         Array(baseline.output.soil.evapotranspiration)
     @test reduce(vcat, [chunk.values[:crop_yield] for chunk in annual_chunks]) ==
         Array(baseline.output.crop.yield)
+    @test reduce(vcat, [chunk.values[:crop_yield_from_previous_sowing_year]
+                        for chunk in annual_chunks]) ==
+        Array(baseline.output.crop.yield_from_previous_sowing_year)
+    @test reduce(vcat, [chunk.values[:crop_yield_from_current_sowing_year]
+                        for chunk in annual_chunks]) ==
+        Array(baseline.output.crop.yield_from_current_sowing_year)
     @test all(length(chunk.time) <= 73 for chunk in daily_chunks)
     @test all(Set(keys(chunk.values)) == Set((
         :crop_gpp, :crop_npp, :crop_lai,

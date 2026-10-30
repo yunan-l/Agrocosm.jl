@@ -506,8 +506,8 @@ function run_simulation!(
     return simulation
 end
 
-const _CHECKPOINT_FORMAT_VERSION = 7
-const _MODEL_STATE_SCHEMA_VERSION = 3
+const _CHECKPOINT_FORMAT_VERSION = 8
+const _MODEL_STATE_SCHEMA_VERSION = 4
 
 _checkpoint_snapshot(values::AbstractArray) = Array(values)
 _checkpoint_snapshot(values::NamedTuple) = map(_checkpoint_snapshot, values)
