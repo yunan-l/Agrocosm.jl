@@ -11,6 +11,7 @@ is an outgoing flux.
 """
 mutable struct WaterBalance{M <: AbstractArray{<:AbstractFloat}}
     precipitation::M            # Atmospheric water input (mm day⁻¹).
+    irrigation_applied::M       # Explicit surface irrigation input (mm day⁻¹).
     rain_after_snow::M          # Liquid precipitation remaining after snow processing (mm day⁻¹).
     soil_storage_before::M      # Liquid soil-water stock at start of day (mm).
     soil_storage_after::M       # Liquid soil-water stock at end of day (mm).
@@ -40,7 +41,8 @@ end
     init_water_balance(number_of_days, number_of_cells, device=identity; T=Float32)
 
 Allocate an optional daily water-balance ledger on the selected device.
-Currently the ledger supports rainfed simulations only.
+The ledger supports rainfed and explicit-surface-irrigation simulations.
+Legacy field-capacity reset is not a physical water flux and is excluded.
 """
 function init_water_balance(number_of_days::Integer,
                             number_of_cells::Integer,
@@ -49,7 +51,7 @@ function init_water_balance(number_of_days::Integer,
     allocate() = device(zeros(T, number_of_days, number_of_cells))
 
     return WaterBalance(
-        allocate(), allocate(), allocate(), allocate(), allocate(),
+        allocate(), allocate(), allocate(), allocate(), allocate(), allocate(),
         allocate(), allocate(), allocate(), allocate(), allocate(),
         allocate(), allocate(), allocate(), allocate(), allocate(),
         allocate(), allocate(), allocate(), allocate(), allocate(),
@@ -117,7 +119,8 @@ function record_water_balance_end!(water_balance::WaterBalance,
             water_balance.soil_ice_storage_before[day_index, :] .+
             water_balance.snow_storage_before[day_index, :] .+
             water_balance.litter_storage_before[day_index, :] .+
-            water_balance.precipitation[day_index, :] .-
+            water_balance.precipitation[day_index, :] .+
+            water_balance.irrigation_applied[day_index, :] .-
             water_balance.soil_storage_after[day_index, :] .-
             water_balance.soil_ice_storage_after[day_index, :] .-
             water_balance.snow_storage_after[day_index, :] .-

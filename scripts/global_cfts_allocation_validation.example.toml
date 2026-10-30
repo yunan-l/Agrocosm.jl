@@ -18,6 +18,8 @@ fixed_year = 2015
 fertilizer = "yes"
 manure = true
 with_tillage = true
+# Use "reset" only to reproduce legacy irrigation experiments.
+irrigation_mode = "surface"
 
 [cfts]
 cft_ids = "all"

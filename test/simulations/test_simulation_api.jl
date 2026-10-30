@@ -88,7 +88,7 @@ end
     @test estimate.days == 4
     @test estimate.backend == :cpu
     @test estimate.diagnostics_bytes == 0
-    @test estimate.projected_output_bytes == 356
+    @test estimate.projected_output_bytes == 372
     @test preallocation == estimate
     @test estimate_memory(
         1, 1; T = Float64, diagnostics = false, block_days = 1,
@@ -562,4 +562,88 @@ end
         ))
         @test_throws ArgumentError restore_checkpoint!(create(), path)
     end
+end
+
+@testset "Explicit surface irrigation and legacy reset" begin
+    initial, _ = simulation_api_fixture(Float32)
+    dry_state = merge(initial.initial_state, (swc = fill(25.0f0, 5, 1),))
+    dry_initial = merge(initial, (initial_state = dry_state,))
+    climate = climate_block(Float32, 3, 15, 0)
+    create(; irrigation = true, irrigation_mode = :surface, diagnostics = true) =
+        initialize_simulation(
+            cft1, dry_initial; indices = [1], days = 3, fertilizer = :no,
+            irrigation, irrigation_mode, diagnostics,
+        )
+
+    surface = create()
+    @test surface.config.irrigation_mode === :surface
+    @test OutputVariable(:soil, :irrigation_applied).reduction === :sum
+    @test initialize_simulation(
+        cft1, dry_initial; indices = [1], days = 1, irrigation = true,
+    ).config.irrigation_mode === :surface
+    @test_throws ArgumentError create(; irrigation_mode = :unknown)
+
+    state = surface.state
+    state.prognostic.crop.phenology.is_growing[1] = 1
+    pedotransfer!(state)
+    applied = zeros(Float32, 1)
+    water_input = similar(applied)
+    Agrocosm.surface_irrigation!(
+        applied, water_input, state, Float32[5], Float32[0], cft1,
+    )
+    target = sum(max(
+        state.auxiliary.soil.water.field_capacity[layer, 1] *
+        state.inputs.soil.properties.layer_depth[layer] -
+        state.prognostic.soil.water.storage[layer, 1] -
+        state.prognostic.soil.water.ice_storage[layer, 1], 0f0,
+    ) for layer in 1:2)
+    @test applied[1] ≈ max(target - 5f0, 0f0)
+    @test water_input[1] ≈ applied[1] + 5f0
+    Agrocosm.surface_irrigation!(
+        applied, water_input, state, Float32[5], Float32[2], cft1,
+    )
+    @test applied[1] ≈ max(target - 3f0, 0f0)
+    Agrocosm.surface_irrigation!(
+        applied, water_input, state, Float32[500], Float32[0], cft1,
+    )
+    @test applied == [0f0]
+    @test water_input == [500f0]
+    state.prognostic.crop.phenology.is_growing[1] = 0
+    Agrocosm.surface_irrigation!(
+        applied, water_input, state, Float32[0], Float32[0], cft1,
+    )
+    @test applied == [0f0]
+
+    surface = create()
+    rainfed = create(; irrigation = false)
+    run_simulation!(surface, climate; spinup = false)
+    run_simulation!(rainfed, climate; spinup = false)
+    @test any(>(0), surface.output.soil.irrigation_applied)
+    @test surface.water_balance.irrigation_applied == surface.output.soil.irrigation_applied
+    @test all(iszero, rainfed.output.soil.irrigation_applied)
+    @test sum(surface.state.prognostic.soil.water.storage) >
+        sum(rainfed.state.prognostic.soil.water.storage)
+    @test surface.water_balance.surface_runoff[1, 1] > 0
+    @test maximum(abs, surface.water_balance.residual) < 1f-3
+
+    for cft in (cft2, cft3, cft9)
+        crop_simulation = initialize_simulation(
+            cft, dry_initial; indices = [1], days = 3, fertilizer = :no,
+            irrigation = true, diagnostics = false,
+        )
+        run_simulation!(crop_simulation, climate; spinup = false)
+        @test all(isfinite, crop_simulation.output.soil.irrigation_applied)
+    end
+
+    legacy = create(; irrigation_mode = :reset, diagnostics = false)
+    run_simulation!(legacy, climate; spinup = false)
+    @test all(iszero, legacy.output.soil.irrigation_applied)
+    @test legacy.state.prognostic.soil.water.storage[1, 1] ≈ max(
+        legacy.state.auxiliary.soil.water.field_capacity[1, 1] *
+        legacy.state.inputs.soil.properties.layer_depth[1] -
+        legacy.state.prognostic.soil.water.ice_storage[1, 1], 0f0,
+    )
+    @test_throws ArgumentError run_simulation!(
+        create(; irrigation_mode = :reset), climate; spinup = false,
+    )
 end

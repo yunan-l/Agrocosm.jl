@@ -88,6 +88,7 @@ function Agrocosm.enzyme_management_yield_loss(
     layer_depth,
     context::Agrocosm.ManagementAdaptationContext;
     irrigation::Bool = false,
+    irrigation_mode::Symbol = :surface,
     nitrogen_limit_vcmax::Bool = false,
     crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat}
@@ -107,6 +108,7 @@ function Agrocosm.enzyme_management_yield_loss(
         _enzyme_continuous_transition!(
             state, cft, model_parameters, climate, day, :gpp, layer_depth,
             irrigation, nitrogen_limit_vcmax, crop_resp_fix, false,
+            nothing, Val(:C3), Val(:surrogate), irrigation_mode,
         )
         day += 1
     end
@@ -137,6 +139,7 @@ function Agrocosm.enzyme_management_yield_split_loss(
     layer_depth,
     context::Agrocosm.ManagementAdaptationContext;
     irrigation::Bool = false,
+    irrigation_mode::Symbol = :surface,
     nitrogen_limit_vcmax::Bool = false,
     crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat}
@@ -161,6 +164,7 @@ function Agrocosm.enzyme_management_yield_split_loss(
         _enzyme_continuous_transition!(
             state, cft, model_parameters, climate, day, :gpp, layer_depth,
             irrigation, nitrogen_limit_vcmax, crop_resp_fix, false,
+            nothing, Val(:C3), Val(:surrogate), irrigation_mode,
         )
         day += 1
     end
@@ -196,6 +200,7 @@ function Agrocosm.enzyme_joint_adaptation_yield_loss(
     layer_depth,
     context::Agrocosm.ManagementAdaptationContext;
     irrigation::Bool = false,
+    irrigation_mode::Symbol = :surface,
     nitrogen_limit_vcmax::Bool = false,
     crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat}
@@ -245,6 +250,10 @@ function Agrocosm.enzyme_joint_adaptation_yield_loss(
             nitrogen_limit_vcmax,
             crop_resp_fix,
             false,
+            nothing,
+            Val(:C3),
+            Val(:surrogate),
+            irrigation_mode,
         )
         day += 1
     end

@@ -23,6 +23,9 @@ fixed_year = 2015
 fertilizer = "yes"
 manure = true
 with_tillage = true
+# "surface" (default) applies water through infiltration; "reset" reproduces
+# the legacy daily field-capacity reset without an explicit water flux.
+irrigation_mode = "surface"
 
 [run]
 backend = "cpu"

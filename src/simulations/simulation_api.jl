@@ -120,6 +120,7 @@ function initialize_simulation(
     days::Integer,
     diagnostics::Bool = true,
     irrigation::Bool = false,
+    irrigation_mode::Symbol = :surface,
     manure::Bool = false,
     fertilizer = :auto,
     with_tillage::Bool = true,
@@ -162,6 +163,7 @@ function initialize_simulation(
         T, device, days, active_indices, active_cell_ids;
         indices,
         irrigation,
+        irrigation_mode,
         manure,
         fertilizer,
         with_tillage,
@@ -273,6 +275,7 @@ function _transition_range!(
 )
     common = (
         irrigation = simulation.config.irrigation,
+        irrigation_mode = simulation.config.irrigation_mode,
         manure = simulation.config.manure,
         fertilizer = simulation.config.fertilizer,
         with_tillage = simulation.config.with_tillage,
@@ -537,6 +540,7 @@ function _simulation_checkpoint(simulation::CropSimulation)
             cft_id = simulation.cft.name,
             photosynthetic_pathway = simulation.cft.path,
             irrigation = simulation.config.irrigation,
+            irrigation_mode = simulation.config.irrigation_mode,
             manure = simulation.config.manure,
             fertilizer = simulation.config.fertilizer,
             with_tillage = simulation.config.with_tillage,
@@ -590,6 +594,12 @@ function _validate_checkpoint_target(simulation::CropSimulation, checkpoint)
         "restore_checkpoint! requires a newly initialized simulation",
     ))
     metadata = checkpoint.metadata
+    if simulation.config.irrigation
+        saved_mode = hasproperty(metadata, :irrigation_mode) ? metadata.irrigation_mode : :reset
+        saved_mode == simulation.config.irrigation_mode || throw(ArgumentError(
+            "checkpoint irrigation mode is $saved_mode; target simulation uses $(simulation.config.irrigation_mode)",
+        ))
+    end
     checks = (
         ("state schema version", metadata.state_schema_version,
          _MODEL_STATE_SCHEMA_VERSION),

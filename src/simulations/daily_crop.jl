@@ -14,6 +14,7 @@ function _daily_crop!(
     processes::ProcessModules, climate, state::ModelState;
     maize = true,
     irrigation = false,
+    irrigation_mode::Symbol = :surface,
     manure = false,
     fertilizer = :auto,
     with_tillage = true,
@@ -52,9 +53,15 @@ function _daily_crop!(
     fertilizer = fertilizer_mode(fertilizer)
     automatic_fertilizer = fertilizer === :auto
 
-    if water_balance !== nothing && irrigation
-        throw(ArgumentError("water-balance diagnostics currently support rainfed simulations only"))
+    irrigation_mode in (:surface, :reset) || throw(ArgumentError(
+        "irrigation_mode must be :surface or :reset",
+    ))
+    if water_balance !== nothing && irrigation && irrigation_mode === :reset
+        throw(ArgumentError("water-balance diagnostics do not support legacy irrigation reset"))
     end
+    explicit_irrigation = irrigation && irrigation_mode === :surface
+    irrigation_applied = explicit_irrigation ? similar(dailyWeather.prec) : nothing
+    surface_input = explicit_irrigation ? similar(dailyWeather.prec) : nothing
 
     annual_rows = count(
         climate_day -> (climate_day + simulation_day_offset) % 365 == 0,
@@ -233,8 +240,21 @@ function _daily_crop!(
             )
         end
         pedotransfer!(state; lpjmlparams = global_params)
+        if explicit_irrigation
+            surface_irrigation!(
+                irrigation_applied, surface_input, state,
+                dailyWeather.prec, crop_fluxes(state).water.interception,
+                cftparameters,
+            )
+            _write_output_row!(output.soil.irrigation_applied, output_row, irrigation_applied)
+            if water_balance !== nothing
+                @views water_balance.irrigation_applied[diagnostic_day, :] .= irrigation_applied
+            end
+        elseif size(output.soil.irrigation_applied, 1) > 0
+            @views output.soil.irrigation_applied[output_row, :] .= zero(T)
+        end
         soil_infiltration!(
-            state, state, dailyWeather.prec;
+            state, state, explicit_irrigation ? surface_input : dailyWeather.prec;
             snowmelt = soil_snow_fluxes(state).melt,
             air_temperature = dailyWeather.temp,
             lpjmlparams = global_params,
@@ -362,7 +382,7 @@ function _daily_crop!(
             lpjmlparams = global_params,
             lpjml_managed_evaporation = true,
         )
-        soil_evapotranspiration!(state, state; irrigation)
+        soil_evapotranspiration!(state, state; irrigation = irrigation && irrigation_mode === :reset)
         record_ecosystem_flux_outputs!(output, state, state; output_row)
         accumulate_season_process_diagnostics!(output, state, state)
         post_crop_nitrogen_losses!(

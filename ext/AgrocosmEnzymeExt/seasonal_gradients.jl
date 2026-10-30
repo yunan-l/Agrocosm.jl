@@ -11,6 +11,7 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
     context::Agrocosm.ADSeasonContext;
     block_days::Integer = 30,
     irrigation::Bool = false,
+    irrigation_mode::Symbol = :surface,
     nitrogen_limit_vcmax::Bool = false,
     crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat, F}
@@ -42,6 +43,7 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
             nitrogen_limit_vcmax,
             crop_resp_fix,
             pathway,
+            irrigation_mode,
         )
     end
 
@@ -71,6 +73,7 @@ function Agrocosm.enzyme_seasonal_soil_gradient_blockwise(
             Enzyme.Const(nitrogen_limit_vcmax),
             Enzyme.Const(crop_resp_fix),
             Enzyme.Const(pathway),
+            Enzyme.Const(irrigation_mode),
         )
         reverse_primal += result[2]
         gradient .+= block_gradient
@@ -101,6 +104,7 @@ function Agrocosm.enzyme_seasonal_joint_gradient_blockwise(
     context::Agrocosm.ADSeasonContext;
     block_days::Integer = 30,
     irrigation::Bool = false,
+    irrigation_mode::Symbol = :surface,
     nitrogen_limit_vcmax::Bool = false,
     crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat, F}
@@ -140,6 +144,7 @@ function Agrocosm.enzyme_seasonal_joint_gradient_blockwise(
             nitrogen_limit_vcmax,
             crop_resp_fix,
             pathway,
+            irrigation_mode,
         )
     end
 
@@ -173,6 +178,7 @@ function Agrocosm.enzyme_seasonal_joint_gradient_blockwise(
             Enzyme.Const(nitrogen_limit_vcmax),
             Enzyme.Const(crop_resp_fix),
             Enzyme.Const(pathway),
+            Enzyme.Const(irrigation_mode),
         )
         reverse_primal += result[2]
         cft_gradient .+= block_cft_gradient
@@ -226,6 +232,7 @@ function Agrocosm.enzyme_seasonal_gradient_blockwise(
     context::Agrocosm.ADSeasonContext;
     block_days::Integer = 30,
     irrigation::Bool = false,
+    irrigation_mode::Symbol = :surface,
     nitrogen_limit_vcmax::Bool = false,
     crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat, F}
@@ -257,6 +264,7 @@ function Agrocosm.enzyme_seasonal_gradient_blockwise(
             nitrogen_limit_vcmax,
             crop_resp_fix,
             pathway,
+            irrigation_mode,
         )
     end
 
@@ -286,6 +294,7 @@ function Agrocosm.enzyme_seasonal_gradient_blockwise(
             Enzyme.Const(nitrogen_limit_vcmax),
             Enzyme.Const(crop_resp_fix),
             Enzyme.Const(pathway),
+            Enzyme.Const(irrigation_mode),
         )
         reverse_primal += result[2]
         gradient .+= block_gradient
@@ -323,6 +332,7 @@ function Agrocosm.enzyme_daily_transition_objective(
     observable::Symbol,
     layer_depth;
     irrigation::Bool = false,
+    irrigation_mode::Symbol = :surface,
     nitrogen_limit_vcmax::Bool = false,
     crop_resp_fix::Bool = true,
 ) where {T <: AbstractFloat}
@@ -331,7 +341,7 @@ function Agrocosm.enzyme_daily_transition_objective(
     _enzyme_continuous_transition!(
         state, cft, global_parameters, climate, day, observable, layer_depth,
         irrigation, nitrogen_limit_vcmax, crop_resp_fix, nitrogen_limit_vcmax,
-        nothing, pathway,
+        nothing, pathway, Val(:surrogate), irrigation_mode,
     )
     return _daily_transition_observable(state, observable)
 end

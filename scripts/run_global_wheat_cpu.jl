@@ -297,6 +297,7 @@ function create_simulation(initial_data, selection, config, days, device, cft_id
         T = Float32,
         diagnostics,
         irrigation = irrigated,
+        irrigation_mode = Symbol(get(management, "irrigation_mode", "surface")),
         manure = management["manure"],
         fertilizer = Symbol(management["fertilizer"]),
         with_tillage = management["with_tillage"],
@@ -336,6 +337,7 @@ production_output_variables() = [
     OutputVariable(:soil, :ecosystem_respiration; reduction = :sum),
     OutputVariable(:soil, :heterotrophic_respiration; reduction = :sum),
     OutputVariable(:soil, :evapotranspiration; reduction = :sum),
+    OutputVariable(:soil, :irrigation_applied; reduction = :sum),
     OutputVariable(:crop, :lai; reduction = :mean),
     OutputVariable(:crop, :yield),
 ]

@@ -26,7 +26,11 @@ function _enzyme_continuous_transition!(
     weather_controls = nothing,
     pathway = Val(:C3),
     lambda_primal_mode = Val(:surrogate),
+    irrigation_mode::Symbol = :surface,
 )
+    irrigation_mode in (:surface, :reset) || throw(ArgumentError(
+        "irrigation_mode must be :surface or :reset",
+    ))
     T = eltype(Agrocosm.crop_prognostic(state).canopy.lai)
     _enzyme_apply_root_distribution!(state, cft.beta_root)
     model_parameters = _enzyme_model_parameters(T, global_parameters)
@@ -157,10 +161,15 @@ function _enzyme_continuous_transition!(
         Agrocosm.soil_snow_fluxes(state).melt,
     )
     Agrocosm.pedotransfer!(state; lpjmlparams = global_params)
+    infiltration_input = irrigation && irrigation_mode === :surface ?
+        _enzyme_surface_irrigation_input(
+            state, cft, daily_weather.prec,
+            Agrocosm.crop_fluxes(state).water.interception,
+        ) : daily_weather.prec
     Agrocosm.soil_infiltration!(
         state,
         state,
-        daily_weather.prec;
+        infiltration_input;
         snowmelt = Agrocosm.soil_snow_fluxes(state).melt,
         air_temperature = daily_weather.temp,
         lpjmlparams = global_params,
@@ -314,7 +323,9 @@ function _enzyme_continuous_transition!(
         )
     end
     _enzyme_evaporation!(state, pet.eeq, global_params, layer_depth)
-    _enzyme_soil_evapotranspiration!(state; irrigation)
+    _enzyme_soil_evapotranspiration!(
+        state; irrigation = irrigation && irrigation_mode === :reset,
+    )
     Agrocosm.post_crop_nitrogen_losses!(
         state;
         air_temperature = daily_weather.temp,

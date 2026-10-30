@@ -2,9 +2,9 @@
     soil_infiltration!(soil, crop, precipitation)
 
 Apply throughfall infiltration and percolation before the daily plant water-stress calculation.
-Rainfed and full-irrigation simulations share this hydrologic and thermal
-update. Full irrigation differs only later in `soil_evapotranspiration!`,
-where storage is restored to field capacity after evapotranspiration.
+Rainfed and irrigated simulations share this hydrologic and thermal update.
+Explicit surface irrigation enters with precipitation before this call;
+legacy reset irrigation restores storage later in `soil_evapotranspiration!`.
 """
 function soil_infiltration!(soil,
                             crop,
@@ -15,10 +15,8 @@ function soil_infiltration!(soil,
                             thermalparams::SoilThermalParams{T} = SoilThermalParams{T}(),
 ) where {T <: AbstractFloat}
     surface_litter_interception!(soil, prec, crop_fluxes(crop).water.interception)
-    # Full irrigation is an unlimited water-supply boundary condition, not a
-    # separate infiltration physics. Keep rainfall, snowmelt, percolation, and
-    # their enthalpy transport identical to the rainfed path before the later
-    # field-capacity restoration.
+    # The same infiltration, percolation, and enthalpy transport applies to
+    # rainfall and explicitly supplied surface irrigation water.
     transfer_heat = snowmelt !== nothing && air_temperature !== nothing
     if transfer_heat
         infil_perc!(
@@ -48,6 +46,95 @@ function soil_infiltration!(soil,
     end
 
     return nothing
+end
+
+"""
+    surface_irrigation!(applied, water_input, state, precipitation, canopy_interception, cft)
+
+Apply enough surface water to refill the upper 500 mm to field capacity when
+root-weighted plant-available water falls below 0.8 (C3), 0.7 (C4), or
+1.0 (rice). Same-day
+liquid throughfall and snowmelt reduce the requested amount. This is a field-level,
+unlimited-supply approximation, without conveyance losses or irrigation-
+technology-specific physics. Water subsequently follows ordinary infiltration.
+"""
+function surface_irrigation!(applied::AbstractVector{T},
+                             water_input::AbstractVector{T},
+                             state::ModelState, precipitation::AbstractVector{T},
+                             canopy_interception::AbstractVector{T},
+                             cft::CFTParameters) where {T <: AbstractFloat}
+    threshold = cft.name == 2 ? one(T) : cft.path == 2 ? T(0.7) : T(0.8)
+    launch_1D!(
+        surface_irrigation_kernel!, applied, water_input,
+        crop_prognostic(state).phenology.is_growing,
+        soil_water_auxiliary(state).relative_content,
+        crop_root_input(state).distribution,
+        soil_water_prognostic(state).storage,
+        soil_water_prognostic(state).ice_storage,
+        soil_water_auxiliary(state).field_capacity,
+        soil_properties(state).layer_depth,
+        precipitation, canopy_interception, threshold,
+    )
+    return nothing
+end
+
+@inline function surface_irrigation_amount(
+    cell::Integer,
+    is_growing::AbstractVector{S},
+    relative_content::AbstractMatrix{T},
+    root_distribution::AbstractVector{T},
+    storage::AbstractMatrix{T},
+    ice_storage::AbstractMatrix{T},
+    field_capacity::AbstractMatrix{T},
+    layer_depth::AbstractVector{T},
+    precipitation::AbstractVector{T},
+    canopy_interception::AbstractVector{T},
+    threshold::T,
+) where {T <: AbstractFloat, S <: Integer}
+    requested = zero(T)
+    if is_growing[cell] == 1
+        root_water = zero(T)
+        for layer in 1:5
+            root_water += relative_content[layer, cell] * root_distribution[layer]
+        end
+        if root_water < threshold
+            remaining_depth = T(500)
+            for layer in 1:5
+                depth = layer_depth[layer]
+                fraction = min(max(remaining_depth, zero(T)), depth) / depth
+                target = field_capacity[layer, cell] * depth
+                requested += max(target - storage[layer, cell] - ice_storage[layer, cell], zero(T)) * fraction
+                remaining_depth -= depth
+            end
+            throughfall = max(precipitation[cell] - canopy_interception[cell], zero(T))
+            requested = max(requested - throughfall, zero(T))
+        end
+    end
+    return requested
+end
+
+@kernel inbounds = true function surface_irrigation_kernel!(
+    applied::AbstractVector{T},
+    water_input::AbstractVector{T},
+    is_growing::AbstractVector{S},
+    relative_content::AbstractMatrix{T},
+    root_distribution::AbstractVector{T},
+    storage::AbstractMatrix{T},
+    ice_storage::AbstractMatrix{T},
+    field_capacity::AbstractMatrix{T},
+    layer_depth::AbstractVector{T},
+    precipitation::AbstractVector{T},
+    canopy_interception::AbstractVector{T},
+    threshold::T,
+) where {T <: AbstractFloat, S <: Integer}
+    cell = @index(Global)
+    requested = surface_irrigation_amount(
+        cell, is_growing, relative_content, root_distribution,
+        storage, ice_storage, field_capacity, layer_depth,
+        precipitation, canopy_interception, threshold,
+    )
+    applied[cell] = requested
+    water_input[cell] = precipitation[cell] + requested
 end
 
 

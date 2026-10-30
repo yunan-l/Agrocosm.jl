@@ -155,6 +155,31 @@ function _enzyme_partition_soil_water_ice_layer!(water, auxiliary, layer, cell)
     return nothing
 end
 
+function _enzyme_surface_irrigation_input(
+    state::Agrocosm.ModelState,
+    cft::Agrocosm.CFTParameters,
+    precipitation,
+    canopy_interception,
+)
+    T = eltype(precipitation)
+    input = similar(precipitation)
+    threshold = cft.name == 2 ? one(T) : cft.path == 2 ? T(0.7) : T(0.8)
+    water = Agrocosm.soil_water_prognostic(state)
+    auxiliary = Agrocosm.soil_water_auxiliary(state)
+    growing = Agrocosm.crop_prognostic(state).phenology.is_growing
+    roots = Agrocosm.crop_root_input(state).distribution
+    depth = Agrocosm.soil_properties(state).layer_depth
+    for cell in eachindex(precipitation)
+        amount = Agrocosm.surface_irrigation_amount(
+            cell, growing, auxiliary.relative_content, roots,
+            water.storage, water.ice_storage, auxiliary.field_capacity,
+            depth, precipitation, canopy_interception, threshold,
+        )
+        input[cell] = precipitation[cell] + amount
+    end
+    return input
+end
+
 function _enzyme_soil_evapotranspiration!(
     state::Agrocosm.ModelState;
     irrigation::Bool = false,

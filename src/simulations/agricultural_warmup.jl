@@ -450,6 +450,7 @@ function agricultural_warmup!(
     no_output = Set{Tuple{Symbol, Symbol}}()
     common = (
         irrigation = simulation.config.irrigation,
+        irrigation_mode = simulation.config.irrigation_mode,
         manure = simulation.config.manure,
         fertilizer = simulation.config.fertilizer,
         with_tillage = simulation.config.with_tillage,
@@ -613,6 +614,7 @@ function agricultural_warmup!(
     no_output = Set{Tuple{Symbol, Symbol}}()
     common = (
         irrigation = simulation.config.irrigation,
+        irrigation_mode = simulation.config.irrigation_mode,
         manure = simulation.config.manure,
         fertilizer = simulation.config.fertilizer,
         with_tillage = simulation.config.with_tillage,

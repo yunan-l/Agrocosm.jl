@@ -36,6 +36,7 @@ mutable struct SoilOutput{A, M}
     slow_nitrogen::M           # Slow soil-organic-nitrogen stock by layer (gN m⁻²).
     heterotrophic_respiration::A # Litter and soil respiration (gC m⁻² day⁻¹).
     evapotranspiration::A      # Total land-surface ET: canopy interception, litter/soil evaporation, and crop transpiration (mm day⁻¹).
+    irrigation_applied::A      # Explicit surface irrigation entering the soil/surface-litter pathway (mm day⁻¹).
 end
 
 """Time-series outputs for climate forcing and potential evaporation."""
@@ -88,6 +89,7 @@ const _DAILY_CROP_FLOAT_OUTPUT_FIELDS = (
 const _DAILY_CROP_INTEGER_OUTPUT_FIELDS = (:growing_mask,)
 const _DAILY_SOIL_FLOAT_OUTPUT_FIELDS = (
     :ecosystem_respiration, :heterotrophic_respiration, :evapotranspiration,
+    :irrigation_applied,
 )
 const _DAILY_CALENDAR_INTEGER_OUTPUT_FIELDS = (
     :harvesting_mask, :sowing_event, :harvest_event,
@@ -136,7 +138,7 @@ function init_output(::Type{T},
         device(zeros(T, 0, litc_layers * cell_size)),
         device(zeros(T, 0, soil_layers * cell_size)),
         device(zeros(T, 0, soil_layers * cell_size)),
-        scalar_output(), scalar_output(),
+        scalar_output(), scalar_output(), scalar_output(),
     )
 
     climate = ClimateOutput(scalar_output(), scalar_output(), scalar_output())

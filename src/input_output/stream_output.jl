@@ -22,7 +22,8 @@ function OutputVariable(group::Symbol, field::Symbol; reduction::Union{Nothing, 
     output_variable_spec(group, field)
     default_reduction = field in (
         :gpp, :npp, :respiration, :ecosystem_respiration,
-        :heterotrophic_respiration, :evapotranspiration, :sowing_event, :harvest_event,
+        :heterotrophic_respiration, :evapotranspiration, :irrigation_applied,
+        :sowing_event, :harvest_event,
     ) ?
         :sum : field in (:biomass, :storage_carbon, :growing_mask, :harvesting_mask) ?
         :last : :mean
