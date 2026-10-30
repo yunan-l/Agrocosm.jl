@@ -29,6 +29,10 @@ using Test
     @test position("soil_temperature!") < position("soil_cn_decomposition!")
     @test position("soil_cn_decomposition!") < position("nitrogen_deposition!") <
           phenology_position
+    @test position("nitrogen_deposition!") < position("fertilizer!") <
+          position("record_carbon_balance_after_cultivate!") < phenology_position
+    @test occursin("defer_second_fertilizer = true", source)
+    @test occursin("surface_second_manure = true", source)
     litter_refreshes = findall(r"(?m)^        update_surface_litter_properties!\(", source)
     @test length(litter_refreshes) == 2
     if length(litter_refreshes) == 2
@@ -67,6 +71,44 @@ using Test
           position("soil_evapotranspiration!") < position("post_crop_nitrogen_losses!")
 end
 
+@testset "Second fertilizer dose and carbon balance in both nitrogen modes" begin
+    for nitrogen_limit_vcmax in (false, true)
+        initial = lifecycle_initial_data(Float32)
+        initial.ModelState.crop.sdate .= 1
+        initial.ModelState.crop.phu .= 100.0f0
+        initial.ModelState.crop.manure .= 10.0f0
+        simulation = initialize_simulation(
+            cft1, initial;
+            T = Float32, days = 30, diagnostics = true,
+            fertilizer = :yes, manure = true, nitrogen_limit_vcmax,
+        )
+        base = simulation.model_parameters
+        parameters = Agrocosm.ModelParameters{Float32}(
+            Agrocosm.LPJmLParams{Float32}(manure_cn = 14.0f0, atmfrac = 0.3f0),
+            base.photosynthesis, base.snow, base.soil_thermal, base.soil_decomposition,
+        )
+        simulation.processes = Agrocosm.ProcessModules(simulation.cft, parameters)
+        run_simulation!(simulation, lifecycle_climate(Float32, 30); spinup = false)
+
+        nitrogen = simulation.nitrogen_balance
+        carbon = simulation.carbon_balance
+        fertilizer_days = findall(!iszero, vec(nitrogen.prescribed_fertilizer_input))
+        manure_days = findall(!iszero, vec(nitrogen.prescribed_manure_input))
+        @test length(fertilizer_days) == 2
+        @test fertilizer_days == manure_days
+        @test sum(nitrogen.prescribed_fertilizer_input) ≈ 20.0f0
+        @test sum(nitrogen.prescribed_manure_input) ≈ 10.0f0
+        @test carbon.manure_input[:, 1] ≈
+              14.0f0 .* nitrogen.prescribed_manure_input[:, 1]
+        final_litter_decomposition = sum(
+            Agrocosm.soil_carbon_fluxes(simulation.state).decomposed_litter,
+        )
+        @test final_litter_decomposition > 0.0f0
+        @test carbon.litter_respiration[30, 1] ≈
+              0.3f0 * final_litter_decomposition
+    end
+end
+
 @testset "Enzyme daily path refreshes litter after decomposition" begin
     source = read(joinpath(
         @__DIR__, "..", "..", "ext", "AgrocosmEnzymeExt", "continuous_transition.jl",
@@ -79,4 +121,5 @@ end
         deposition = findfirst(r"(?m)^        Agrocosm\.nitrogen_deposition!\(", source)
         @test first(decomposition) < first(litter_refreshes[2]) < first(deposition)
     end
+    @test !occursin("if apply_prescribed_inputs && nitrogen_limit_vcmax", source)
 end

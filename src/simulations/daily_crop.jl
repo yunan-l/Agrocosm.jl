@@ -116,17 +116,13 @@ function _daily_crop!(
             state, managed_land, state, day_of_year;
             manure,
             apply_prescribed_fertilizer = fertilizer === :yes,
-            defer_second_fertilizer = nitrogen_limit_vcmax,
+            defer_second_fertilizer = true,
             prescribed_phu,
             prescribed_winter_type,
             cftparameters = cftparameters,
             lpjmlparams = global_params,
             laimax = cftparameters.laimax,
         )
-        if carbon_balance !== nothing
-            record_carbon_balance_after_cultivate!(carbon_balance, diagnostic_day, state)
-        end
-
         if with_tillage
             litter_tillage!(state, state)
             tillage_hydraulics!(state, state; lpjmlparams = global_params)
@@ -167,17 +163,20 @@ function _daily_crop!(
                 state, dailyWeather.no3_deposition, dailyWeather.nh4_deposition,
             )
         end
-        if nitrogen_limit_vcmax
-            # LPJmL applies the second fertilizer/manure dose after today's
-            # litter/SOM turnover and atmospheric deposition, before uptake.
-            fertilizer!(
-                state, managed_land, state, day_of_year;
-                fertilizer = fertilizer === :yes,
-                manure,
-                apply_sowing_dose = false,
-                surface_second_manure = nitrogen_limit_vcmax,
-                reset_inputs = false,
-                lpjmlparams = global_params,
+        # LPJmL applies the second fertilizer/manure dose after today's
+        # litter/SOM turnover and atmospheric deposition, before uptake.
+        fertilizer!(
+            state, managed_land, state, day_of_year;
+            fertilizer = fertilizer === :yes,
+            manure,
+            apply_sowing_dose = false,
+            surface_second_manure = true,
+            reset_inputs = false,
+            lpjmlparams = global_params,
+        )
+        if carbon_balance !== nothing
+            record_carbon_balance_after_cultivate!(
+                carbon_balance, diagnostic_day, state; lpjmlparams = global_params,
             )
         end
         c_shift_response_sum === nothing ||
@@ -404,7 +403,10 @@ function _daily_crop!(
             )
         end
         if carbon_balance !== nothing
-            record_carbon_balance_end!(carbon_balance, diagnostic_day, state, state)
+            record_carbon_balance_end!(
+                carbon_balance, diagnostic_day, state, state;
+                lpjmlparams = global_params,
+            )
         end
         # All process kernels for a day share the current backend stream. Wait
         # once at the lifecycle boundary so callers observe a completed daily

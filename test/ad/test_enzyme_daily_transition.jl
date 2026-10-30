@@ -282,6 +282,8 @@ end
         @test getproperty(Agrocosm.crop_fluxes(ad_state).nitrogen, field) ≈
             getproperty(Agrocosm.crop_fluxes(production_state).nitrogen, field)
     end
+    @test Agrocosm.soil_carbon_prognostic(ad_state).litter[1, 1] ≈
+          Agrocosm.soil_carbon_prognostic(production_state).litter[1, 1]
     @test all(iszero, Agrocosm.crop_prognostic(ad_state).nitrogen.pending_fertilizer)
     @test all(iszero, Agrocosm.crop_prognostic(ad_state).nitrogen.pending_manure)
     @test all(iszero, Agrocosm.crop_events(ad_state).sowing)
@@ -546,6 +548,8 @@ end
         deferred_fertilizer
     @test only(Agrocosm.crop_fluxes(production_state).nitrogen.prescribed_manure_input) ≈ 4.0f0
     @test only(Agrocosm.crop_fluxes(enzyme_state).nitrogen.prescribed_manure_input) ≈ 4.0f0
+    @test Agrocosm.soil_carbon_prognostic(enzyme_state).litter[1, 1] ≈
+          Agrocosm.soil_carbon_prognostic(production_state).litter[1, 1]
 
     state_factory() = begin
         state = deepcopy(template.state)

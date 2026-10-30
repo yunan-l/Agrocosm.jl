@@ -57,15 +57,15 @@ function _enzyme_continuous_transition!(
         day;
         update_vernalization_requirement = false,
     )
-    # cultivate! resets the daily input fluxes and, without N-limited Vcmax,
-    # applies a pending second dose before soil decomposition.
+    # Match cultivate!'s daily input-flux reset; the second dose is applied
+    # after decomposition in both nitrogen modes.
     if apply_prescribed_inputs
         Agrocosm.fertilizer!(
             state, managed_land, state, day;
-            fertilizer = !nitrogen_limit_vcmax,
-            manure = !nitrogen_limit_vcmax,
+            fertilizer = false,
+            manure = false,
             apply_sowing_dose = false,
-            apply_second_dose = !nitrogen_limit_vcmax,
+            apply_second_dose = false,
             reset_inputs = true,
             lpjmlparams = global_params,
         )
@@ -110,10 +110,9 @@ function _enzyme_continuous_transition!(
             daily_weather.nh4_deposition,
         )
     end
-    if apply_prescribed_inputs && nitrogen_limit_vcmax
-        # Standard nitrogen-limited trajectories carry the fixed second dose
-        # in state; management-adaptation objectives inject their own pulses
-        # and explicitly disable this event.
+    if apply_prescribed_inputs
+        # Fixed-event trajectories carry the prescribed second dose in state;
+        # management-adaptation objectives inject their own pulses and disable it.
         Agrocosm.fertilizer!(
             state, managed_land, state, weather_controls === nothing ? day : mod1(day, 365);
             fertilizer = true,
