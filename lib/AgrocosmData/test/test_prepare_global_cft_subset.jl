@@ -137,6 +137,47 @@ include(joinpath(@__DIR__, "..", "scripts", "prepare_global_cft_subset.jl"))
         prepare_subset(management_only_config)
         @test isfile(joinpath(directory, "management_only", "phu_24cfts.nc"))
 
+        landuse_64_path = joinpath(directory, "landuse_64.nc")
+        NCDataset(landuse_64_path, "c") do dataset
+            defDim(dataset, "pft", 64)
+            defDim(dataset, "time", 2)
+            defDim(dataset, "cell", 1)
+            defVar(dataset, "pft", Int32.(1:64), ("pft",))
+            defVar(dataset, "time", Int32[2015, 2016], ("time",))
+            values = zeros(Float32, 64, 2, 1)
+            values[1, :, 1] .= Float32[0.4, 0.35]
+            values[17, :, 1] .= Float32[0.1, 0.15]
+            values[33, :, 1] .= Float32[0.2, 0.05]
+            values[49, :, 1] .= Float32[0.3, 0.1]
+            defVar(dataset, "landfrac", values, ("pft", "time", "cell"))
+        end
+        landuse_config = joinpath(directory, "landuse_aggregation.toml")
+        open(landuse_config, "w") do output
+            TOML.print(output, Dict(
+                "subset" => Dict(
+                    "output_directory" => joinpath(directory, "landuse_aggregated"),
+                    "management_years" => "all",
+                    "chunk_length" => 1,
+                ),
+                "management" => Dict(
+                    "landuse" => Dict(
+                        "input" => landuse_64_path,
+                        "output" => "landuse_24.nc",
+                        "variable" => "landfrac",
+                        "cft_indices" => vcat(collect(1:12), collect(17:28)),
+                        "irrigation_system_band_offsets" => [0, 16, 32],
+                    ),
+                ),
+            ))
+        end
+        prepare_subset(landuse_config)
+        NCDataset(joinpath(directory, "landuse_aggregated", "landuse_24.nc"), "r") do dataset
+            @test size(dataset["landfrac"]) == (24, 2, 1)
+            @test vec(dataset["landfrac"][1, :, 1]) == Float32[0.4, 0.35]
+            @test vec(dataset["landfrac"][13, :, 1]) ≈ Float32[0.6, 0.3]
+            @test split(dataset.attrib["agrocosm_source_cft_groups"], ";")[13] == "17,33,49"
+        end
+
         climate_path = joinpath(directory, "climate.nc")
         time_values = Int32.(0:729)
         NCDataset(climate_path, "c") do dataset

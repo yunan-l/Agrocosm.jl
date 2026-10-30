@@ -112,7 +112,8 @@ function define_subset_variable!(destination, source, name, selections)
     return output
 end
 
-function copy_main_variable!(destination, source, name, selections; chunk_length::Integer)
+function copy_main_variable!(destination, source, name, selections;
+                             chunk_length::Integer, cft_groups = nothing)
     source_variable = variable(source, name)
     dimensions = String.(dimnames(source_variable))
     output = defVar(
@@ -120,6 +121,27 @@ function copy_main_variable!(destination, source, name, selections; chunk_length
         attrib = attributes(source_variable), deflatelevel = 1, shuffle = true,
     )
     time_position = findfirst(dimension -> dimension_kind(dimension) === :time, dimensions)
+    if !isnothing(cft_groups)
+        cft_position = findfirst(dimension -> dimension_kind(dimension) === :cft, dimensions)
+        selected_time = isnothing(time_position) ? nothing : selections[dimensions[time_position]]
+        time_chunks = isnothing(time_position) ? (nothing,) :
+            (first:min(first + chunk_length - 1, length(selected_time))
+             for first in 1:chunk_length:length(selected_time))
+        for output_time in time_chunks, (output_band, source_bands) in pairs(cft_groups)
+            source_indices = ntuple(length(dimensions)) do position
+                position == cft_position ? source_bands :
+                position == time_position ? selected_time[output_time] :
+                selections[dimensions[position]]
+            end
+            output_indices = ntuple(length(dimensions)) do position
+                position == cft_position ? (output_band:output_band) :
+                position == time_position ? output_time :
+                1:length(selections[dimensions[position]])
+            end
+            output[output_indices...] = sum(source_variable[source_indices...]; dims = cft_position)
+        end
+        return output
+    end
     if isnothing(time_position)
         source_indices = ntuple(position -> selections[dimensions[position]], length(dimensions))
         output_indices = ntuple(position -> 1:length(source_indices[position]), length(dimensions))
@@ -148,6 +170,7 @@ function subset_netcdf(
     variable_name::AbstractString;
     cft_index::Union{Nothing, Integer} = nothing,
     cft_indices::Union{Nothing, AbstractVector{<:Integer}} = nothing,
+    cft_groups::Union{Nothing, AbstractVector{<:AbstractVector{<:Integer}}} = nothing,
     years::Union{Nothing, AbstractVector{<:Integer}} = nothing,
     require_365_days::Bool = true,
     daily_source_start_year::Union{Nothing, Integer} = nothing,
@@ -181,6 +204,18 @@ function subset_netcdf(
                 throw(BoundsError(selections[cft_dimension], selected_cft_indices))
             selections[cft_dimension] = selected_cft_indices
         end
+        if !isnothing(cft_groups)
+            isnothing(selected_cft_indices) && throw(ArgumentError(
+                "cft_groups requires cft_indices",
+            ))
+            length(cft_groups) == length(selected_cft_indices) || throw(ArgumentError(
+                "cft_groups must contain one group per output CFT",
+            ))
+            all(group -> !isempty(group) && all(
+                index -> 1 <= index <= size(source[variable_name],
+                    findfirst(==(cft_dimension), dimensions)), group,
+            ), cft_groups) || throw(ArgumentError("cft_groups contains an empty or invalid source band"))
+        end
         if !isnothing(years)
             time_dimension, time_indices = isnothing(daily_source_start_year) ?
                 indices_for_years(source, variable_name, years; require_365_days) :
@@ -197,6 +232,10 @@ function subset_netcdf(
             destination.attrib["agrocosm_subset_variable"] = variable_name
             !isnothing(selected_cft_indices) &&
                 (destination.attrib["agrocosm_source_cft_indices"] = join(selected_cft_indices, ","))
+            !isnothing(cft_groups) &&
+                (destination.attrib["agrocosm_source_cft_groups"] = join(
+                    (join(group, ",") for group in cft_groups), ";",
+                ))
             !isnothing(years) &&
                 (destination.attrib["agrocosm_selected_years"] = join(years, ","))
 
@@ -212,7 +251,7 @@ function subset_netcdf(
                     (destination[dimension][:] = collect(1:length(selected_cft_indices)))
             end
             copy_main_variable!(
-                destination, source, variable_name, selections; chunk_length,
+                destination, source, variable_name, selections; chunk_length, cft_groups,
             )
         end
     end
@@ -290,11 +329,27 @@ function prepare_subset(config_path::AbstractString)
             "management.$name cft_indices must contain $expected_count entries",
         ))
         input_path = resolve_path(config_path, spec["input"])
+        cft_groups = if name == "landuse" && haskey(spec, "irrigation_system_band_offsets")
+            offsets = Int.(spec["irrigation_system_band_offsets"])
+            !isempty(offsets) && first(offsets) == 0 &&
+                all(>=(0), offsets) && length(unique(offsets)) == length(offsets) ||
+                throw(ArgumentError(
+                    "management.landuse irrigation_system_band_offsets must start at 0 " *
+                    "and contain distinct non-negative offsets",
+                ))
+            vcat(
+                [[index] for index in source_cft_indices[1:12]],
+                [[index + offset for offset in offsets] for index in source_cft_indices[13:24]],
+            )
+        else
+            nothing
+        end
         subset_netcdf(
             input_path,
             joinpath(output_directory, spec["output"]),
             spec["variable"];
             cft_indices = source_cft_indices,
+            cft_groups,
             years = management_years(
                 input_path, spec["variable"], management_year_selection,
             ),

@@ -11,6 +11,10 @@ input = "/path/to/cft_default_cft_aggregation_30min_1500-2017_fallow_to_others_6
 output = "landuse_24cfts_1500-2017.nc"
 variable = "landfrac"
 cft_indices = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28]
+# Raw 64-band LPJmL land use stores irrigated areas in surface, sprinkler,
+# and drip blocks (16 bands each). Combine their areas for Agrocosm's single
+# irrigated-land approximation; this does not model sprinkler or drip physics.
+irrigation_system_band_offsets = [0, 16, 32]
 
 [management.fertilizer]
 input = "/path/to/fert_N_default_cft_aggregation_30min_1860-2017.nc"
