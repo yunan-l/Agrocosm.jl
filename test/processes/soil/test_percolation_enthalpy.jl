@@ -65,6 +65,33 @@ end
         @test abs(soil.thermal.percolation_energy_residual[1]) < 1.0f0
     end
 
+    @testset "immediate runoff from frozen soil carries incoming enthalpy" begin
+        @test Agrocosm.compute_liquid_water_enthalpy(
+            -5.0f0, soil_thermal_params.water_heat_capacity,
+            soil_thermal_params.volumetric_fusion_heat,
+        ) == soil_thermal_params.volumetric_fusion_heat
+        soil, crop, state = initialized_thermal_soil(
+            storage = fill(60.0f0, 5),
+        )
+        for _ in 1:10
+            soil_temperature!(state, Float32[-20.0], Float32[-2.0])
+        end
+        @test soil.thermal.temperature[1, 1] < 0.0f0
+        temperature_before = soil.thermal.temperature[1, 1]
+
+        soil_infiltration!(
+            state, state, Float32[10.0];
+            snowmelt = Float32[0.0], air_temperature = Float32[5.0],
+        )
+
+        lateral_water = soil.water.lateral_runoff[1, 1]
+        @test lateral_water > 0.0f0
+        @test lateral_water ≈ soil.water.influx[1, 1] atol = 1.0f-5
+        @test soil.thermal.lateral_runoff_energy_output[1] ≈
+              soil.thermal.rain_energy_input[1] rtol = 1.0f-6
+        @test soil.thermal.temperature[1, 1] ≈ temperature_before atol = 1.0f-4
+    end
+
     @testset "layer transfers cancel and boundary ledger closes" begin
         soil, crop, state = initialized_thermal_soil(
             storage = Float32[160, 240, 480, 800, 1600],

@@ -142,7 +142,6 @@ function infil_perc!(soil,
         soil_infil_litter = T(lpjmlparams.soil_infil_litter),
         percthres = T(lpjmlparams.percthres),
         water_heat_capacity = T(thermalparams.water_heat_capacity),
-        ice_heat_capacity = T(thermalparams.ice_heat_capacity),
         volumetric_fusion_heat = T(thermalparams.volumetric_fusion_heat),
         soil_layers = 5,
         NPERCO = T(lpjmlparams.NPERCO),
@@ -207,20 +206,16 @@ surface runoff in the calling kernel.
 end
 
 """
-    compute_liquid_water_enthalpy(temperature, water_heat_capacity,
-                                  ice_heat_capacity, fusion_heat)
+    compute_liquid_water_enthalpy(temperature, water_heat_capacity, fusion_heat)
 
-Return volumetric enthalpy transported by water leaving a soil layer. Liquid
-water above freezing carries fusion heat plus sensible heat; frozen material
-uses the ice heat capacity, matching the existing percolation-energy ledger.
+Return volumetric enthalpy transported by liquid runoff or percolation. Water
+leaving a frozen layer remains liquid in the water ledger, so its outflow cannot
+carry ice-phase enthalpy. Use 0 °C as the lower outflow temperature.
 """
 @inline function compute_liquid_water_enthalpy(temperature::T,
                                                water_heat_capacity::T,
-                                               ice_heat_capacity::T,
                                                fusion_heat::T) where {T <: AbstractFloat}
-    return temperature >= zero(T) ?
-        fusion_heat + water_heat_capacity * temperature :
-        ice_heat_capacity * temperature
+    return fusion_heat + water_heat_capacity * max(temperature, zero(T))
 end
 
 """
@@ -330,7 +325,7 @@ end
 
     @unpack soil_layers, NPERCO, transfer_heat,
             soil_infil, soil_infil_litter, percthres,
-            water_heat_capacity, ice_heat_capacity, volumetric_fusion_heat = kernel_params
+            water_heat_capacity, volumetric_fusion_heat = kernel_params
     anion_excl = M(soil_anion_exclusion[cell])
 
     freewater = zero(T)
@@ -422,8 +417,7 @@ end
             soil_w_fw[l, cell] = zero(T)
 
             layer_volumetric_enthalpy = compute_liquid_water_enthalpy(
-                soil_temperature[l, cell], water_heat_capacity, ice_heat_capacity,
-                volumetric_fusion_heat,
+                soil_temperature[l, cell], water_heat_capacity, volumetric_fusion_heat,
             )
 
             # Handle lateral runoff of water above saturation
@@ -446,7 +440,13 @@ end
             end
 
             if transfer_heat && lrunoff > zero(T)
-                runoff_energy = lrunoff * T(0.001) * layer_volumetric_enthalpy
+                # Water rejected on entry retains its incoming enthalpy; only
+                # runoff drawn from stored soil water carries layer enthalpy.
+                incoming_runoff = min(lrunoff, layer_influx)
+                runoff_energy = T(0.001) * (
+                    incoming_runoff * incoming_volumetric_enthalpy +
+                    (lrunoff - incoming_runoff) * layer_volumetric_enthalpy
+                )
                 soil_perc_energy[l, cell] -= runoff_energy
                 lateral_energy_output[cell] += runoff_energy
             end
