@@ -458,7 +458,8 @@ end
                 if l < soil_layers
                     saturation_factor = 1 - (soil_w[l+1, cell] * soil_whcs[l+1, cell] + soil_w_fw[l+1, cell] + soil_ice_available[l+1, cell] + soil_ice_free[l+1, cell]) / (soil_wsats[l+1, cell] - soil_wpwps[l+1, cell])
                 else
-                    saturation_factor = 1 - (soil_w[l, cell] * soil_whcs[l, cell] + soil_w_fw[l, cell] + soil_ice_available[l, cell] + soil_ice_free[l, cell]) / (soil_wsats[l, cell] - soil_wpwps[l, cell])
+                    # No receiving layer below the modeled column: free drainage.
+                    saturation_factor = one(M)
                 end
                 saturation = (soil_w[l, cell] * soil_whcs[l, cell] + soil_wpwps[l, cell] +
                     soil_ice_available[l, cell] + soil_ice_free[l, cell]) / soil_wsats[l, cell]

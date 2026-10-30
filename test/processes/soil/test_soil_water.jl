@@ -11,6 +11,30 @@ using Test
     @test high > medium > 0.0f0
 end
 
+@testset "Five-layer bottom boundary drains saturated soil" begin
+    soil = init_soil(1, soilparams.soildepth, identity)
+    crop = init_crop(1, identity)
+    state = test_model_state(crop, soil)
+
+    soil.properties.sand_fraction .= 0.4f0
+    soil.properties.clay_fraction .= 0.2f0
+    pedotransfer!(state)
+    soil.water.storage .= soil.water.wilting_storage .+ soil.water.holding_capacity_storage
+    soil.water.storage[5, 1] = soil.water.saturation_storage[5, 1]
+    soil.nitrogen.nitrate[5, 1] = 10.0f0
+    Agrocosm.partition_soil_water_ice!(state)
+
+    water_before = sum(soil.water.storage)
+    nitrate_before = sum(soil.nitrogen.nitrate)
+    soil_infiltration!(state, state, Float32[0.0])
+
+    @test soil.water.bottom_drainage[1] > 0.0f0
+    @test soil.nitrogen.leaching[1] > 0.0f0
+    @test sum(soil.water.storage) + soil.water.bottom_drainage[1] +
+          soil.water.surface_runoff[1] + sum(soil.water.lateral_runoff) ≈ water_before atol = 1.0f-4
+    @test sum(soil.nitrogen.nitrate) + soil.nitrogen.leaching[1] ≈ nitrate_before atol = 1.0f-4
+end
+
 @testset "Staged daily soil-water update" begin
     soil = init_soil(1, soilparams.soildepth, identity)
     crop = init_crop(1, identity)
