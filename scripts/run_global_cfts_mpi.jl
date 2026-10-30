@@ -215,7 +215,7 @@ function run_global_cfts_mpi(
     configured_output = abspath(config["paths"]["output_directory"])
     mpi_config = get(config, "mpi", Dict{String, Any}())
     output_base = abspath(get(mpi_config, "output_directory", configured_output))
-    cleanup_rank_outputs = Bool(get(mpi_config, "cleanup_rank_outputs", false))
+    cleanup_rank_outputs = Bool(get(mpi_config, "cleanup_rank_outputs", true))
     scoped_output = isnothing(cft_id) ? output_base :
         joinpath(output_base, "batches", batch_name(cft_id, irrigated))
     output_root = joinpath(scoped_output, "mpi_$(lpad(count, 4, '0'))_ranks")
