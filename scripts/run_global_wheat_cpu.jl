@@ -14,6 +14,50 @@ import .AgrocosmData: CFTRegistry, DATA_SCHEMA_VERSION, DatasetCatalog, DatasetS
     read_climate_block, read_grid, read_management, read_soil_cn_targets,
     read_soil_data, read_soil_pool_allocation, select_cells, write_soil_pool_allocation
 
+const _GLOBAL_CONFIG_KEYS = (
+    "paths" => (
+        "input_directory", "output_directory", "hwsd_targets", "hwsd_profile_directory",
+        "pool_allocation", "agrocosm_repository", "allocation_root", "cft_result_root",
+        "rice_cft_result_root", "soil_result",
+    ),
+    "climate" => (
+        "temperature_file", "precipitation_file", "longwave_file", "shortwave_file",
+        "wind_file", "wind_variable", "co2_file", "no3_deposition_file",
+        "no3_deposition_variable", "nh4_deposition_file", "nh4_deposition_variable",
+        "nitrogen_deposition_mode", "nitrogen_deposition_fixed_year", "tasmax_file",
+        "tasmax_variable", "tasmin_file", "tasmin_variable",
+    ),
+    "management" => (
+        "mode", "fixed_year", "fertilizer", "manure", "with_tillage", "sowing_mode",
+        "irrigation_mode", "landuse_file", "sowing_date_file", "phu_file",
+        "fertilizer_file", "manure_file", "residue_fraction_file",
+    ),
+    "run" => (
+        "backend", "device_id", "production", "calibration_only", "cell_limit",
+        "crop_resp_fix", "nitrogen_limit_vcmax", "diagnostic_cells",
+        "memory_safety_factor", "simulation_start_year", "simulation_end_year",
+        "warmup_climate_start_year", "warmup_climate_end_year", "warmup_cache_climate",
+        "warmup_years", "warmup_minimum_years", "warmup_maximum_years",
+        "warmup_target_constrained", "warmup_consecutive_years",
+        "warmup_relative_tolerance", "warmup_pool_fraction_tolerance",
+        "warmup_required_converged_fraction", "require_warmup_convergence",
+        "resume_completed_batches", "output_start_year", "pool_allocation_cell_policy",
+        "allow_mixed_cft_profiles", "exclude_rock_ice_soils",
+    ),
+)
+
+function validate_global_config(config)
+    for (name, allowed) in _GLOBAL_CONFIG_KEYS
+        section = get(config, name, nothing)
+        isnothing(section) && continue
+        section isa AbstractDict || throw(ArgumentError("[$name] must be a TOML table"))
+        for key in keys(section)
+            key in allowed || throw(ArgumentError("unknown [$name] option: $key"))
+        end
+    end
+    return nothing
+end
+
 function execution_backend(config; override = nothing)
     configured = Symbol(lowercase(String(get(config["run"], "backend", "cpu"))))
     backend = isnothing(override) ? configured : Symbol(override)
@@ -520,6 +564,7 @@ function run_global_wheat(
     warmup_convergence_reducer = nothing,
 )
     config = TOML.parsefile(config_path)
+    validate_global_config(config)
     paths = config["paths"]
     run = config["run"]
     production_enabled = Bool(get(run, "production", true)) &&

@@ -149,6 +149,7 @@ function run_global_cfts(
     resume_consensus = nothing,
 )
     config = TOML.parsefile(config_path)
+    validate_global_config(config)
     haskey(config["paths"], "pool_allocation") && error(
         "the CFT workflow derives one CFT- and water-system-specific allocation per batch; " *
         "do not set paths.pool_allocation in the shared configuration",

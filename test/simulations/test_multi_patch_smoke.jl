@@ -1,6 +1,19 @@
 include(joinpath(@__DIR__, "..", "..", "scripts", "run_global_cfts_cpu.jl"))
 
 @testset "multi-CFT patch selection, state isolation, and batch configuration" begin
+    example_config = TOML.parsefile(joinpath(
+        @__DIR__, "..", "..", "scripts", "global_wheat_cpu.example.toml",
+    ))
+    @test validate_global_config(example_config) === nothing
+    @test_throws ArgumentError validate_global_config(Dict(
+        "run" => Dict("nitrogen_limit_vcmx" => true),
+    ))
+    @test_throws ArgumentError validate_global_config(Dict(
+        "climate" => Dict("no3_depositon_file" => "missing.nc"),
+    ))
+    @test_throws ArgumentError validate_global_config(Dict(
+        "management" => Dict("with_tilage" => true),
+    ))
     high_throughput_closure = percolation_energy_closure(
         Float32[10], Float32[2.0e6], Float32[0], Float32[0], Float32[0];
         absolute_tolerance = 5.0f0, relative_tolerance = 5.0f-6,

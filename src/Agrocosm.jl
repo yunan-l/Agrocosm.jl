@@ -20,7 +20,7 @@ import MuladdMacro: @muladd
 
 # STRUCTURES
 export LPJmLParams, CFTParameters, PhotoParams, ModelParameters, PetPar, Output
-export DailyWeather, ClimBuf, CO2
+export DailyWeather, ClimBuf
 export Crop, CropState, CropFluxes, CropAuxiliary, CropWorkspace
 export crop_restart_payload
 export CropPhenology, CropCarbonState, CropNitrogenState, CropWaterState
@@ -85,7 +85,7 @@ export litter_tillage!, tillage_hydraulics!, litter_bioturbation!
 export deg2rad, ppm2Pa, ppm2bar, hour2day, hour2sec, degCtoK
 
 # DATA
-export InitialDataLoader, ClimateDataLoader, DataLoader, DataLoader_winter_wheat
+export InitialDataLoader, ClimateDataLoader
 export field_capacity_water, soil_initial_state, model_initial_data
 export write_output_nc
 export OutputVariable, OutputChunk, OutputStream

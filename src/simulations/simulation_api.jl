@@ -506,7 +506,7 @@ function run_simulation!(
     return simulation
 end
 
-const _CHECKPOINT_FORMAT_VERSION = 8
+const _CHECKPOINT_FORMAT_VERSION = 9
 const _MODEL_STATE_SCHEMA_VERSION = 4
 
 _checkpoint_snapshot(values::AbstractArray) = Array(values)
@@ -574,6 +574,7 @@ function _simulation_checkpoint(simulation::CropSimulation)
             with_tillage = simulation.config.with_tillage,
             crop_resp_fix = simulation.config.crop_resp_fix,
             nitrogen_limit_vcmax = simulation.config.nitrogen_limit_vcmax,
+            freeze_vernalization_requirement = simulation.config.freeze_vernalization_requirement,
             sowing_mode = simulation.config.sowing_mode,
             parameter_fingerprint = _checkpoint_fingerprint((
                 cft = simulation.cft,
@@ -645,6 +646,8 @@ function _validate_checkpoint_target(simulation::CropSimulation, checkpoint)
          simulation.config.crop_resp_fix),
         ("nitrogen Vcmax limitation", metadata.nitrogen_limit_vcmax,
          simulation.config.nitrogen_limit_vcmax),
+        ("frozen vernalization requirement", metadata.freeze_vernalization_requirement,
+         simulation.config.freeze_vernalization_requirement),
         ("sowing mode", metadata.sowing_mode, simulation.config.sowing_mode),
         ("parameter fingerprint", metadata.parameter_fingerprint,
          _checkpoint_fingerprint((
@@ -708,6 +711,10 @@ function simulation_summary(simulation::CropSimulation)
         "run the simulation before requesting its summary",
     ))
     npp = _simulation_host(simulation.output.crop.npp)
+    isempty(npp) && throw(ArgumentError(
+        "simulation_summary requires retained time-series output; " *
+        "streamed simulations do not retain those arrays",
+    ))
     lai = _simulation_host(simulation.output.crop.lai)
     biomass = _simulation_host(simulation.output.crop.biomass)
     water = simulation.water_balance

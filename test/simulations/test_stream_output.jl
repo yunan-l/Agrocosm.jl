@@ -87,6 +87,7 @@ end
     ))
               for chunk in daily_chunks)
     @test Agrocosm._output_timeseries_empty(streamed.output)
+    @test_throws ArgumentError simulation_summary(streamed)
 
     diagnostic_simulation = initialize_simulation(
         cft1, initial;

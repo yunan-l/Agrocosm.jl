@@ -561,9 +561,12 @@ end
         windspeed = vcat(first_block.windspeed, second_block.windspeed),
         co2 = Float32[400],
     )
-    create(days = 4; cell_ids = [101]) = initialize_simulation(
+    create(days = 4;
+           cell_ids = [101],
+           freeze_vernalization_requirement = false) = initialize_simulation(
         cft1, initial;
         indices = [1], cell_ids, T = Float32, days = days, fertilizer = :yes,
+        freeze_vernalization_requirement,
     )
 
     reference = create()
@@ -605,8 +608,11 @@ end
         wrong_domain = create(; cell_ids = [202])
         @test_throws ArgumentError restore_checkpoint!(wrong_domain, path)
 
+        wrong_vernalization = create(; freeze_vernalization_requirement = true)
+        @test_throws ArgumentError restore_checkpoint!(wrong_vernalization, path)
+
         checkpoint = JLD2.load(path, "checkpoint")
-        JLD2.jldsave(path; checkpoint = merge(checkpoint, (format_version = 7,)))
+        JLD2.jldsave(path; checkpoint = merge(checkpoint, (format_version = 8,)))
         @test_throws ArgumentError restore_checkpoint!(create(), path)
         incompatible_metadata = merge(
             checkpoint.metadata,
