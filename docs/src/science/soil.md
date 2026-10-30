@@ -25,16 +25,26 @@ and partitions excess water into vertical percolation and runoff. Water leaving
 the bottom layer is drainage. Nitrate moves with percolating water using the
 source-layer concentration and cannot exceed the source nitrate pool.
 
-Full irrigation restores each rooted layer to field capacity every day:
+Only liquid water percolates. Ice contributes to layer saturation and reduces
+percolation conductivity by a factor of ``10^{-6f_{ice}}``; there is no separate
+frozen-soil impedance at the surface-infiltration boundary.
+
+The default irrigated mode (`:surface`) requests enough water to refill the
+upper 500 mm toward field capacity when root-weighted water falls below the
+crop threshold. Rain throughfall reduces the request; applied water then
+follows the ordinary infiltration and runoff path. The optional legacy
+`:reset` mode instead sets all modeled soil layers to field capacity after
+evapotranspiration:
 
 ```math
-I_l=\max(0,W_{fc,l}-W_l),\qquad W_l\leftarrow W_l+I_l.
+W_{liquid,l}\leftarrow\max(0,W_{fc,l}-W_{ice,l}).
 ```
 
-The added water is an unconstrained boundary input; this option is not a water
-allocation, river, reservoir, or irrigation-infrastructure model. Irrigated
-patches therefore do not report a closed daily water-balance residual; rainfed
-patches continue to use the water-balance diagnostic.
+Neither mode constrains water supply or represents river, reservoir, or
+irrigation-infrastructure dynamics. The `:surface` mode records applied water
+in the daily water-balance ledger; the `:reset` mode does not report a closed
+daily water-balance residual. Rainfed patches also use the water-balance
+diagnostic.
 
 ## Soil thermal state
 

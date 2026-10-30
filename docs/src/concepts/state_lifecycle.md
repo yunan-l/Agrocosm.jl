@@ -45,6 +45,11 @@ the following transition and are therefore classified as prognostic state.
 Only prognostic variables and restart-relevant inputs belong to the scientific
 checkpoint. Fluxes, recomputable auxiliaries, and workspaces do not.
 
+`OutputStream` is a separate writer/aggregation object and is not saved by
+`save_checkpoint`. A model checkpoint alone therefore cannot resume an
+interrupted monthly or annual output period mid-period; the current production
+workflow keeps the same stream alive across its completed-year checkpoint.
+
 The exhaustive field inventory, including units, is maintained in the source
 repository's `docs/variable_inventory.md`.
 

@@ -336,6 +336,11 @@ Accepted uptake is removed proportionally from nitrate and ammonium. Automatic
 fertilization supplies remaining demand as a boundary input; otherwise the
 achieved leaf demand determines nitrogen sufficiency.
 
+With `nitrogen_limit_vcmax=false`, crop N uptake runs after carbon allocation
+without feeding N status back to ``V_{c\max}``, and biological fixation is not
+computed. The `fertilizer=:auto` option can still fill an unmet demand. This
+mode should not be used to infer soybean fixation or its carbon cost.
+
 ## Fertilizer and manure
 
 Prescribed fertilizer and manure are split between sowing and a second
@@ -440,6 +445,11 @@ At normal harvest, storage carbon becomes yield. The configured residue
 fraction sends leaf and mobile-pool material to surface or incorporated litter;
 root material becomes root litter. Remaining material crosses the boundary as
 harvest export, with nitrogen following organ-specific routing.
+
+If a calendar year contains more than one harvest, the annual `yield` field
+retains the last harvest, while annual `season_*` diagnostics accumulate across
+harvests. Separate yield totals distinguish crops sown in the previous and
+current calendar year.
 
 The model output `crop_yield` is harvested storage-organ carbon in
 ``\mathrm{gC\,m^{-2}}``, not dry matter. For LPJmL/GGCMI-compatible reporting,
