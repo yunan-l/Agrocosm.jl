@@ -59,6 +59,7 @@ include("test_climate_deposition.jl")
         @test climate_forcing(climate[1]).wind === climate[1].wind
         @test climate_forcing(climate[1]).co2_daily
         @test climate_forcing(climate[1]).backend_neutral
+        @test climate_forcing(climate[1]).cell_ids == climate[1].selection.cell_ids
         @test !hasproperty(climate_forcing(climate[1]), :provenance)
         forcings = climate_forcings(climate_reader)
         @test forcings isa AbstractVector{NamedTuple}

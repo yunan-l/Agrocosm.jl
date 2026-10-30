@@ -372,6 +372,7 @@ function climate_forcing(block::ClimateBlock)
         co2 = block.co2,
         co2_daily = true,
         backend_neutral = true,
+        cell_ids = block.selection.cell_ids,
     )
     !isnothing(block.wind) && (forcing = merge(forcing, (wind = block.wind,)))
     !isnothing(block.no3_deposition) && (forcing = merge(forcing, (

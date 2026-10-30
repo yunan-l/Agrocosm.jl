@@ -385,6 +385,15 @@ end
     @test simulation.config.indices == [1]
 end
 
+@testset "Cell IDs default to the selected initial data coordinates" begin
+    initial, _ = simulation_api_fixture(Float32)
+    source = merge(initial, (coords = [101],))
+    simulation = initialize_simulation(
+        cft1, source; indices = [1], days = 1, fertilizer = :no,
+    )
+    @test simulation.config.execution.domain.cell_ids == Int32[101]
+end
+
 @testset "Annual CO₂ forcing length is validated before kernel launch" begin
     initial, _ = simulation_api_fixture(Float32)
     simulation = initialize_simulation(
@@ -395,6 +404,51 @@ end
     @test_throws DimensionMismatch run_simulation!(
         simulation, incomplete; spinup = false,
     )
+end
+
+@testset "Climate blocks match the selected simulation cells" begin
+    initial, climate = simulation_api_fixture(Float32)
+    simulation = initialize_simulation(
+        cft1, initial; indices = [1], cell_ids = [101], days = 3, fertilizer = :no,
+    )
+    forcing = (
+        temp = climate.temp,
+        prec = climate.prec,
+        sw = climate.swdown,
+        lw = climate.lwnet,
+        co2 = fill(400.0f0, 3),
+        backend_neutral = true,
+        cell_ids = Int32[101],
+    )
+    @test_throws ArgumentError run_simulation!(
+        simulation, merge(forcing, (cell_ids = Int32[102],)); spinup = false,
+    )
+    @test_throws DimensionMismatch run_simulation!(
+        simulation, merge(forcing, (temp = repeat(climate.temp, 1, 2),)); spinup = false,
+    )
+    @test_throws DimensionMismatch run_simulation!(
+        simulation, merge(forcing, (prec = repeat(climate.prec, 1, 2),)); spinup = false,
+    )
+    @test_throws DimensionMismatch run_simulation!(
+        simulation, merge(forcing, (co2 = fill(400.0f0, 3, 2),)); spinup = false,
+    )
+    @test simulation.simulated_days == 0
+end
+
+@testset "Climate start_day preserves the simulation calendar on resume" begin
+    initial, climate = simulation_api_fixture(Float32)
+    initial = merge(initial, (crop = merge(initial.crop, (sdate = Int32[2],)),))
+    create() = initialize_simulation(
+        cft1, initial; indices = [1], days = 3, fertilizer = :no,
+    )
+    split = create()
+    reference = create()
+    run_simulation!(split, climate; end_day = 1, spinup = false)
+    run_simulation!(split, climate; start_day = 2, end_day = 3, spinup = false)
+    run_simulation!(reference, climate; spinup = false)
+    @test split.output.calendar.sowing_event == reference.output.calendar.sowing_event
+    @test findall(!iszero, vec(split.output.calendar.sowing_event)) == [2]
+    @test split.output.crop.npp == reference.output.crop.npp
 end
 
 @testset "High-level crop simulation API" begin

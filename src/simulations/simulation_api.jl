@@ -158,7 +158,13 @@ function initialize_simulation(
     climbuf, crop, pet, soil, managed_land, daily_weather, output = states
     state = model_state(climbuf, crop, pet, soil, managed_land, daily_weather, output)
     active_indices = indices === nothing ? collect(1:cells) : collect(Int, indices)
-    active_cell_ids = cell_ids === nothing ? active_indices : collect(Int, cell_ids)
+    active_cell_ids = if cell_ids !== nothing
+        collect(Int, cell_ids)
+    elseif hasproperty(initial_data, :coords)
+        collect(Int, initial_data.coords[active_indices])
+    else
+        active_indices
+    end
     config = SimulationConfiguration(
         T, device, days, active_indices, active_cell_ids;
         indices,
@@ -191,9 +197,13 @@ function initialize_simulation(
 end
 
 function _prepare_climate(simulation::CropSimulation, climate::NamedTuple)
-    if hasproperty(climate, :backend_neutral) && climate.backend_neutral
+    prepared = if hasproperty(climate, :backend_neutral) && climate.backend_neutral
+        if hasproperty(climate, :cell_ids)
+            climate.cell_ids == simulation.config.execution.domain.cell_ids ||
+                throw(ArgumentError("climate cell_ids do not match the simulation domain"))
+        end
         T = simulation.config.T
-        prepared = (
+        forcing = (
             temp = T.(climate.temp),
             prec = T.(climate.prec),
             sw = T.(climate.sw),
@@ -202,34 +212,50 @@ function _prepare_climate(simulation::CropSimulation, climate::NamedTuple)
             co2_daily = true,
         )
         if hasproperty(climate, :wind)
-            prepared = merge(prepared, (wind = T.(climate.wind),))
+            forcing = merge(forcing, (wind = T.(climate.wind),))
         end
         for name in (:no3_deposition, :nh4_deposition)
             hasproperty(climate, name) || continue
             values = T.(getproperty(climate, name))
-            prepared = merge(
-                prepared,
-                (; name => _daily_deposition_forcing(values, size(prepared.temp, 1))),
+            forcing = merge(
+                forcing,
+                (; name => _daily_deposition_forcing(values, size(forcing.temp, 1))),
             )
         end
         if hasproperty(climate, :temp_spinup)
-            prepared = merge(prepared, (temp_spinup = T.(climate.temp_spinup),))
+            forcing = merge(forcing, (temp_spinup = T.(climate.temp_spinup),))
         end
         if hasproperty(climate, :prec_spinup)
-            prepared = merge(prepared, (prec_spinup = T.(climate.prec_spinup),))
+            forcing = merge(forcing, (prec_spinup = T.(climate.prec_spinup),))
         end
-        return _adapt_to_device(simulation.config.device, prepared)
-    end
-    if hasproperty(climate, :swdown) && hasproperty(climate, :lwnet)
+        _adapt_to_device(simulation.config.device, forcing)
+    elseif hasproperty(climate, :swdown) && hasproperty(climate, :lwnet)
         indices = simulation.config.indices
         indices === nothing && throw(ArgumentError(
             "raw climate data require indices in initialize_simulation",
         ))
-        return ClimateDataLoader(
+        ClimateDataLoader(
             climate, indices, simulation.config.device; T = simulation.config.T,
         )
+    else
+        climate
     end
-    return climate
+    cells = length(simulation.config.execution.domain.indices)
+    expected = (size(prepared.temp, 1), cells)
+    ndims(prepared.temp) == 2 && size(prepared.temp) == expected ||
+        throw(DimensionMismatch("climate.temp must have shape $expected"))
+    for name in (:prec, :sw, :lw, :wind, :no3_deposition, :nh4_deposition)
+        hasproperty(prepared, name) || continue
+        size(getproperty(prepared, name)) == expected || throw(DimensionMismatch(
+            "climate.$name must have shape $expected",
+        ))
+    end
+    if ndims(prepared.co2) == 2
+        size(prepared.co2, 2) == cells || throw(DimensionMismatch(
+            "daily CO₂ forcing must contain $cells cell column(s)",
+        ))
+    end
+    return prepared
 end
 
 function _prepare_annual_management!(simulation::CropSimulation, management::NamedTuple)
@@ -400,7 +426,9 @@ function run_simulation!(
         _prepare_annual_management!(simulation, management)
     _transition_range!(
         simulation, prepared_climate, start_day, local_end_day;
-        reuse_output, selected_output, prescribed...,
+        reuse_output, selected_output,
+        simulation_day_offset = simulation.simulated_days + 1 - start_day,
+        prescribed...,
     )
     simulation.simulated_days += run_days
     return simulation
