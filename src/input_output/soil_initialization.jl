@@ -57,8 +57,8 @@ function soil_initial_state(
     size(targets.soil_organic_carbon) == size(soil.saturation) || throw(DimensionMismatch(
         "soil targets and soil properties must have matching layers",
     ))
-    mineral_fraction_of_slow >= 0 || throw(ArgumentError(
-        "mineral_fraction_of_slow must be nonnegative",
+    isfinite(mineral_fraction_of_slow) && mineral_fraction_of_slow >= 0 || throw(ArgumentError(
+        "mineral_fraction_of_slow must be finite and nonnegative",
     ))
     carbon = T.(targets.soil_organic_carbon)
     nitrogen = T.(targets.total_nitrogen)
@@ -115,6 +115,7 @@ function soil_initial_state(
         litn = zeros(T, 3, cells),
         fastn = fast_nitrogen .* organic_nitrogen,
         slown = slow_nitrogen .* organic_nitrogen,
+        mineral_fraction_of_slow = mineral,
     )
     return c_shift === nothing ? state : merge(state, (
         c_shift_fast = c_shift.fast,

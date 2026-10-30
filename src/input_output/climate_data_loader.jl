@@ -68,6 +68,13 @@ function ClimateDataLoader(climate::NamedTuple,
         co2 = T.(climate.co2),
     )
 
+    if hasproperty(climate, :prec_spinup)
+        loaded_climate = merge(
+            loaded_climate,
+            (prec_spinup = T.(climate.prec_spinup[:, data_index]),),
+        )
+    end
+
     # Normalize optional wind forcing to one internal field name while keeping
     # existing climate archives (which do not contain wind) fully compatible.
     if hasproperty(climate, :windspeed)

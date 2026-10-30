@@ -48,12 +48,14 @@ using Test
         lwnet = zeros(Float32, 2, 2),
         co2 = Float32[400],
         windspeed = Float32[1 2; 3 4],
+        prec_spinup = Float32[10 20; 30 40],
         no3_deposition = Float32[0.001 0.002; 0.003 0.004],
         nh4_deposition = Float32[0.005 0.006; 0.007 0.008],
     )
     loaded = ClimateDataLoader(loader_input, [2], identity)
     @test hasproperty(loaded, :wind)
     @test loaded.wind == Float32[2; 4;;]
+    @test loaded.prec_spinup == Float32[20; 40;;]
     @test loaded.no3_deposition == Float32[0.002; 0.004;;]
     @test loaded.nh4_deposition == Float32[0.006; 0.008;;]
 
@@ -61,6 +63,7 @@ using Test
     @test eltype(loaded64.temp) == Float64
     @test eltype(loaded64.co2) == Float64
     @test eltype(loaded64.wind) == Float64
+    @test eltype(loaded64.prec_spinup) == Float64
     @test eltype(loaded64.no3_deposition) == Float64
 
     monthly_deposition = reshape(Float32.(1:12), 12, 1)

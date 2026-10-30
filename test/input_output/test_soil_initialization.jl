@@ -23,4 +23,11 @@ using Test
     @test state.fastn + state.slown + 0.02f0 .* state.slown ≈ targets.total_nitrogen
     @test all(state.swc .> 0)
     @test all(state.swc .< soil.saturation .* reshape(soil.layer_depth, :, 1))
+
+    custom = soil_initial_state(targets, soil; mineral_fraction_of_slow = 0.05)
+    @test custom.mineral_fraction_of_slow == 0.05f0
+    @test custom.fastn + custom.slown + 0.1f0 .* custom.slown ≈ targets.total_nitrogen
+    @test_throws ArgumentError soil_initial_state(
+        targets, soil; mineral_fraction_of_slow = Inf,
+    )
 end

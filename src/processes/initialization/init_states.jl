@@ -67,7 +67,7 @@ initialize_soil_mineral_nitrogen!(soil, u0, strategy)
 
 Initialize soil NO₃ and NH₄ using either restart values or the default rule.
 The default initializes each mineral pool in each layer to one percent of that
-layer's slow organic-N pool.
+layer's slow organic-N pool, unless the initial state specifies another fraction.
 """
 function initialize_soil_mineral_nitrogen!(soil::Soil,
                                            u0::NamedTuple,
@@ -87,7 +87,10 @@ function initialize_soil_mineral_nitrogen!(soil::Soil,
             "use :restart or :from_slow_organic_nitrogen",
         ))
     end
-    slow_n_fraction = convert(eltype(soil.nitrogen.slow), 0.01)
+    slow_n_fraction = convert(
+        eltype(soil.nitrogen.slow),
+        hasproperty(u0, :mineral_fraction_of_slow) ? u0.mineral_fraction_of_slow : 0.01,
+    )
     nitrate_restart = restart ? u0.soil_NO3 : soil.nitrogen.nitrate
     ammonium_restart = restart ? u0.soil_NH4 : soil.nitrogen.ammonium
     launch_2D!(

@@ -64,6 +64,11 @@ function InitialDataLoader(data::NamedTuple,
         fastn = T.(initial_state.fastn[:, data_index]),
         slown = T.(initial_state.slown[:, data_index]),
     )
+    if hasproperty(initial_state, :mineral_fraction_of_slow)
+        u0_set = merge(u0_set, (
+            mineral_fraction_of_slow = T(initial_state.mineral_fraction_of_slow),
+        ))
+    end
     if load_mineral_nitrogen_restart
         u0_set = merge(u0_set, (
             soil_NH4 = T.(initial_state.soil_NH4[:, data_index]),

@@ -191,10 +191,10 @@ const soil_thermal_params = SoilThermalParams{Float32}()
 """
 SoilDecompParams
 
-Local LPJmL-style soil carbon and nitrogen decomposition response parameters used in this file.
+Soil decomposition moisture-response parameters. The temperature activation
+coefficient `e0` is supplied by `LPJmLParams`.
 """
 @kwdef struct SoilDecompParams{T <: AbstractFloat}
-    e0::T = 308.56 # Lloyd–Taylor temperature-response activation parameter (K).
     intercept::T = 0.04021601 # Intercept of the LPJmL soil-moisture response polynomial.
     moist3::T = -5.00505434 # Cubic soil-moisture response coefficient.
     moist2::T = 4.26937932 # Quadratic soil-moisture response coefficient.

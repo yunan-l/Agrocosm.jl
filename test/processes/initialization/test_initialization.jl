@@ -140,6 +140,8 @@ end
     @test parameters64.snow isa SnowParams{Float64}
     @test parameters64.soil_thermal isa SoilThermalParams{Float64}
     @test parameters64.soil_decomposition isa SoilDecompParams{Float64}
+    @test !hasproperty(parameters64.soil_decomposition, :e0)
+    @test parameters64.lpjml.e0 == 308.56
     @test soilparams64 isa SoilParams{Float64}
     @test soilparams64.silt[1] ≈ 0.24 atol = eps(Float32)
     @test soilparams64.clay[1] ≈ 0.54 atol = eps(Float32)
@@ -289,6 +291,38 @@ end
     @test eltype(loaded64.ModelState.crop.sdate) == Int32
     @test eltype(loaded64.ModelState.u0.swc) == Float64
     @test loaded64.soilparams.soilcode == Int32[1, 3]
+
+    data_with_fraction = merge(data_without_shift, (
+        initial_state = merge(initial_without_shift, (
+            mineral_fraction_of_slow = 0.05f0,
+        )),
+    ))
+    loaded_fraction = InitialDataLoader(data_with_fraction, [1, 2], identity; T = Float64)
+    @test loaded_fraction.ModelState.u0.mineral_fraction_of_slow == Float64(0.05f0)
+    fraction_simulation = initialize_simulation(
+        cft1, data_with_fraction;
+        indices = [1, 2], T = Float32, days = 1, diagnostics = false,
+    )
+    fraction_soil = fraction_simulation.state.prognostic.soil.nitrogen
+    @test fraction_soil.nitrate ≈ 0.05f0 .* fraction_soil.slow
+    @test fraction_soil.ammonium ≈ 0.05f0 .* fraction_soil.slow
+    default_simulation = initialize_simulation(
+        cft1, data_without_shift;
+        indices = [1, 2], T = Float32, days = 1, diagnostics = false,
+    )
+    explicit_default = merge(data_without_shift, (
+        initial_state = merge(initial_without_shift, (
+            mineral_fraction_of_slow = 0.01f0,
+        )),
+    ))
+    explicit_default_simulation = initialize_simulation(
+        cft1, explicit_default;
+        indices = [1, 2], T = Float32, days = 1, diagnostics = false,
+    )
+    @test default_simulation.state.prognostic.soil.nitrogen.nitrate ==
+          explicit_default_simulation.state.prognostic.soil.nitrogen.nitrate
+    @test default_simulation.state.prognostic.soil.nitrogen.ammonium ==
+          explicit_default_simulation.state.prognostic.soil.nitrogen.ammonium
 
     fast_shift = repeat(Float32[0.4, 0.25, 0.15, 0.1, 0.1], 1, cells)
     slow_shift = repeat(Float32[0.5, 0.2, 0.15, 0.1, 0.05], 1, cells)
