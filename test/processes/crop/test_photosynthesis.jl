@@ -16,6 +16,27 @@ using Test
     @test Agrocosm.compute_water_limited_assimilation(daily_net, T(12), T(20), T(101325)) == zero(T)
 end
 
+@testset "Zero lambda bypasses photosynthesis and leaf respiration" begin
+    for (pathway, cft, temperature) in ((:C3, cft1, 20.0f0), (:C4, cft3, 25.0f0))
+        crop = init_crop(1, identity)
+        state = test_model_state(crop)
+        photos = crop.auxiliary.photosynthesis
+        photos.temperature_stress .= 1.0f0
+        photos.vcmax .= 1.0f0
+        photos.lambda .= 0.0f0
+
+        Agrocosm.photosynthesis!(
+            Val(pathway), cft, state, Float32[10.0], Float32[12.0],
+            Float32[temperature], Float32[40.0]; comp_vcmax = false,
+        )
+
+        @test crop.fluxes.carbon.gross_assimilation == Float32[0.0]
+        @test crop.fluxes.carbon.leaf_respiration == Float32[0.0]
+        @test crop.fluxes.carbon.net_assimilation == Float32[0.0]
+        @test crop.fluxes.carbon.water_limited_assimilation == Float32[0.0]
+    end
+end
+
 @testset "C3 photosynthesis CPU smoke test" begin
     crop = init_crop(1, identity)
     state = test_model_state(crop)

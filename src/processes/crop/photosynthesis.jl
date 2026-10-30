@@ -152,9 +152,10 @@ end
     je = c1 * apar[cell] * T(cmass) * T(cq) / (daylength[cell] + T(1e-5))
     jc = c2 * hour2day(vcmax[cell])
     agd = compute_co_limited_assimilation(je, jc, T(theta), daylength[cell])
-    gross = inactive ? zero(T) : max(zero(T), agd)
+    active = !inactive && lambda[cell] > zero(T)
+    gross = active ? max(zero(T), agd) : zero(T)
     gross_assimilation[cell] = gross
-    leaf = inactive ? zero(T) : T(b) * vcmax[cell]
+    leaf = active ? T(b) * vcmax[cell] : zero(T)
     leaf_respiration[cell] = leaf
     net_assimilation[cell], adt = compute_net_assimilation(gross, leaf, daylength[cell])
     water_limited_assimilation[cell] = compute_water_limited_assimilation(
@@ -249,9 +250,10 @@ photosynthesis!(::Val{:C4}, CFT, crop, apar, daylength, temperature, co2; kwargs
     je = c1 * apar[cell] * T(cmass) * T(cq) / (daylength[cell] + T(1e-5))
     jc = hour2day(vcmax[cell])
     agd = compute_co_limited_assimilation(je, jc, T(theta), daylength[cell])
-    gross = inactive ? zero(T) : max(zero(T), agd)
+    active = !inactive && lambda[cell] > zero(T)
+    gross = active ? max(zero(T), agd) : zero(T)
     gross_assimilation[cell] = gross
-    leaf = inactive ? zero(T) : T(b) * vcmax[cell]
+    leaf = active ? T(b) * vcmax[cell] : zero(T)
     leaf_respiration[cell] = leaf
     net_assimilation[cell], adt = compute_net_assimilation(gross, leaf, daylength[cell])
     water_limited_assimilation[cell] = compute_water_limited_assimilation(
