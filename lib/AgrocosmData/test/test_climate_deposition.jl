@@ -88,9 +88,11 @@ end
         @test !hasproperty(forcing, :wind)
         @test size(forcing.no3_deposition) == (365, 1)
         @test size(forcing.nh4_deposition) == (365, 1)
-        @test forcing.no3_deposition[15, 1] == 1.0f0
-        @test forcing.nh4_deposition[15, 1] == 2.0f0
-        @test forcing.no3_deposition[1, 1] ≈ 12.0f0 + (17.0f0 / 31.0f0) * (1.0f0 - 12.0f0)
+        @test forcing.no3_deposition[1, 1] ≈ 12.0f0 + (16.0f0 / 31.0f0) * (1.0f0 - 12.0f0)
+        @test forcing.no3_deposition[15, 1] ≈ 12.0f0 + (30.0f0 / 31.0f0) * (1.0f0 - 12.0f0)
+        @test forcing.no3_deposition[16, 1] == 1.0f0
+        @test forcing.no3_deposition[17, 1] ≈ 1.0f0 + 1.0f0 / 30.0f0
+        @test forcing.nh4_deposition[16, 1] == 2.0f0
         @test forcing.nh4_deposition[1, 1] ≈ 2.0f0 * forcing.no3_deposition[1, 1]
     end
 end
@@ -107,9 +109,9 @@ end
         )))
         forcing = climate_forcing(block)
 
-        @test forcing.no3_deposition[15, 1] == 1.0f0
+        @test forcing.no3_deposition[16, 1] == 1.0f0
         @test forcing.no3_deposition[365, 1] ≈
-            12.0f0 + (16.0f0 / 31.0f0) * (1.0f0 - 12.0f0)
+            12.0f0 + (15.0f0 / 31.0f0) * (1.0f0 - 12.0f0)
         @test forcing.nh4_deposition == 2.0f0 .* forcing.no3_deposition
     end
 end

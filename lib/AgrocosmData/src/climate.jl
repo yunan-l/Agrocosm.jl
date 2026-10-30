@@ -248,15 +248,16 @@ function _daily_nitrogen_deposition(
         year = isnothing(reader.nitrogen_deposition_year) ?
             _calendar_year(block_time[day_index]) : reader.nitrogen_deposition_year
         month, day_of_month = _date_month_day(block_time[day_index])
+        day_in_month = day_of_month - 1 # LPJmL's interpolate() uses 0-based days.
         month_length = _NOLEAP_MONTH_LENGTHS[month]
         previous_month = month == 1 ? 12 : month - 1
         next_month = month == 12 ? 1 : month + 1
-        source_month, target_month, offset, denominator = if day_of_month >= month_length ÷ 2
-            month, next_month, day_of_month - month_length ÷ 2,
+        source_month, target_month, offset, denominator = if day_in_month >= month_length ÷ 2
+            month, next_month, day_in_month - month_length ÷ 2,
             _LPJML_MONTH_CENTRE_INTERVALS[month]
         else
             previous_month, month,
-            day_of_month + (_NOLEAP_MONTH_LENGTHS[previous_month] + 1) ÷ 2,
+            day_in_month + (_NOLEAP_MONTH_LENGTHS[previous_month] + 1) ÷ 2,
             _LPJML_MONTH_CENTRE_INTERVALS[previous_month]
         end
         year_offset = year_offsets[year]
