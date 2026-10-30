@@ -6,6 +6,7 @@ using Test
         crop = init_crop(T, 2, identity)
         pet = init_pet(T, 2, identity)
         state = test_model_state(crop; pet)
+        crop.state.phenology.is_growing .= Int32(1)
         crop.state.canopy.lai .= T(2)
         pet.par .= T(20)
         snow_height = T[0, 0.1]
@@ -20,6 +21,24 @@ using Test
         @test crop.auxiliary.canopy.apar[1] > zero(T)
         @test crop.auxiliary.canopy.fpar[2] == zero(T)
         @test crop.auxiliary.canopy.apar[2] == zero(T)
+    end
+end
+
+@testset "Absent crop has no absorbed PAR" begin
+    for T in (Float32, Float64), cft in (cft1, cft3)
+        crop = init_crop(T, 2, identity)
+        pet = init_pet(T, 2, identity)
+        state = test_model_state(crop; pet)
+        crop.state.phenology.is_growing .= Int32[1, 0]
+        crop.state.canopy.lai .= T(2) # The inactive cell retains harvest-day LAI.
+        pet.par .= T(20)
+
+        apar_crop!(cft, state, pet; maize = cft === cft3)
+
+        @test crop.auxiliary.canopy.apar[1] > zero(T)
+        @test crop.auxiliary.canopy.fpar[1] > zero(T)
+        @test crop.auxiliary.canopy.apar[2] == zero(T)
+        @test crop.auxiliary.canopy.fpar[2] == zero(T)
     end
 end
 

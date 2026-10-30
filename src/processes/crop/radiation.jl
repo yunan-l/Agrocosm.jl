@@ -158,6 +158,7 @@ function apar_crop!(
         crop_canopy_auxiliary(crop).fpar,
         crop_prognostic(crop).canopy.lai,
         crop_prognostic(crop).canopy.lai_npp_deficit,
+        crop_prognostic(crop).phenology.is_growing,
         snow_height === nothing ? pet.eeq : snow_height,
         pet.par,
         T(CFT.lightextcoeff),
@@ -185,6 +186,7 @@ apar_crop_maize!(CFT::CFTParameters, crop, pet::PetPar, snow_height = nothing) =
     fpar::AbstractVector{T},
     lai::AbstractVector{T},
     lai_npp_deficit::AbstractVector{T},
+    is_growing::AbstractVector{S},
     snow_height::AbstractVector{T},
     par::AbstractVector{T},
     light_extinction::T,
@@ -192,15 +194,20 @@ apar_crop_maize!(CFT::CFTParameters, crop, pet::PetPar, snow_height = nothing) =
     alpha_a::T,
     maize::Bool,
     apply_snow_cover::Bool,
-) where {T <: AbstractFloat}
+) where {T <: AbstractFloat, S <: Integer}
     cell = @index(Global)
-    actual_lai = max(zero(T), lai[cell] - lai_npp_deficit[cell])
-    snow_free = !apply_snow_cover || snow_height[cell] <= zero(T)
-    absorbed_fraction = compute_absorbed_fraction(
-        actual_lai, light_extinction, maize, snow_free,
-    )
-    fpar[cell] = absorbed_fraction
-    apar[cell] = compute_absorbed_par(
-        par[cell], leaf_albedo, alpha_a, absorbed_fraction,
-    )
+    if is_growing[cell] == zero(S)
+        fpar[cell] = zero(T)
+        apar[cell] = zero(T)
+    else
+        actual_lai = max(zero(T), lai[cell] - lai_npp_deficit[cell])
+        snow_free = !apply_snow_cover || snow_height[cell] <= zero(T)
+        absorbed_fraction = compute_absorbed_fraction(
+            actual_lai, light_extinction, maize, snow_free,
+        )
+        fpar[cell] = absorbed_fraction
+        apar[cell] = compute_absorbed_par(
+            par[cell], leaf_albedo, alpha_a, absorbed_fraction,
+        )
+    end
 end

@@ -20,6 +20,9 @@ function harvest_crop!(crop,
         crop_prognostic(crop).phenology.harvesting_previous,
         crop_prognostic(crop).phenology.harvesting,
         crop_prognostic(crop).phenology.is_growing,
+        crop_prognostic(crop).canopy.lai,
+        crop_prognostic(crop).canopy.lai_npp_deficit,
+        crop_canopy_auxiliary(crop).actual_lai,
         crop_prognostic(crop).phenology.growing_days,
         crop_fluxes(crop).carbon.yield,
         crop_fluxes(crop).carbon.harvest_export,
@@ -266,7 +269,10 @@ end
         carbon_input[SURFACE_LITTER, cell] = carbon_residue
         carbon_input[ROOT_LITTER, cell] = root_carbon[cell]
         nitrogen_input[SURFACE_LITTER, cell] = nitrogen_residue
-        nitrogen_input[ROOT_LITTER, cell] = root_nitrogen[cell]
+        # Uptake precedes failed-crop termination in the N-limited pathway,
+        # while organ allocation follows it. Return that mobile N to litter.
+        nitrogen_input[ROOT_LITTER, cell] = total_nitrogen[cell] -
+            storage_nitrogen[cell] - aboveground_nitrogen
         carbon_input[INCORPORATED_LITTER, cell] = zero(T)
         nitrogen_input[INCORPORATED_LITTER, cell] = zero(T)
 
@@ -339,6 +345,9 @@ end
     harvesting_previous::AbstractVector{B},
     harvesting::AbstractVector{B},
     is_growing::AbstractVector{S},
+    lai::AbstractVector{T},
+    lai_npp_deficit::AbstractVector{T},
+    actual_lai::AbstractVector{T},
     growing_days::AbstractVector{S},
         crop_yield::AbstractVector{T},
         carbon_harvest_export::AbstractVector{T},
@@ -395,6 +404,9 @@ end
         nitrogen_residue = max(aboveground_nitrogen, zero(T)) * residue_fraction[cell]
         harvest_date[cell] = S(day)
         is_growing[cell] = zero(S)
+        lai[cell] = zero(T)
+        lai_npp_deficit[cell] = zero(T)
+        actual_lai[cell] = zero(T)
         crop_yield[cell] = storage_carbon[cell]
         annual_yield[cell] = crop_yield[cell]
         if growing_days[cell] > day

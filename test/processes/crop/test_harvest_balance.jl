@@ -14,6 +14,8 @@ using Test
     crop.state.carbon.storage .= 5.0f0
     crop.state.carbon.pool .= 3.0f0
     crop.state.carbon.biomass .= 14.0f0
+    crop.state.canopy.lai .= 2.0f0
+    crop.auxiliary.canopy.actual_lai .= 2.0f0
     crop.state.nitrogen.leaf .= 0.2f0
     crop.state.nitrogen.root .= 0.4f0
     crop.state.nitrogen.storage .= 0.5f0
@@ -45,6 +47,8 @@ using Test
     @test sum(soil.carbon.litter) == carbon_residue
     @test sum(soil.nitrogen.litter) == nitrogen_residue
     @test crop.state.phenology.is_growing[1] == 0
+    @test crop.state.canopy.lai[1] == 0.0f0
+    @test crop.auxiliary.canopy.actual_lai[1] == 0.0f0
 end
 
 @testset "Harvest-season diagnostics are accumulated and emitted annually" begin
@@ -108,7 +112,9 @@ end
     crop.state.carbon.root .= 0.3f0
     crop.state.carbon.pool .= 0.5f0
     crop.fluxes.carbon.respiration .= 2.0f0
-    crop.state.nitrogen.total .= 0.4f0
+    # Today's uptake can raise total N before failure, while organ N still
+    # reflects yesterday's allocation.
+    crop.state.nitrogen.total .= 0.5f0
     crop.state.nitrogen.leaf .= 0.1f0
     crop.state.nitrogen.root .= 0.1f0
     crop.state.nitrogen.pool .= 0.2f0
@@ -136,7 +142,8 @@ end
     @test all(>=(0), soil.carbon.input)
     @test all(>=(0), soil.carbon.litter)
     @test crop.fluxes.carbon.harvest_export[1] + sum(soil.carbon.input) ≈ -1.0f0
-    @test crop.fluxes.nitrogen.harvest_export[1] + sum(soil.nitrogen.input) ≈ 0.4f0
+    @test crop.fluxes.nitrogen.harvest_export[1] + sum(soil.nitrogen.input) ≈ 0.5f0
+    @test soil.nitrogen.input[Agrocosm.ROOT_LITTER, 1] ≈ 0.2f0
 
     # An absent stand cannot continue producing a negative-NPP tail.
     carbon_allocation!(cft1, state)

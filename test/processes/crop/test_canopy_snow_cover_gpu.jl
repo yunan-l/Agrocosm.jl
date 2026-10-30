@@ -11,6 +11,7 @@ CUDA.allowscalar(false)
         crop = init_crop(Float32, cells, CuArray)
         pet = init_pet(Float32, cells, CuArray)
         state = test_model_state(crop; pet)
+        crop.state.phenology.is_growing .= Int32(1)
         crop.state.canopy.lai .= 2.0f0
         pet.par .= 20.0f0
         snow = CuArray(repeat(Float32[0, 0.1], cells ÷ 2))
@@ -28,5 +29,12 @@ CUDA.allowscalar(false)
         @test all(>(0.0f0), @view(apar[1:2:end]))
         @test all(iszero, @view(fpar[2:2:end]))
         @test all(iszero, @view(apar[2:2:end]))
+
+        # GPU lanes remain allocated after harvest, but must not absorb PAR.
+        crop.state.phenology.is_growing .= Int32(0)
+        apar_crop!(cft, state, pet, snow; maize = cft === cft3)
+        synchronize()
+        @test all(iszero, Array(crop.auxiliary.canopy.fpar))
+        @test all(iszero, Array(crop.auxiliary.canopy.apar))
     end
 end
