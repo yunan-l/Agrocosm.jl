@@ -226,7 +226,7 @@ include("test_climate_deposition.jl")
     @test example.cfts.ids == Int32.(1:12)
     @test cft_name(example.cfts, 4) == "tropical cereals"
     @test cft_name(example.cfts, 9) == "oil crops soybean"
-    @test dataset(example, :landuse).management_bands.irrigated == Int32.(17:28)
+    @test dataset(example, :landuse).management_bands.irrigated == Int32.(13:24)
     @test dataset(example, :sowing_date).management_bands.irrigated == Int32.(13:24)
     @test dataset(example, :residue_fraction).management_bands.irrigated == Int32.(1:12)
 
