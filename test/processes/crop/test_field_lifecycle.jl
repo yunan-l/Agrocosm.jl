@@ -123,7 +123,8 @@ end
     @test :workspace ∉ propertynames(restart)
     @test :workspace ∉ fieldnames(typeof(output))
     @test propertynames(output.annual) == (
-        :yield, :harvest_date,
+        :yield, :yield_from_previous_sowing_year,
+        :yield_from_current_sowing_year, :harvest_date,
         :season_gpp, :season_lai_days, :season_length,
         :season_water_deficit, :season_evapotranspiration,
         :harvest_aboveground_carbon,
