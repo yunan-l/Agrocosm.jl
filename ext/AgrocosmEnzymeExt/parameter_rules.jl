@@ -4,6 +4,17 @@
     ::Val{parameter_names},
 ) where {T, S, parameter_names}
     fields = fieldnames(Agrocosm.CFTParameters)
+    if length(unique(parameter_names)) != length(parameter_names)
+        return :(throw(ArgumentError("duplicate CFT parameter name")))
+    end
+    for name in parameter_names
+        name in (:temp_co2_high, :temp_photos_high, :basetemp_low) && continue
+        index = findfirst(==(name), fields)
+        if index === nothing || fieldtype(Agrocosm.CFTParameters{T, S}, index) !== T
+            message = "unsupported differentiable CFT parameter $name"
+            return :(throw(ArgumentError($message)))
+        end
+    end
     values = map(fields) do field
         if field === :temp_co2
             index = findfirst(==(:temp_co2_high), parameter_names)
@@ -119,6 +130,18 @@ end
     ::Val{parameter_names},
 ) where {T, parameter_names}
     fields = fieldnames(Agrocosm.LPJmLParams)
+    if length(unique(parameter_names)) != length(parameter_names)
+        return :(throw(ArgumentError("duplicate LPJmL parameter name")))
+    end
+    for name in parameter_names
+        name === :k_soil10_fast && continue
+        index = findfirst(==(name), fields)
+        if name in (:k_litter10, :residue_frac) || index === nothing ||
+           fieldtype(Agrocosm.LPJmLParams{T}, index) !== T
+            message = "unsupported differentiable LPJmL parameter $name"
+            return :(throw(ArgumentError($message)))
+        end
+    end
     values = map(fields) do field
         if field === :k_soil10
             index = findfirst(==(:k_soil10_fast), parameter_names)

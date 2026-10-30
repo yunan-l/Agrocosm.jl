@@ -22,7 +22,7 @@ function _enzyme_continuous_transition!(
     irrigation::Bool = false,
     nitrogen_limit_vcmax::Bool = false,
     crop_resp_fix::Bool = true,
-    apply_deferred_prescribed_inputs::Bool = nitrogen_limit_vcmax,
+    apply_prescribed_inputs::Bool = true,
     weather_controls = nothing,
     pathway = Val(:C3),
     lambda_primal_mode = Val(:surrogate),
@@ -47,6 +47,9 @@ function _enzyme_continuous_transition!(
     current_co2 = Agrocosm.readclimate!(climate, daily_weather, day)
     weather_controls === nothing ||
         Agrocosm.apply_weather_forcing!(daily_weather, weather_controls, day)
+    # The fixed-event state is already past sowing. Production's cultivate!
+    # clears this one-day marker before tillage on the following day.
+    fill!(Agrocosm.crop_events(state).sowing, 0)
     Agrocosm.update_climbuf!(
         cft,
         daily_weather.temp,
@@ -54,6 +57,19 @@ function _enzyme_continuous_transition!(
         day;
         update_vernalization_requirement = false,
     )
+    # cultivate! resets the daily input fluxes and, without N-limited Vcmax,
+    # applies a pending second dose before soil decomposition.
+    if apply_prescribed_inputs
+        Agrocosm.fertilizer!(
+            state, managed_land, state, day;
+            fertilizer = !nitrogen_limit_vcmax,
+            manure = !nitrogen_limit_vcmax,
+            apply_sowing_dose = false,
+            apply_second_dose = !nitrogen_limit_vcmax,
+            reset_inputs = true,
+            lpjmlparams = global_params,
+        )
+    end
     # The production driver applies its configured tillage treatment before
     # daily litter mixing. The fixed-event AD path uses the same daily
     # management treatment; sowing and harvest remain outer events.
@@ -94,7 +110,7 @@ function _enzyme_continuous_transition!(
             daily_weather.nh4_deposition,
         )
     end
-    if apply_deferred_prescribed_inputs
+    if apply_prescribed_inputs && nitrogen_limit_vcmax
         # Standard nitrogen-limited trajectories carry the fixed second dose
         # in state; management-adaptation objectives inject their own pulses
         # and explicitly disable this event.

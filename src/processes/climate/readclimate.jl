@@ -18,6 +18,10 @@ function readclimate!(climate::NamedTuple,
     nh4_deposition = has_nh4_deposition ? climate.nh4_deposition : climate.temp
     default_wind = eltype(dailyWeather.temp)(lpjmlparams.volatil_wind)
     if ndims(climate.co2) == 1
+        co2_index = co2_daily ? day : div(day - 1, 365) + 1
+        1 <= co2_index <= length(climate.co2) || throw(DimensionMismatch(
+            "CO₂ forcing has $(length(climate.co2)) value(s), but day $day requires index $co2_index",
+        ))
         launch_1D!(
             read_annual_climate_kernel!,
             dailyWeather.temp,
@@ -45,6 +49,12 @@ function readclimate!(climate::NamedTuple,
         )
         return dailyWeather.annual_co2
     elseif ndims(climate.co2) == 2
+        1 <= day <= size(climate.co2, 1) || throw(DimensionMismatch(
+            "daily CO₂ forcing has $(size(climate.co2, 1)) row(s), but day $day was requested",
+        ))
+        size(climate.co2, 2) == length(dailyWeather.temp) || throw(DimensionMismatch(
+            "daily CO₂ forcing has $(size(climate.co2, 2)) cell(s), but weather has $(length(dailyWeather.temp))",
+        ))
         launch_1D!(
             read_daily_climate_kernel!,
             dailyWeather.temp,

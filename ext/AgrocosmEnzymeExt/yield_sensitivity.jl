@@ -171,14 +171,10 @@ function _weather_yield_block(
     irrigation_mode::Symbol,
 )
     T = eltype(forcing)
-    # A saved post-sowing state still carries the one-day event. Production's
-    # cultivate! clears it on the next day. Fixed-event AD skips cultivate!,
-    # so clear this marker explicitly or tillage/litter mixing repeats daily.
-    fill!(Agrocosm.crop_events(state).sowing, 0)
     for day in days
         _enzyme_continuous_transition!(
             state, cft, parameters, climate, day, :gpp, layer_depth,
-            irrigation, nitrogen_limit_vcmax, crop_resp_fix, nitrogen_limit_vcmax,
+            irrigation, nitrogen_limit_vcmax, crop_resp_fix, true,
             forcing, pathway, Val(:production), irrigation_mode,
         )
     end

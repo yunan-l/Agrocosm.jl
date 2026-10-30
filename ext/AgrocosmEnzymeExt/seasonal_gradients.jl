@@ -340,7 +340,7 @@ function Agrocosm.enzyme_daily_transition_objective(
     cft = _replace_cft_parameters(base_cft, theta, parameter_names)
     _enzyme_continuous_transition!(
         state, cft, global_parameters, climate, day, observable, layer_depth,
-        irrigation, nitrogen_limit_vcmax, crop_resp_fix, nitrogen_limit_vcmax,
+        irrigation, nitrogen_limit_vcmax, crop_resp_fix, true,
         nothing, pathway, Val(:surrogate), irrigation_mode,
     )
     return _daily_transition_observable(state, observable)

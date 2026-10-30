@@ -27,6 +27,7 @@ using Test
     # Moving back to a legacy archive must not retain the previous day's wind.
     readclimate!(climate_without_wind, weather, 2)
     @test weather.wind == fill(lpjmlparams.volatil_wind, 2)
+    @test_throws DimensionMismatch readclimate!(climate_without_wind, weather, 366)
 
     climate_with_deposition = merge(
         climate_without_wind,
@@ -121,4 +122,7 @@ end
     kernel_co2 = readclimate!(global_daily_climate, kernel, 2)
     @test reference_co2[1] == 40.2f0
     @test kernel_co2 == reference_co2
+    @test_throws DimensionMismatch readclimate!(
+        merge(climate, (co2 = Float32[400],)), kernel, 366,
+    )
 end

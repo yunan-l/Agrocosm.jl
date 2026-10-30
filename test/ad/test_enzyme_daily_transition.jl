@@ -100,7 +100,7 @@ function _daily_transition_fixture(
         wind = fill(T(2), days, cells),
         no3_deposition = fill(T(0.01), days, cells),
         nh4_deposition = fill(T(0.02), days, cells),
-        co2 = T[400],
+        co2 = fill(T(400), cld(days, 365)),
     )
     state = model_state(climbuf, crop, pet, soil, managed_land, weather, output)
     global_parameters = ModelParameters(T)
@@ -255,6 +255,37 @@ function _nitrogen_limited_transition_fixture()
     plant_nitrogen.pool .= 0.4f0
     plant_nitrogen.storage .= 0.2f0
     return template
+end
+
+@testset "Fixed-event AD applies the non-N-limited second dose once" begin
+    template = _daily_transition_fixture(12, 10)
+    ad_state = deepcopy(template.state)
+    production_state = deepcopy(template.state)
+    for state in (ad_state, production_state)
+        Agrocosm.crop_phenology_input(state).phu .= 10.0f0
+        Agrocosm.crop_prognostic(state).phenology.husum .= 3.0f0
+        Agrocosm.crop_prognostic(state).nitrogen.pending_fertilizer .= 4.0f0
+        Agrocosm.crop_prognostic(state).nitrogen.pending_manure .= 2.0f0
+        Agrocosm.crop_events(state).sowing .= 1
+    end
+
+    daily_crop_C3!(11, 11, ProcessModules(cft1, template.global_parameters),
+        template.climate, production_state;
+        fertilizer = :yes, manure = true, with_tillage = true,
+        update_vernalization_requirement = false, reuse_output = true)
+    enzyme_daily_transition_objective(
+        Float32[cft1.gmin], ad_state, cft1, template.global_parameters,
+        template.climate, (:gmin,), 11, :gpp, template.layer_depth,
+    )
+
+    for field in (:prescribed_fertilizer_input, :prescribed_manure_input)
+        @test getproperty(Agrocosm.crop_fluxes(ad_state).nitrogen, field) ≈
+            getproperty(Agrocosm.crop_fluxes(production_state).nitrogen, field)
+    end
+    @test all(iszero, Agrocosm.crop_prognostic(ad_state).nitrogen.pending_fertilizer)
+    @test all(iszero, Agrocosm.crop_prognostic(ad_state).nitrogen.pending_manure)
+    @test all(iszero, Agrocosm.crop_events(ad_state).sowing)
+    @test all(iszero, Agrocosm.soil_management_fluxes(ad_state).tillage_carbon)
 end
 
 @testset "Enzyme one-day ModelState transition" begin

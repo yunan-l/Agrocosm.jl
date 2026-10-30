@@ -12,6 +12,28 @@ function _cft_offset_square(theta, base_cft, parameter_names)
     return value * value
 end
 
+@testset "AD parameter names fail fast" begin
+    cft = convert_precision(Float64, cft1)
+    parameters = ModelParameters(Float64)
+    @test_throws ArgumentError _CFT_OFFSET_EXTENSION._replace_cft_parameters(
+        cft, [1.0], (:not_a_cft_parameter,),
+    )
+    @test_throws ArgumentError _CFT_OFFSET_EXTENSION._replace_cft_parameters(
+        cft, [1.0], (:k_litter10,),
+    )
+    @test_throws ArgumentError _CFT_OFFSET_EXTENSION._replace_cft_parameters(
+        cft, [1.0, 2.0], (:gmin, :gmin),
+    )
+    @test_throws ArgumentError _CFT_OFFSET_EXTENSION._replace_model_parameters(
+        parameters, [1.0], (:not_a_soil_parameter,),
+    )
+    for name in (:k_litter10, :residue_frac)
+        @test_throws ArgumentError _CFT_OFFSET_EXTENSION._replace_model_parameters(
+            parameters, [1.0], (name,),
+        )
+    end
+end
+
 @testset "Enzyme CFT tail-field gradients" begin
     cft = convert_precision(Float64, cft1)
     for name in (:hiopt, :himin)
