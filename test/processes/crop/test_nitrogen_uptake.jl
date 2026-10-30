@@ -136,6 +136,16 @@ end
     @test crop.fluxes.nitrogen.uptake[1] ≈ 0.5f0
     @test crop.fluxes.nitrogen.auto_fertilizer[1] == 0.0f0
     @test crop.state.nitrogen.sufficiency[1] == 1.0f0
+
+    crop.state.nitrogen.total .= 0.1f0
+    crop.fluxes.carbon.net_assimilation .= 1.0f0
+    crop.state.nitrogen.sufficiency .= 0.3f0
+    nuptake_crop!(state, cft9, state; biological_fixation = true)
+    @test crop.fluxes.nitrogen.biological_fixation[1] ≈ 0.25f0 / 6.0f0
+    @test crop.state.nitrogen.total[1] ≈ 0.1f0 + crop.fluxes.nitrogen.biological_fixation[1]
+    @test crop.state.nitrogen.total[1] < crop.auxiliary.stress.nitrogen_demand_total[1]
+    @test crop.auxiliary.stress.nitrogen_demand_leaf[1] == 0.4f0
+    @test crop.state.nitrogen.sufficiency[1] == 1.0f0
 end
 
 @testset "Biological fixation responses are bounded" begin

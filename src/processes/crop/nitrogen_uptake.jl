@@ -269,7 +269,11 @@ end
             nitrogen_deficit = max(zero(T), crop_ndemand_tot[cell] - crop_nitrogen[cell])
         end
 
-        if !fixes_nitrogen && auto_fertilizer && nitrogen_deficit > zero(T)
+        if fixes_nitrogen
+            # LPJmL leaves N-fixing crops free of the non-fixer N-stress scaling,
+            # even when NPP-controlled fixation cannot meet total demand.
+            crop_vscal[cell] = one(T)
+        elseif auto_fertilizer && nitrogen_deficit > zero(T)
             crop_nitrogen[cell] += nitrogen_deficit
             crop_nuptake[cell] += nitrogen_deficit
             crop_nautofertilizer[cell] = nitrogen_deficit
