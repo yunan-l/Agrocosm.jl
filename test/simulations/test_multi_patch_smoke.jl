@@ -25,6 +25,16 @@ include(joinpath(@__DIR__, "..", "..", "scripts", "run_global_cfts_cpu.jl"))
         absolute_tolerance = 5.0f0, relative_tolerance = 5.0f-6,
     ).closes
 
+    freeze_thaw_residual = Float32[-8.5 0.05; 2.0 0.025]
+    freeze_thaw_column = Float32[15832 4.0e6; 2.870624e8 -3.0e6]
+    @test thermal_closure_ratio(freeze_thaw_residual, freeze_thaw_column) <= 1.0f-4
+    @test thermal_closure_ratio(freeze_thaw_residual, freeze_thaw_column) ≈
+        8.5f0 / 2.870624f8
+    @test maximum(abs.(freeze_thaw_residual) ./ max.(abs.(freeze_thaw_column), 1.0f0)) > 1.0f-4
+    @test thermal_closure_ratio(Float32[-8.5 1000; 2.0 0.025], freeze_thaw_column) > 1.0f-4
+    @test thermal_closure_ratio(Float32[0 0], Float32[0 0]) == 0
+    @test_throws DimensionMismatch thermal_closure_ratio(Float32[1 2], Float32[1; 2;;])
+
     @test requested_crop_systems(Dict{String, Any}()) == [(1, false)]
     @test is_arable_crop_soil(13)
     @test !is_arable_crop_soil(ROCK_ICE_SOIL_CODE)

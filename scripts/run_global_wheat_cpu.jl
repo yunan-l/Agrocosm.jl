@@ -495,13 +495,23 @@ function percolation_energy_closure(residual, rain, snowmelt, lateral_runoff, bo
     )
 end
 
+"""Return the largest daily thermal residual scaled by each cell's peak column enthalpy."""
+function thermal_closure_ratio(energy_residual::AbstractMatrix, column_energy::AbstractMatrix)
+    size(energy_residual) == size(column_energy) ||
+        throw(DimensionMismatch("energy residual and column energy must have the same days × cells shape"))
+    # Column enthalpy crosses zero during freeze-thaw, so a daily relative ratio
+    # would amplify Float32 round-off in the layer sum.
+    column_scale = max.(maximum(abs, column_energy; dims = 1), one(eltype(column_energy)))
+    return maximum(abs.(energy_residual) ./ column_scale)
+end
+
 function balance_report(simulation, validation)
     water = maximum(abs, Array(simulation.water_balance.residual))
     carbon = maximum(abs, Array(simulation.carbon_balance.relative_residual))
     nitrogen = maximum(abs, Array(simulation.nitrogen_balance.relative_residual))
     energy = Array(simulation.thermal_balance.energy_residual)
     column_energy = Array(simulation.thermal_balance.column_energy)
-    thermal = maximum(abs.(energy) ./ max.(abs.(column_energy), 1.0f0))
+    thermal = thermal_closure_ratio(energy, column_energy)
     thermal_balance = simulation.thermal_balance
     percolation = percolation_energy_closure(
         Array(thermal_balance.percolation_energy_residual),
